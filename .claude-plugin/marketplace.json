@@ -1,5 +1,6 @@
 {
   "name": "grill-with-docs",
+  "description": "Marketplace público do plugin grill-with-docs para planejamento arquitetural Delivery First.",
   "owner": {
     "name": "Carlos Araujo"
   },
