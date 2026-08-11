@@ -88,8 +88,11 @@ def plan_entry(index: dict[str, Any], target: str, release: Release, meta: dict[
     plugins = index.get("plugins")
     if not isinstance(plugins, list):
         raise TargetInvalid("índice sem lista 'plugins'")
-    position = next((i for i, p in enumerate(plugins)
-                     if isinstance(p, dict) and p.get("name") == PLUGIN_NAME), None)
+    positions = [i for i, p in enumerate(plugins)
+                 if isinstance(p, dict) and p.get("name") == PLUGIN_NAME]
+    if len(positions) > 1:
+        raise TargetInvalid(f"{len(positions)} entradas com name {PLUGIN_NAME!r}; índice ambíguo")
+    position = positions[0] if positions else None
     result = json.loads(json.dumps(index))  # cópia profunda, preservando ordem
     if position is None:
         entry = new_entry(target, release, meta)
@@ -163,12 +166,108 @@ def object_span(text: str, start: int) -> tuple[int, int]:
     raise TargetInvalid("objeto JSON não fechado no índice")
 
 
+def array_span(text: str, key: str) -> tuple[int, int]:
+    """Span of the array value for ``key`` at the top level of the document."""
+    depth, index, in_string, escaped = 0, 0, False, False
+    pattern = re.compile(r'"' + re.escape(key) + r'"\s*:\s*\[')
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+        elif char == '"':
+            if depth == 1:
+                match = pattern.match(text, index)
+                if match:
+                    start = match.end() - 1
+                    return start, matching(text, start, "[", "]")
+            in_string = True
+        index += 1
+    raise TargetInvalid(f"array {key!r} não encontrado no índice")
+
+
+def matching(text: str, opening: int, open_char: str, close_char: str) -> int:
+    depth, index, in_string, escaped = 0, opening, False, False
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char == open_char:
+            depth += 1
+        elif char == close_char:
+            depth -= 1
+            if depth == 0:
+                return index + 1
+        index += 1
+    raise TargetInvalid("estrutura JSON não fechada no índice")
+
+
+def entry_spans(text: str) -> list[tuple[int, int, dict[str, Any]]]:
+    """Span and parsed value of every object directly inside the plugins array.
+
+    Anchoring on the ``name`` field and walking backwards to the nearest ``{``
+    silently picks a nested object whenever ``name`` is not the first key — a
+    human reordering the fields by hand is enough to trigger it.
+    """
+    start, end = array_span(text, "plugins")
+    found: list[tuple[int, int, dict[str, Any]]] = []
+    index, depth, in_string, escaped = start + 1, 0, False, False
+    while index < end - 1:
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{" and depth == 0:
+            close = matching(text, index, "{", "}")
+            try:
+                found.append((index, close, json.loads(text[index:close])))
+            except json.JSONDecodeError as error:
+                raise TargetInvalid(f"objeto inválido na lista de plugins: {error}") from error
+            index = close
+            continue
+        elif char in "[":
+            depth += 1
+        elif char in "]":
+            depth -= 1
+        index += 1
+    return found
+
+
 def locate(text: str, name: str) -> tuple[int, int]:
-    """Span of the plugin entry with this name, anchored on its ``name`` field."""
-    matches = list(re.finditer(r'"name"\s*:\s*"' + re.escape(name) + r'"', text))
+    """Span of the single plugin entry with this name."""
+    matches = [(a, b) for a, b, value in entry_spans(text) if value.get("name") == name]
     if not matches:
         raise TargetInvalid(f"entrada {name!r} não encontrada no texto do índice")
-    return object_span(text, matches[-1].start())
+    if len(matches) > 1:
+        # Decidir pela primeira e escrever na última deixaria o índice com duas
+        # declarações divergentes do mesmo plugin.
+        raise TargetInvalid(f"{len(matches)} entradas com name {name!r}; índice ambíguo")
+    return matches[0]
 
 
 def column_of(text: str, start: int) -> str:
@@ -290,10 +389,10 @@ def splice(text: str, plan: EntryPlan, previous: dict[str, Any]) -> str:
 
     # CREATED: ancorar no último plugin existente e inserir depois dele. Buscar o
     # último "}" do arquivo encontraria o fecho de um objeto aninhado, como policy.
-    siblings = previous.get("plugins") or []
-    if not siblings:
+    spans = entry_spans(text)
+    if not spans:
         raise TargetInvalid("índice sem plugins; não há âncora para inserir")
-    start, end = locate(text, siblings[-1].get("name", ""))
+    start, end = spans[-1][0], spans[-1][1]
     pad = column_of(text, start)
     return text[:end] + ",\n" + pad + rendered.replace("\n", "\n" + pad) + text[end:]
 

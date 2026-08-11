@@ -219,10 +219,48 @@ class Splice(unittest.TestCase):
         self.assertEqual(parsed["plugins"][0]["version"], "0.1.0")
         self.assertEqual(parsed["plugins"][1]["version"], "2.5.0")
 
-    def test_object_span_ignores_braces_inside_strings(self) -> None:
-        text = '[{"name": "a", "d": "chave } falsa"}, {"name": "b"}]'
+    def test_name_does_not_have_to_be_the_first_key(self) -> None:
+        """Regressão: ancorar em `name` e voltar até o `{` mais próximo pegava o
+        objeto aninhado quando algo precedia `name`, e a publicação saía inerte."""
+        text, index = self.entry_with(compat={"min": "1.0"})
+        entry = self.published(text, index)
+        self.assertEqual(entry["version"], "2.5.0")
+        self.assertEqual(entry["source"]["ref"], "v2.5.0")
+        self.assertEqual(entry["compat"], {"min": "1.0"})
+
+    def test_nested_object_before_name_carrying_a_colliding_key(self) -> None:
+        text, index = self.entry_with(compat={"version": "1.0.0"})
+        entry = self.published(text, index)
+        self.assertEqual(entry["version"], "2.5.0")
+        self.assertEqual(entry["compat"]["version"], "1.0.0")
+
+    def test_duplicate_entries_are_refused_not_half_patched(self) -> None:
+        """Decidir pela primeira e escrever na última deixaria o índice com duas
+        declarações divergentes do mesmo plugin."""
+        entry = {"name": "grill-with-docs",
+                 "source": {"source": "git-subdir", "url": "u", "path": "plugin",
+                            "ref": "v1.0.0", "sha": OTHER_SHA},
+                 "version": "1.0.0"}
+        text = json.dumps({"plugins": [dict(entry), {"name": "outro", "source": "./x"}, dict(entry)]}, indent=2)
+        with self.assertRaises(MODULE.TargetInvalid):
+            MODULE.plan_entry(json.loads(text), "claude", RELEASE, {})
+        with self.assertRaises(MODULE.TargetInvalid):
+            MODULE.locate(text, "grill-with-docs")
+
+    def test_creation_anchors_on_the_last_array_object_not_the_last_brace(self) -> None:
+        text = json.dumps({"plugins": [{"name": "backlog",
+                                        "source": {"source": "local", "path": "./p"},
+                                        "policy": {"installation": "AVAILABLE"}}]}, indent=2)
+        index = json.loads(text)
+        parsed = json.loads(MODULE.splice(text, MODULE.plan_entry(index, "codex", RELEASE, {}), index))
+        self.assertEqual([p["name"] for p in parsed["plugins"]], ["backlog", "grill-with-docs"])
+        self.assertEqual(parsed["plugins"][0]["policy"], {"installation": "AVAILABLE"})
+
+    def test_spans_ignore_braces_and_brackets_inside_strings(self) -> None:
+        text = '{"plugins": [{"name": "a", "d": "chave } e ] falsas"}, {"name": "b"}]}'
         start, end = MODULE.locate(text, "a")
-        self.assertEqual(json.loads(text[start:end])["d"], "chave } falsa")
+        self.assertEqual(json.loads(text[start:end])["d"], "chave } e ] falsas")
+        self.assertEqual([v["name"] for _, _, v in MODULE.entry_spans(text)], ["a", "b"])
 
     def test_indent_is_detected_from_the_file(self) -> None:
         self.assertEqual(MODULE.detect_indent(CLAUDE_INDEX), 2)
