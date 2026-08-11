@@ -1,7 +1,7 @@
 # FASE-002 — Publicação fan-out nos dois marketplaces
 
 - phase: FASE-002
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-002
 - context-refs: Marketplace, Cópia vendorizada, Entrada de marketplace, Publicação
 - ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0006
