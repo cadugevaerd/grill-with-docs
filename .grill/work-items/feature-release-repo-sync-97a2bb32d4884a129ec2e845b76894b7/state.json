@@ -1,0 +1,265 @@
+{
+  "active_phase": "FASE-002",
+  "audit_verdict": "GO",
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "789b55f46909c6861995740082199d912614bca7b23be4e0da5c73d824e94350",
+    "state": "present"
+  },
+  "development": {
+    "audit": [
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/spec.md",
+            "sha256": "80b9d565aebc36159b2aae28944b8d78e0ddf1d106b435711328417e19110fc7"
+          },
+          {
+            "path": "specs/001-bump-gate/checklists/requirements.md",
+            "sha256": "aaa222a8b03cd379787dcab7afba05dc80d577513a5efa1af67a3b52cd7ef033"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/plan.md",
+            "sha256": "01401aead07bcd47a3446618bd6e5f829de23eea455c8f5e01161d72670a8493"
+          },
+          {
+            "path": "specs/001-bump-gate/research.md",
+            "sha256": "1f7f338668be4286062e009ca95176ff9524180c3c31796dcbec16e00e96292b"
+          },
+          {
+            "path": "specs/001-bump-gate/contracts/cli.md",
+            "sha256": "2bee938e5d413ad71c368ae8ddb5cdf26302f6781bc3beeaa75bd6ddd31bbd9a"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/checklists/acceptance.md",
+            "sha256": "ca59643de00a1752ef7e1b306e0c9d4c13d04b38d45e76356c627499ce013118"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/tasks.md",
+            "sha256": "240d4f9b930d8c13fd6d55061462b3fc3e69298ee99ed59f6de249fed049e270"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/analysis.md",
+            "sha256": "bc0585680870dc337286fb968d28c2d6960aee4b1fbf7c9acc026a35e3c630a1"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/agent-assignments.md",
+            "sha256": "befc75ca25c91367924ea050773b251c5592312698d5c32f778dabcb3bc8c64b"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "tests/check_version_bump.py",
+            "sha256": "b4d5220c4174d42147580ab5d964d0744028d96214410ea6fec5403ea44a7804"
+          },
+          {
+            "path": "tests/validate_bump_gate_contract.py",
+            "sha256": "2d72c2276dad9fb1988e6fac856e109826ada1a4c84d16b23632bf792581bc62"
+          },
+          {
+            "path": ".github/workflows/ci.yml",
+            "sha256": "1c58ff53a7c6fa1ebd00e7f12b64a9d6c0cd161174afe538c564f596a5c4aa79"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/converge.md",
+            "sha256": "dd38190db5fe599d2be8dad8ca20b93e15783f52c34249ffacdd231582b69705"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/verify.md",
+            "sha256": "ea8929a2ed7865f629c1d3fe02e980e22dcd1267b740be6dcf94956b43c0eab7"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/review.md",
+            "sha256": "816dc6fd1bfdcaca012bc448384083e57051394680eeda44f1a06941f9cc28a2"
+          },
+          {
+            "path": "specs/001-bump-gate/verify.md",
+            "sha256": "c762ad8c348a0a0f547feb55e2210debcedcf3b4e183e407fe905241f42bc903"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
+      }
+    ],
+    "current_step": "ship",
+    "schema": "grill-development/v1",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "agent-assign",
+      "agent-execute",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "in-progress",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    }
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "in-progress",
+  "version": "1.2.0",
+  "work_id": "feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4",
+    "version": "v2"
+  }
+}
