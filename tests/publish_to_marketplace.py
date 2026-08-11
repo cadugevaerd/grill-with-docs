@@ -283,8 +283,13 @@ def string_value_span(text: str, key: str) -> tuple[int, int] | None:
     Depth matters: a regex would happily patch a same-named key nested inside the
     entry — patching `meta.version` while leaving the real one stale, corrupting
     unrelated data in the process.
+
+    The scan does not stop at the first hit: JSON tolerates a repeated key, and
+    `json.loads` keeps the last one. Patching the first would edit a shadowed
+    value and leave the effective one stale, so ambiguity is refused instead.
     """
     depth, index, in_string, escaped = 0, 0, False, False
+    found: tuple[int, int] | None = None
     pattern = re.compile(r'"' + re.escape(key) + r'"\s*:\s*"')
     while index < len(text):
         char = text[index]
@@ -306,10 +311,14 @@ def string_value_span(text: str, key: str) -> tuple[int, int] | None:
                 match = pattern.match(text, index)
                 if match:
                     closing = text.index('"', match.end())
-                    return match.end(), closing
+                    if found is not None:
+                        raise TargetInvalid(f"chave {key!r} duplicada na entrada; índice ambíguo")
+                    found = (match.end(), closing)
+                    index = closing + 1  # pular a aspa de fechamento, não relê-la como abertura
+                    continue
             in_string = True
         index += 1
-    return None
+    return found
 
 
 def replace_at(text: str, key: str, value: str) -> str | None:
@@ -322,6 +331,7 @@ def replace_at(text: str, key: str, value: str) -> str | None:
 def object_value_span(text: str, key: str) -> tuple[int, int] | None:
     """Span of an object value for ``key`` at the top level of ``text``'s object."""
     depth, index, in_string, escaped = 0, 0, False, False
+    found: tuple[int, int] | None = None
     pattern = re.compile(r'"' + re.escape(key) + r'"\s*:\s*\{')
     while index < len(text):
         char = text[index]
@@ -342,10 +352,14 @@ def object_value_span(text: str, key: str) -> tuple[int, int] | None:
             if depth == 1:
                 match = pattern.match(text, index)
                 if match:
-                    return object_span(text, match.end() - 1)
+                    if found is not None:
+                        raise TargetInvalid(f"chave {key!r} duplicada na entrada; índice ambíguo")
+                    found = object_span(text, match.end() - 1)
+                    index = found[1]
+                    continue
             in_string = True
         index += 1
-    return None
+    return found
 
 
 def retarget(entry_text: str, entry: dict[str, Any]) -> str | None:

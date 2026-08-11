@@ -256,6 +256,30 @@ class Splice(unittest.TestCase):
         self.assertEqual([p["name"] for p in parsed["plugins"]], ["backlog", "grill-with-docs"])
         self.assertEqual(parsed["plugins"][0]["policy"], {"installation": "AVAILABLE"})
 
+    def duplicated(self, entry_json: str) -> None:
+        text = '{\n  "plugins": [\n    %s\n  ]\n}\n' % entry_json
+        with self.assertRaises(MODULE.TargetInvalid):
+            MODULE.splice(text, MODULE.plan_entry(json.loads(text), "claude", RELEASE, {}), json.loads(text))
+
+    def test_a_repeated_key_in_the_entry_is_refused(self) -> None:
+        """Regressão: JSON tolera chave repetida e `json.loads` fica com a última.
+        Patchar a primeira editaria um valor sombreado e deixaria o efetivo velho,
+        com a ferramenta reportando sucesso."""
+        source = ('{"source": "git-subdir", "url": "u", "path": "plugin", '
+                  '"ref": "v1.0.0", "sha": "%s"}' % OTHER_SHA)
+        self.duplicated('{"name": "grill-with-docs", "version": "9.9.9", "source": %s, "version": "1.0.0"}' % source)
+        self.duplicated('{"name": "grill-with-docs", "source": %s, "source": %s, "version": "1.0.0"}' % (source, source))
+
+    def test_a_repeated_key_inside_source_is_refused(self) -> None:
+        entry = ('{"name": "grill-with-docs", "source": {"source": "git-subdir", "url": "u", '
+                 '"path": "plugin", "ref": "vFAKE", "ref": "v1.0.0", "sha": "%s"}, "version": "1.0.0"}' % OTHER_SHA)
+        self.duplicated(entry)
+
+    def test_a_legitimate_entry_still_publishes_after_the_duplicate_guard(self) -> None:
+        text, index = self.entry_with()
+        entry = self.published(text, index)
+        self.assertEqual((entry["version"], entry["source"]["ref"]), ("2.5.0", "v2.5.0"))
+
     def test_spans_ignore_braces_and_brackets_inside_strings(self) -> None:
         text = '{"plugins": [{"name": "a", "d": "chave } e ] falsas"}, {"name": "b"}]}'
         start, end = MODULE.locate(text, "a")
