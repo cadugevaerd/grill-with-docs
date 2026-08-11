@@ -1,0 +1,59 @@
+# CLAUDE.md — grill-with-docs
+
+Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfooding). As duas coisas convivem na mesma árvore, então saber o que é fonte e o que é artefato de consumo evita confusão.
+
+## Layout
+
+- `plugin/` — fonte publicada do plugin: `SKILL.md`, `assets/`, `scripts/`, `references/` e os dois manifests (`.claude-plugin/`, `.codex-plugin/`).
+- `tests/` — validadores canônicos. `tests/run_validators.py` faz glob de `validate_*.py`, então um arquivo novo entra na suíte sozinho.
+- `tests/fixtures/` — repositórios sintéticos, incluindo `.specify/` próprios. Não confundir com o `.specify/` da raiz.
+- `.specify/` e `.claude/` na raiz — stack do Spec Kit deste repositório, versionada de propósito (ver abaixo).
+- `WORKFLOW.md` na raiz — workflow project-wide gerenciado, marcador `grill-with-docs-workflow:v2`.
+
+## Rodar os testes
+
+```bash
+python3 tests/run_validators.py
+```
+
+Baseline atual: 198 testes, exit 0, com 1 skip dependente de ambiente em `validate_workspace_contract.py`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
+
+## Restrições do core
+
+- Somente biblioteca padrão, Python >=3.10. Sem dependência externa.
+- O core **nunca baixa bytes**. Toda instalação é delegada a quem é dono do artefato (`uv`, `specify`, o instalador verificado do plugin `backlog`) e a verificação é por versão resolvida, nunca por hash de tarball.
+- Hooks são read-only e não escrevem nem acessam a rede.
+- Feature e fix são plan-only e terminam em `PLAN_ONLY_STOP`. Só hotfix tem trilha executável, via `HOTFIX-GO`.
+
+## `ESSENTIAL` do WORKFLOW.md
+
+`ensure_workflow.py` valida `WORKFLOW.md` exigindo **todas** as substrings da tupla `ESSENTIAL`. Acrescentar um marcador novo marca como `incompatible workflow` todo `WORKFLOW.md` v2 já materializado em projetos consumidores. Não mexa nessa tupla sem bump de `VERSION` para `v3` e um caminho de migração.
+
+## `init` e dependências
+
+`grill_workspace.py init` fixa o `WORKFLOW.md` antes de montar o bundle e reporta o estado das dependências externas em `dependencies`. O preflight é declarado em `plugin/skills/grill-with-docs/assets/dependencies.json`.
+
+- padrão: só detecta e reporta, nunca bloqueia;
+- `--allow-install`: autoriza a instalação delegada e a criação/bind do backlog. Essa flag é a confirmação explícita que o contrato do backlog exige;
+- `--require-dependencies`: torna a falta um `MISSING-DEPENDENCY` fail-closed;
+- `--skip-backlog`: desliga a integração com o backlog;
+- `GRILL_SKIP_DEPENDENCIES=1`: desliga a detecção em ambiente air-gapped e **nunca** é reportado como `OK`.
+
+Subcomandos auxiliares: `preflight ROOT [--allow-install] [--skip-backlog]` e `backlog-sync ROOT --work-id ID [--apply]`.
+
+## Extensões do Spec Kit
+
+`git`, `agent-assign`, `bugfix` e `verify-review-ship` são exigidas pelo `WORKFLOW.md`. As três últimas vivem no catálogo `community`, que é discovery-only: instalar por `--from <archive-url>` dispara um aviso interativo de fonte não confiável e aborta em modo não-interativo. Um instalador automatizado não deve responder esse aviso no lugar do humano, então `--allow-install` registra o catálogo como confiável em `.specify/extension-catalogs.yml` (`install_allowed: true`) e instala pelo nome. É uma decisão de confiança explícita e revisável no diff.
+
+## Por que `.specify/` e `.claude/` são versionados
+
+A stack do Spec Kit deste repositório está no controle de versão de propósito, para que a configuração seja reproduzível e revisável. Consequências a conhecer:
+
+- `.specify/extensions/` carrega código de terceiros vendorizado (`agent-assign` de xymelon, `bugfix` de Quratulain-bilal). Atualizações de extensão aparecem como diff.
+- `.specify/extensions/.cache/` é cache do catálogo e gera churn a cada refresh.
+- `.claude/settings.local.json` é override por máquina; mudanças locais de configuração viram diff.
+- `.specify/memory/constitution.md` na raiz ainda é o **placeholder do spec-kit**. Enquanto tiver placeholders, o gate constitucional do `init` e o `audit_decisions.py` bloqueiam com `BLOCKED-CONSTITUTION`. Rode `/speckit-constitution` antes de iniciar um work item aqui.
+
+## Distribuição
+
+`tests/validate_distribution.py` trava o contrato público. Ao mudar a versão, atualize em cinco lugares: `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json` e a constante `VERSION` do próprio validador.
