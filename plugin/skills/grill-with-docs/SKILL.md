@@ -52,6 +52,8 @@ python3 .../grill_workspace.py preflight ROOT [--allow-install] [--skip-backlog]
 python3 .../grill_workspace.py backlog-sync ROOT --work-id ID [--apply]
 ```
 
+O código do backlog raramente coincide com o nome do diretório, então `backlog_bridge.py ROOT --code CODE [--apply]` vincula um backlog existente explicitamente. Repositório já vinculado a outro código, ou código já vinculado a outro caminho, falha fechado em vez de revincular em silêncio.
+
 `backlog-sync` espelha os `BL-NNNN` abertos do work item como itens do backlog vinculado ao repositório. Preview é o padrão e não muta; `--apply` executa. A ponte fala somente `backlogctl --json` e nunca lê SQLite direto. Sem backlog vinculado, o sync retorna `BACKLOG-NOT-BOUND`.
 
 `WORK-ITEM.json` registra metadata imutável e hash canônico: `work_id`, tipo, slug, branch, HEAD, base ref/commit, Constituição e workflow. Escopo, dependências e conflitos ADR permanecem declarados em campos próprios para reconciliação.

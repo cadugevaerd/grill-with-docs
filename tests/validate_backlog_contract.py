@@ -113,6 +113,29 @@ class Resolution(unittest.TestCase):
         tools = self.tools_with([{"code": "CCC", "name": "unrelated", "bound_path": "/elsewhere"}])
         self.assertEqual(MODULE.resolve_backlog(self.root, CLI, tools, DB)["status"], "NEEDS-CREATE")
 
+    def test_requested_code_wins_over_the_derived_one(self) -> None:
+        tools = self.tools_with([{"code": "SGD", "name": "inherited-name", "bound_path": ""}])
+        resolution = MODULE.resolve_backlog(self.root, CLI, tools, DB, "SGD")
+        self.assertEqual(resolution["status"], "NEEDS-BIND")
+        self.assertEqual(resolution["code"], "SGD")
+        self.assertEqual(resolution["name"], "inherited-name")
+
+    def test_requested_code_that_does_not_exist_is_created(self) -> None:
+        tools = self.tools_with([])
+        resolution = MODULE.resolve_backlog(self.root, CLI, tools, DB, "NEW")
+        self.assertEqual(resolution["status"], "NEEDS-CREATE")
+        self.assertEqual(resolution["code"], "NEW")
+
+    def test_requested_code_already_bound_elsewhere_fails_closed(self) -> None:
+        tools = self.tools_with([{"code": "SGD", "name": "n", "bound_path": "/other/repo"}])
+        with self.assertRaises(MODULE.BacklogUnavailable):
+            MODULE.resolve_backlog(self.root, CLI, tools, DB, "SGD")
+
+    def test_repository_bound_to_another_code_is_never_silently_rebound(self) -> None:
+        tools = self.tools_with([{"code": "AAA", "name": "n", "bound_path": str(self.root)}])
+        with self.assertRaises(MODULE.BacklogUnavailable):
+            MODULE.resolve_backlog(self.root, CLI, tools, DB, "SGD")
+
 
 class BindLifecycle(unittest.TestCase):
     def setUp(self) -> None:
