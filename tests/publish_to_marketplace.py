@@ -178,22 +178,97 @@ def column_of(text: str, start: int) -> str:
     return prefix if not prefix.strip() else ""
 
 
+def string_value_span(text: str, key: str) -> tuple[int, int] | None:
+    """Span of a string value for ``key`` at the top level of ``text``'s object.
+
+    Depth matters: a regex would happily patch a same-named key nested inside the
+    entry — patching `meta.version` while leaving the real one stale, corrupting
+    unrelated data in the process.
+    """
+    depth, index, in_string, escaped = 0, 0, False, False
+    pattern = re.compile(r'"' + re.escape(key) + r'"\s*:\s*"')
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+        elif char == '"':
+            if depth == 1:
+                match = pattern.match(text, index)
+                if match:
+                    closing = text.index('"', match.end())
+                    return match.end(), closing
+            in_string = True
+        index += 1
+    return None
+
+
+def replace_at(text: str, key: str, value: str) -> str | None:
+    span = string_value_span(text, key)
+    if span is None:
+        return None
+    return text[:span[0]] + value + text[span[1]:]
+
+
+def object_value_span(text: str, key: str) -> tuple[int, int] | None:
+    """Span of an object value for ``key`` at the top level of ``text``'s object."""
+    depth, index, in_string, escaped = 0, 0, False, False
+    pattern = re.compile(r'"' + re.escape(key) + r'"\s*:\s*\{')
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+        elif char == '"':
+            if depth == 1:
+                match = pattern.match(text, index)
+                if match:
+                    return object_span(text, match.end() - 1)
+            in_string = True
+        index += 1
+    return None
+
+
 def retarget(entry_text: str, entry: dict[str, Any]) -> str | None:
     """Rewrite only the three values that a release changes.
 
     Re-serialising even our own entry would expand hand-written compact arrays and
     turn a three-line release into a diff nobody reads. Returns ``None`` when the
-    expected keys are not all present, so the caller can fall back.
+    expected keys are not where they must be, so the caller can fall back.
     """
-    updates = {"ref": entry["source"]["ref"], "sha": entry["source"]["sha"],
-               "version": entry["version"]}
-    result = entry_text
-    for key, value in updates.items():
-        pattern = re.compile(r'("' + key + r'"\s*:\s*")[^"]*(")')
-        result, count = pattern.subn(lambda m: m.group(1) + value + m.group(2), result, count=1)
-        if count != 1:
+    result = replace_at(entry_text, "version", entry["version"])
+    if result is None:
+        return None
+    span = object_value_span(result, "source")
+    if span is None:
+        return None
+    inner = result[span[0]:span[1]]
+    for key in ("ref", "sha"):
+        patched = replace_at(inner, key, entry["source"][key])
+        if patched is None:
             return None
-    return result
+        inner = patched
+    return result[:span[0]] + inner + result[span[1]:]
 
 
 def splice(text: str, plan: EntryPlan, previous: dict[str, Any]) -> str:

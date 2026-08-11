@@ -181,6 +181,44 @@ class Splice(unittest.TestCase):
         parsed = json.loads(MODULE.splice(CODEX_INDEX, plan, previous))
         self.assertNotIn("grill-with-docs", json.dumps(parsed["plugins"][0]))
 
+    def entry_with(self, **extra) -> tuple[str, dict]:
+        entry = {"name": "grill-with-docs", **extra,
+                 "source": {"source": "git-subdir", "url": "u", "path": "plugin",
+                            "ref": "v1.0.0", "sha": OTHER_SHA},
+                 "version": "1.0.0"}
+        text = json.dumps({"plugins": [entry]}, indent=2)
+        return text, json.loads(text)
+
+    def published(self, text: str, index: dict) -> dict:
+        plan = MODULE.plan_entry(index, "claude", RELEASE, {})
+        return json.loads(MODULE.splice(text, plan, index))["plugins"][0]
+
+    def test_a_nested_version_key_is_never_patched(self) -> None:
+        """Regressão: `count=1` sobre o texto inteiro acertava `meta.version`,
+        corrompendo dado alheio e deixando a versão real intocada."""
+        text, index = self.entry_with(meta={"version": "9.9.9"})
+        entry = self.published(text, index)
+        self.assertEqual(entry["meta"]["version"], "9.9.9")
+        self.assertEqual(entry["version"], "2.5.0")
+
+    def test_ref_and_sha_outside_source_are_never_patched(self) -> None:
+        text, index = self.entry_with(extra={"ref": "vX", "sha": "b" * 40})
+        entry = self.published(text, index)
+        self.assertEqual(entry["extra"], {"ref": "vX", "sha": "b" * 40})
+        self.assertEqual(entry["source"]["ref"], "v2.5.0")
+        self.assertEqual(entry["source"]["sha"], SHA)
+
+    def test_a_sibling_named_as_a_superstring_is_not_targeted(self) -> None:
+        text = json.dumps({"plugins": [
+            {"name": "grill-with-docs-extra", "source": "./x", "version": "0.1.0"},
+            {"name": "grill-with-docs", "source": {"source": "git-subdir", "url": "u",
+                                                   "path": "plugin", "ref": "v1.0.0", "sha": OTHER_SHA},
+             "version": "1.0.0"}]}, indent=2)
+        index = json.loads(text)
+        parsed = json.loads(MODULE.splice(text, MODULE.plan_entry(index, "claude", RELEASE, {}), index))
+        self.assertEqual(parsed["plugins"][0]["version"], "0.1.0")
+        self.assertEqual(parsed["plugins"][1]["version"], "2.5.0")
+
     def test_object_span_ignores_braces_inside_strings(self) -> None:
         text = '[{"name": "a", "d": "chave } falsa"}, {"name": "b"}]'
         start, end = MODULE.locate(text, "a")
