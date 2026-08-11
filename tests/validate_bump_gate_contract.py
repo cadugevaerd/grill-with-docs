@@ -159,6 +159,45 @@ class Boundaries(unittest.TestCase):
             MODULE.subprocess.run = original
 
 
+class GitLayer(unittest.TestCase):
+    """A camada de git é exercitada capturando o argv, sem repositório."""
+
+    def setUp(self) -> None:
+        self.original = MODULE.git
+        self.calls: list[list[str]] = []
+
+    def tearDown(self) -> None:
+        MODULE.git = self.original
+
+    def capture(self, output: str = "") -> None:
+        def fake(argv):
+            self.calls.append(list(argv))
+            return output
+
+        MODULE.git = fake
+
+    def test_diff_disables_rename_detection(self) -> None:
+        """Regressão: com rename detection, mover um arquivo para fora de plugin/
+        reportaria só o destino, e a remoção de conteúdo do bundle passaria como
+        se nada no bundle tivesse mudado."""
+        self.capture()
+        MODULE.changed_paths("base", "head")
+        self.assertEqual(len(self.calls), 1)
+        self.assertIn("--no-renames", self.calls[0])
+
+    def test_diff_uses_the_merge_base_not_the_tip(self) -> None:
+        self.capture()
+        MODULE.changed_paths("base", "head")
+        self.assertIn("base...head", self.calls[0])
+        self.assertNotIn("base..head", self.calls[0])
+
+    def test_a_move_out_of_the_bundle_requires_a_bump(self) -> None:
+        """O par que o --no-renames produz: origem sob plugin/, destino fora."""
+        paths = ["docs-attribution.md", "plugin/skills/grill-with-docs/references/upstream-attribution.md"]
+        self.assertTrue(MODULE.touches_plugin(paths))
+        self.assertEqual(MODULE.decide(paths, "2.5.0", "2.5.0").code, "MISSING-BUMP")
+
+
 class CommandLine(unittest.TestCase):
     """A CLI é exercitada com a camada de git substituída, para rodar sem repositório."""
 

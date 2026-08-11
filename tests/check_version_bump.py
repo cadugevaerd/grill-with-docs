@@ -110,8 +110,13 @@ def git(argv: list[str]) -> str:
 
 
 def changed_paths(base_ref: str, head_ref: str) -> list[str]:
-    """Three dots: the diff is against the merge base, not against the tip of base."""
-    output = git(["diff", "--name-only", f"{base_ref}...{head_ref}"])
+    """Three dots: the diff is against the merge base, not against the tip of base.
+
+    ``--no-renames`` is load-bearing. With rename detection on, moving a file out
+    of ``plugin/`` reports only the destination, so a change that removes content
+    from the published bundle would read as no change to it at all.
+    """
+    output = git(["diff", "--no-renames", "--name-only", f"{base_ref}...{head_ref}"])
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 

@@ -174,9 +174,26 @@
         "reason": "",
         "state": "in-progress",
         "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/verify.md",
+            "sha256": "ea8929a2ed7865f629c1d3fe02e980e22dcd1267b740be6dcf94956b43c0eab7"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
       }
     ],
-    "current_step": "verify",
+    "current_step": "review",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -198,11 +215,11 @@
       "checklist": "complete",
       "converge": "complete",
       "plan": "complete",
-      "review": "pending",
+      "review": "in-progress",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "in-progress"
+      "verify": "complete"
     }
   },
   "limits": {
