@@ -1,7 +1,7 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree dd6fa69bb1e1aa49069aa998624d81e4793ddb1862d8b34e35c4c59d11569e33 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 240d4f9b930d8c13fd6d55061462b3fc3e69298ee99ed59f6de249fed049e270   (gate reports excluded)
+Source fingerprint: tree 2e98159744c686a8e7bc81b0d442000845f5c131f37740491773da8c5c9cdb51 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 240d4f9b930d8c13fd6d55061462b3fc3e69298ee99ed59f6de249fed049e270   (gate reports excluded)
 Converge: CONVERGED
 
 Evidência de converge: `specs/001-bump-gate/converge.md`, produzida nesta sessão após a última execução das tarefas de implementação. `work` é o sha256 do vazio, ou seja, não há mudança não commitada nem arquivo não rastreado no escopo revisado.
@@ -10,8 +10,8 @@ Evidência de converge: `specs/001-bump-gate/converge.md`, produzida nesta sess�
 
 | Gate | Command | Result | Evidence | Validator |
 |---|---|---|---|---|
-| tests | `python3 tests/run_validators.py` | PASS | 228 testes, exit 0, 1 skip dependente de ambiente | orquestrador |
-| tests (alvo) | `python3 tests/validate_bump_gate_contract.py` | PASS | 26 testes, OK, reexecutado após a última edição do verificador | orquestrador |
+| tests | `python3 tests/run_validators.py` | PASS | 231 testes, exit 0, 1 skip dependente de ambiente; reexecutado após a correção do bypass | orquestrador |
+| tests (alvo) | `python3 tests/validate_bump_gate_contract.py` | PASS | 29 testes, OK, incluindo os três de regressão do bypass de rename | orquestrador |
 | build | — | SKIPPED | projeto é Python stdlib sem etapa de build; não há `pyproject.toml`, `Makefile` nem `setup.cfg` | orquestrador |
 | lint | — | SKIPPED | nenhum linter configurado no repositório | orquestrador |
 | typecheck | — | SKIPPED | nenhum checador de tipo configurado | orquestrador |
@@ -38,7 +38,7 @@ O caminho de erro do git, alterado por último, foi reexecutado após a mudança
 
 ### Failures / Blockers
 
-Nenhum.
+Nenhum na execução atual. O ciclo anterior deste gate passou sobre uma fonte que continha um bypass de rename; a fonte mudou, o fingerprint foi recomputado e todos os gates foram reexecutados. O relatório anterior está superado por este.
 
 ### Next Action
 
