@@ -132,9 +132,34 @@
         "reason": "",
         "state": "in-progress",
         "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "tests/check_version_bump.py",
+            "sha256": "b4d5220c4174d42147580ab5d964d0744028d96214410ea6fec5403ea44a7804"
+          },
+          {
+            "path": "tests/validate_bump_gate_contract.py",
+            "sha256": "2d72c2276dad9fb1988e6fac856e109826ada1a4c84d16b23632bf792581bc62"
+          },
+          {
+            "path": ".github/workflows/ci.yml",
+            "sha256": "1c58ff53a7c6fa1ebd00e7f12b64a9d6c0cd161174afe538c564f596a5c4aa79"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
       }
     ],
-    "current_step": "agent-execute",
+    "current_step": "converge",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -151,10 +176,10 @@
     ],
     "steps": {
       "agent-assign": "complete",
-      "agent-execute": "in-progress",
+      "agent-execute": "complete",
       "analyze": "complete",
       "checklist": "complete",
-      "converge": "pending",
+      "converge": "in-progress",
       "plan": "complete",
       "review": "pending",
       "ship": "pending",
