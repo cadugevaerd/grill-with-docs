@@ -4,7 +4,7 @@
     {
       "name": "grill-with-docs",
       "source": "./plugin",
-      "version": "2.4.1",
+      "version": "2.5.0",
       "description": "Planejamento arquitetural e entrega first com evidência, auditoria e reconciliação fail-closed.",
       "category": "Development",
       "policy": {

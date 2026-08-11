@@ -30,8 +30,8 @@ ship externo → state complete/GO → reconcile preview → apply na integraç�
 
 - [ ] Resolver e fixar o Git root real.
 - [ ] Confirmar branch/worktree dedicada para a feature, fix ou hotfix.
-- [ ] Executar `ensure_workflow.py --ensure ROOT`; aceitar somente `CREATED|REUSED`.
-- [ ] Executar `grill_workspace.py init ROOT --type ... --slug ...`.
+- [ ] Executar `grill_workspace.py init ROOT --type ... --slug ...`; ele fixa o `WORKFLOW.md` project-wide e aceita somente `CREATED|REUSED` no campo `workflow`.
+- [ ] Ler o campo `dependencies` do retorno; usar `--allow-install` para instalação delegada e `--require-dependencies` quando o gate precisar ser fail-closed.
 - [ ] Fixar o `work_id` retornado e usar somente `.grill/work-items/<work-id>/`.
 - [ ] Confirmar `WORK-ITEM.json`, metadata imutável e hash canônico.
 - [ ] Reler `WORKFLOW.md` project-wide e seu hash.

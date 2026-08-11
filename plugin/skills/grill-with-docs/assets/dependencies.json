@@ -1,0 +1,165 @@
+{
+  "schema": "grill-dependencies/v1",
+  "dependencies": [
+    {
+      "id": "python",
+      "kind": "runtime",
+      "required": true,
+      "min": "3.10",
+      "reason": "core do grill-with-docs"
+    },
+    {
+      "id": "git",
+      "kind": "binary",
+      "required": true,
+      "command": "git",
+      "version_args": [
+        "--version"
+      ],
+      "reason": "identidade do work item, branch, base ref"
+    },
+    {
+      "id": "specify",
+      "kind": "binary",
+      "required": true,
+      "command": "specify",
+      "version_args": [
+        "--version"
+      ],
+      "min": "0.11.2",
+      "reason": "ciclo externo specify -> plan -> ... -> ship",
+      "install": [
+        [
+          "uv",
+          "tool",
+          "install",
+          "--force",
+          "specify-cli",
+          "--from",
+          "git+https://github.com/github/spec-kit.git"
+        ]
+      ]
+    },
+    {
+      "id": "spec-kit-scaffold",
+      "kind": "path",
+      "required": true,
+      "path": ".specify/templates/spec-template.md",
+      "reason": "templates e scripts do Spec Kit no repo",
+      "install": [
+        [
+          "specify",
+          "init",
+          "--here",
+          "--integration",
+          "claude",
+          "--script",
+          "sh",
+          "--force"
+        ]
+      ]
+    },
+    {
+      "id": "spec-kit-community-catalog",
+      "kind": "path",
+      "required": true,
+      "path": ".specify/extension-catalogs.yml",
+      "contains": "install_allowed: true",
+      "reason": "extensoes community exigidas pelo WORKFLOW.md so instalam a partir de um catalogo confiavel",
+      "install": [
+        [
+          "specify",
+          "extension",
+          "catalog",
+          "add",
+          "https://raw.githubusercontent.com/github/spec-kit/main/extensions/catalog.community.json",
+          "--name",
+          "community-trusted",
+          "--install-allowed"
+        ]
+      ]
+    },
+    {
+      "id": "ext:git",
+      "kind": "specify-extension",
+      "required": true,
+      "extension": "git",
+      "reason": "WORKFLOW.md exige a extensao git",
+      "install": [
+        [
+          "specify",
+          "extension",
+          "add",
+          "git"
+        ]
+      ]
+    },
+    {
+      "id": "ext:agent-assign",
+      "kind": "specify-extension",
+      "required": true,
+      "extension": "agent-assign",
+      "reason": "WORKFLOW.md exige a extensao agent-assign",
+      "install": [
+        [
+          "specify",
+          "extension",
+          "add",
+          "agent-assign"
+        ]
+      ]
+    },
+    {
+      "id": "ext:bugfix",
+      "kind": "specify-extension",
+      "required": true,
+      "extension": "bugfix",
+      "reason": "WORKFLOW.md exige a extensao bugfix",
+      "install": [
+        [
+          "specify",
+          "extension",
+          "add",
+          "bugfix"
+        ]
+      ]
+    },
+    {
+      "id": "ext:verify-review-ship",
+      "kind": "specify-extension",
+      "required": true,
+      "extension": "verify-review-ship",
+      "reason": "WORKFLOW.md exige a extensao verify-review-ship",
+      "install": [
+        [
+          "specify",
+          "extension",
+          "add",
+          "verify-review-ship"
+        ]
+      ]
+    },
+    {
+      "id": "backlogctl",
+      "kind": "binary",
+      "required": false,
+      "command": "backlogctl",
+      "env": "BACKLOGCTL_EXECUTABLE",
+      "version_args": [
+        "version"
+      ],
+      "min": "2.3.0",
+      "search_paths": [
+        "${HOME}/.claude/plugins/data/backlog-claude-skills/bin/backlogctl"
+      ],
+      "owner": "plugin backlog",
+      "reason": "bind do repo e espelho de BL no backlog",
+      "install": [
+        [
+          "node",
+          "${BACKLOG_INSTALLER}"
+        ]
+      ]
+    }
+  ]
+}
