@@ -27,20 +27,32 @@ worktree C ──> .grill/work-items/<work-id-C>/ ─┘
 
 ## Identidade e inicialização
 
-Resolva o Git root real e trabalhe em branch/worktree dedicada. Materialize ou valide o workflow project-wide:
-
-```text
-python3 "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/grill-with-docs/scripts/ensure_workflow.py" --ensure ROOT
-```
+Resolva o Git root real e trabalhe em branch/worktree dedicada. O `init` fixa o workflow project-wide sozinho; `ensure_workflow.py --ensure ROOT` continua disponível para uso isolado.
 
 Crie o namespace isolado:
 
 ```text
 python3 "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/grill-with-docs/scripts/grill_workspace.py" \
-  init ROOT --type feature|fix|hotfix --slug SLUG [--work-id WORK_ID] [--base-ref REF]
+  init ROOT --type feature|fix|hotfix --slug SLUG [--work-id WORK_ID] [--base-ref REF] \
+  [--allow-install] [--require-dependencies] [--skip-backlog]
 ```
 
 Sem `--work-id`, o core gera uma identidade collision-resistant. `--work-id` explícito serve para retomada/idempotência e deve corresponder à mesma identidade. A criação usa lock, staging e rename atômico; colisão ou integridade divergente bloqueiam.
+
+## Dependências e backlog
+
+O preflight é declarado em `assets/dependencies.json` e executado por `scripts/ensure_dependencies.py`: Python >=3.10, `git`, Spec Kit (CLI >=0.11.2, scaffold `.specify/` e as extensões `git`, `agent-assign`, `bugfix`, `verify-review-ship`) e `backlogctl`. O core nunca baixa bytes: cada instalação é delegada a quem é dono do artefato — `uv`, `specify` e o instalador verificado do plugin `backlog` — e a verificação é por versão resolvida, nunca por hash de tarball.
+
+Três das extensões exigidas (`agent-assign`, `bugfix`, `verify-review-ship`) vivem no catálogo `community` do Spec Kit, que é discovery-only. Instalar por `--from <archive-url>` exige confirmação interativa de fonte não confiável, que um instalador automatizado não deve responder no lugar do humano. Por isso `--allow-install` registra o catálogo community como confiável em `.specify/extension-catalogs.yml` (`install_allowed: true`) e instala pelo nome. Essa é uma decisão de confiança explícita, versionada no repositório e revisável: a partir dela, `specify extension add` passa a instalar extensões de terceiros desse catálogo sem novo aviso.
+
+Por padrão o `init` só detecta e reporta em `dependencies`, sem bloquear. `--allow-install` autoriza a instalação delegada e a criação/bind do backlog; essa flag é a confirmação explícita que o contrato do backlog exige. `--require-dependencies` transforma a falta em `MISSING-DEPENDENCY` fail-closed. `GRILL_SKIP_DEPENDENCIES=1` desliga a detecção em ambiente air-gapped e nunca é reportado como `OK`.
+
+```text
+python3 .../grill_workspace.py preflight ROOT [--allow-install] [--skip-backlog]
+python3 .../grill_workspace.py backlog-sync ROOT --work-id ID [--apply]
+```
+
+`backlog-sync` espelha os `BL-NNNN` abertos do work item como itens do backlog vinculado ao repositório. Preview é o padrão e não muta; `--apply` executa. A ponte fala somente `backlogctl --json` e nunca lê SQLite direto. Sem backlog vinculado, o sync retorna `BACKLOG-NOT-BOUND`.
 
 `WORK-ITEM.json` registra metadata imutável e hash canônico: `work_id`, tipo, slug, branch, HEAD, base ref/commit, Constituição e workflow. Escopo, dependências e conflitos ADR permanecem declarados em campos próprios para reconciliação.
 

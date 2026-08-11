@@ -6,3 +6,10 @@ __pycache__/
 venv/
 .coverage
 htmlcov/
+
+# Artefatos de dogfooding na raiz, nao fonte do plugin. Anchored para preservar
+# as fixtures em tests/fixtures/*/.specify/.
+# .specify/extensions/ vendoriza codigo de terceiros e .specify/memory/constitution.md
+# aqui e o placeholder do spec-kit, que bloquearia o gate constitucional do init.
+/.claude/
+/.specify/

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import NamedTuple
 
 VERSION = "v2"
 MARKER = "grill-with-docs-workflow:v2"
@@ -38,6 +39,15 @@ ESSENTIAL = (
     "hotfix-fast",
     "HOTFIX-GO",
 )
+
+
+class WorkflowResult(NamedTuple):
+    """Decision taken about WORKFLOW.md, decoupled from how it is reported."""
+
+    status: str
+    path: Path | None
+    content: bytes
+    reason: str | None
 
 
 def digest(content: bytes) -> str:
@@ -123,56 +133,59 @@ def atomic_create(target: Path, content: bytes) -> bool:
             pass
 
 
-def ensure(root_argument: str) -> int:
+def resolve_workflow(root_argument: str | Path) -> WorkflowResult:
+    """Materialise or validate WORKFLOW.md and return the decision without printing.
+
+    Callers that own stdout (the CLI) render the result; callers embedded in
+    another command (init) consume it directly, so the single-line JSON
+    contract of the embedding command stays intact.
+    """
     candidate = Path(root_argument).expanduser()
     if not candidate.is_dir():
-        emit("BLOCKED", reason="ROOT must be existing Git top-level")
-        return 2
+        return WorkflowResult("BLOCKED", None, b"", "ROOT must be existing Git top-level")
     root = candidate.resolve()
     if git_root(root) != root:
-        emit("BLOCKED", reason="ROOT must be existing Git top-level")
-        return 2
+        return WorkflowResult("BLOCKED", None, b"", "ROOT must be existing Git top-level")
 
     target = root / "WORKFLOW.md"
     try:
         if target.is_symlink() or target.resolve(strict=False).parent != root:
-            emit("BLOCKED", reason="unsafe target")
-            return 2
+            return WorkflowResult("BLOCKED", None, b"", "unsafe target")
 
         if target.exists():
             content, text = read_regular(target)
             version = managed_version(text)
             if version and version != VERSION:
-                emit("BLOCKED", reason="managed version mismatch")
-                return 2
+                return WorkflowResult("BLOCKED", None, b"", "managed version mismatch")
             if compatible(text):
-                emit("REUSED", target, content)
-                return 0
-            emit("BLOCKED", reason="incompatible workflow")
-            return 2
+                return WorkflowResult("REUSED", target, content, None)
+            return WorkflowResult("BLOCKED", None, b"", "incompatible workflow")
 
         template_content, template_text = read_regular(TEMPLATE)
         if managed_version(template_text) != VERSION or not compatible(template_text):
-            emit("BLOCKED", reason="invalid bundled template")
-            return 2
+            return WorkflowResult("BLOCKED", None, b"", "invalid bundled template")
         created = atomic_create(target, template_content)
 
         if target.is_symlink() or target.resolve(strict=False).parent != root:
-            emit("BLOCKED", reason="unsafe target after create")
-            return 2
+            return WorkflowResult("BLOCKED", None, b"", "unsafe target after create")
         content, text = read_regular(target)
         version = managed_version(text)
         if (version and version != VERSION) or not compatible(text):
-            emit("BLOCKED", reason="read-back validation failed")
-            return 2
-        emit("CREATED" if created else "REUSED", target, content)
-        return 0
+            return WorkflowResult("BLOCKED", None, b"", "read-back validation failed")
+        return WorkflowResult("CREATED" if created else "REUSED", target, content, None)
     except UnicodeError:
-        emit("BLOCKED", reason="invalid UTF-8 workflow")
-        return 2
+        return WorkflowResult("BLOCKED", None, b"", "invalid UTF-8 workflow")
     except OSError as error:
-        emit("BLOCKED", reason=f"filesystem-error:{type(error).__name__}")
+        return WorkflowResult("BLOCKED", None, b"", f"filesystem-error:{type(error).__name__}")
+
+
+def ensure(root_argument: str) -> int:
+    result = resolve_workflow(root_argument)
+    if result.status == "BLOCKED":
+        emit("BLOCKED", reason=result.reason or "unknown")
         return 2
+    emit(result.status, result.path, result.content)
+    return 0
 
 
 def human_status(payload: dict, root: Path) -> str:

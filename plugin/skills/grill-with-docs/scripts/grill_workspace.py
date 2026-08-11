@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import errno
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -52,6 +53,22 @@ LEGACY_FILES = tuple(name for name in ROOT_FILES if name != "CONSTITUTION-CHECK.
 MANAGED_GLOBAL = {".grill/global/ROADMAP.md", ".grill/global/AUDIT.md"}
 CHECK_START = "<!-- grill-constitution-check:start -->"
 CHECK_END = "<!-- grill-constitution-check:end -->"
+_SIBLINGS: dict[str, Any] = {}
+
+
+def sibling(name: str) -> Any:
+    """Load a sibling script by path, so the import survives any module loader."""
+    if name not in _SIBLINGS:
+        path = Path(__file__).resolve().with_name(f"{name}.py")
+        spec = importlib.util.spec_from_file_location(f"grill_sibling_{name}", path)
+        if spec is None or spec.loader is None:
+            raise ImportError(name)
+        module = importlib.util.module_from_spec(spec)
+        # dataclass resolution looks the module up in sys.modules while the body runs.
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        _SIBLINGS[name] = module
+    return _SIBLINGS[name]
 
 
 class JsonParser(argparse.ArgumentParser):
@@ -930,6 +947,60 @@ def bundle_from_files(work_id: str, files: dict[str, bytes], origin: str) -> Ite
     return ItemBundle(work_id, files, origin, bundle_fingerprint(files), metadata)
 
 
+def ensure_project_workflow(root: Path) -> dict[str, Any]:
+    """Materialise or validate the project-wide WORKFLOW.md before any bundle exists."""
+    workflow = sibling("ensure_workflow")
+    result = workflow.resolve_workflow(root)
+    if result.status == "BLOCKED":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORKFLOW-UNAVAILABLE", result.reason or "unknown")
+    return {"status": result.status, "path": "WORKFLOW.md", "sha256": workflow.digest(result.content)}
+
+
+def dependency_report(root: Path, *, allow_install: bool) -> dict[str, Any]:
+    """Detect the external toolchain; install only when explicitly authorised."""
+    dependencies = sibling("ensure_dependencies")
+    try:
+        return dependencies.preflight(root, allow_install=allow_install)
+    except (dependencies.ManifestError, OSError, json.JSONDecodeError) as error:
+        return {"schema": dependencies.SCHEMA, "verdict": "BLOCKED", "error": type(error).__name__}
+
+
+def backlog_report(root: Path, *, apply: bool) -> dict[str, Any]:
+    bridge = sibling("backlog_bridge")
+    try:
+        return bridge.ensure_bind(root, apply=apply)
+    except bridge.BacklogUnavailable as error:
+        return {"schema": bridge.SCHEMA, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}
+
+
+def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Report and optionally repair the environment without creating a work item."""
+    root = project_root(args.root)
+    payload = {
+        "schema": "grill-preflight/v1",
+        "workflow": ensure_project_workflow(root),
+        "dependencies": dependency_report(root, allow_install=args.allow_install),
+    }
+    if not args.skip_backlog:
+        payload["backlog"] = backlog_report(root, apply=args.allow_install)
+    payload["verdict"] = payload["dependencies"].get("verdict", "BLOCKED")
+    return payload, EXIT_OK if payload["verdict"] == "OK" else EXIT_BLOCKED
+
+
+def backlog_sync_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Mirror the open BLs of one work item into the bound backlog, preview-first."""
+    root = project_root(args.root)
+    item = root / ".grill" / "work-items" / args.work_id
+    bundle = read_local_bundle(root, item)
+    validate_bundle_integrity(bundle)
+    bridge = sibling("backlog_bridge")
+    try:
+        payload = bridge.sync_items(root, item, args.work_id, apply=args.apply)
+    except bridge.BacklogUnavailable as error:
+        return {"schema": bridge.SCHEMA, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}, EXIT_BLOCKED
+    return payload, EXIT_OK if payload.get("verdict") in {"PREVIEW", "APPLIED"} else EXIT_BLOCKED
+
+
 def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     if args.type not in KINDS or not SLUG_RE.fullmatch(args.slug):
@@ -937,6 +1008,14 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     work_id = args.work_id or f"{args.type}-{args.slug}-{uuid.uuid4().hex}"
     if not WORK_ID_RE.fullmatch(work_id):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", work_id)
+    workflow = ensure_project_workflow(root)
+    dependencies = dependency_report(root, allow_install=getattr(args, "allow_install", False))
+    if getattr(args, "require_dependencies", False) and dependencies.get("verdict") != "OK":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "MISSING-DEPENDENCY",
+                         ",".join(dependencies.get("missing_required") or ["unknown"]))
+    environment = {"workflow": workflow, "dependencies": dependencies}
+    if not getattr(args, "skip_backlog", False):
+        environment["backlog"] = backlog_report(root, apply=getattr(args, "allow_install", False))
     target = root / ".grill" / "work-items" / work_id
     lock = acquire_lock(root, work_id, target, reuse_if_target_exists=True)
     try:
@@ -945,7 +1024,7 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             immutable = validate_metadata(bundle.metadata, work_id)
             if immutable.get("type") != args.type or immutable.get("slug") != args.slug:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-DIVERGENCE", work_id)
-            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint}, EXIT_OK
+            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint, **environment}, EXIT_OK
         constitution_created, constitution_hash = ensure_managed_constitution(root)
         immutable = immutable_metadata(root, args, work_id)
         files = initial_files(root, work_id, immutable)
@@ -961,10 +1040,11 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             immutable = validate_metadata(bundle.metadata, work_id)
             if immutable.get("type") != args.type or immutable.get("slug") != args.slug:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-DIVERGENCE", work_id)
-            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint}, EXIT_OK
+            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint, **environment}, EXIT_OK
         bundle = read_local_bundle(root, target)
         return {"status": "CREATED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
-                "constitution": "CREATED" if constitution_created else "PRESERVED", "constitution_sha256": constitution_hash}, EXIT_OK
+                "constitution": "CREATED" if constitution_created else "PRESERVED", "constitution_sha256": constitution_hash,
+                **environment}, EXIT_OK
     finally:
         if lock is not None:
             shutil.rmtree(lock, ignore_errors=True)
@@ -1779,6 +1859,17 @@ def build_parser() -> JsonParser:
     init_parser.add_argument("--slug", required=True)
     init_parser.add_argument("--work-id")
     init_parser.add_argument("--base-ref")
+    init_parser.add_argument("--allow-install", action="store_true", dest="allow_install")
+    init_parser.add_argument("--require-dependencies", action="store_true", dest="require_dependencies")
+    init_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
+    preflight_parser = subparsers.add_parser("preflight")
+    preflight_parser.add_argument("root")
+    preflight_parser.add_argument("--allow-install", action="store_true", dest="allow_install")
+    preflight_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
+    backlog_parser = subparsers.add_parser("backlog-sync")
+    backlog_parser.add_argument("root")
+    backlog_parser.add_argument("--work-id", required=True)
+    backlog_parser.add_argument("--apply", action="store_true")
     audit_parser = subparsers.add_parser("audit")
     audit_parser.add_argument("root")
     audit_parser.add_argument("--work-id")
@@ -1849,6 +1940,8 @@ def main(argv: list[str] | None = None) -> int:
             "hotfix-go": hotfix_go_command,
             "checkpoint": checkpoint_command,
             "status": status_command,
+            "preflight": preflight_command,
+            "backlog-sync": backlog_sync_command,
         }
         payload, exit_code = handlers[args.command](args)
     except CliFailure as failure:

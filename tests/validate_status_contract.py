@@ -7,6 +7,7 @@ from pathlib import Path
 
 PLUGIN=Path(__file__).resolve().parents[1]/"plugin"
 WS=PLUGIN/"skills/grill-with-docs/scripts/grill_workspace.py"
+WORKFLOW_TEMPLATE=PLUGIN/"skills/grill-with-docs/assets/WORKFLOW.template.md"
 STATUS=PLUGIN/"skills/grill-with-docs/scripts/grill_status.py"
 
 def cli(script,*args):
@@ -22,7 +23,9 @@ class StatusPublicContract(unittest.TestCase):
         self.t=tempfile.TemporaryDirectory(); self.r=Path(self.t.name)
         subprocess.run(["git","init","-q","-b","main",str(self.r)],check=True)
         for k,v in (("user.email","t@example.invalid"),("user.name","status tests")): subprocess.run(["git","-C",str(self.r),"config",k,v],check=True)
-        (self.r/"WORKFLOW.md").write_text("# workflow\n")
+        # init now pins the project-wide workflow, so the fixture needs the real
+        # managed template instead of a placeholder that fails compatibility.
+        shutil.copyfile(WORKFLOW_TEMPLATE, self.r/"WORKFLOW.md")
         subprocess.run(["git","-C",str(self.r),"add","."],check=True); subprocess.run(["git","-C",str(self.r),"commit","-qm","init"],check=True)
     def tearDown(self): self.t.cleanup()
     def item(self, wid="work-a", root=None):
