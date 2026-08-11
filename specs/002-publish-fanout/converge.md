@@ -38,3 +38,19 @@ Ambos foram achados executando contra os arquivos reais, não por leitura.
 - `tests/publish_to_marketplace.py` não é coletado pelo glob `validate_*.py`.
 - `.github/workflows/ci.yml` intocado; `publish.yml` é arquivo novo.
 - O publicador não clona, não cria tag e não empurra: recebe checkout pronto. Toda operação com credencial vive no workflow.
+
+## Terceira rodada: achados do revisor independente
+
+O revisor reproduziu, em ataques próprios, duas corrupções que eu não tinha encontrado. Ambas corrigidas e cobertas.
+
+1. **Âncora textual pegava objeto errado (crítico).** `object_span` fazia `rindex("{")` a partir do match de `"name"`, o que assume que `name` é a primeira chave da entrada. Com qualquer objeto aninhado antes dela — um `compat` que um humano acrescente ao reordenar campos — a âncora caía no objeto aninhado. O `retarget` não achava as três chaves naquele span, o fallback reserializava a entrada inteira e a colava **dentro** do aninhado. O arquivo continuava JSON válido por acidente de balanceamento, com chaves duplicadas; `json.loads`, que é last-wins, resolvia para o **release velho**. A ferramenta reportava `APPLIED / entry UPDATED / version 2.5.0` e o workflow empurraria isso. Falha silenciosa, sem exceção.
+
+   Corrigido substituindo a âncora textual: `entry_spans` percorre o array `plugins` na profundidade do array, faz brace matching de cada objeto e o parseia, identificando a entrada pelo `name` parseado. A ordem das chaves passou a ser irrelevante.
+
+2. **Split-brain com entradas duplicadas.** `plan_entry` decidia pela primeira ocorrência e `locate` escrevia na última. Com duas entradas de mesmo nome, o índice terminava com duas declarações divergentes do mesmo plugin. Agora ambos recusam com `TargetInvalid`: índice ambíguo não é resolvido por escolha silenciosa.
+
+Um terceiro achado do revisor, sobre `retarget` casar chave aninhada, era de uma versão anterior à minha correção de profundidade e não se reproduz no código atual — verificado rodando o cenário exato dele.
+
+Achados menores registrados e não corrigidos: `detect_indent` ignora tabulação, caindo no default de 2 espaços (cosmético; os dois índices reais usam espaços), e a mensagem de colisão de tag não nomeia "faltou bump" como causa provável (DX).
+
+Suíte após esta rodada: **267 testes**, exit `0`. `validate_publish_contract.py` foi de 26 para 30.

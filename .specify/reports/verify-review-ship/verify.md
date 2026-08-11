@@ -1,7 +1,7 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree f8a915826af9aaad229952a9a049da8881fac4f40e6783e7f0e23db42ad7958a / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 88814086ed1b31a2530b2b7b99f389353f1062e24107a7c01b06c9d3cc5f6479   (gate reports excluded)
+Source fingerprint: tree 865be940ae3243a8ae0ad07d9323072658bf228ed8f1bd444bb8221816e0fc75 / work 5ca57aa376734971ba8aa511e74f275034b333b684fb07fd8f7d0e7ba0ff7329 / plan 88814086ed1b31a2530b2b7b99f389353f1062e24107a7c01b06c9d3cc5f6479
 Converge: CONVERGED
 
 Evidência em `specs/002-publish-fanout/converge.md`, produzida contra clones dos dois marketplaces publicados.
@@ -10,8 +10,8 @@ Evidência em `specs/002-publish-fanout/converge.md`, produzida contra clones do
 
 | Gate | Command | Result | Evidence | Validator |
 |---|---|---|---|---|
-| tests | `python3 tests/run_validators.py` | PASS | 260 testes, exit 0, 1 skip de ambiente | orquestrador |
-| tests (alvo) | `python3 tests/validate_publish_contract.py` | PASS | 23 testes, OK | orquestrador |
+| tests | `python3 tests/run_validators.py` | PASS | 267 testes, exit 0, 1 skip de ambiente | orquestrador |
+| tests (alvo) | `python3 tests/validate_publish_contract.py` | PASS | 30 testes, OK | orquestrador |
 | build / lint / typecheck / format | — | SKIPPED | nenhuma dessas ferramentas existe no repositório | orquestrador |
 | security | inspeção do manuseio de segredo no workflow | PASS | token vai por `http.extraheader`, nunca na URL do remote; `::add-mask::` antes de exportar; `persist-credentials: false` no checkout canônico | orquestrador |
 | quickstart/contracts | publicador contra clones reais dos dois marketplaces | PASS | UPDATED, CREATED, UNCHANGED e BLOCKED conforme `contracts/cli.md` | orquestrador |
