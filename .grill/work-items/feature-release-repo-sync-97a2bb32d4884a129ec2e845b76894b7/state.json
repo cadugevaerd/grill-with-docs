@@ -81,9 +81,26 @@
         "reason": "",
         "state": "in-progress",
         "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/tasks.md",
+            "sha256": "240d4f9b930d8c13fd6d55061462b3fc3e69298ee99ed59f6de249fed049e270"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
       }
     ],
-    "current_step": "tasks",
+    "current_step": "analyze",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -101,14 +118,14 @@
     "steps": {
       "agent-assign": "pending",
       "agent-execute": "pending",
-      "analyze": "pending",
+      "analyze": "in-progress",
       "checklist": "complete",
       "converge": "pending",
       "plan": "complete",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
-      "tasks": "in-progress",
+      "tasks": "complete",
       "verify": "pending"
     }
   },
