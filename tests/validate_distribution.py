@@ -27,6 +27,14 @@ def main():
     assert not list(PLUGIN.rglob("tests"))
     for path in (PLUGIN / ".codex-plugin/plugin.json", PLUGIN / ".claude-plugin/plugin.json", PLUGIN / "hooks/hooks.json", PLUGIN / "skills/grill-with-docs/SKILL.md", PLUGIN / "skills/grill-with-docs/scripts/grill_workspace.py", PLUGIN / "skills/grill-with-docs/scripts/audit_decisions.py"):
         assert path.is_file(), path
+    # Version headings drift silently from the manifests; pin them to the bump.
+    for path, prefix in ((PLUGIN / "skills/grill-with-docs/SKILL.md", "# Grill with Docs v"),
+                         (PLUGIN / "skills/grill-with-docs/references/session-protocol.md", "# Protocolo de sessão v"),
+                         (ROOT / "README.md", "**v")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        headings = [line for line in lines if line.startswith(prefix)]
+        assert len(headings) == 1, (path.name, prefix, headings)
+        assert headings[0].startswith(f"{prefix}{VERSION}"), (path.name, headings[0])
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "codex plugin marketplace add ." in readme and "codex plugin add grill-with-docs@grill-with-docs" in readme
     assert "claude plugin marketplace add cadugevaerd/grill-with-docs" in readme and "claude plugin install grill-with-docs@grill-with-docs" in readme
