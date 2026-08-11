@@ -47,3 +47,23 @@ Total 228 testes. Baseline antes desta fase era 202; os 26 novos são de `valida
 - `tests/check_version_bump.py` **não** é coletado pelo glob `validate_*.py` de `run_validators.py`, verificado por enumeração do glob.
 - Nada foi criado ou alterado dentro de `plugin/`.
 - A matriz de portabilidade existente em `ci.yml` permanece inalterada; o job novo é adicional e condicionado a `pull_request`.
+
+## Reconvergência após achado de review
+
+O gate de review encontrou um bypass e a correção mudou a fonte, o que invalida a evidência acima. Reexecutado.
+
+**Achado**: com detecção de rename ligada, `git diff --name-only base...head` reporta apenas o destino. Mover um arquivo para **fora** de `plugin/` remove conteúdo do bundle publicado, mas era lido como `NO-PLUGIN-CHANGE`, exit `0`. Reproduzido em clone real.
+
+**Correção**: `--no-renames` em `changed_paths`, que faz o caminho de origem sob `plugin/` reaparecer no diff. Três testes de regressão em `tests/validate_bump_gate_contract.py`, classe `GitLayer`.
+
+| Vetor | Antes | Depois |
+|---|---|---|
+| mover arquivo de `plugin/` para fora, sem bump | `NO-PLUGIN-CHANGE`, exit 0 | `MISSING-BUMP`, exit 1 |
+| rename dentro de `plugin/` | já reprovava | `MISSING-BUMP`, exit 1 |
+| mudança só de modo (`chmod +x`) em `plugin/` | — | `MISSING-BUMP`, exit 1 |
+| substituir arquivo de `plugin/` por symlink | — | `MISSING-BUMP`, exit 1 |
+| copiar arquivo para dentro de `plugin/` | — | `MISSING-BUMP`, exit 1 |
+
+Os quatro cenários do handoff e as quatro bordas originais foram reexecutados e permanecem conforme.
+
+Suíte após a correção: `python3 tests/run_validators.py` → exit `0`, 231 testes. Os três testes novos elevam `validate_bump_gate_contract.py` de 26 para 29.
