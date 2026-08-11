@@ -69,3 +69,30 @@ jobs:
         run: |
           python tests/validate_distribution.py
           python tests/validate_workspace_contract.py WorkspaceV2Contract.test_rename_child_moves_directory_and_rejects_preexisting_target WorkspaceV2Contract.test_init_isolates_same_slug_and_never_writes_global WorkspaceV2Contract.test_init_reuse_identity_conflict_and_immutable_tamper WorkspaceV2Contract.test_migrate_preview_apply_preserves_files_directories_and_reuses WorkspaceV2Contract.test_reconcile_apply_is_byte_idempotent_without_mtime_churn WorkspaceV2Contract.test_hotfix_fast_is_self_contained_and_feature_remains_plan_only WorkspaceV2Contract.test_filesystem_json_normalizes_byte_paths_and_native_command_parsing WorkspaceV2Contract.test_audit_supports_artifact_root_outside_project_root
+
+  bump-gate:
+    name: Version bump gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # fetch-depth: 0 is mandatory: the default shallow clone does not contain
+      # the merge base, so `git show <base>:<file>` would fail.
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+
+      # On pull_request the checkout is an ephemeral merge commit, so the base
+      # must come from the event payload SHA, never from a branch name.
+      - name: Enforce version bump
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python tests/check_version_bump.py --base-ref "$BASE_SHA"

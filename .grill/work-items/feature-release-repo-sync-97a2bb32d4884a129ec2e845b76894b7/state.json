@@ -115,9 +115,26 @@
         "reason": "",
         "state": "in-progress",
         "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/agent-assignments.md",
+            "sha256": "befc75ca25c91367924ea050773b251c5592312698d5c32f778dabcb3bc8c64b"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
       }
     ],
-    "current_step": "agent-assign",
+    "current_step": "agent-execute",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -133,8 +150,8 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "in-progress",
-      "agent-execute": "pending",
+      "agent-assign": "complete",
+      "agent-execute": "in-progress",
       "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
