@@ -1,5 +1,5 @@
 {
-  "active_phase": "FASE-001",
+  "active_phase": "FASE-002",
   "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
