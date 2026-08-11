@@ -4,7 +4,7 @@
 - state: ready-for-specify
 - roadmap: ROADMAP.md#FASE-002
 - context-refs: Marketplace, Cópia vendorizada, Entrada de marketplace, Publicação
-- ADRs: ADR-0001, ADR-0003, ADR-0004, ADR-0005
+- ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0006
 - BLs: BL-0001
 
 ## WHAT

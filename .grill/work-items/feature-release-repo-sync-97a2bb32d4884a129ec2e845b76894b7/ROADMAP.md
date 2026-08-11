@@ -20,7 +20,7 @@
 - scope-in: workflow de publicação; espelho de `plugin/` + README; atualização de `version` na entrada de marketplace; um job por marketplace; secret com o PAT
 - scope-out: reconciliação do drift já existente; qualquer mudança no formato de marketplace
 - context-refs: Marketplace, Cópia vendorizada, Entrada de marketplace, Publicação
-- ADRs: ADR-0001, ADR-0003, ADR-0004, ADR-0005
+- ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0006
 - BLs: BL-0001
 - depends-on: FASE-001
 - specify-handoff: handoffs/FASE-002-SPECIFY-HANDOFF.md

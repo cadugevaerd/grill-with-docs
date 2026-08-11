@@ -18,7 +18,7 @@ Risco: duas PRs concorrentes que bumpem para a mesma versão conflitam em `plugi
 
 ## FASE-002 — Publicação fan-out nos dois marketplaces
 - phase: FASE-002
-- ADRs: ADR-0001, ADR-0003, ADR-0004, ADR-0005
+- ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0006
 - BLs: BL-0001
 - delivery-units: DU-002
 - development-type: platform-devops
