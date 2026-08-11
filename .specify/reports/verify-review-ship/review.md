@@ -55,9 +55,22 @@ Registrado como limite conhecido, não como defeito: duas pull requests concorre
 
 Nenhum conflito. A cláusula "Fail-closed sem waiver" foi o critério que orientou a verificação dos caminhos sem informação, e todos reprovam.
 
-### Nota de procedimento
+### Revisão independente
 
-Um revisor independente foi despachado em paralelo e não entregou relatório. O achado acima veio da passada adversarial do orquestrador, reproduzida em clone real antes da correção. O gate não deve ser lido como tendo tido dois pares de olhos independentes.
+Um revisor independente foi despachado e entregou relatório. Ele **reproduziu o mesmo bypass de rename de forma independente**, em repositório descartável próprio, chegando à mesma causa: `git diff --name-only` liga detecção de rename por padrão, sem precisar de `-M`. Duas reproduções independentes do mesmo defeito.
+
+Ele confirmou, verificando e não apenas raciocinando: os caminhos fail-closed, a comparação por tupla de inteiros, a ausência de sobreposição com `validate_distribution.py`, que nada foi adicionado em `plugin/`, e que o job de CI usa o campo correto do payload do evento.
+
+Dois achados dele foram além do que eu tinha:
+
+1. **A suíte nunca exercitava git de verdade.** Todo teste da camada de git usava monkeypatch; `test_diff_disables_rename_detection` apenas afirmava que `--no-renames` aparece no argv, sem provar o comportamento resultante. Foi exatamente essa lacuna que permitiu o bypass conviver com "228 testes OK". Corrigido: classe `RealGit` em `tests/validate_bump_gate_contract.py`, que sobe repositório git real em diretório temporário e exercita rename para fora, remoção simples, mudança fora do bundle, bump válido, a CLI completa e base inalcançável. Suíte foi de 29 para 35 testes.
+2. **FR-007 não se fecha só com código.** Uma reprovação do job só bloqueia a integração se o check estiver registrado como required status check na branch protection de `main`. Nada no diff garante isso. Registrado como `SGD-4` no backlog externo.
+
+Sobre a completude da correção, ele verificou os primos do vetor: detecção de cópia nunca esteve ligada (exige `-C`), mudança apenas de modo é listada normalmente, e symlink é blob como qualquer outro. Marcou explicitamente symlink e submódulo como raciocinados e não reproduzidos.
+
+Resíduo de baixa prioridade apontado por ele e registrado como `SGD-5`: `on.pull_request` sem `types:` explícito usa o default `[opened, synchronize, reopened]`, então retargetar uma PR para outra base sem novo push não redispara o gate, mantendo um PASS calculado contra a base antiga. Não corrigido nesta fase porque `on.pull_request` é nível de workflow e incluir `edited` faria a matriz de portabilidade inteira rodar a cada edição de título. Comportamento padrão do GitHub Actions, não regressão desta mudança.
+
+Veredito do revisor: APPROVE.
 
 ### Final Recommendation
 
