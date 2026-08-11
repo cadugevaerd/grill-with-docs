@@ -10,7 +10,10 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -196,6 +199,92 @@ class GitLayer(unittest.TestCase):
         paths = ["docs-attribution.md", "plugin/skills/grill-with-docs/references/upstream-attribution.md"]
         self.assertTrue(MODULE.touches_plugin(paths))
         self.assertEqual(MODULE.decide(paths, "2.5.0", "2.5.0").code, "MISSING-BUMP")
+
+
+class RealGit(unittest.TestCase):
+    """Exercita o binário git de verdade.
+
+    Os demais testes substituem a camada de git, então uma mudança de flag que
+    quebrasse o comportamento real passaria por eles: a asserção sobre argv
+    continuaria valendo. Este teste fecha essa lacuna — foi exatamente por ela
+    que o bypass de rename chegou a existir com a suíte verde.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.previous = os.getcwd()
+        self.git("init", "-q", "-b", "main", ".")
+        self.git("config", "user.email", "gate@example.invalid")
+        self.git("config", "user.name", "bump gate tests")
+        self.write(MANIFEST_FILE, '{"name": "p", "version": "2.5.0"}\n')
+        self.write(PLUGIN_FILE, "conteúdo distribuído\n")
+        self.write("tests/algum_teste.py", "# fora do bundle\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "base")
+        self.base = self.git("rev-parse", "HEAD").strip()
+        os.chdir(self.root)
+
+    def tearDown(self) -> None:
+        os.chdir(self.previous)
+        self.temporary.cleanup()
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(self.root), *args], capture_output=True,
+                              text=True, check=True).stdout
+
+    def write(self, relative: str, text: str) -> None:
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def commit_all(self, message: str) -> None:
+        self.git("add", "-A")
+        self.git("commit", "-qm", message)
+
+    def verdict(self):
+        return MODULE.decide(MODULE.changed_paths(self.base, "HEAD"),
+                             MODULE.read_version(self.base), MODULE.read_version("HEAD"))
+
+    def test_move_out_of_the_bundle_is_caught_against_real_git(self) -> None:
+        """Regressão do bypass: sem --no-renames o git reportaria só o destino."""
+        self.git("mv", PLUGIN_FILE, "docs_movido.md")
+        self.commit_all("move para fora do bundle")
+        paths = MODULE.changed_paths(self.base, "HEAD")
+        self.assertIn(PLUGIN_FILE, paths)
+        self.assertEqual(self.verdict().code, "MISSING-BUMP")
+
+    def test_plain_deletion_is_caught_against_real_git(self) -> None:
+        self.git("rm", "-q", PLUGIN_FILE)
+        self.commit_all("remove do bundle")
+        self.assertEqual(self.verdict().code, "MISSING-BUMP")
+
+    def test_change_outside_the_bundle_passes_against_real_git(self) -> None:
+        self.write("tests/algum_teste.py", "# alterado\n")
+        self.commit_all("muda fora do bundle")
+        self.assertEqual(self.verdict().code, "NO-PLUGIN-CHANGE")
+
+    def test_bundle_change_with_bump_passes_against_real_git(self) -> None:
+        self.write(PLUGIN_FILE, "conteúdo alterado\n")
+        self.write(MANIFEST_FILE, '{"name": "p", "version": "2.6.0"}\n')
+        self.commit_all("muda o bundle com bump")
+        self.assertEqual(self.verdict().code, "BUMPED")
+
+    def test_cli_exits_one_against_real_git_when_the_bump_is_missing(self) -> None:
+        self.write(PLUGIN_FILE, "conteúdo alterado\n")
+        self.commit_all("muda o bundle sem bump")
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            code = MODULE.main(["--base-ref", self.base, "--json"])
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(stream.getvalue())["code"], "MISSING-BUMP")
+
+    def test_unreachable_base_fails_closed_against_real_git(self) -> None:
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            code = MODULE.main(["--base-ref", "0" * 40, "--json"])
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(stream.getvalue())["code"], "VERSION-UNREADABLE")
 
 
 class CommandLine(unittest.TestCase):
