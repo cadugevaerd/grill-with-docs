@@ -104,7 +104,8 @@ def git(argv: list[str]) -> str:
     except OSError as error:
         raise GitError(f"git {' '.join(argv)}: {error}") from error
     if process.returncode != 0:
-        raise GitError(f"git {' '.join(argv)}: {(process.stderr or '').strip()}")
+        detail = " ".join((process.stderr or "").split())  # uma linha, para o modo texto
+        raise GitError(f"git {' '.join(argv)}: {detail}")
     return process.stdout
 
 
