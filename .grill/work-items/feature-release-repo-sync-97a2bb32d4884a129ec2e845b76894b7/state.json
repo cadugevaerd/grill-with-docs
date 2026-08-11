@@ -39,9 +39,34 @@
         "reason": "",
         "state": "in-progress",
         "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/plan.md",
+            "sha256": "01401aead07bcd47a3446618bd6e5f829de23eea455c8f5e01161d72670a8493"
+          },
+          {
+            "path": "specs/001-bump-gate/research.md",
+            "sha256": "1f7f338668be4286062e009ca95176ff9524180c3c31796dcbec16e00e96292b"
+          },
+          {
+            "path": "specs/001-bump-gate/contracts/cli.md",
+            "sha256": "2bee938e5d413ad71c368ae8ddb5cdf26302f6781bc3beeaa75bd6ddd31bbd9a"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
       }
     ],
-    "current_step": "plan",
+    "current_step": "checklist",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -60,9 +85,9 @@
       "agent-assign": "pending",
       "agent-execute": "pending",
       "analyze": "pending",
-      "checklist": "pending",
+      "checklist": "in-progress",
       "converge": "pending",
-      "plan": "in-progress",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
