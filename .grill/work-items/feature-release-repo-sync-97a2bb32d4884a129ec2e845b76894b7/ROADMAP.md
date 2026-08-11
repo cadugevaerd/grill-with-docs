@@ -3,7 +3,7 @@
 - execution-order: FASE-001, FASE-002, FASE-003
 
 ## FASE-001 — Gate de bump no CI
-- state: ready-for-specify
+- state: complete
 - objetivo: um merge que toque `plugin/` sem subir a versão falha no CI, e a versão volta a identificar o conteúdo publicado
 - scope-in: verificação de bump no workflow de CI existente; critério de "tocou plugin/"; mensagem de falha acionável
 - scope-out: qualquer escrita nos marketplaces; credencial; conteúdo copiado
@@ -15,7 +15,7 @@
 - delivery-units: DU-001
 
 ## FASE-002 — Publicação fan-out nos dois marketplaces
-- state: planned
+- state: ready-for-specify
 - objetivo: todo merge na main que toque `plugin/` deixa `claude-skills` e `codex-skills` com a versão e o conteúdo do canônico
 - scope-in: workflow de publicação; espelho de `plugin/` + README; atualização de `version` na entrada de marketplace; um job por marketplace; secret com o PAT
 - scope-out: reconciliação do drift já existente; qualquer mudança no formato de marketplace
