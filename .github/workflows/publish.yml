@@ -1,0 +1,134 @@
+name: publish to marketplaces
+
+# Publicar é criar a tag imutável no canônico e apontar a entrada de cada
+# marketplace para ela. Nenhum conteúdo é copiado: o source é git-subdir.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "plugin/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-marketplaces
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag da release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      ref: ${{ steps.resolve.outputs.ref }}
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Resolver versão e commit
+        id: resolve
+        run: |
+          version=$(python3 -c "import json;print(json.load(open('plugin/.claude-plugin/plugin.json'))['version'])")
+          sha=$(git rev-parse HEAD)
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'ref=v%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+
+      # Uma tag publicada é imutável: reescrevê-la mudaria o que já foi
+      # distribuído a quem instalou aquela versão.
+      - name: Criar a tag, recusando remarcação
+        env:
+          REF: ${{ steps.resolve.outputs.ref }}
+          SHA: ${{ steps.resolve.outputs.sha }}
+        run: |
+          # `|| true` aqui captura "tag ainda não existe", que é o caso normal e
+          # faria o passo abortar sob `bash -e`. Não engole falha de gate: a
+          # divergência de commit abaixo reprova explicitamente.
+          existing=$(git rev-parse -q --verify "refs/tags/$REF^{commit}" || true)
+          if [ -n "$existing" ]; then
+            if [ "$existing" != "$SHA" ]; then
+              echo "::error::$REF já existe em $existing e a publicação pede $SHA; tag publicada é imutável"
+              exit 1
+            fi
+            echo "$REF já aponta para $SHA; nada a criar"
+            exit 0
+          fi
+          git config user.name "grill-with-docs release"
+          git config user.email "release@users.noreply.github.com"
+          git tag -a "$REF" -m "$REF" "$SHA"
+          git push origin "refs/tags/$REF"
+
+  publish:
+    name: Publicar em ${{ matrix.target }}
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: claude
+            repo: cadugevaerd/claude-skills
+          - target: codex
+            repo: cadugevaerd/codex-skills
+    steps:
+      - name: Checkout do canônico
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+
+      # O token vai por cabeçalho, nunca na URL do remote: uma URL com segredo
+      # fica gravada em .git/config e vaza em qualquer log que a imprima.
+      - name: Clonar o marketplace
+        env:
+          TOKEN: ${{ secrets.MARKETPLACE_PUBLISH_TOKEN }}
+          REPO: ${{ matrix.repo }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::secret MARKETPLACE_PUBLISH_TOKEN ausente"
+            exit 1
+          fi
+          header=$(printf 'x-access-token:%s' "$TOKEN" | base64 -w0)
+          echo "::add-mask::$header"
+          printf 'AUTH_HEADER=%s\n' "$header" >> "$GITHUB_ENV"
+          git -c http.extraheader="AUTHORIZATION: basic $header" \
+              clone --depth 1 "https://github.com/$REPO.git" marketplace
+
+      - name: Apontar a entrada para a release
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.release.outputs.version }}
+          REF: ${{ needs.release.outputs.ref }}
+          SHA: ${{ needs.release.outputs.sha }}
+        run: |
+          python3 tests/publish_to_marketplace.py \
+            --target "$TARGET" --checkout marketplace \
+            --version "$VERSION" --ref "$REF" --sha "$SHA" --apply --json
+
+      - name: Commitar e empurrar somente se mudou
+        env:
+          REPO: ${{ matrix.repo }}
+          REF: ${{ needs.release.outputs.ref }}
+        working-directory: marketplace
+        run: |
+          if git diff --quiet; then
+            echo "$REPO já aponta para $REF; nada a empurrar"
+            exit 0
+          fi
+          git config user.name "grill-with-docs release"
+          git config user.email "release@users.noreply.github.com"
+          git commit -am "chore(grill-with-docs): aponta para $REF"
+          git -c http.extraheader="AUTHORIZATION: basic $AUTH_HEADER" push origin HEAD

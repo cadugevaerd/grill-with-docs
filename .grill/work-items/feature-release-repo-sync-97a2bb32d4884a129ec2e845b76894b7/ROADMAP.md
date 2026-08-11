@@ -15,19 +15,19 @@
 - delivery-units: DU-001
 
 ## FASE-002 — Publicação fan-out nos dois marketplaces
-- state: ready-for-specify
+- state: complete
 - objetivo: todo merge na main que toque `plugin/` deixa `claude-skills` e `codex-skills` com a versão e o conteúdo do canônico
 - scope-in: workflow de publicação; espelho de `plugin/` + README; atualização de `version` na entrada de marketplace; um job por marketplace; secret com o PAT
 - scope-out: reconciliação do drift já existente; qualquer mudança no formato de marketplace
 - context-refs: Marketplace, Cópia vendorizada, Entrada de marketplace, Publicação
-- ADRs: ADR-0001, ADR-0003, ADR-0004, ADR-0005
+- ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0006
 - BLs: BL-0001
 - depends-on: FASE-001
 - specify-handoff: handoffs/FASE-002-SPECIFY-HANDOFF.md
 - delivery-units: DU-002
 
 ## FASE-003 — Reconciliação do drift existente
-- state: planned
+- state: ready-for-specify
 - objetivo: `claude-skills` e `codex-skills` deixam de servir 2.4.0 e passam a servir a versão corrente do canônico
 - scope-in: gatilho `workflow_dispatch` no workflow de publicação; execução manual única; verificação do resultado nos dois marketplaces
 - scope-out: backfill de 2.4.1 ou de qualquer versão histórica

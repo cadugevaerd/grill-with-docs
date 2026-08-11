@@ -1,5 +1,5 @@
 {
-  "active_phase": "FASE-002",
+  "active_phase": "FASE-003",
   "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
@@ -212,9 +212,24 @@
         "reason": "",
         "state": "in-progress",
         "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/001-bump-gate/ship.md",
+            "sha256": "c6be0cdd136599b2ba612e8fd3de1311f8f45b495d522e68540aa11daf973dd5"
+          },
+          {
+            "path": "specs/001-bump-gate/learnings.md",
+            "sha256": "9b7fa7c51070521c72f68b21323163ca0c104aab3f9461725aa14ca4f865ed8f"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "ship"
       }
     ],
-    "current_step": "ship",
+    "current_step": "complete",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -237,7 +252,7 @@
       "converge": "complete",
       "plan": "complete",
       "review": "complete",
-      "ship": "in-progress",
+      "ship": "complete",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
