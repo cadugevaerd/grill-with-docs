@@ -54,3 +54,19 @@ Um terceiro achado do revisor, sobre `retarget` casar chave aninhada, era de uma
 Achados menores registrados e não corrigidos: `detect_indent` ignora tabulação, caindo no default de 2 espaços (cosmético; os dois índices reais usam espaços), e a mensagem de colisão de tag não nomeia "faltou bump" como causa provável (DX).
 
 Suíte após esta rodada: **267 testes**, exit `0`. `validate_publish_contract.py` foi de 26 para 30.
+
+## Quarta rodada: correção pós-ship
+
+O revisor achou uma terceira variante da mesma classe, depois do merge. Reproduzida e corrigida em `main` como follow-up.
+
+**Chave duplicada dentro da mesma entrada.** JSON tolera chave repetida e `json.loads` fica com a última. `string_value_span` e `object_value_span` retornavam no primeiro candidato em profundidade 1, então o patch acertava o valor sombreado e deixava o efetivo velho — com a ferramenta reportando `APPLIED / 2.5.0`. Três variantes reproduzidas: `version` repetida na entrada, `source` repetida na entrada, e `ref` repetida dentro de `source`. Na segunda o resultado era pior que no-op: entrada autocontraditória, com `version` novo e `source.ref` velho.
+
+Corrigido fazendo as duas funções varrerem até o fim e recusarem quando há mais de um candidato, em vez de escolher — mesma política já aplicada a nomes duplicados no array.
+
+**Bug na própria correção, achado ao testá-la.** Ao pular para o fim do valor encontrado, eu posicionava o índice **na** aspa de fechamento, que na iteração seguinte era lida como abertura de string e dessincronizava o scanner. Por isso `source` duplicada recusava mas `version` duplicada não. Um caractere: `index = closing + 1`.
+
+Suíte: **270 testes**, exit `0`. `validate_publish_contract.py` foi de 30 para 33.
+
+## Achados de configuração registrados
+
+`SGD-7`: o filtro `on.pull_request.paths` faz PR que toca só `README.md`, `specs/**` ou `CHANGELOG.md` pular o workflow inteiro, então `bump-gate` nunca reporta. Marcado como required check, essas PRs travam pendentes; não marcado, FR-007 é convenção. Complementa `SGD-4`.
