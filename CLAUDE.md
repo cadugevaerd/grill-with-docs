@@ -52,7 +52,11 @@ A stack do Spec Kit deste repositório está no controle de versão de propósit
 - `.specify/extensions/` carrega código de terceiros vendorizado (`agent-assign` de xymelon, `bugfix` de Quratulain-bilal). Atualizações de extensão aparecem como diff.
 - `.specify/extensions/.cache/` é cache do catálogo e gera churn a cada refresh.
 - `.claude/settings.local.json` é override por máquina; mudanças locais de configuração viram diff.
-- `.specify/memory/constitution.md` na raiz ainda é o **placeholder do spec-kit**. Enquanto tiver placeholders, o gate constitucional do `init` e o `audit_decisions.py` bloqueiam com `BLOCKED-CONSTITUTION`. Rode `/speckit-constitution` antes de iniciar um work item aqui.
+- `.specify/memory/constitution.md` na raiz é a **Constituição gerenciada do grill**, gerada de `assets/GRILL-CONSTITUTION.template.md` e não o placeholder do spec-kit. São 8 cláusulas normativas e ela é read-only depois do bootstrap: nenhum ADR ou decisão local funciona como waiver.
+
+## Backlog
+
+Este repositório está vinculado ao backlog `SGD` (`spec-kit-grill-with-docs`), herdado do caminho anterior do projeto. O código não coincide com o nome do diretório, então o vínculo foi feito com `backlog_bridge.py . --code SGD --apply`. Toda mutação no backlog é preview-first e exige `--apply`.
 
 ## Distribuição
 

@@ -85,12 +85,29 @@ def derive_identity(root: Path, taken: set[str]) -> tuple[str, str]:
     raise BacklogUnavailable("no free backlog code derived from the repository name")
 
 
-def resolve_backlog(root: Path, cli: str, tools: Any, db: str) -> dict[str, Any]:
+def resolve_backlog(root: Path, cli: str, tools: Any, db: str, requested: str | None = None) -> dict[str, Any]:
+    """Decide which backlog owns this repository.
+
+    A repository name rarely matches the backlog code it inherited, so an
+    explicit ``requested`` code wins over every derivation.
+    """
     backlogs = call(cli, tools, db, ["backlog", "list"]).get("data") or []
     target = str(root)
     bound = next((item for item in backlogs if item.get("bound_path") == target), None)
     if bound is not None:
+        if requested and bound["code"] != requested:
+            raise BacklogUnavailable(f"{target} is already bound to {bound['code']}, not {requested}")
         return {"status": "BOUND", "code": bound["code"], "name": bound.get("name"), "bound_path": target}
+    if requested:
+        declared = next((item for item in backlogs if item.get("code") == requested), None)
+        if declared is not None and declared.get("bound_path"):
+            raise BacklogUnavailable(f"{requested} is already bound to {declared['bound_path']}")
+        return {
+            "status": "NEEDS-BIND" if declared is not None else "NEEDS-CREATE",
+            "code": requested,
+            "name": declared.get("name") if declared else root.name,
+            "bound_path": target,
+        }
     taken = {item.get("code") for item in backlogs if item.get("code")}
     unbound = next((item for item in backlogs if item.get("name") == root.name and not item.get("bound_path")), None)
     if unbound is not None:
@@ -99,10 +116,11 @@ def resolve_backlog(root: Path, cli: str, tools: Any, db: str) -> dict[str, Any]
     return {"status": "NEEDS-CREATE", "code": code, "name": name, "bound_path": target}
 
 
-def ensure_bind(root: Path, *, apply: bool = False, db: str | None = None, tools: Any = None) -> dict[str, Any]:
+def ensure_bind(root: Path, *, apply: bool = False, db: str | None = None, tools: Any = None,
+                code: str | None = None) -> dict[str, Any]:
     cli, tools = resolve_cli(tools)
     store = str(Path(db or DEFAULT_DB).expanduser())
-    resolution = resolve_backlog(root, cli, tools, store)
+    resolution = resolve_backlog(root, cli, tools, store, code)
     payload = {"schema": SCHEMA, "db": store, "backlog": resolution, "changed": False}
     if resolution["status"] == "BOUND" or not apply:
         payload["verdict"] = "OK" if resolution["status"] == "BOUND" else "PREVIEW"
@@ -111,7 +129,7 @@ def ensure_bind(root: Path, *, apply: bool = False, db: str | None = None, tools
         call(cli, tools, store, ["backlog", "create", "--code", resolution["code"],
                                  "--name", resolution["name"], "--profile", "software"])
     call(cli, tools, store, ["backlog", "bind", "--code", resolution["code"], "--path", str(root)])
-    payload["backlog"] = resolve_backlog(root, cli, tools, store)
+    payload["backlog"] = resolve_backlog(root, cli, tools, store, code)
     payload["changed"] = True
     payload["verdict"] = "APPLIED"
     return payload
@@ -188,6 +206,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--work-item")
     parser.add_argument("--work-id")
     parser.add_argument("--db")
+    parser.add_argument("--code")
     parser.add_argument("--apply", action="store_true")
     arguments = parser.parse_args(argv)
     root = Path(arguments.root).expanduser().resolve()
@@ -196,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
             payload = sync_items(root, Path(arguments.work_item).resolve(), arguments.work_id,
                                  apply=arguments.apply, db=arguments.db)
         else:
-            payload = ensure_bind(root, apply=arguments.apply, db=arguments.db)
+            payload = ensure_bind(root, apply=arguments.apply, db=arguments.db, code=arguments.code)
     except BacklogUnavailable as error:
         payload = {"schema": SCHEMA, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
