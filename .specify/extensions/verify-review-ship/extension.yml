@@ -1,0 +1,101 @@
+schema_version: "1.0"
+
+extension:
+  id: "verify-review-ship"
+  name: "Verify Review Ship"
+  version: "0.4.2"
+  description: "Post-convergence operational verification, technical review, learning governance, and transactional delivery."
+  category: "process"
+  effect: "read-write"
+  author: "Carlos Eduardo Gevaerd Araujo"
+  repository: "https://github.com/cadugevaerd/spec-kit-verify-review-ship"
+  license: "MIT"
+  homepage: "https://github.com/cadugevaerd/spec-kit-verify-review-ship"
+
+requires:
+  speckit_version: ">=0.11.2"
+  commands: ["speckit.implement", "speckit.converge", "speckit.analyze", "speckit.constitution"]
+
+provides:
+  commands:
+    - name: "speckit.verify-review-ship.verify"
+      file: "commands/verify.md"
+      description: "Run post-convergence executable gates and diff hygiene checks."
+      aliases: ["speckit.verify-review-ship.v"]
+    - name: "speckit.verify-review-ship.review"
+      file: "commands/review.md"
+      description: "Review technical risk after Converge and Verify evidence."
+      aliases: ["speckit.verify-review-ship.r"]
+    - name: "speckit.verify-review-ship.ship"
+      file: "commands/ship.md"
+      description: "Capture approved learnings, revalidate, and merge safely."
+      aliases: ["speckit.verify-review-ship.s"]
+  scripts:
+    - name: "source-fingerprint.sh"
+      file: "scripts/source-fingerprint.sh"
+      description: "Canonical source fingerprint: reviewed-scope tree, work (including untracked) and tasks.md."
+  config:
+    - name: "verify-review-ship-config.yml"
+      template: "config-template.yml"
+      description: "Convergence, executable-gate, review, learning-policy, merge, and cleanup configuration."
+      required: false
+
+tags: ["quality", "review", "shipping", "merge", "cleanup", "learning", "governance", "agent-skills"]
+
+defaults:
+  converge:
+    required: true
+    accepted_outcome: "converged"
+    require_current_source: true
+    block_on_tasks_appended: true
+  # Paths excluded from the source fingerprint. Gate reports live in the repository, so a
+  # fingerprint that included them would be invalidated by writing the report it just declared.
+  # Extend this list if the project stores gate reports elsewhere.
+  fingerprint_exclude:
+    - ".specify/reports/verify-review-ship/**"
+    - "specs/**/verify.md"
+    - "specs/**/review.md"
+  orchestration:
+    discover_subagents: true
+    require_subagents: false
+    max_parallel_agents: 4
+  verify:
+    require_clean_worktree: false
+    run_tests: true
+    run_build: true
+    run_lint: true
+    run_typecheck: true
+  review:
+    include_runtime_correctness: true
+    include_readability: true
+    include_architecture: true
+    include_security: true
+    include_performance: true
+    severity_blocks_ship: ["Critical", "Important"]
+  ship:
+    require_verify_report: true
+    require_review_report: true
+    require_rollback_plan: true
+    require_monitoring_notes: true
+    default_decision_on_critical: "NO-GO"
+    remote: "origin"
+    base_branch: ""
+    merge_strategy: "no-ff"
+    require_clean_worktree: true
+    rerun_integration_gates: true
+    learning_gate:
+      enabled: true
+      require_human_approval: true
+      require_evidence: true
+      deduplicate: true
+      auto_commit_versioned_changes: true
+      rerun_analyze_on_constitution_change: true
+      rerun_verify_review: true
+      allow_targets: ["constitution", "agent-context", "adr-docs", "backlog", "memory", "discard"]
+      adr_directory: "docs/adr"
+      backlog_path: "BACKLOG.md"
+      context_section_heading: "Project Learnings"
+    memory:
+      mode: "propose-only"
+      write_after_verified_merge: true
+      required: false

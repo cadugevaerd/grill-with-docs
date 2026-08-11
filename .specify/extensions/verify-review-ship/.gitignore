@@ -1,0 +1,10 @@
+# Verify Review Ship
+
+.env
+.env.*
+.DS_Store
+__pycache__/
+.pytest_cache/
+dist/
+build/
+*.pyc
