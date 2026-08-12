@@ -27,8 +27,7 @@
 - delivery-units: DU-002
 
 ## FASE-003 — Reconciliação do drift existente
-- state: blocked
-- blocker: o segredo de publicação não está instalado no canônico e instalá-lo é ato humano; sem ele o disparo manual falha no primeiro passo que o consome e nenhum destino é reconciliado. Espelhado como SGD-9. O ciclo de 11 etapas está concluído e tudo que não depende da credencial foi entregue e verificado (`specs/003-drift-reconciliation/`).
+- state: complete
 - objetivo: `claude-skills` deixa de servir 2.4.1 e `codex-skills` deixa de não servir nada; ambos passam a servir a versão corrente do canônico
 - scope-in: gatilho `workflow_dispatch` no workflow de publicação; execução manual única; verificação do resultado nos dois marketplaces
 - scope-out: backfill de qualquer versão histórica

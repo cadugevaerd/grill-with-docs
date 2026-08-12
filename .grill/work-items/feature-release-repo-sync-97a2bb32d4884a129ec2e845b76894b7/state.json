@@ -1,6 +1,6 @@
 {
-  "active_phase": "FASE-003",
-  "audit_verdict": "BLOCKED",
+  "active_phase": null,
+  "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
     "schema": "v1",
@@ -265,11 +265,11 @@
     "max_questions_per_run": 25,
     "max_scope_growth_streak": 3
   },
-  "milestone_status": "in-progress",
+  "milestone_status": "completed",
   "second_pass": {
     "new_material_dqs": 0
   },
-  "status": "in-progress",
+  "status": "complete",
   "version": "1.2.0",
   "work_id": "feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7",
   "workflow": {

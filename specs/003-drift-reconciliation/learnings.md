@@ -6,6 +6,16 @@ O job de publicação terminava depois do `git push`, e isso parecia suficiente 
 
 A regra generalizável: quando um passo escreve em um sistema externo, o critério de sucesso tem que ser uma leitura desse sistema, não o código de retorno da escrita. E a leitura precisa vir de uma conexão nova — reler o arquivo que o próprio passo editou atesta a memória do runner, não o destino.
 
+## A releitura provou seu valor na primeira execução, sem precisar reprovar nada
+
+A primeira publicação real rodou verde nos dois destinos, e a releitura confirmou `problems: []` a partir de clone novo. Isso parece anticlimático — o passo novo não pegou nada. Mas o valor dele não é achar defeito nesta execução: é que o verde desta execução agora significa "os destinos servem 2.5.0 pelo pin certo", verificado de fora, em vez de "dois `git push` retornaram zero". A diferença entre as duas afirmações é o que a fase inteira comprou.
+
+A segunda execução fechou o outro lado: nada criado, nada empurrado, `VERIFIED` nos dois. Idempotência deixou de ser propriedade argumentada e virou observação.
+
+## O bloqueio era real, e insistir nele foi correto
+
+A fase ficou parada num ato humano: instalar a credencial. Publicar à mão daqui teria produzido o mesmo estado final nos marketplaces e destruído o objetivo — a automação seguiria sem nenhuma execução real, e o primeiro teste em condições reais aconteceria às cegas num merge futuro. Quando a autorização veio, o pipeline inteiro rodou de ponta a ponta e a fase fechou com evidência de produção, não com simulação. O custo de esperar foi tempo; o custo de contornar teria sido o próprio propósito da fase.
+
 ## A auditoria pegou o que eu deixei passar
 
 Adicionei ADR-0007 ao ROADMAP e esqueci o handoff e o PLAN-CONTEXT. A auditoria reprovou com `ARTIFACT-INVALID` e nomeou as duas divergências. Um gate documental que roda de graça e aponta o arquivo exato vale mais do que a disciplina de lembrar — foi a segunda vez nesta milestone que uma verificação automática pegou uma inconsistência que a revisão humana tinha deixado passar.

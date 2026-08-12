@@ -47,6 +47,10 @@ A releitura não herda `working-directory: marketplace` do passo anterior, entã
 
 `tests/validate_publish_contract.py`: 33 → 49 testes, todos verdes. Suíte canônica completa registrada em `verify.md`.
 
-## O que não foi integrado
+## Execução real
 
-A execução real. Ela depende do segredo de publicação, que não está instalado no repositório canônico e cuja instalação é ato humano — o workflow tem zero execuções até aqui. Tudo que não depende disso está entregue.
+Aconteceu depois do merge, com autorização explícita do usuário para executar ADR-0004 como decidido. O segredo foi instalado por stdin, para que o valor não passasse por linha de comando nem por log.
+
+Run 31603973983 sobre `c2a0c02`: tag `v2.5.0` criada, `claude-skills` atualizado de 2.4.1, `codex-skills` com entrada criada do zero, releitura `VERIFIED` nos dois. Run 31604076395 logo em seguida: nada criado, nada empurrado, `VERIFIED` nos dois. Detalhe e hashes em `verify.md`.
+
+O drift que abriu esta fase deixou de existir.

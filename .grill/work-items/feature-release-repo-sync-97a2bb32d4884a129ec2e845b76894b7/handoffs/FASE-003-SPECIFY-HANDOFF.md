@@ -1,7 +1,7 @@
 # FASE-003 — Reconciliação do drift existente
 
 - phase: FASE-003
-- state: blocked
+- state: complete
 - roadmap: ROADMAP.md#FASE-003
 - context-refs: Drift de publicação, Publicação
 - ADRs: ADR-0007
