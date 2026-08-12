@@ -44,6 +44,49 @@ class StatusPublicContract(unittest.TestCase):
         self.item(); _,b=status(self.r); _,d=status(self.r,"--current-worktree"); self.assertEqual(len(b["work_items"]),1); self.assertEqual(len(d["work_items"]),1)
     def test_repeated_output_is_byte_identical(self):
         self.item(); a,_=status(self.r); b,_=status(self.r); self.assertEqual(a.stdout,b.stdout); self.assertEqual(b.stderr,"")
+    def _git(self,*args): subprocess.run(["git","-C",str(self.r),*args],check=True,capture_output=True)
+    def _terminal(self, wid="work-a"):
+        p=self.r/".grill/work-items"/wid/"state.json"; d=json.loads(p.read_text(encoding="utf-8"))
+        d["status"]="complete"; d["milestone_status"]="completed"
+        p.write_text(json.dumps(d,indent=2)+"\n",encoding="utf-8")
+    def _findings(self, wid="work-a"):
+        _,x=status(self.r); return next(w for w in x["work_items"] if w["work_id"]==wid)["findings"]
+
+    # Os quatro quadrantes da deriva: em andamento ou terminal, no ramo registrado
+    # ou fora dele. Só um deles é anomalia.
+    def test_drift_is_silent_on_the_recorded_branch_however_many_commits(self):
+        self.item(); self._git("add","."); self._git("commit","-qm","bundle")
+        for n in range(3):
+            (self.r/f"f{n}.txt").write_text("x",encoding="utf-8"); self._git("add","."); self._git("commit","-qm",f"c{n}")
+        self.assertEqual(self._findings(),[])
+    def test_drift_fires_off_the_recorded_branch_while_the_branch_lives(self):
+        self.item(); self._git("add","."); self._git("commit","-qm","bundle")
+        self._git("branch","outra"); self._git("checkout","-q","outra")
+        self.assertIn("LIVE-VS-RECORDED",self._findings())
+    def test_drift_is_silent_once_the_recorded_branch_is_gone(self):
+        """Cada fase entrega no seu ramo: o do init morre no primeiro ship, e daí
+        em diante a comparação volta a ser insatisfazível, como a de head."""
+        self.item(); self._git("add","."); self._git("commit","-qm","bundle")
+        self._git("checkout","-qb","fase-dois"); self._git("branch","-D","main")
+        self.assertEqual(self._findings(),[])
+    def test_drift_is_silent_for_a_terminal_item_read_anywhere(self):
+        self.item(); self._git("add","."); self._git("commit","-qm","bundle")
+        self._terminal(); self._git("branch","outra"); self._git("checkout","-q","outra")
+        self.assertEqual(self._findings(),[])
+    def test_an_incomplete_milestone_is_not_terminal(self):
+        self.item(); self._git("add","."); self._git("commit","-qm","bundle")
+        p=self.r/".grill/work-items/work-a/state.json"; d=json.loads(p.read_text(encoding="utf-8"))
+        d["status"]="complete"  # marco segue aberto: conservador é continuar alarmando
+        p.write_text(json.dumps(d,indent=2)+"\n",encoding="utf-8")
+        self._git("branch","outra"); self._git("checkout","-q","outra")
+        self.assertIn("LIVE-VS-RECORDED",self._findings())
+    def test_both_heads_stay_visible_for_whoever_needs_the_difference(self):
+        self.item(); self._git("add","."); self._git("commit","-qm","bundle")
+        _,x=status(self.r); item=x["work_items"][0]
+        self.assertTrue(item["recorded"]["head"]); self.assertTrue(item["locations"][0]["head"])
+        self.assertNotEqual(item["recorded"]["head"],item["locations"][0]["head"])
+        self.assertEqual(item["findings"],[])
+
     def snapshot_tree(self):
         # `.git/` fica de fora porque o dono dele é o git, não o grill: a
         # manutenção automática cria e remove `.git/objects/maintenance.lock`
