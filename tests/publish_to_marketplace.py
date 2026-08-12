@@ -34,6 +34,9 @@ TARGETS: dict[str, dict[str, str]] = {
 EXIT_OK = 0
 EXIT_TARGET_INVALID = 1
 EXIT_USAGE = 2
+# A divergência de estado é separada do alvo inválido de propósito: procurar
+# defeito de configuração diante de um push perdido custa a investigação inteira.
+EXIT_MISMATCH = 3
 
 
 class Release(NamedTuple):
@@ -46,6 +49,11 @@ class EntryPlan(NamedTuple):
     status: str  # CREATED | UPDATED | UNCHANGED
     entry: dict[str, Any]
     index: dict[str, Any]
+
+
+class Verification(NamedTuple):
+    ok: bool
+    problems: list[str]
 
 
 class TargetInvalid(RuntimeError):
@@ -113,6 +121,48 @@ def plan_entry(index: dict[str, Any], target: str, release: Release, meta: dict[
         return EntryPlan("UNCHANGED", entry, result)
     result["plugins"][position] = entry
     return EntryPlan("UPDATED", entry, result)
+
+
+def verify_release(index: dict[str, Any], release: Release) -> Verification:
+    """Compare what a marketplace serves against the release that was published.
+
+    Rereading the file this run just wrote would only prove the edit happened in
+    the runner's memory: a push that landed elsewhere, a commit that missed the
+    file, or an index rewritten meanwhile would all pass. Handing over a checkout
+    freshly fetched from the remote is therefore the caller's responsibility —
+    this function only compares.
+
+    Only ``version`` and the five pinned fields are compared. Everything else in
+    the entry is curated per marketplace by decision, so comparing it would turn
+    legitimate curation into a failed publish.
+
+    Every divergence is reported, never just the first: stopping early turns one
+    broken entry into as many investigation rounds as it has broken fields.
+    """
+    plugins = index.get("plugins")
+    if not isinstance(plugins, list):
+        raise TargetInvalid("índice sem lista 'plugins'")
+    matches = [p for p in plugins if isinstance(p, dict) and p.get("name") == PLUGIN_NAME]
+    if not matches:
+        return Verification(False, [f"entrada {PLUGIN_NAME!r} ausente do índice"])
+    if len(matches) > 1:
+        # Aprovar pela primeira atestaria um índice que declara o plugin duas
+        # vezes, e o cliente não tem obrigação de escolher a mesma.
+        return Verification(False, [f"{len(matches)} entradas com name {PLUGIN_NAME!r}; índice ambíguo"])
+
+    entry = matches[0]
+    problems: list[str] = []
+    if entry.get("version") != release.version:
+        problems.append(f"version={entry.get('version')!r}, esperado {release.version!r}")
+    source = entry.get("source")
+    if not isinstance(source, dict):
+        problems.append(f"source={source!r}, esperado objeto")
+    else:
+        for key, want in source_object(release).items():
+            got = source.get(key)
+            if got != want:
+                problems.append(f"source.{key}={got!r}, esperado {want!r}")
+    return Verification(not problems, problems)
 
 
 def detect_indent(text: str) -> int:
@@ -434,8 +484,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sha", required=True)
     parser.add_argument("--repo-root", default=".")
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--verify", action="store_true",
+                        help="conferir o estado já publicado, sem escrever")
     parser.add_argument("--json", action="store_true", dest="as_json")
     arguments = parser.parse_args(argv)
+
+    if arguments.verify and arguments.apply:
+        # Verificar e escrever na mesma invocação faria a conferência atestar a
+        # própria escrita, que é exatamente o que ela existe para não fazer.
+        print("--verify e --apply são mutuamente exclusivos", file=sys.stderr)
+        return EXIT_USAGE
 
     checkout = Path(arguments.checkout).expanduser()
     if not checkout.is_dir():
@@ -449,15 +507,37 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         index, path, original = read_index(checkout, arguments.target)
-        meta = canonical_meta(Path(arguments.repo_root), arguments.target)
-        plan = plan_entry(index, arguments.target, release, meta)
-        if arguments.apply and plan.status != "UNCHANGED":
-            apply_entry(path, plan, original, index)
+        if arguments.verify:
+            verification = verify_release(index, release)
+        else:
+            meta = canonical_meta(Path(arguments.repo_root), arguments.target)
+            plan = plan_entry(index, arguments.target, release, meta)
+            if arguments.apply and plan.status != "UNCHANGED":
+                apply_entry(path, plan, original, index)
     except TargetInvalid as error:
         payload = {"target": arguments.target, "verdict": "BLOCKED", "error": str(error)}
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
               if arguments.as_json else f"BLOCKED {arguments.target}: {error}")
         return EXIT_TARGET_INVALID
+
+    if arguments.verify:
+        payload = {
+            "target": arguments.target,
+            "verdict": "VERIFIED" if verification.ok else "MISMATCH",
+            "problems": verification.problems,
+            "version": release.version,
+            "ref": release.ref,
+            "sha": release.sha,
+            "index": TARGETS[arguments.target]["index"],
+        }
+        if arguments.as_json:
+            print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+        elif verification.ok:
+            print(f"VERIFIED {arguments.target}: versão {release.version}, ref {release.ref}, "
+                  f"sha {release.sha}")
+        else:
+            print(f"MISMATCH {arguments.target}: " + "; ".join(verification.problems))
+        return EXIT_OK if verification.ok else EXIT_MISMATCH
 
     payload = {
         "target": arguments.target,

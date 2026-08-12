@@ -28,11 +28,11 @@
 
 ## FASE-003 — Reconciliação do drift existente
 - state: ready-for-specify
-- objetivo: `claude-skills` e `codex-skills` deixam de servir 2.4.0 e passam a servir a versão corrente do canônico
+- objetivo: `claude-skills` deixa de servir 2.4.1 e `codex-skills` deixa de não servir nada; ambos passam a servir a versão corrente do canônico
 - scope-in: gatilho `workflow_dispatch` no workflow de publicação; execução manual única; verificação do resultado nos dois marketplaces
-- scope-out: backfill de 2.4.1 ou de qualquer versão histórica
+- scope-out: backfill de qualquer versão histórica
 - context-refs: Drift de publicação, Publicação
-- ADRs: none
+- ADRs: ADR-0007
 - BLs: none
 - depends-on: FASE-002
 - specify-handoff: handoffs/FASE-003-SPECIFY-HANDOFF.md

@@ -132,3 +132,37 @@ jobs:
           git config user.email "release@users.noreply.github.com"
           git commit -am "chore(grill-with-docs): aponta para $REF"
           git -c http.extraheader="AUTHORIZATION: basic $AUTH_HEADER" push origin HEAD
+
+      # Um push aceito prova que o remote respondeu, não que o destino serve a
+      # release. Conferir o arquivo que este job acabou de editar atestaria só a
+      # edição em memória do runner, então a releitura vem de um clone novo.
+      # Roda mesmo quando nada foi empurrado: aí ela confirma que o destino já
+      # estava em dia, que é o caso de reexecução.
+      - name: Verificar o estado publicado
+        env:
+          TARGET: ${{ matrix.target }}
+          REPO: ${{ matrix.repo }}
+          VERSION: ${{ needs.release.outputs.version }}
+          REF: ${{ needs.release.outputs.ref }}
+          SHA: ${{ needs.release.outputs.sha }}
+          CANONICAL: https://github.com/cadugevaerd/grill-with-docs.git
+        run: |
+          rm -rf marketplace-verify
+          git -c http.extraheader="AUTHORIZATION: basic $AUTH_HEADER" \
+              clone --depth 1 "https://github.com/$REPO.git" marketplace-verify
+          python3 tests/publish_to_marketplace.py \
+            --target "$TARGET" --checkout marketplace-verify \
+            --version "$VERSION" --ref "$REF" --sha "$SHA" --verify --json
+
+          # A referência publicada precisa resolver para o commit publicado na
+          # visão de quem instala o plugin — e quem instala não tem o segredo,
+          # por isso a consulta ao canônico é anônima.
+          listing=$(git ls-remote "$CANONICAL" "refs/tags/$REF" "refs/tags/$REF^{}")
+          # Tag anotada expõe o commit na linha peeled; leve, na própria linha.
+          resolved=$(printf '%s\n' "$listing" | awk '$2 ~ /\^\{\}$/ {print $1}')
+          [ -n "$resolved" ] || resolved=$(printf '%s\n' "$listing" | awk 'NR==1 {print $1}')
+          if [ "$resolved" != "$SHA" ]; then
+            echo "::error::$REF resolve para ${resolved:-nada} e a publicação declara $SHA"
+            exit 1
+          fi
+          echo "$REPO serve $VERSION e $REF resolve para $SHA"
