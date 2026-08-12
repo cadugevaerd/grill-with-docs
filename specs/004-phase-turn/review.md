@@ -46,7 +46,24 @@ A virada grava `step: "phase-turn"`. Nenhum leitor itera `development.audit`: o 
 
 ## Revisão independente
 
-O subagente `reviewer-004` foi despachado com escopo de leitura e mandato de refutar, e não devolveu parecer dentro da janela desta fase. O registrado acima é a passada adversarial da sessão primária, com sondagens nomeadas e reproduzíveis — mais fraco que revisão independente, e declarado como tal.
+O subagente `reviewer-004` devolveu parecer **depois** do ship desta fase. Veredito: sem achado aberto. O que ele acrescenta ao registrado acima:
+
+- **Confirmou o Achado 1 de forma independente.** Encontrou o crash de `audit` não-lista por conta própria, com PoC em `/tmp` contra o código pré-correção, e só depois viu que já estava corrigido. Reproduziu contra o pós-correção e confirmou `DEVELOPMENT-SCHEMA`, exit 2. Também notou por que os 10 testes originais não pegavam: nenhum corrompia `audit` para tipo não-lista.
+- **Verificou a extração linha a linha** contra `HEAD~1` e confirmou a ordem preservada. Acrescentou um ponto que minha prova funcional não cobria: `acquire_lock(root, args.work_id, item)` é chamado de forma idêntica nos dois comandos, sem `reuse_if_target_exists`, então `checkpoint` e `phase-turn` sobre o mesmo work item competem pelo mesmo lock e são serializados entre si.
+- **Fechou os casos de borda de `phase_turn_command`** que o mandato pedia: chave ausente em `steps` vira `None`, nunca cai em `REUSED` por acidente; valor com caixa diferente é tratado como não-`complete`; `sequence` como tupla falha em `DEVELOPMENT-SCHEMA`, porque lista não é igual a tupla em Python; item repetido é impossível, já que só passa quem for igual a `SEQUENCE`.
+- **Confirmou por busca que nenhum leitor itera a trilha**, nos dois scripts.
+
+### Achado novo, herdado e não resolvido
+
+`GLOBAL-MUTATION` é levantado dentro do `finally`, **depois** de `atomic_write` já ter persistido o estado. Um `raise` em `finally` descarta o `return`, então a escrita aconteceu e o operador recebe `BLOCKED` — que se lê como "nada aconteceu". Verificado por mim em Python puro após o apontamento.
+
+Agravante que ele levantou e eu confirmei: `grep GLOBAL-MUTATION tests/` não retorna nada. O guard nunca foi exercitado positivamente por nenhum teste, novo ou antigo. Meu `test_phase_turn_refuses_to_disturb_the_global_projection` prova o caminho feliz — que o comando não mexe no global — e não que o guard dispara quando alguém mexe.
+
+Ele sinalizou explicitamente que é comportamento herdado do `checkpoint`, não regressão desta fase. Registrado como SGD-14, não corrigido aqui.
+
+### Registro de ordem
+
+O parecer chegou depois do ship. Este arquivo dizia que ele não havia devolvido parecer — verdade quando escrito, falso agora. O Achado 1 é da sessão primária, e ele o confirmou de forma independente; o achado do `GLOBAL-MUTATION` é dele.
 
 ## Suíte
 
