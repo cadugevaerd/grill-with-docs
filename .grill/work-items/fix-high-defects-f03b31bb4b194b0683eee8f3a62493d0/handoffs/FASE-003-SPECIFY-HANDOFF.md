@@ -1,7 +1,7 @@
 # FASE-003 — Gate de bump bloqueante
 
 - phase: FASE-003
-- state: planned
+- state: ready-for-specify
 - roadmap: ROADMAP.md#FASE-003
 - context-refs: Gate de bump, Required status check, Filtro de paths
 - ADRs: ADR-0003

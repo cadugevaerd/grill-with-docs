@@ -1,5 +1,5 @@
 {
-  "active_phase": "FASE-002",
+  "active_phase": "FASE-003",
   "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
@@ -400,9 +400,15 @@
         "reason": "aprendizados registrados",
         "state": "complete",
         "step": "ship"
+      },
+      {
+        "evidence": [],
+        "reason": "FASE-002 entregue; abrindo FASE-003",
+        "state": "turned",
+        "step": "phase-turn"
       }
     ],
-    "current_step": "complete",
+    "current_step": "specify",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -418,17 +424,17 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "complete",
-      "agent-execute": "complete",
-      "analyze": "complete",
-      "checklist": "complete",
-      "converge": "complete",
-      "plan": "complete",
-      "review": "complete",
-      "ship": "complete",
-      "specify": "complete",
-      "tasks": "complete",
-      "verify": "complete"
+      "agent-assign": "pending",
+      "agent-execute": "pending",
+      "analyze": "pending",
+      "checklist": "pending",
+      "converge": "pending",
+      "plan": "pending",
+      "review": "pending",
+      "ship": "pending",
+      "specify": "pending",
+      "tasks": "pending",
+      "verify": "pending"
     }
   },
   "limits": {

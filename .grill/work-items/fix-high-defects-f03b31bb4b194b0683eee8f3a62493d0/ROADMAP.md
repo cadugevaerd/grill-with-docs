@@ -15,7 +15,7 @@
 - delivery-units: DU-001
 
 ## FASE-002 — Deriva viva precisa
-- state: ready-for-specify
+- state: complete
 - objetivo: `status` deixa de reprovar todo work item multi-commit e volta a distinguir bloqueio real de deriva esperada
 - scope-in: separação das duas comparações do pino; supressão do finding de head; escopo do finding de branch ao work item não terminal
 - scope-out: qualquer alteração no pino gravado ou no hash que o protege
@@ -27,7 +27,7 @@
 - delivery-units: DU-002
 
 ## FASE-003 — Gate de bump bloqueante
-- state: planned
+- state: ready-for-specify
 - objetivo: PR que altera o conteúdo distribuído sem subir a versão não consegue ser integrada, e PR que não toca esse conteúdo não fica presa
 - scope-in: gate em workflow próprio, sem filtro de paths; verificação de que o check reporta em toda PR, inclusive nas que hoje pulam o workflow
 - scope-out: alteração do filtro de paths da matriz de portabilidade; o ato humano de marcar o check como required no branch protection
