@@ -58,6 +58,19 @@ A stack do Spec Kit deste repositório está no controle de versão de propósit
 
 Este repositório está vinculado ao backlog `SGD` (`spec-kit-grill-with-docs`), herdado do caminho anterior do projeto. O código não coincide com o nome do diretório, então o vínculo foi feito com `backlog_bridge.py . --code SGD --apply`. Toda mutação no backlog é preview-first e exige `--apply`.
 
+## Gates de integração
+
+São dois workflows, e a separação é deliberada:
+
+- `.github/workflows/ci.yml` — matriz de portabilidade (3 SOs × Python), com `paths:` restrito ao que ela cobre. Tem guarda que pula a matriz em merge de PR, porque o evento `pull_request` já testou a mesma árvore.
+- `.github/workflows/bump-gate.yml` — o gate de versão, **sem** `paths:`. Ele roda em toda PR e sempre reporta.
+
+O gate mora sozinho porque `paths:` é declarado no nível do workflow, não do job: enquanto vivia no `ci.yml`, herdava o filtro da matriz e ficava mudo nas PRs que não o casavam. Um required check mudo prende a PR para sempre.
+
+**Ato humano pendente:** registrar `Version bump gate` como *required status check* na branch protection de `main`, em `cadugevaerd/grill-with-docs`. Sem isso, FR-007 é convenção e não gate — a reprovação aparece em vermelho e nada impede o merge. Nenhum commit consegue fazer isso; é configuração do serviço. Rastreado em SGD-4 e SGD-7.
+
+Ao marcar, vale exigir junto **branch atualizada em relação à base**: isso fecha a ressalva da guarda de deduplicação do `ci.yml`, onde uma PR desatualizada poderia depositar árvore diferente da testada.
+
 ## Distribuição
 
 `tests/validate_distribution.py` trava o contrato público. Ao mudar a versão, atualize em **oito** lugares — os quatro manifests, a constante `VERSION` do próprio validador e três headings de documentação que o validador também fixa:

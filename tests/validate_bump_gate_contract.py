@@ -287,6 +287,83 @@ class RealGit(unittest.TestCase):
         self.assertEqual(json.loads(stream.getvalue())["code"], "VERSION-UNREADABLE")
 
 
+class WorkflowWiring(unittest.TestCase):
+    """O gate só bloqueia se reportar sempre — e só reporta se escapar do filtro.
+
+    A migração tirou o job de um workflow e o pôs em outro. Errar o arquivo novo
+    deixaria o repositório sem gate nenhum, sem sintoma nenhum, até alguém
+    integrar conteúdo distribuído sem subir a versão.
+    """
+
+    ROOT = TESTS.parent
+    GATE = ROOT / ".github/workflows/bump-gate.yml"
+    CI = ROOT / ".github/workflows/ci.yml"
+
+    def load_yaml(self, path: Path) -> dict:
+        try:
+            import yaml
+        except ImportError:  # pragma: no cover - a matriz de CI não instala pyyaml
+            self.skipTest("pyyaml indisponível")
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    def triggers(self, document: dict) -> dict:
+        # PyYAML lê o `on:` do GitHub Actions como o booleano True.
+        return document[True] if True in document else document["on"]
+
+    def test_the_gate_lives_in_its_own_workflow(self) -> None:
+        self.assertTrue(self.GATE.is_file(), self.GATE)
+
+    def test_the_gate_has_no_path_filter(self) -> None:
+        triggers = self.triggers(self.load_yaml(self.GATE))
+        self.assertIn("pull_request", triggers)
+        pull_request = triggers["pull_request"] or {}
+        self.assertNotIn("paths", pull_request)
+        self.assertNotIn("paths-ignore", pull_request)
+
+    def test_the_gate_keeps_full_history_and_the_payload_base(self) -> None:
+        document = self.load_yaml(self.GATE)
+        job = next(iter(document["jobs"].values()))
+        checkout = next(s for s in job["steps"] if "checkout" in str(s.get("uses", "")))
+        self.assertEqual(checkout["with"]["fetch-depth"], 0)
+        enforce = next(s for s in job["steps"] if "check_version_bump.py" in str(s.get("run", "")))
+        self.assertEqual(enforce["env"]["BASE_SHA"], "${{ github.event.pull_request.base.sha }}")
+        self.assertNotIn("github.base_ref", str(enforce))
+
+    def test_the_matrix_workflow_no_longer_owns_the_gate(self) -> None:
+        document = self.load_yaml(self.CI)
+        self.assertNotIn("bump-gate", document["jobs"])
+        self.assertNotIn("check_version_bump", self.CI.read_text(encoding="utf-8"))
+
+    def test_the_matrix_keeps_its_path_filter_and_its_dedup_guard(self) -> None:
+        document = self.load_yaml(self.CI)
+        triggers = self.triggers(document)
+        self.assertIn("paths", triggers["pull_request"])
+        contract = document["jobs"]["contract"]
+        self.assertIn("Merge pull request", contract["if"])
+
+    def test_no_job_reports_success_without_running_the_gate(self) -> None:
+        """Um shim que aprova quando o gate foi pulado torna aprovado
+        indistinguível de não-executado."""
+        for path in (self.GATE, self.CI):
+            document = self.load_yaml(path)
+            for name, job in document["jobs"].items():
+                steps = job.get("steps", [])
+                self.assertTrue(steps, (path.name, name))
+                for step in steps:
+                    self.assertNotIn("exit 0", str(step.get("run", "")))
+
+    def test_both_workflows_have_valid_shell(self) -> None:
+        for path in (self.GATE, self.CI):
+            document = self.load_yaml(path)
+            for job in document["jobs"].values():
+                for step in job.get("steps", []):
+                    script = step.get("run")
+                    if not script:
+                        continue
+                    checked = subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True)
+                    self.assertEqual(checked.returncode, 0, (path.name, step.get("name"), checked.stderr))
+
+
 class CommandLine(unittest.TestCase):
     """A CLI é exercitada com a camada de git substituída, para rodar sem repositório."""
 

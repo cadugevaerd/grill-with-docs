@@ -406,9 +406,200 @@
         "reason": "FASE-002 entregue; abrindo FASE-003",
         "state": "turned",
         "step": "phase-turn"
+      },
+      {
+        "evidence": [],
+        "reason": "FASE-003",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/006-bump-gate-required/spec.md",
+            "sha256": "3533764fba03ed1adbbbaa6a61ca2ff156a1b0aec6dee8c7e0c0463a2b24cf8d"
+          }
+        ],
+        "reason": "6 FRs",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "reason": "plan",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/006-bump-gate-required/plan.md",
+            "sha256": "34c16dead3c266b349b9bba4f09ec85eea22f0a1417b48944060f692b45247f3"
+          }
+        ],
+        "reason": "p",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "reason": "checklist",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/006-bump-gate-required/checklists/acceptance.md",
+            "sha256": "34b472d6eb9796ed65e9ce4b7754ae1ba3294b7c1ba9447bff513aaf902afb03"
+          }
+        ],
+        "reason": "checklist",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "reason": "tasks",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/006-bump-gate-required/tasks.md",
+            "sha256": "830a4dc20e89af6646e27147dfffbf32343df4d8144ce40adc0d29e2b6e242e1"
+          }
+        ],
+        "reason": "tasks",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "reason": "analyze",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/006-bump-gate-required/analysis.md",
+            "sha256": "cee7acaed678cf4a702ccf20c9cdad038b34585f2624afcfd6fd7874a24a4864"
+          }
+        ],
+        "reason": "analyze",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "reason": "agent-assign",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/006-bump-gate-required/agent-assign.md",
+            "sha256": "3684227b47d33dc7a843e3e182ed176b8303344f88dce1974008fd668052fd79"
+          }
+        ],
+        "reason": "agent-assign",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [],
+        "reason": "T-001..T-004",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".github/workflows/bump-gate.yml",
+            "sha256": "73fff5cfb5de9354eb71721af10a3f9802f31cf7e249f510b75f2f1f4e5998a7"
+          },
+          {
+            "path": "tests/validate_bump_gate_contract.py",
+            "sha256": "fa361b64ee293c6e61c797b75483afbb5fb5626522649941ca3c87ed438d69bd"
+          }
+        ],
+        "reason": "gate em workflow proprio, 7 testes de fiacao",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "converge",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/006-bump-gate-required/converge.md",
+            "sha256": "204de2308fc6aa32b1b77ee20bf0c1563496cf3e21131a076ac9a41d5a60b857"
+          }
+        ],
+        "reason": "converge",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "reason": "verify",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/006-bump-gate-required/verify.md",
+            "sha256": "7f1537601df5ef6a05665707ac9a3c877490da51bff1d591d70db5850355f02a"
+          }
+        ],
+        "reason": "verify",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "reason": "review",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/006-bump-gate-required/review.md",
+            "sha256": "302810cab5499895bb3c8ca03ba21bdfddf14160bc63d3babf15d83a86b24aa4"
+          }
+        ],
+        "reason": "review",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "reason": "A-E",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/006-bump-gate-required/learnings.md",
+            "sha256": "76fa7ee2f954d0a0855a594b10357e024eac86cac1d810106b37d33a9a2b01d7"
+          }
+        ],
+        "reason": "aprendizados",
+        "state": "complete",
+        "step": "ship"
       }
     ],
-    "current_step": "specify",
+    "current_step": "complete",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -424,17 +615,17 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "pending",
-      "agent-execute": "pending",
-      "analyze": "pending",
-      "checklist": "pending",
-      "converge": "pending",
-      "plan": "pending",
-      "review": "pending",
-      "ship": "pending",
-      "specify": "pending",
-      "tasks": "pending",
-      "verify": "pending"
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "complete",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
     }
   },
   "limits": {
