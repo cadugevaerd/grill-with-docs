@@ -73,6 +73,9 @@ def invoke(*args: object) -> tuple[subprocess.CompletedProcess[str], dict]:
     return process, payload
 
 
+SEQUENCE = tuple(load_workspace_module().SEQUENCE)
+
+
 def git(root: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(root), *args], text=True, capture_output=True, check=True).stdout.strip()
 
@@ -350,6 +353,131 @@ class WorkspaceV2Contract(unittest.TestCase):
         self.assertEqual(payload["code"], "INVALID-ARGUMENTS")
         self.assertEqual(payload["verdict"], "BLOCKED")
         self.assertNotIn("Traceback", process.stderr)
+
+    def _run_full_cycle(self, work_id: str, tag: str) -> None:
+        """Drive the 11 steps to complete, using one evidence file per step."""
+        evidence = Path("evidence") / f"{tag}.md"
+        (self.root / evidence).parent.mkdir(parents=True, exist_ok=True)
+        (self.root / evidence).write_text(f"evidencia {tag}\n", encoding="utf-8")
+        for step in SEQUENCE:
+            for state in ("in-progress", "complete"):
+                arguments = ["checkpoint", self.root, "--work-id", work_id, "--step", step,
+                             "--state", state, "--reason", f"{tag} {step}"]
+                if state == "complete":
+                    arguments += ["--evidence", evidence.as_posix()]
+                process, payload = invoke(*arguments)
+                self.assertEqual(process.returncode, 0, payload)
+
+    def _development(self, work_id: str) -> dict:
+        state = json.loads((self.root / ".grill/work-items" / work_id / "state.json").read_text(encoding="utf-8"))
+        return state["development"]
+
+    def test_phase_turn_reopens_the_matrix_and_records_the_reason(self) -> None:
+        self._init_item(work_id="turning")
+        self._run_full_cycle("turning", "fase-um")
+        before = self._development("turning")
+        self.assertTrue(all(before["steps"][s] == "complete" for s in SEQUENCE))
+
+        process, payload = invoke("phase-turn", self.root, "--work-id", "turning",
+                                  "--reason", "FASE-001 entregue, abrindo FASE-002")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "TURNED"))
+        after = self._development("turning")
+        self.assertTrue(all(after["steps"][s] == "pending" for s in SEQUENCE))
+        self.assertEqual(after["current_step"], SEQUENCE[0])
+        turn = after["audit"][-1]
+        self.assertEqual((turn["step"], turn["state"]), ("phase-turn", "turned"))
+        self.assertEqual(turn["reason"], "FASE-001 entregue, abrindo FASE-002")
+        # A forma do estado não muda: é o que dispensa migrar bundles existentes.
+        self.assertEqual(set(before), set(after))
+
+    def test_phase_turn_is_idempotent_and_writes_nothing_on_reuse(self) -> None:
+        self._init_item(work_id="reuse")
+        self._run_full_cycle("reuse", "ciclo")
+        invoke("phase-turn", self.root, "--work-id", "reuse", "--reason", "primeira virada")
+        path = self.root / ".grill/work-items/reuse/state.json"
+        before = path.read_bytes()
+        process, payload = invoke("phase-turn", self.root, "--work-id", "reuse", "--reason", "de novo")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "REUSED"))
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_phase_turn_refuses_an_unfinished_phase_without_touching_state(self) -> None:
+        self._init_item(work_id="partial")
+        invoke("checkpoint", self.root, "--work-id", "partial", "--step", "specify",
+               "--state", "in-progress", "--reason", "comecando")
+        path = self.root / ".grill/work-items/partial/state.json"
+        before = path.read_bytes()
+        process, payload = invoke("phase-turn", self.root, "--work-id", "partial", "--reason", "cedo demais")
+        self.assertEqual((process.returncode, payload["code"]), (2, "PHASE-INCOMPLETE"))
+        self.assertIn("plan", payload["error"])
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_phase_turn_requires_a_reason(self) -> None:
+        self._init_item(work_id="mute")
+        self._run_full_cycle("mute", "ciclo")
+        path = self.root / ".grill/work-items/mute/state.json"
+        before = path.read_bytes()
+        process, payload = invoke("phase-turn", self.root, "--work-id", "mute", "--reason", "   ")
+        self.assertEqual((process.returncode, payload["code"]), (2, "REASON-REQUIRED"))
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_phase_turn_refuses_an_untracked_work_item(self) -> None:
+        item = self._init_item(work_id="legacy-turn")
+        state = json.loads((item / "state.json").read_text(encoding="utf-8"))
+        state.pop("development", None)
+        (item / "state.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+        process, payload = invoke("phase-turn", self.root, "--work-id", "legacy-turn", "--reason", "x")
+        self.assertEqual((process.returncode, payload["code"]), (2, "LEGACY-UNTRACKED"))
+
+    def test_a_finished_phase_names_the_turn_instead_of_invalid_transition(self) -> None:
+        """A recusa precisa ensinar: foi por não ensinar que duas fases ficaram sem trilha."""
+        self._init_item(work_id="teaching")
+        self._run_full_cycle("teaching", "ciclo")
+        process, payload = invoke("checkpoint", self.root, "--work-id", "teaching", "--step", "specify",
+                                  "--state", "in-progress", "--reason", "proxima fase")
+        self.assertEqual((process.returncode, payload["code"]), (2, "PHASE-TURN-REQUIRED"))
+
+    def test_a_genuinely_invalid_transition_still_says_so(self) -> None:
+        self._init_item(work_id="skipping")
+        process, payload = invoke("checkpoint", self.root, "--work-id", "skipping", "--step", "tasks",
+                                  "--state", "in-progress", "--reason", "pulando specify e plan")
+        self.assertEqual((process.returncode, payload["code"]), (2, "INVALID-TRANSITION"))
+
+    def test_three_phases_leave_three_trails_in_one_work_item(self) -> None:
+        self._init_item(work_id="three")
+        for index, tag in enumerate(("fase-1", "fase-2", "fase-3"), start=1):
+            self._run_full_cycle("three", tag)
+            if index < 3:
+                _, payload = invoke("phase-turn", self.root, "--work-id", "three",
+                                    "--reason", f"encerrando {tag}")
+                self.assertEqual(payload["verdict"], "TURNED")
+        audit = self._development("three")["audit"]
+        turns = [entry for entry in audit if entry["step"] == "phase-turn"]
+        self.assertEqual(len(turns), 2)
+        self.assertEqual([t["reason"] for t in turns], ["encerrando fase-1", "encerrando fase-2"])
+        # 3 fases x 11 passos x 2 transições, mais as 2 viradas.
+        self.assertEqual(len(audit), 3 * len(SEQUENCE) * 2 + 2)
+        for tag in ("fase-1", "fase-2", "fase-3"):
+            self.assertTrue(any(entry["reason"].startswith(tag) for entry in audit), tag)
+
+    def test_phase_turn_refuses_to_disturb_the_global_projection(self) -> None:
+        self._init_item(work_id="guarded")
+        self._run_full_cycle("guarded", "ciclo")
+        global_file = self.root / ".grill/global/ROADMAP.md"
+        global_file.parent.mkdir(parents=True, exist_ok=True)
+        global_file.write_text("# Global\n", encoding="utf-8")
+        before = global_file.read_bytes()
+        process, payload = invoke("phase-turn", self.root, "--work-id", "guarded", "--reason", "virando")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "TURNED"))
+        self.assertEqual(global_file.read_bytes(), before)
+
+    def test_phase_turn_refuses_a_symlinked_work_item(self) -> None:
+        if not symlink_supported():
+            self.skipTest("host cannot create symlinks")
+        self._init_item(work_id="real-one")
+        link = self.root / ".grill/work-items/linked"
+        link.symlink_to(self.root / ".grill/work-items/real-one", target_is_directory=True)
+        process, payload = invoke("phase-turn", self.root, "--work-id", "linked", "--reason", "x")
+        self.assertEqual((process.returncode, payload["code"]), (2, "WORK-ITEM-SYMLINK"))
 
     def test_constitution_pass_and_not_applicable_are_accepted(self) -> None:
         self._constitution()
