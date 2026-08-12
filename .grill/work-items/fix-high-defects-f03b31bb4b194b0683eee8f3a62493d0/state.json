@@ -209,9 +209,200 @@
         "reason": "FASE-001 entregue em a60e386; abrindo FASE-002",
         "state": "turned",
         "step": "phase-turn"
+      },
+      {
+        "evidence": [],
+        "reason": "FASE-002: deriva viva precisa",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/005-live-drift/spec.md",
+            "sha256": "3e6d81010700b7d408cf394f6e15a470aa47e5c82d677d6720090f392920f8c7"
+          }
+        ],
+        "reason": "6 FRs, 5 SCs",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "reason": "d",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/005-live-drift/plan.md",
+            "sha256": "3360cc9eef962c180f746d2e57b4a4d2117e044af32db737069c64929e66e683"
+          }
+        ],
+        "reason": "4 decisoes",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "reason": "criterios",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/005-live-drift/checklists/acceptance.md",
+            "sha256": "aca0a23a2665a18a083ba2cfd3e3213e362e77fd4fb12505e52617f2a3668b4b"
+          }
+        ],
+        "reason": "14 itens",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "reason": "tasks",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/005-live-drift/tasks.md",
+            "sha256": "f9b2b134c537bee8d47df41b58db2d0341ec8fdf42369bdb71d9c935638b0836"
+          }
+        ],
+        "reason": "4 tasks",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "reason": "riscos",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/005-live-drift/analysis.md",
+            "sha256": "46b7f5dd4e1d07dc483354f715cedbb6e64a24aef8292f5e9a9243833b172359"
+          }
+        ],
+        "reason": "4 riscos",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "reason": "a",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/005-live-drift/agent-assign.md",
+            "sha256": "f549ec8549c9c8590e371559e266ce7616412006585feb28e87d49710759e394"
+          }
+        ],
+        "reason": "dono unico",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [],
+        "reason": "T-001..T-004",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_status.py",
+            "sha256": "4ae9476878bd0693f58b8a557606c7096d1a55f41de5830e0acba9acdb92da5e"
+          },
+          {
+            "path": "tests/validate_status_contract.py",
+            "sha256": "f8fe65f9539d64a0b33b7b7bfc87d3fba4e4b2ad458b1163925f8afa80a78f89"
+          }
+        ],
+        "reason": "condicao refinada, 6 testes novos, bump 2.5.3",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "c",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/005-live-drift/converge.md",
+            "sha256": "6801b10c7341589eaeb419dd99463c7accd9bb99cf4da2a53d60b7b73ef36924"
+          }
+        ],
+        "reason": "309 testes",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "reason": "v",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/005-live-drift/verify.md",
+            "sha256": "e570555b1d51b1daf2227e11402b884501fda338fc418debe255c93bce09f291"
+          }
+        ],
+        "reason": "14 CHK verdes, 309 testes",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "reason": "r",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/005-live-drift/review.md",
+            "sha256": "650c14151c0cee29deb4be2dfa9197522fcbcc79ab602ef2ada8174095581783"
+          }
+        ],
+        "reason": "APPROVE",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "reason": "A-E",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/005-live-drift/learnings.md",
+            "sha256": "5e59cb92269f603a71a35673717a507cf6993dd2acb9f08919a2393fb378376c"
+          }
+        ],
+        "reason": "aprendizados registrados",
+        "state": "complete",
+        "step": "ship"
       }
     ],
-    "current_step": "specify",
+    "current_step": "complete",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -227,17 +418,17 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "pending",
-      "agent-execute": "pending",
-      "analyze": "pending",
-      "checklist": "pending",
-      "converge": "pending",
-      "plan": "pending",
-      "review": "pending",
-      "ship": "pending",
-      "specify": "pending",
-      "tasks": "pending",
-      "verify": "pending"
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "complete",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
     }
   },
   "limits": {

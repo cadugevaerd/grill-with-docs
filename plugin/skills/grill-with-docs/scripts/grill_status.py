@@ -84,7 +84,23 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
             findings.append("INVALID-DEVELOPMENT-SEQUENCE")
     phases, phase_states, modules, units, types = phases_and_map(bundle.files)
     lv = live(root)
-    if immutable.get("branch") != lv["branch"] or immutable.get("head") != lv["head"]: findings.append("LIVE-VS-RECORDED")
+    # O head gravado é o do instante do `init`, anterior ao bundle existir: nenhum
+    # commit que contenha o bundle pode igualá-lo, então compará-lo emitia um
+    # achado que disparava sempre, para todo work item, mascarando bloqueio real.
+    # O branch é comparável — mas só enquanto se trabalha nele. Depois do ship
+    # ele é mergeado e apagado, e a diferença passa a ser esperada. Os dois heads
+    # continuam na saída, em `recorded` e em `locations`, para quem precisar da
+    # diferença calculá-la.
+    # E o branch registrado só é comparável enquanto ele existir: o protocolo
+    # entrega uma fase por branch, então o branch do `init` morre no primeiro
+    # ship e um work item multi-fase passaria a alarmar para sempre da segunda
+    # fase em diante — o mesmo defeito, um nível acima.
+    terminal = state.get("status") == "complete" and state.get("milestone_status") == "completed"
+    recorded_branch = immutable.get("branch")
+    recorded_alive = bool(recorded_branch) and bool(
+        git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{recorded_branch}"))
+    if not terminal and recorded_alive and recorded_branch != lv["branch"]:
+        findings.append("LIVE-VS-RECORDED")
     # Re-read all governance evidence through the same no-follow reader used by
     # writes.  The bundle walk is not sufficient: a symlink can be introduced
     # between discovery and this projection, and root-level constitution files
