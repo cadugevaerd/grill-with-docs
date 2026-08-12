@@ -1802,7 +1802,11 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             state["development"] = development
             args.state = "in-progress"
         sequence = development.get("sequence"); steps = development.get("steps")
-        if sequence != SEQUENCE or not isinstance(steps, dict):
+        # A trilha entra na validação de forma junto com o resto: ausente é
+        # legítimo e vira lista, mas presente e de outro tipo derrubava o comando
+        # com AttributeError no append lá embaixo — traceback onde devia haver
+        # código nomeado.
+        if sequence != SEQUENCE or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         current = steps.get(args.step, "pending")
         evidence = []
@@ -1885,7 +1889,7 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-UNTRACKED", args.work_id)
         sequence = development.get("sequence")
         steps = development.get("steps")
-        if sequence != SEQUENCE or not isinstance(steps, dict):
+        if sequence != SEQUENCE or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         reason = args.reason.strip()
         if not reason:
@@ -1906,7 +1910,7 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         # Mesmo shape das demais entradas da trilha, com um step fora de SEQUENCE:
         # acrescentar um campo de fase mudaria a forma do estado e exigiria migrar
         # bundles existentes, que é justamente o que esta decisão evita.
-        development.setdefault("audit", []).append(
+        development["audit"].append(
             {"step": "phase-turn", "state": "turned", "evidence": [], "reason": reason})
         atomic_write(root, path, (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode())
         return {"verdict": "TURNED", "work_id": args.work_id, "reason": reason,

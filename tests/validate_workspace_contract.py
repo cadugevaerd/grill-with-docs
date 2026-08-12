@@ -428,6 +428,30 @@ class WorkspaceV2Contract(unittest.TestCase):
         process, payload = invoke("phase-turn", self.root, "--work-id", "legacy-turn", "--reason", "x")
         self.assertEqual((process.returncode, payload["code"]), (2, "LEGACY-UNTRACKED"))
 
+    def _corrupt_audit(self, work_id: str) -> Path:
+        path = self.root / ".grill/work-items" / work_id / "state.json"
+        state = json.loads(path.read_text(encoding="utf-8"))
+        state["development"]["audit"] = {"nao": "e lista"}
+        path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+        return path
+
+    def test_a_trail_that_is_not_a_list_is_named_not_a_traceback(self) -> None:
+        """Ambos os escritores de estado tocam a trilha; nenhum pode estourar nela."""
+        self._init_item(work_id="badtrail")
+        self._run_full_cycle("badtrail", "ciclo")
+        self._corrupt_audit("badtrail")
+        process, payload = invoke("phase-turn", self.root, "--work-id", "badtrail", "--reason", "virando")
+        self.assertEqual((process.returncode, payload["code"]), (2, "DEVELOPMENT-SCHEMA"))
+        self.assertNotIn("Traceback", process.stderr)
+
+    def test_checkpoint_also_names_a_trail_that_is_not_a_list(self) -> None:
+        self._init_item(work_id="badtrail2")
+        self._corrupt_audit("badtrail2")
+        process, payload = invoke("checkpoint", self.root, "--work-id", "badtrail2", "--step", "specify",
+                                  "--state", "in-progress", "--reason", "comecando")
+        self.assertEqual((process.returncode, payload["code"]), (2, "DEVELOPMENT-SCHEMA"))
+        self.assertNotIn("Traceback", process.stderr)
+
     def test_a_finished_phase_names_the_turn_instead_of_invalid_transition(self) -> None:
         """A recusa precisa ensinar: foi por não ensinar que duas fases ficaram sem trilha."""
         self._init_item(work_id="teaching")

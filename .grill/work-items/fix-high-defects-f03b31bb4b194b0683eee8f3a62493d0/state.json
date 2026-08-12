@@ -152,9 +152,49 @@
         "reason": "301 testes exit 0",
         "state": "complete",
         "step": "converge"
+      },
+      {
+        "evidence": [],
+        "reason": "gates",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/verify.md",
+            "sha256": "5ae7263f70718ae975405a6e01633608417d10772a7b86fbfbaaf74a10aae36d"
+          }
+        ],
+        "reason": "301 testes, 18 CHK verdes, projecao global intacta",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "reason": "revisor independente",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/review.md",
+            "sha256": "63cd4687f6a71ae77412a9b6a6f9b109225175fbcccb0a6b46bb5f4cc6ece71a"
+          }
+        ],
+        "reason": "APPROVE, 1 defeito corrigido nos dois escritores",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "reason": "fases A-E",
+        "state": "in-progress",
+        "step": "ship"
       }
     ],
-    "current_step": "verify",
+    "current_step": "ship",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -176,11 +216,11 @@
       "checklist": "complete",
       "converge": "complete",
       "plan": "complete",
-      "review": "pending",
-      "ship": "pending",
+      "review": "complete",
+      "ship": "in-progress",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "complete"
     }
   },
   "limits": {
