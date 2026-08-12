@@ -36,7 +36,7 @@ Restrição de portabilidade: o canônico é público e sem forks, então secret
 
 ## FASE-003 — Reconciliação do drift existente
 - phase: FASE-003
-- ADRs: none
+- ADRs: ADR-0007
 - BLs: none
 - delivery-units: DU-003
 - development-type: platform-devops
@@ -46,6 +46,8 @@ O workflow de publicação declara `workflow_dispatch` além do gatilho de merge
 
 O `workflow_dispatch` permanece depois da reconciliação como escape hatch: permite republicar sem inventar um commit, útil quando um job falha e o re-run já expirou.
 
-Verificação: a entrada de marketplace e o `plugin.json` vendorizado nos dois destinos devem declarar a mesma versão do canônico, e `plugins/grill-with-docs/tests/` deve ter desaparecido do `claude-skills`.
+Verificação: por ADR-0007, cada destino é relido de um clone novo tirado do remoto, e a entrada precisa declarar a versão corrente e os cinco campos do pin `git-subdir`, com a referência resolvendo no canônico para o commit publicado.
+
+O texto anterior deste parágrafo pedia a mesma versão no `plugin.json` vendorizado e o desaparecimento de `plugins/grill-with-docs/tests/` do `claude-skills`. Os dois critérios pressupõem o espelho de conteúdo abandonado em ADR-0006: não existe cópia publicada, logo não há manifesto vendorizado nem diretório de testes a remover.
 
 > Mantenha um bloco por fase e referências ADR/BL exatamente equivalentes ao ROADMAP e ao handoff. Nunca registre `selected-handoff` aqui.
