@@ -31,11 +31,26 @@
     "feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7/R-0005",
     "feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7/R-0006",
     "feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7/R-0007",
-    "feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7/R-0008"
+    "feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7/R-0008",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/ADR-0001",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/ADR-0002",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/ADR-0003",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/DQ-0001",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/DQ-0002",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/DQ-0003",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/DQ-0004",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/FASE-001",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/FASE-002",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/FASE-003",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/R-0001",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/R-0002",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/R-0003",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/R-0004"
   ],
   "verdict": "PREVIEW",
   "work_ids": [
-    "feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7"
+    "feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7",
+    "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0"
   ]
 }
 ```
