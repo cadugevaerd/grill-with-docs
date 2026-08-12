@@ -60,4 +60,15 @@ Este repositório está vinculado ao backlog `SGD` (`spec-kit-grill-with-docs`),
 
 ## Distribuição
 
-`tests/validate_distribution.py` trava o contrato público. Ao mudar a versão, atualize em cinco lugares: `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json` e a constante `VERSION` do próprio validador.
+`tests/validate_distribution.py` trava o contrato público. Ao mudar a versão, atualize em **oito** lugares — os quatro manifests, a constante `VERSION` do próprio validador e três headings de documentação que o validador também fixa:
+
+- `plugin/.claude-plugin/plugin.json`
+- `plugin/.codex-plugin/plugin.json`
+- `.claude-plugin/marketplace.json`
+- `.agents/plugins/marketplace.json`
+- constante `VERSION` em `tests/validate_distribution.py`
+- `plugin/skills/grill-with-docs/SKILL.md` — heading `# Grill with Docs vX.Y.Z`
+- `plugin/skills/grill-with-docs/references/session-protocol.md` — heading `# Protocolo de sessão vX.Y.Z`
+- `README.md` — heading `**vX.Y.Z`
+
+Os três headings existem porque derivavam silenciosamente dos manifests; o validador exige exatamente uma ocorrência de cada prefixo, casando a versão.
