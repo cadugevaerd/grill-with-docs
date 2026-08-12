@@ -1,0 +1,46 @@
+{
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "conflicts-with-adrs": [],
+  "depends-on-work": [],
+  "immutable": {
+    "base_commit": "e107b19d1a1e3ec6032df5c2b0a37c2b11cd7cec",
+    "base_ref": "HEAD",
+    "branch": "fix/high-defects",
+    "constitution": {
+      "path": ".specify/memory/constitution.md",
+      "sha256": "789b55f46909c6861995740082199d912614bca7b23be4e0da5c73d824e94350",
+      "state": "present"
+    },
+    "head": "e107b19d1a1e3ec6032df5c2b0a37c2b11cd7cec",
+    "schema": "grill-work-item/v2",
+    "slug": "high-defects",
+    "type": "fix",
+    "work_id": "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0",
+    "workflow": {
+      "path": "WORKFLOW.md",
+      "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4"
+    }
+  },
+  "immutable_sha256": "0f642310fd38455e8e9260553ba5a9f2678b35e8b50a3e47171883dcb996178e",
+  "initial_artifacts": {
+    "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
+    "CONSTITUTION-CHECK.md": "477330022fa8999d443b9de231d94a082fe3eaf3f1a85446ad95765909d502dd",
+    "CONTEXT.md": "046a1d433eab29a57783aae06ea414afc271d25bcc7372290ccde7f00fd97ee7",
+    "DECISION-BACKLOG.md": "0ead85c254fb8b2c6a817a2cebaad3594fe88019041c904ec9176af012f806ab",
+    "DECISION-FRONTIER.md": "3b129d57ccac57b1af5096e1639df58a20190abcef54382e0d948d778b44e0d6",
+    "DELIVERY-MAP.md": "26ce55d35ddb5c916fb1101e760320e51e5b57b205a924e67cbac6a720808d17",
+    "PLAN-CONTEXT.md": "9f43372c57b4ab07edece509be37d7ea7204ccf5300a984e2cc69a6216d82ded",
+    "ROADMAP.md": "9c68e05c6993da8b319d96716b6d9fc90329af9876fdc74699eca4ee8b556734",
+    "ROUND-LOG.jsonl": "fee46cc9873273ad4d3bc6abb41ca3bd30aacbe392b137d8c8b6c97b6aca13e7",
+    "handoffs/FASE-001-SPECIFY-HANDOFF.md": "3cfe46ee546a9c46cf78fd7bf59ca897df07d24431a46ab4b61bf147fe919a58",
+    "state.json": "dc8c4b698faa744debc992844872d905e9b2dd783e07acc853ee0d95032a6d33"
+  },
+  "schema": "grill-work-item/v2",
+  "scope": {
+    "paths": []
+  }
+}

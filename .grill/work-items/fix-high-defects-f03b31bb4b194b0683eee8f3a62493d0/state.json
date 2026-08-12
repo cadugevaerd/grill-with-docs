@@ -1,0 +1,245 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "pending",
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "789b55f46909c6861995740082199d912614bca7b23be4e0da5c73d824e94350",
+    "state": "present"
+  },
+  "development": {
+    "audit": [
+      {
+        "evidence": [],
+        "reason": "FASE-001: virada de fase auditada",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/spec.md",
+            "sha256": "9a65c32f017185fa49c7b4054c734d6ffaf31c28fbc71902b38cd1d5c41af1c0"
+          }
+        ],
+        "reason": "spec com 7 FRs e 5 SCs",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "reason": "desenho da virada",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/plan.md",
+            "sha256": "465e11c9564c6384fe214d925d9bf3acbe039e5a64723d1a45bf633e8e391820"
+          }
+        ],
+        "reason": "5 decisoes de desenho, contrato do subcomando",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "reason": "criterios de aceite",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/checklists/acceptance.md",
+            "sha256": "4010b96482386f52087190641419a409fa019fde9107e69e5d9f7c051fa10234"
+          }
+        ],
+        "reason": "18 itens",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "reason": "T-001..T-006",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/tasks.md",
+            "sha256": "00939143086a591981040b2014f3d6f39f3c72df41e14898e0a4cf0d9b555d13"
+          }
+        ],
+        "reason": "6 tasks ordenadas por dependencia",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "reason": "riscos",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/analysis.md",
+            "sha256": "f3ac1f36992adc57512d5c13fbfac32f42c2a1a9179804fda3efd775b6c1f4c0"
+          }
+        ],
+        "reason": "6 riscos, cobertura dos 7 FRs",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "reason": "escopos",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/agent-assign.md",
+            "sha256": "0fd97a9d85b3ee036a43c0c9777fa67bfecad346e14677355d86016b6402fb4d"
+          }
+        ],
+        "reason": "dono unico, revisor independente no review",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [],
+        "reason": "T-001..T-006",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+            "sha256": "0e3b08d814ea642eae17970d199bd0a4abd6c13f93c185b168f00b37f968afe5"
+          },
+          {
+            "path": "tests/validate_workspace_contract.py",
+            "sha256": "623053b45de6969257eea9de1d63cca253b55431fa2fcc36d00c49efec15af65"
+          }
+        ],
+        "reason": "phase-turn, PHASE-TURN-REQUIRED, 10 testes novos, bump 2.5.2",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "integracao",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/converge.md",
+            "sha256": "aa270294f86bfb65e3105647f3fd30d8e0d81a7439a0dba03f39d3297458dff7"
+          }
+        ],
+        "reason": "301 testes exit 0",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "reason": "gates",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/verify.md",
+            "sha256": "5ae7263f70718ae975405a6e01633608417d10772a7b86fbfbaaf74a10aae36d"
+          }
+        ],
+        "reason": "301 testes, 18 CHK verdes, projecao global intacta",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "reason": "revisor independente",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/review.md",
+            "sha256": "63cd4687f6a71ae77412a9b6a6f9b109225175fbcccb0a6b46bb5f4cc6ece71a"
+          }
+        ],
+        "reason": "APPROVE, 1 defeito corrigido nos dois escritores",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "reason": "fases A-E",
+        "state": "in-progress",
+        "step": "ship"
+      }
+    ],
+    "current_step": "ship",
+    "schema": "grill-development/v1",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "agent-assign",
+      "agent-execute",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "in-progress",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    }
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "in-progress",
+  "version": "1.2.0",
+  "work_id": "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4",
+    "version": "v2"
+  }
+}

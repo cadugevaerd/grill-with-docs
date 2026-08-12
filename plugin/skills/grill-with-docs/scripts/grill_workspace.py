@@ -21,7 +21,7 @@ import uuid
 from datetime import date
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, Callable, NoReturn
 
 EXIT_OK = 0
 EXIT_NO_GO = 1
@@ -1735,33 +1735,60 @@ def migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
 SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "agent-assign", "agent-execute", "converge", "verify", "review", "ship"]
 
 
-def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    root = project_root(args.root)
-    if args.step not in SEQUENCE:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STEP", args.step)
-    if not WORK_ID_RE.fullmatch(args.work_id):
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", args.work_id)
-    item = root / ".grill" / "work-items" / args.work_id
+def resolve_development_item(root: Path, work_id: str) -> Path:
+    """Locate a work item bundle for a state-writing command, refusing symlinks."""
+    if not WORK_ID_RE.fullmatch(work_id):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", work_id)
+    item = root / ".grill" / "work-items" / work_id
     if item.is_symlink():
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORK-ITEM-SYMLINK", args.work_id)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORK-ITEM-SYMLINK", work_id)
     if not item.is_dir():
-        raise CliFailure(EXIT_NO_GO, "NO-GO", "WORK-ITEM-MISSING", args.work_id)
+        raise CliFailure(EXIT_NO_GO, "NO-GO", "WORK-ITEM-MISSING", work_id)
+    return item
+
+
+def global_snapshotter(root: Path) -> Callable[[], dict[str, tuple[bytes, int]]]:
+    """Content+mtime snapshot of the global projection, to prove it stayed put.
+
+    Shared by every command that writes work-item state: the projection is
+    derived, never edited in place, so any difference across a state write is a
+    bug in that write.
+    """
     global_dir = root / ".grill" / "global"
-    def snapshot_global() -> dict[str, tuple[bytes, int]]:
+
+    def snapshot() -> dict[str, tuple[bytes, int]]:
         if not global_dir.exists():
             return {}
         return {str(p.relative_to(global_dir)): (p.read_bytes(), p.stat().st_mtime_ns)
                 for p in global_dir.rglob("*") if p.is_file() and not p.is_symlink()}
+
+    return snapshot
+
+
+def read_development_state(root: Path, item: Path, work_id: str) -> tuple[Path, dict[str, Any]]:
+    """Read and shape-check ``state.json`` for a state-writing command."""
+    path = item / "state.json"
+    raw = safe_read(path, root=root, utf8=True)
+    assert isinstance(raw, str)
+    try:
+        state = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError) as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STATE", work_id) from exc
+    if not isinstance(state, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STATE", work_id)
+    return path, state
+
+
+def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    root = project_root(args.root)
+    if args.step not in SEQUENCE:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STEP", args.step)
+    item = resolve_development_item(root, args.work_id)
+    snapshot_global = global_snapshotter(root)
     global_before = snapshot_global()
     lock = acquire_lock(root, args.work_id, item)
     try:
-        path = item / "state.json"; raw = safe_read(path, root=root, utf8=True); assert isinstance(raw, str)
-        try:
-            state = json.loads(raw)
-        except (UnicodeDecodeError, json.JSONDecodeError, TypeError) as exc:
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STATE", args.work_id) from exc
-        if not isinstance(state, dict):
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STATE", args.work_id)
+        path, state = read_development_state(root, item, args.work_id)
         development = state.get("development")
         if not isinstance(development, dict) or development.get("schema") != "grill-development/v1":
             if not args.initialize_legacy:
@@ -1775,7 +1802,11 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             state["development"] = development
             args.state = "in-progress"
         sequence = development.get("sequence"); steps = development.get("steps")
-        if sequence != SEQUENCE or not isinstance(steps, dict):
+        # A trilha entra na validação de forma junto com o resto: ausente é
+        # legítimo e vira lista, mas presente e de outro tipo derrubava o comando
+        # com AttributeError no append lá embaixo — traceback onde devia haver
+        # código nomeado.
+        if sequence != SEQUENCE or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         current = steps.get(args.step, "pending")
         evidence = []
@@ -1808,6 +1839,12 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         index = sequence.index(args.step)
         if args.state == "in-progress":
             if current not in {"pending", "blocked"} or any(steps.get(s) != "complete" for s in sequence[:index]):
+                # Uma fase inteiramente concluída não é transição inválida: é fase
+                # encerrada esperando virada. Devolver INVALID-TRANSITION aqui
+                # mandava o operador procurar defeito onde faltava um passo de
+                # ciclo, e foi assim que duas fases inteiras ficaram sem trilha.
+                if all(steps.get(s) == "complete" for s in sequence):
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PHASE-TURN-REQUIRED", args.step)
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-TRANSITION", args.step)
         elif args.state == "complete":
             if not evidence:
@@ -1828,6 +1865,60 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         if snapshot_global() != global_before:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "GLOBAL-MUTATION", args.work_id)
 
+
+
+def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Close a finished phase and hand the step matrix back to the next one.
+
+    The matrix lives once per work item while the roadmap holds several phases,
+    so a completed cycle leaves every step ``complete`` and the next phase with
+    nowhere to start. The history is not lost by resetting: ``development.audit``
+    is append-only and already records every transition, which is why this
+    reopens the matrix instead of changing the shape of the state — no existing
+    bundle needs migrating, including ones already projected globally.
+    """
+    root = project_root(args.root)
+    item = resolve_development_item(root, args.work_id)
+    snapshot_global = global_snapshotter(root)
+    global_before = snapshot_global()
+    lock = acquire_lock(root, args.work_id, item)
+    try:
+        path, state = read_development_state(root, item, args.work_id)
+        development = state.get("development")
+        if not isinstance(development, dict) or development.get("schema") != "grill-development/v1":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-UNTRACKED", args.work_id)
+        sequence = development.get("sequence")
+        steps = development.get("steps")
+        if sequence != SEQUENCE or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
+        reason = args.reason.strip()
+        if not reason:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "REASON-REQUIRED", args.work_id)
+
+        # Idempotência antes da recusa, e não depois: um registro inteiro em
+        # `pending` é exatamente o que esta operação produz, então reprová-lo por
+        # "fase incompleta" tornaria a reexecução impossível.
+        if all(steps.get(s) == "pending" for s in sequence):
+            return {"verdict": "REUSED", "work_id": args.work_id, "reason": reason,
+                    "current_step": development.get("current_step")}, EXIT_OK
+        pending = [s for s in sequence if steps.get(s) != "complete"]
+        if pending:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PHASE-INCOMPLETE", ", ".join(pending))
+
+        development["steps"] = {step: "pending" for step in sequence}
+        development["current_step"] = sequence[0]
+        # Mesmo shape das demais entradas da trilha, com um step fora de SEQUENCE:
+        # acrescentar um campo de fase mudaria a forma do estado e exigiria migrar
+        # bundles existentes, que é justamente o que esta decisão evita.
+        development["audit"].append(
+            {"step": "phase-turn", "state": "turned", "evidence": [], "reason": reason})
+        atomic_write(root, path, (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode())
+        return {"verdict": "TURNED", "work_id": args.work_id, "reason": reason,
+                "current_step": development["current_step"]}, EXIT_OK
+    finally:
+        shutil.rmtree(lock, ignore_errors=True)
+        if snapshot_global() != global_before:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "GLOBAL-MUTATION", args.work_id)
 
 
 def status_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -1915,6 +2006,12 @@ def build_parser() -> JsonParser:
     checkpoint_parser.add_argument("--reason", default="")
     checkpoint_parser.add_argument("--initialize-legacy", action="store_true")
     checkpoint_parser.add_argument("--from-step")
+    phase_turn_parser = subparsers.add_parser("phase-turn")
+    phase_turn_parser.add_argument("root")
+    phase_turn_parser.add_argument("--work-id", required=True)
+    # A razão é exigida pela lógica, não pelo parser: assim a falta sai como
+    # REASON-REQUIRED, um código nomeado, em vez de erro de uso do argparse.
+    phase_turn_parser.add_argument("--reason", default="")
     status_parser = subparsers.add_parser("status")
     status_parser.add_argument("root")
     status_parser.add_argument("--work-id")
@@ -1940,6 +2037,7 @@ def main(argv: list[str] | None = None) -> int:
             "hotfix": hotfix_command,
             "hotfix-go": hotfix_go_command,
             "checkpoint": checkpoint_command,
+            "phase-turn": phase_turn_command,
             "status": status_command,
             "preflight": preflight_command,
             "backlog-sync": backlog_sync_command,
