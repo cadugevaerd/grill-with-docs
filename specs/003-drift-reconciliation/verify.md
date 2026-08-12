@@ -13,13 +13,13 @@
 | validate_checkpoint_contract | 36 |
 | validate_contract | 30 |
 | validate_dependencies_contract | 21 |
-| validate_publish_contract | **49** (era 33) |
+| validate_publish_contract | **51** (era 33) |
 | validate_status_contract | 27 |
 | validate_workflow_contract | 14 |
 | validate_workspace_contract | 52, 1 skip dependente de ambiente |
 | validate_distribution | `distribution: OK` |
 
-Total 286, contra o baseline de 270. As 16 novas são as classes `VerifyRelease` e `VerifyCommandLine`.
+Total 288, contra o baseline de 270. As 18 novas são as classes `VerifyRelease` e `VerifyCommandLine`, mais os dois testes do defeito encontrado na revisão.
 
 ## Checklist de aceite
 
@@ -32,6 +32,7 @@ Total 286, contra o baseline de 270. As 16 novas são as classes `VerifyRelease`
 | CHK-005 reprova entrada duplicada | ✅ | `test_duplicate_entries_are_reported_instead_of_picked` |
 | CHK-006 acumula divergências | ✅ | `test_every_divergence_is_reported_together` |
 | CHK-007 curadoria não reprova | ✅ | `test_curated_fields_never_fail_the_verification` |
+| CHK-003b reprova referência extra no `source` | ✅ | achado da revisão; `test_a_second_reference_inside_source_is_reported`, `test_the_publisher_refuses_what_the_verification_would_reject` |
 | CHK-008 saídas 0 e 3 | ✅ | `test_verify_approves_what_apply_published`, `test_verify_exits_three_on_divergence` |
 | CHK-009 `--verify` com `--apply` recusado | ✅ | `test_verify_refuses_to_run_together_with_apply` |
 | CHK-010 aplicar depois verificar | ✅ | `test_verify_approves_what_apply_published` |
@@ -40,7 +41,7 @@ Total 286, contra o baseline de 270. As 16 novas são as classes `VerifyRelease`
 | CHK-013 releitura depois do push | ✅ | ordem dos passos conferida no YAML parseado |
 | CHK-014 nenhum segredo novo | ✅ | reusa `AUTH_HEADER` já mascarado; nenhuma URL carrega token |
 | CHK-015 gatilho manual segue declarado | ✅ | `on: [push, workflow_dispatch]` |
-| CHK-016 suíte verde | ✅ | 286, exit 0 |
+| CHK-016 suíte verde | ✅ | 288, exit 0 |
 | CHK-017 nada em `plugin/` mudou | ✅ | diff toca `tests/`, `.github/`, `specs/`, `.grill/` |
 | CHK-018 publicador fora do glob | ✅ | `test_the_publisher_is_not_collected_as_a_validator` |
 | CHK-019 segredo instalado | ⛔ | **ato humano, não realizado** |

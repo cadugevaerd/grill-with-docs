@@ -37,7 +37,7 @@ Restrição de portabilidade: o canônico é público e sem forks, então secret
 ## FASE-003 — Reconciliação do drift existente
 - phase: FASE-003
 - ADRs: ADR-0007
-- BLs: none
+- BLs: BL-0002
 - delivery-units: DU-003
 - development-type: platform-devops
 

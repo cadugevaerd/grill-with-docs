@@ -430,6 +430,22 @@ class VerifyRelease(unittest.TestCase):
         with self.assertRaises(MODULE.TargetInvalid):
             MODULE.verify_release({}, RELEASE)
 
+    def test_a_second_reference_inside_source_is_reported(self) -> None:
+        """Os cinco campos certos não bastam se houver outra referência junto."""
+        index = self.published()
+        self.entry_of(index)["source"]["branch"] = "main"
+        result = MODULE.verify_release(index, RELEASE)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.problems, ["source.branch não pertence ao pin"])
+
+    def test_the_publisher_refuses_what_the_verification_would_reject(self) -> None:
+        """Verificador mais estrito que publicador deixaria o job vermelho depois
+        de já ter publicado; os dois precisam recusar o mesmo estado."""
+        index = json.loads(CLAUDE_INDEX)
+        next(p for p in index["plugins"] if p["name"] == "grill-with-docs")["source"]["branch"] = "main"
+        with self.assertRaises(MODULE.TargetInvalid):
+            MODULE.plan_entry(index, "claude", RELEASE, {})
+
 
 class VerifyCommandLine(unittest.TestCase):
     def setUp(self) -> None:

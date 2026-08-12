@@ -113,6 +113,13 @@ def plan_entry(index: dict[str, Any], target: str, release: Release, meta: dict[
         # Converter vendorização em referência mudaria o mecanismo de distribuição
         # sem decisão registrada; recusar é mais seguro que adivinhar.
         raise TargetInvalid(f"entrada existente com source inesperado: {source!r}")
+    extra = sorted(set(source) - set(source_object(release)))
+    if extra:
+        # O publicador nunca escreve nada além do pin ali dentro, então uma chave
+        # a mais veio de edição à mão. Ela pode ser uma segunda referência, móvel,
+        # que faria o cliente resolver para outro commit — e preservá-la em
+        # silêncio publicaria uma entrada que não corresponde à release.
+        raise TargetInvalid(f"source com chaves fora do pin: {', '.join(extra)}")
 
     entry = json.loads(json.dumps(current))
     entry["source"] = {**source, **source_object(release)}
@@ -158,10 +165,16 @@ def verify_release(index: dict[str, Any], release: Release) -> Verification:
     if not isinstance(source, dict):
         problems.append(f"source={source!r}, esperado objeto")
     else:
-        for key, want in source_object(release).items():
+        expected = source_object(release)
+        for key, want in expected.items():
             got = source.get(key)
             if got != want:
                 problems.append(f"source.{key}={got!r}, esperado {want!r}")
+        for key in sorted(set(source) - set(expected)):
+            # Os cinco campos podem estar todos certos e o destino ainda servir
+            # outra coisa, se houver uma segunda referência ali dentro. O
+            # publicador recusa escrever nesse estado; a releitura o denuncia.
+            problems.append(f"source.{key} não pertence ao pin")
     return Verification(not problems, problems)
 
 
