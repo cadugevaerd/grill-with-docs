@@ -341,6 +341,16 @@ class WorkspaceV2Contract(unittest.TestCase):
         self.assertEqual(payload["work_id"], "external-artifacts")
         self.assertEqual(before, snapshot(external))
 
+    def test_audit_without_work_id_or_artifact_root_is_a_named_usage_error(self) -> None:
+        """A guarda tem de correr antes de montar o caminho: `root / ... / None`
+        levanta TypeError, e um traceback não diz qual argumento faltou."""
+        self._init_item(work_id="named-usage-error")
+        process, payload = invoke("audit", self.root)
+        self.assertEqual(process.returncode, 2)
+        self.assertEqual(payload["code"], "INVALID-ARGUMENTS")
+        self.assertEqual(payload["verdict"], "BLOCKED")
+        self.assertNotIn("Traceback", process.stderr)
+
     def test_constitution_pass_and_not_applicable_are_accepted(self) -> None:
         self._constitution()
         item = self._init_item(work_id="constitutional")

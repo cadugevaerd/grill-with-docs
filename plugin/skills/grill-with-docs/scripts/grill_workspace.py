@@ -1089,6 +1089,10 @@ def hotfix_go_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
 
 def audit_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.project_root or args.root)
+    # A guarda precisa vir antes de montar o caminho: `root / ... / None` levanta
+    # TypeError, e um traceback não diz ao operador qual argumento faltou.
+    if not args.artifact_root and not args.work_id:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--work-id or --artifact-root is required")
     item = Path(os.path.abspath(args.artifact_root)) if args.artifact_root else root / ".grill" / "work-items" / args.work_id
     if item.is_dir() and (item / "WORK-ITEM.json").is_file():
         try:
@@ -1119,9 +1123,6 @@ def audit_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             return {"verdict": "HOTFIX-PREPARED", "code": "HOTFIX-PREPARED", "work_id": bundle.work_id,
                     "scope": hotfix["scope"], "constitutional": constitutional,
                     "post_ship": hotfix.get("post_ship", ["reconcile", "full-document-audit"])}, EXIT_OK
-    if not args.artifact_root and not args.work_id:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--work-id or --artifact-root is required")
-    item = Path(os.path.abspath(args.artifact_root)) if args.artifact_root else root / ".grill" / "work-items" / args.work_id
     if not item.is_dir():
         return {"verdict": "NO-GO", "code": "WORK-ITEM-MISSING"}, EXIT_NO_GO
     before = read_external_bundle(item) if args.artifact_root else read_local_bundle(root, item)
