@@ -1,6 +1,6 @@
 {
-  "active_phase": "FASE-001",
-  "audit_verdict": "pending",
+  "active_phase": "FASE-002",
+  "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
     "schema": "v1",
@@ -192,9 +192,26 @@
         "reason": "fases A-E",
         "state": "in-progress",
         "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/004-phase-turn/learnings.md",
+            "sha256": "29aefffa26f35fe7e3475befa3de56ce95e81232c9466ea3ac6ee0545a2b1d81"
+          }
+        ],
+        "reason": "merge a60e386, push verificado, gates verdes",
+        "state": "complete",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "reason": "FASE-001 entregue em a60e386; abrindo FASE-002",
+        "state": "turned",
+        "step": "phase-turn"
       }
     ],
-    "current_step": "ship",
+    "current_step": "specify",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -210,17 +227,17 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "complete",
-      "agent-execute": "complete",
-      "analyze": "complete",
-      "checklist": "complete",
-      "converge": "complete",
-      "plan": "complete",
-      "review": "complete",
-      "ship": "in-progress",
-      "specify": "complete",
-      "tasks": "complete",
-      "verify": "complete"
+      "agent-assign": "pending",
+      "agent-execute": "pending",
+      "analyze": "pending",
+      "checklist": "pending",
+      "converge": "pending",
+      "plan": "pending",
+      "review": "pending",
+      "ship": "pending",
+      "specify": "pending",
+      "tasks": "pending",
+      "verify": "pending"
     }
   },
   "limits": {

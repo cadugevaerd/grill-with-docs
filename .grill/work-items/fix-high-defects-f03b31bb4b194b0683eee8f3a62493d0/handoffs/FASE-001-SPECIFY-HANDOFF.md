@@ -1,7 +1,7 @@
 # FASE-001 — Virada de fase auditada
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: Matriz de etapas, Trilha de checkpoint, Virada de fase
 - ADRs: ADR-0001

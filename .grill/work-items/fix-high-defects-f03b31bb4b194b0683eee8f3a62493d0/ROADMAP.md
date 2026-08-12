@@ -3,7 +3,7 @@
 - execution-order: FASE-001, FASE-002, FASE-003
 
 ## FASE-001 — Virada de fase auditada
-- state: ready-for-specify
+- state: complete
 - objetivo: um work item com ROADMAP multi-fase consegue iniciar a segunda fase, e cada fase deixa trilha por passo
 - scope-in: comando de virada que devolve a matriz de etapas ao início; razão obrigatória; registro da transição na trilha de checkpoint; mensagem de erro da transição inválida apontando o caminho de saída
 - scope-out: mudança no schema de `state.json`; migração de bundles existentes; re-pino de identidade
@@ -15,7 +15,7 @@
 - delivery-units: DU-001
 
 ## FASE-002 — Deriva viva precisa
-- state: planned
+- state: ready-for-specify
 - objetivo: `status` deixa de reprovar todo work item multi-commit e volta a distinguir bloqueio real de deriva esperada
 - scope-in: separação das duas comparações do pino; supressão do finding de head; escopo do finding de branch ao work item não terminal
 - scope-out: qualquer alteração no pino gravado ou no hash que o protege

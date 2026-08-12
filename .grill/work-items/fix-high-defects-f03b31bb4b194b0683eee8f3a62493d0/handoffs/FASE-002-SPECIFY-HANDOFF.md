@@ -1,7 +1,7 @@
 # FASE-002 — Deriva viva precisa
 
 - phase: FASE-002
-- state: planned
+- state: ready-for-specify
 - roadmap: ROADMAP.md#FASE-002
 - context-refs: Pino de identidade, Deriva viva, Work item terminal
 - ADRs: ADR-0002
