@@ -1,5 +1,5 @@
 {
-  "active_phase": "FASE-003",
+  "active_phase": null,
   "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
@@ -635,11 +635,11 @@
     "max_questions_per_run": 25,
     "max_scope_growth_streak": 3
   },
-  "milestone_status": "in-progress",
+  "milestone_status": "completed",
   "second_pass": {
     "new_material_dqs": 0
   },
-  "status": "in-progress",
+  "status": "complete",
   "version": "1.2.0",
   "work_id": "fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0",
   "workflow": {
