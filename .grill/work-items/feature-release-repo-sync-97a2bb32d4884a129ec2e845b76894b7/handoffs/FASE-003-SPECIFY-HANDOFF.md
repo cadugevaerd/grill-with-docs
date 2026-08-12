@@ -1,11 +1,11 @@
 # FASE-003 — Reconciliação do drift existente
 
 - phase: FASE-003
-- state: ready-for-specify
+- state: blocked
 - roadmap: ROADMAP.md#FASE-003
 - context-refs: Drift de publicação, Publicação
-- ADRs: none
-- BLs: none
+- ADRs: ADR-0007
+- BLs: BL-0002
 
 ## WHAT
 - delivery-units: DU-003
@@ -25,6 +25,8 @@ Escopo: o gatilho manual e uma execução única de reconciliação, mais a veri
 Fora de escopo: republicar versões históricas que nunca chegaram aos marketplaces.
 
 Critérios de aceite: os dois destinos declarando a versão corrente do canônico, tanto no manifesto vendorizado quanto na entrada de marketplace; o diretório de testes ausente da cópia publicada; o gatilho manual permanecendo disponível depois da reconciliação.
+
+> Nota de reconciliação, 2026-08-12: os dois primeiros critérios acima pressupõem o espelho de conteúdo abandonado em ADR-0006 — não existe cópia publicada, logo não há manifesto vendorizado nem diretório de testes a remover. ADR-0007 registra o que os substitui: cada destino é relido de um clone novo e precisa declarar a versão corrente e os cinco campos do pin `git-subdir`, com a referência resolvendo no canônico para o commit publicado. O terceiro critério permanece como está. O texto original fica preservado por rastreabilidade.
 
 ## WHY
 A publicação automática só reage a mudanças no conteúdo do plugin, e o próprio trabalho que a introduz não é uma dessas mudanças. Sem um disparo manual, o atraso atual sobreviveria por tempo indeterminado e a automação ficaria sem nenhuma execução real — o primeiro teste em condições reais aconteceria às cegas, em um merge futuro qualquer.

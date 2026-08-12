@@ -353,6 +353,154 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
 
 
+class VerifyRelease(unittest.TestCase):
+    """Um push aceito não é prova de publicação; a releitura é."""
+
+    def published(self) -> dict:
+        return MODULE.plan_entry(json.loads(CLAUDE_INDEX), "claude", RELEASE, {}).index
+
+    def entry_of(self, index: dict) -> dict:
+        return next(p for p in index["plugins"] if p["name"] == "grill-with-docs")
+
+    def test_a_published_index_verifies(self) -> None:
+        self.assertEqual(MODULE.verify_release(self.published(), RELEASE),
+                         MODULE.Verification(True, []))
+
+    def test_a_stale_version_is_reported(self) -> None:
+        result = MODULE.verify_release(json.loads(CLAUDE_INDEX), RELEASE)
+        self.assertFalse(result.ok)
+        self.assertTrue(any(problem.startswith("version=") for problem in result.problems))
+
+    def test_every_pinned_field_is_compared(self) -> None:
+        for field in ("source", "url", "path", "ref", "sha"):
+            with self.subTest(field=field):
+                index = self.published()
+                self.entry_of(index)["source"][field] = "adulterado"
+                result = MODULE.verify_release(index, RELEASE)
+                self.assertFalse(result.ok)
+                self.assertEqual([p.split("=")[0] for p in result.problems], [f"source.{field}"])
+
+    def test_a_dropped_pinned_field_is_reported(self) -> None:
+        index = self.published()
+        del self.entry_of(index)["source"]["sha"]
+        result = MODULE.verify_release(index, RELEASE)
+        self.assertFalse(result.ok)
+        self.assertIn("source.sha=None", result.problems[0])
+
+    def test_an_absent_entry_is_reported(self) -> None:
+        index = self.published()
+        index["plugins"] = [p for p in index["plugins"] if p["name"] != "grill-with-docs"]
+        result = MODULE.verify_release(index, RELEASE)
+        self.assertFalse(result.ok)
+        self.assertIn("ausente", result.problems[0])
+
+    def test_duplicate_entries_are_reported_instead_of_picked(self) -> None:
+        index = self.published()
+        index["plugins"].append(json.loads(json.dumps(self.entry_of(index))))
+        result = MODULE.verify_release(index, RELEASE)
+        self.assertFalse(result.ok)
+        self.assertIn("ambíguo", result.problems[0])
+
+    def test_every_divergence_is_reported_together(self) -> None:
+        index = self.published()
+        entry = self.entry_of(index)
+        entry["version"] = "9.9.9"
+        entry["source"]["sha"] = OTHER_SHA
+        entry["source"]["ref"] = "v9.9.9"
+        result = MODULE.verify_release(index, RELEASE)
+        self.assertEqual(len(result.problems), 3)
+
+    def test_a_source_that_is_not_an_object_is_reported(self) -> None:
+        index = self.published()
+        self.entry_of(index)["source"] = "./plugins/grill-with-docs"
+        result = MODULE.verify_release(index, RELEASE)
+        self.assertFalse(result.ok)
+        self.assertEqual(len(result.problems), 1)
+
+    def test_curated_fields_never_fail_the_verification(self) -> None:
+        index = self.published()
+        entry = self.entry_of(index)
+        entry["description"] = "outro texto, curado neste marketplace"
+        entry["tags"] = ["completamente", "diferente"]
+        entry["author"] = {"name": "Outra Pessoa"}
+        entry["category"] = "Outra"
+        self.assertTrue(MODULE.verify_release(index, RELEASE).ok)
+
+    def test_an_index_without_a_plugins_list_is_refused(self) -> None:
+        with self.assertRaises(MODULE.TargetInvalid):
+            MODULE.verify_release({}, RELEASE)
+
+    def test_a_second_reference_inside_source_is_reported(self) -> None:
+        """Os cinco campos certos não bastam se houver outra referência junto."""
+        index = self.published()
+        self.entry_of(index)["source"]["branch"] = "main"
+        result = MODULE.verify_release(index, RELEASE)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.problems, ["source.branch não pertence ao pin"])
+
+    def test_the_publisher_refuses_what_the_verification_would_reject(self) -> None:
+        """Verificador mais estrito que publicador deixaria o job vermelho depois
+        de já ter publicado; os dois precisam recusar o mesmo estado."""
+        index = json.loads(CLAUDE_INDEX)
+        next(p for p in index["plugins"] if p["name"] == "grill-with-docs")["source"]["branch"] = "main"
+        with self.assertRaises(MODULE.TargetInvalid):
+            MODULE.plan_entry(index, "claude", RELEASE, {})
+
+
+class VerifyCommandLine(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.index = self.root / MODULE.TARGETS["claude"]["index"]
+        self.index.parent.mkdir(parents=True)
+        self.index.write_text(CLAUDE_INDEX, encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def run_cli(self, *extra: str) -> tuple[int, str]:
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            code = MODULE.main(["--target", "claude", "--checkout", str(self.root),
+                                "--version", "2.5.0", "--ref", "v2.5.0", "--sha", SHA, *extra])
+        return code, stream.getvalue()
+
+    def test_verify_approves_what_apply_published(self) -> None:
+        self.assertEqual(self.run_cli("--apply", "--json")[0], 0)
+        code, output = self.run_cli("--verify", "--json")
+        payload = json.loads(output)
+        self.assertEqual((code, payload["verdict"], payload["problems"]), (0, "VERIFIED", []))
+
+    def test_verify_exits_three_on_divergence(self) -> None:
+        code, output = self.run_cli("--verify", "--json")
+        payload = json.loads(output)
+        self.assertEqual(code, MODULE.EXIT_MISMATCH)
+        self.assertEqual(payload["verdict"], "MISMATCH")
+        self.assertTrue(payload["problems"])
+
+    def test_the_three_failure_modes_have_distinct_exit_codes(self) -> None:
+        self.assertEqual({MODULE.EXIT_OK, MODULE.EXIT_TARGET_INVALID,
+                          MODULE.EXIT_USAGE, MODULE.EXIT_MISMATCH}, {0, 1, 2, 3})
+
+    def test_verify_writes_nothing(self) -> None:
+        before = self.index.read_text(encoding="utf-8")
+        self.run_cli("--verify", "--json")
+        self.assertEqual(self.index.read_text(encoding="utf-8"), before)
+
+    def test_verify_refuses_to_run_together_with_apply(self) -> None:
+        before = self.index.read_text(encoding="utf-8")
+        with contextlib.redirect_stderr(io.StringIO()):
+            code, _ = self.run_cli("--verify", "--apply", "--json")
+        self.assertEqual(code, MODULE.EXIT_USAGE)
+        self.assertEqual(self.index.read_text(encoding="utf-8"), before)
+
+    def test_a_broken_index_is_blocked_not_mismatched(self) -> None:
+        self.index.write_text("{nao e json", encoding="utf-8")
+        code, output = self.run_cli("--verify", "--json")
+        self.assertEqual(code, MODULE.EXIT_TARGET_INVALID)
+        self.assertEqual(json.loads(output)["verdict"], "BLOCKED")
+
+
 class Collection(unittest.TestCase):
     def test_the_publisher_is_not_collected_as_a_validator(self) -> None:
         self.assertTrue(SCRIPT.is_file())

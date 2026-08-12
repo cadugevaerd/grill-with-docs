@@ -1,6 +1,6 @@
 {
   "active_phase": "FASE-003",
-  "audit_verdict": "GO",
+  "audit_verdict": "BLOCKED",
   "capability": {
     "name": "module-decomposition",
     "schema": "v1",
