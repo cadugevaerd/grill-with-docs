@@ -27,6 +27,19 @@ concurrency:
 jobs:
   contract:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    # O evento pull_request já testa `refs/pull/N/merge`, que é exatamente a
+    # árvore que o merge deposita na main — então o push subsequente repetiria
+    # a matriz inteira sobre conteúdo idêntico. O gatilho de push continua,
+    # porque este repo também empurra direto para a main e aí ele é a única
+    # cobertura. A guarda é fail-safe: mensagem que não casar apenas roda de
+    # novo, nunca deixa de rodar.
+    #
+    # Ressalva: se uma PR desatualizada em relação à base for mergeada, a
+    # árvore resultante pode diferir da que a PR testou. Exigir branch
+    # atualizada no branch protection fecha isso (ver SGD-4).
+    if: >-
+      github.event_name == 'pull_request' ||
+      !startsWith(github.event.head_commit.message, 'Merge pull request ')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:

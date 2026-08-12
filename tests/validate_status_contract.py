@@ -44,8 +44,19 @@ class StatusPublicContract(unittest.TestCase):
         self.item(); _,b=status(self.r); _,d=status(self.r,"--current-worktree"); self.assertEqual(len(b["work_items"]),1); self.assertEqual(len(d["work_items"]),1)
     def test_repeated_output_is_byte_identical(self):
         self.item(); a,_=status(self.r); b,_=status(self.r); self.assertEqual(a.stdout,b.stdout); self.assertEqual(b.stderr,"")
+    def snapshot_tree(self):
+        # `.git/` fica de fora porque o dono dele é o git, não o grill: a
+        # manutenção automática cria e remove `.git/objects/maintenance.lock`
+        # entre os dois snapshots e reprova um teste que nada escreveu.
+        return {p.relative_to(self.r).as_posix():p.read_bytes() for p in self.r.rglob("*")
+                if p.is_file() and ".git" not in p.relative_to(self.r).parts}
     def test_read_only_fingerprint(self):
-        before={p.relative_to(self.r).as_posix():p.read_bytes() for p in self.r.rglob("*") if p.is_file()}; status(self.r); after={p.relative_to(self.r).as_posix():p.read_bytes() for p in self.r.rglob("*") if p.is_file()}; self.assertEqual(before,after)
+        before=self.snapshot_tree(); status(self.r); after=self.snapshot_tree(); self.assertEqual(before,after)
+    def test_the_snapshot_still_sees_everything_the_grill_owns(self):
+        """Excluir .git/ não pode virar desculpa para o teste não olhar nada."""
+        self.item(); tree=self.snapshot_tree()
+        self.assertTrue(any(k.startswith(".grill/work-items/") for k in tree))
+        self.assertFalse(any(k.startswith(".git/") for k in tree))
     def test_real_worktree_with_spaces_default_aggregates_equal_bundle(self):
         self.item(); secondary=Path(self.t.name)/"secondary worktree"
         subprocess.run(["git","-C",str(self.r),"worktree","add","-b","other",str(secondary)],check=True,capture_output=True)
