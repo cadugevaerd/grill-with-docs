@@ -430,6 +430,13 @@ class VerifyRelease(unittest.TestCase):
         with self.assertRaises(MODULE.TargetInvalid):
             MODULE.verify_release({}, RELEASE)
 
+    def test_a_malformed_neighbour_does_not_fail_our_entry(self) -> None:
+        """Não somos donos dos vizinhos: reprovar a nossa publicação por causa do
+        erro de outro travaria a fase em algo que não dá para consertar daqui."""
+        index = self.published()
+        index["plugins"] = [None, "grill-with-docs", *index["plugins"]]
+        self.assertTrue(MODULE.verify_release(index, RELEASE).ok)
+
     def test_a_second_reference_inside_source_is_reported(self) -> None:
         """Os cinco campos certos não bastam se houver outra referência junto."""
         index = self.published()

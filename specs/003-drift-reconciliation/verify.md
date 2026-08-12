@@ -13,13 +13,13 @@
 | validate_checkpoint_contract | 36 |
 | validate_contract | 30 |
 | validate_dependencies_contract | 21 |
-| validate_publish_contract | **51** (era 33) |
+| validate_publish_contract | **52** (era 33) |
 | validate_status_contract | 27 |
 | validate_workflow_contract | 14 |
 | validate_workspace_contract | 52, 1 skip dependente de ambiente |
 | validate_distribution | `distribution: OK` |
 
-Total 288, contra o baseline de 270. As 18 novas são as classes `VerifyRelease` e `VerifyCommandLine`, mais os dois testes do defeito encontrado na revisão.
+Total 289, contra o baseline de 270. As 19 novas são as classes `VerifyRelease` e `VerifyCommandLine`, os dois testes do defeito encontrado na revisão e o da lacuna de cobertura que a revisão independente apontou.
 
 ## Checklist de aceite
 

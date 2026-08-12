@@ -50,7 +50,16 @@ Cobertura: `test_a_second_reference_inside_source_is_reported` e `test_the_publi
 
 ## Revisão independente
 
-O subagente `reviewer-003` foi despachado com escopo de leitura e mandato de refutar, e não devolveu parecer dentro da janela desta fase. O que está registrado acima é a passada adversarial da sessão primária, com as sondagens nomeadas e reproduzíveis. Isso é mais fraco do que a revisão independente que a FASE-002 teve, e fica declarado como tal em vez de ser apresentado como equivalente.
+O subagente `reviewer-003` devolveu parecer **depois** do merge, com escopo de leitura e mandato de refutar. Sem objeção ao merge. O parecer é registrado aqui na íntegra do que muda o resultado:
+
+- **Nenhum falso verde novo.** Tentou tipos inesperados (`None`, número, lista) nos campos comparados, `name` com case e espaço diferentes, entrada duplicada, `source` com campo faltando. Todos reprovam corretamente, nenhum levanta exceção não tratada.
+- **Confirmou o defeito de `source` com chave extra** como falso verde real — ele viu o código anterior ao endurecimento — e confirmou que a correção está presente, testada e coerente nos dois lados. Concorda com a escolha fail-closed: é o mecanismo de resolução `git-subdir` que um campo como `branch` sequestraria, e `TargetInvalid` nomeado é melhor que corrupção silenciosa.
+- **Concorda com as duas aprovações conscientes**, pelos mesmos motivos registrados acima, e reproduziu a de chave duplicada com PoC própria, verificando que vale também dentro de `source`.
+- **Verificou a orquestração empiricamente**, não por inspeção: `set -e` derrubando o job na saída 3, e a lógica awk contra um repositório git sintético com tag anotada, tag leve e tag ausente. Derrubou explicitamente a hipótese de colisão por prefixo — `refs/tags/$REF` é path literal completo, então `refs/tags/v2.5.0` não casa `refs/tags/v2.5.0-rc1`.
+- **Achado novo, documental:** a spec dizia "quatro campos do pin" em dois lugares, contra os cinco de `source_object()` e de todo o resto dos artefatos. O "quatro" vinha de ADR-0006, que conta os elementos do `GitSubdir` do codex sem o discriminador. Corrigido.
+- **Lacuna de cobertura apontada:** o vizinho malformado tinha teste para `plan_entry` mas não para `verify_release`. Fechada por `test_a_malformed_neighbour_does_not_fail_our_entry`.
+
+Ordem real dos fatos, para o registro: o parecer chegou depois do merge, então a correção documental e o teste de cobertura entraram em commit posterior. O achado de `source` com chave extra é da sessão primária, não dele — ele confirmou independentemente que era real e que está fechado.
 
 ## Bloqueio não contornado
 

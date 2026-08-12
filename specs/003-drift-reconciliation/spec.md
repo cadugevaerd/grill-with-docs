@@ -36,7 +36,7 @@ A execução não termina verde por ter escrito num arquivo local: ela relê o e
 **Acceptance Scenarios**:
 
 1. **Given** um destino cujo índice publicado corresponde à release, **When** a verificação roda, **Then** ela aprova e nomeia versão, ref e sha conferidos.
-2. **Given** um destino cujo índice publicado diverge em qualquer um dos quatro campos do pin ou na versão, **When** a verificação roda, **Then** ela reprova nomeando cada divergência.
+2. **Given** um destino cujo índice publicado diverge em qualquer um dos cinco campos do pin ou na versão, **When** a verificação roda, **Then** ela reprova nomeando cada divergência.
 3. **Given** uma referência publicada que não resolve para o commit publicado no canônico, **When** a verificação roda, **Then** ela reprova.
 
 ---
@@ -69,7 +69,7 @@ Depois da reconciliação, o gatilho manual permanece como saída de emergência
 
 - **FR-001**: A publicação MUST poder ser disparada manualmente, sem depender de mudança no conteúdo do plugin.
 - **FR-002**: Uma única execução manual MUST levar ambos os destinos à versão corrente do canônico, criando a entrada onde ela não existir e atualizando onde existir.
-- **FR-003**: A execução MUST reler o estado publicado no destino, a partir do repositório remoto, e MUST falhar quando ele não corresponder exatamente à release em `version` e nos quatro campos do pin.
+- **FR-003**: A execução MUST reler o estado publicado no destino, a partir do repositório remoto, e MUST falhar quando ele não corresponder exatamente à release em `version` e nos cinco campos do pin (`source`, `url`, `path`, `ref`, `sha`).
 - **FR-004**: A execução MUST verificar que a referência publicada resolve, no canônico, para o commit publicado.
 - **FR-005**: A verificação MUST nomear cada divergência encontrada, em vez de reportar apenas reprovação.
 - **FR-006**: A reconciliação MUST NOT republicar versões históricas que nunca chegaram aos destinos.
