@@ -252,7 +252,10 @@ class StoreContract(unittest.TestCase):
   self.assertEqual(sorted(p.name for p in self.paths().locks.iterdir()),[])
  def test_lock_contention_is_named_and_bounded(self):
   self.register(); lock=self.paths().locks/store.ORCHESTRATOR_LOCK; lock.mkdir()
-  (lock/'owner.json').write_text(json.dumps({'pid':os.getpid(),'host':__import__('socket').gethostname(),'process_start':'linux:0'} if not LINUX else {'pid':os.getpid(),'host':'other-host'},sort_keys=True))
+  # A remote owner cannot be reclaimed; this proves bounded contention on every
+  # runner.  Do not infer capability from the OS name: recent macOS runners can
+  # expose /proc and therefore exercise Linux-style stale-lock recovery.
+  (lock/'owner.json').write_text(json.dumps({'pid':os.getpid(),'host':'other-host'},sort_keys=True))
   snapshot=store.read_snapshot(self.r)
   with self.assertRaises(store.StoreError) as ctx: store.write_snapshot(self.r,dict(snapshot.document),1,now=CLOCK,timeout=0.2)
   self.assertEqual(ctx.exception.code,'LOCK_CONTENTION'); self.assertEqual(store.read_snapshot(self.r).revision,1)
