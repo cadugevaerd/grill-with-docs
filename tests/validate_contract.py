@@ -557,6 +557,35 @@ class AuditorContract(unittest.TestCase):
         (self.root / "ROUND-LOG.jsonl").write_text('{"round_id":"bad"}\n')
         self.assert_no_go("round_id inválido")
 
+    def test_legacy_rounds_and_lifecycle_events_preserve_append_only_history(self) -> None:
+        round_log = self.root / "ROUND-LOG.jsonl"
+        legacy = {
+            "round_id": "R-0001", "batch": "B-001", "stage": "specify",
+            "agent": "legacy-agent", "item": "FASE-001", "gate": "PASS",
+            "evidence": ["legacy-evidence"], "result": "recorded",
+        }
+        lifecycle = {
+            "round_id": "R-0002", "record_type": "lifecycle", "event": "phase-turn",
+            "batch": "B-002", "stage": "phase-turn", "agent": "codex",
+            "item": "FASE-002", "gate": "PASS", "evidence": ["merge"],
+            "result": "turned",
+        }
+        round_log.write_text("\n".join(json.dumps(record, sort_keys=True) for record in (legacy, lifecycle)) + "\n")
+        self.assertEqual(run_audit(self.root).returncode, 0)
+
+        invalid_lifecycle = dict(lifecycle, question_id="DQ-0001", transition="resolved")
+        round_log.write_text(json.dumps(invalid_lifecycle, sort_keys=True) + "\n")
+        self.assert_no_go("lifecycle não aceita transição de decisão")
+
+        incomplete_lifecycle = {"round_id": "R-0001", "record_type": "lifecycle", "event": "phase-turn"}
+        round_log.write_text(json.dumps(incomplete_lifecycle, sort_keys=True) + "\n")
+        self.assert_no_go("lifecycle incompleto")
+
+        modern = {"round_id": "R-0001", "question_id": "DQ-0001", "transition": "resolved"}
+        late_legacy = dict(legacy, round_id="R-0002")
+        round_log.write_text("\n".join(json.dumps(record, sort_keys=True) for record in (modern, late_legacy)) + "\n")
+        self.assert_no_go("legado após schema moderno")
+
     def test_adr_schema_is_validated(self) -> None:
         adr = self.root / "docs/adr/ADR-0001.md"
         adr.write_text("status: accepted\nevidence-status: unverified\n")

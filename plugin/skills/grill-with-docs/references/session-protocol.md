@@ -79,6 +79,8 @@ Para cada heading normativo H2/H3, `CONSTITUTION-CHECK.md` deve conter exatament
 6. Acrescentar uma linha ao log append-only.
 7. Recalcular a fronteira antes da próxima pergunta.
 
+Entradas de decisão novas usam `question_id` e `transition`. Eventos de lifecycle usam `record_type: lifecycle` e um `event` permitido, sem transição de decisão. Logs legados permanecem imutáveis: o auditor os lê no schema histórico e nunca exige reescrita retroativa.
+
 Duas rodadas sem progresso, terceira repetição, terceira expansão consecutiva ou 25 perguntas materiais: checkpoint + `SAFETY_STOP`. `stop|pausar` grava `PAUSED_USER`.
 
 ## Hotfix-fast / incident
