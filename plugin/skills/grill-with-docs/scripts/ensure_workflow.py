@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
+import importlib.util
+import io
 import json
 import os
 import re
@@ -18,6 +21,18 @@ VERSION = "v2"
 MARKER = "grill-with-docs-workflow:v2"
 HERE = Path(__file__).resolve()
 TEMPLATE = HERE.parents[1] / "assets/WORKFLOW.template.md"
+# LD-004 item 3/4: a NEW, additive marker recognised alongside VERSION ("v2").
+# Never assigned to VERSION itself -- VERSION keeps gating fresh bootstrap
+# (init/`--ensure` on a repo with no WORKFLOW.md still materialise v2, per
+# LD-004's invariant that default bootstrap must not change) and the v2
+# ESSENTIAL tuple below is untouched, byte for byte, so no v2 consumer is
+# affected by this addition.
+V3_MARKER_VERSION = "v3"
+# Same path grill_core/workflow_v3.py resolves REGISTRY to (its ASSETS is
+# HERE.parents[2] / "assets" from one directory deeper); kept as a literal
+# here rather than imported so this module has no load-time dependency on
+# grill_core, matching the read-only, best-effort spirit of the hook.
+REGISTRY = HERE.parents[1] / "assets/workflow-step-skills.json"
 ESSENTIAL = (
     "## Loop externo",
     "## Ciclo externo de execução",
@@ -75,6 +90,89 @@ def managed_version(text: str) -> str | None:
     return match.group(1) if match else None
 
 
+_GRILL_CORE: dict[str, object] = {}
+
+
+def _load_grill_core(name: str):
+    """Best-effort load of ``grill_core/<name>.py``; ``None`` on any failure.
+
+    This module never edits grill_core (LD-004: it belongs to other pieces),
+    it only consumes it as a library, and only for the one pure, side-effect
+    free function it needs (``workflow_v3.compatible_v3``). Any load failure
+    -- module absent, unreadable, syntactically broken while another builder
+    is mid-edit -- degrades to "v3 not recognised" instead of raising: the
+    hook and ``--ensure`` must stay usable even if that sibling module is
+    momentarily unstable (gaps_deferred, not a reason to edit it).
+    """
+    if name in _GRILL_CORE:
+        return _GRILL_CORE[name]
+    try:
+        path = HERE.with_name("grill_core") / f"{name}.py"
+        spec = importlib.util.spec_from_file_location(f"ensure_workflow_grill_core_{name}", path)
+        if spec is None or spec.loader is None:
+            module = None
+        else:
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            with contextlib.redirect_stdout(io.StringIO()):
+                spec.loader.exec_module(module)
+    except BaseException:
+        if 'spec' in locals() and spec is not None:
+            sys.modules.pop(spec.name, None)
+        module = None
+    _GRILL_CORE[name] = module
+    return module
+
+
+def compatible_v3(text: str) -> bool:
+    """v3 compatibility, delegated to grill_core/workflow_v3.py's own ESSENTIAL tuple.
+
+    Single source of truth stays with the module that owns the v3 template
+    and registry (peça D); this only asks it the same pure question
+    ``resolve_workflow`` already asks ``compatible()`` for v2. An unloadable
+    module means "not v3-compatible" -- the same BLOCKED outcome a v3-marked
+    file already produced before this round, never a crash.
+
+    Deliberately ESSENTIAL-substring-only, same as ``workflow_v3.compatible_v3``
+    -- it does NOT check the registry pin. Callers that decide whether a v3
+    document is safe to treat as READY (``resolve_workflow``'s REUSED branch,
+    ``_execution_ready``) must use :func:`_v3_ready` instead, which also
+    verifies the pin. This function stays a pure frontier check because
+    ``tests/validate_v3_wiring_contract.py`` asserts it is identical to
+    ``workflow_v3.compatible_v3`` (delegation, not the fuller execution gate).
+    """
+    module = _load_grill_core("workflow_v3")
+    if module is None or not hasattr(module, "compatible_v3"):
+        return False
+    try:
+        return bool(module.compatible_v3(text))
+    except Exception:
+        return False
+
+
+def _v3_ready(text: str) -> bool:
+    """v3 READINESS: ESSENTIAL frontier AND registry pin match (LD-010 item 2).
+
+    Closes the fail-open this round opened: ``compatible_v3``/the old
+    ``_execution_ready`` only tested ESSENTIAL substrings, and the literal
+    unrendered ``__REGISTRY_SHA256__`` placeholder -- or a forged pin -- both
+    still CONTAIN the substring "registry_sha256", so a substring-only check
+    let them through. Delegates to ``grill_core/workflow_v3.py``'s
+    ``execution_gate``, the same gate ``workflow_v3 detect`` already applies
+    on read, so a document REUSED here can never disagree with what that
+    module would report for the identical bytes. An unloadable module or any
+    failure degrades to "not ready" -- the same conservative posture as
+    ``compatible_v3`` -- never a crash.
+    """
+    module = _load_grill_core("workflow_v3")
+    if module is None or not hasattr(module, "execution_gate"):
+        return False
+    try:
+        return module.execution_gate(text).status == "OK"
+    except Exception:
+        return False
+
+
 def read_regular(path: Path) -> tuple[bytes, str]:
     """Open one regular file without following a final-component symlink."""
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -94,10 +192,10 @@ def read_regular(path: Path) -> tuple[bytes, str]:
     return content, content.decode("utf-8")
 
 
-def emit(status: str, path: Path | None = None, content: bytes | None = None, **extra: str) -> None:
+def emit(status: str, path: Path | None = None, content: bytes | None = None, *, version: str = VERSION, **extra: str) -> None:
     payload: dict[str, str] = {"status": status, **extra}
     if path is not None and content is not None:
-        payload.update(path=str(path), sha256=digest(content), version=VERSION)
+        payload.update(path=str(path), sha256=digest(content), version=version)
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
 
 
@@ -155,6 +253,21 @@ def resolve_workflow(root_argument: str | Path) -> WorkflowResult:
         if target.exists():
             content, text = read_regular(target)
             version = managed_version(text)
+            # v3 branch first and separately from the v2 mismatch check below:
+            # a v3-marked file must never hit "managed version mismatch" (that
+            # is the exact failure LD-004 exists to close), and the v2
+            # ESSENTIAL tuple / compatible() must never be asked to validate
+            # v3 content. Falling through here is impossible -- both arms
+            # return -- so a v2/unmarked/human-equivalent file takes the
+            # unmodified path below, byte for byte.
+            if version == V3_MARKER_VERSION:
+                # _v3_ready, not compatible_v3: REUSED must mean "safe to
+                # execute against", which requires the registry pin to match,
+                # not merely the ESSENTIAL frontier being present (LD-010
+                # item 2 -- this is the same gate --ensure/init must apply).
+                if _v3_ready(text):
+                    return WorkflowResult("REUSED", target, content, None)
+                return WorkflowResult("BLOCKED", None, b"", "incompatible workflow")
             if version and version != VERSION:
                 return WorkflowResult("BLOCKED", None, b"", "managed version mismatch")
             if compatible(text):
@@ -184,7 +297,14 @@ def ensure(root_argument: str) -> int:
     if result.status == "BLOCKED":
         emit("BLOCKED", reason=result.reason or "unknown")
         return 2
-    emit(result.status, result.path, result.content)
+    # Report the marker actually materialised/read back, not the bootstrap
+    # default: a REUSED v3 document must say version:"v3", not silently lie
+    # "v2" (fresh CREATED is always VERSION, since only v2 gets bootstrapped).
+    try:
+        actual_version = managed_version(result.content.decode("utf-8")) or VERSION
+    except UnicodeError:
+        actual_version = VERSION
+    emit(result.status, result.path, result.content, version=actual_version)
     return 0
 
 
@@ -233,6 +353,32 @@ def render_hook_output(event: str, message: str) -> str:
     return rendered
 
 
+def _execution_ready(text: str) -> bool:
+    """True when ``text`` is a materialised workflow the hook can safely project status for."""
+    version = managed_version(text)
+    if version == V3_MARKER_VERSION:
+        return _v3_ready(text)
+    return version == VERSION and compatible(text)
+
+
+def _registry_prefix() -> str:
+    """LD-004 item 4 / LD-001: registry_sha256 (raw bytes hash) + the anti-emulation phrase.
+
+    Built first, standalone, so it can be placed before the status projection
+    in the hook message: render_hook_output truncates from the END of the
+    string when the 2048-byte budget is exceeded, so anything after this
+    prefix -- including the whole status line -- is what gets cut, never this.
+    A missing/unreadable registry degrades the hash, not the phrase: the
+    instruction to invoke the canonical skill instead of emulating it holds
+    regardless of whether the registry asset can be read right now.
+    """
+    try:
+        registry_sha256 = digest(REGISTRY.read_bytes())
+    except OSError:
+        registry_sha256 = "unavailable"
+    return f"registry_sha256={registry_sha256}; read, resolve and invoke; do not emulate."
+
+
 def hook() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -262,7 +408,7 @@ def hook() -> int:
             content, text = read_regular(path)
         except (OSError, UnicodeError):
             content, text = b"", ""
-        if managed_version(text) == VERSION and compatible(text):
+        if _execution_ready(text):
             try:
                 status_script = HERE.with_name("grill_workspace.py")
                 result = subprocess.run([sys.executable, str(status_script), "status", str(root), "--current-worktree"], capture_output=True, text=True, check=False, timeout=3)
@@ -270,7 +416,10 @@ def hook() -> int:
                 status_line = human_status(status_payload, root) if isinstance(status_payload, dict) else "BLOCKED status"
             except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
                 status_line = "BLOCKED status"
-            message = (f"Leia {path}; sha256={digest(content)}. {status_line} "
+            # Registry hash + anti-emulation phrase come first (see
+            # _registry_prefix): truncation eats the tail (status/Fluxo), not
+            # this head, when the 2048-byte hook budget is exceeded.
+            message = (f"{_registry_prefix()} Leia {path}; sha256={digest(content)}. {status_line} "
                        "Fluxo: specify → plan → checklist → tasks → analyze → agent-assign → agent-execute → converge → verify → review → ship.")
         else:
             message = f"WORKFLOW.md incompatível em {path}; invoque grill-with-docs para auditar."

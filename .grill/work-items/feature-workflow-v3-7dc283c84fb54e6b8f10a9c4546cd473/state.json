@@ -1,0 +1,1000 @@
+{
+  "active_phase": "FASE-004",
+  "audit_verdict": "pending",
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "789b55f46909c6861995740082199d912614bca7b23be4e0da5c73d824e94350",
+    "state": "present"
+  },
+  "development": {
+    "audit": [
+      {
+        "evidence": [],
+        "reason": "Sessão de decisão para workflow-v3 iniciada.",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/007-workflow-v3/spec.md",
+            "sha256": "efceb52541c8420e954a7e4155307d2553576b0f1de709bf0950dfb68e843db5"
+          },
+          {
+            "path": "specs/007-workflow-v3/checklists/requirements.md",
+            "sha256": "7606f4091b37ae4c679bc89b789fabfcc6badb27d89a9a62876d64e2563c29a9"
+          }
+        ],
+        "reason": "Especificação FASE-001 e checklist de requisitos concluídos.",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "reason": "Plano técnico FASE-001 em elaboração.",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/007-workflow-v3/plan.md",
+            "sha256": "45e3b92fde358658b4e0031a97e7a5f51baf2b0d1c368ef39f155ebf75ebf2ae"
+          },
+          {
+            "path": "specs/007-workflow-v3/contracts/skill-resolution.md",
+            "sha256": "7195d2e31c1ddd86a2c1299c15c073101d54b4be33213a256426734b469847bc"
+          }
+        ],
+        "reason": "Plano, modelo e contrato canônico revisados.",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "reason": "Checklist de qualidade de requisitos em revisão.",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/007-workflow-v3/checklists/canonical-skills.md",
+            "sha256": "0385a968148fff3e90e24de07e0401a686dd0b2f3b7aa6de843c0322200c051f"
+          }
+        ],
+        "reason": "Checklist de requisitos canônicos fechado sem pendências.",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "reason": "Tarefas rastreáveis FASE-001 em organização.",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/007-workflow-v3/tasks.md",
+            "sha256": "55af1c58127067e17040b3f68b38d903a56068dd7f2aa6fac9e1eb8cfbf33cca"
+          }
+        ],
+        "reason": "Onze tarefas foram mapeadas e concluídas com caminhos e dependências.",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "reason": "Análise cruzada de especificação, plano e tarefas em curso.",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/007-workflow-v3/spec.md",
+            "sha256": "efceb52541c8420e954a7e4155307d2553576b0f1de709bf0950dfb68e843db5"
+          },
+          {
+            "path": "specs/007-workflow-v3/tasks.md",
+            "sha256": "55af1c58127067e17040b3f68b38d903a56068dd7f2aa6fac9e1eb8cfbf33cca"
+          }
+        ],
+        "reason": "Análise SpecKit: cobertura integral, zero conflito constitucional e zero lacuna crítica.",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "reason": "Ownership das tarefas sendo confirmado no executor padrão.",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/007-workflow-v3/tasks.md",
+            "sha256": "55af1c58127067e17040b3f68b38d903a56068dd7f2aa6fac9e1eb8cfbf33cca"
+          }
+        ],
+        "reason": "Todas as tarefas foram atribuídas ao executor padrão; nenhuma execução isolada foi autorizada.",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [],
+        "reason": "Implementação do resolver canônico em execução no worktree.",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_core/step_skills.py",
+            "sha256": "70429888b26918bf65f922f3bd5cd87e9b23954697a7bc69f7f3e363d6ea3689"
+          },
+          {
+            "path": "tests/validate_step_skill_registry_contract.py",
+            "sha256": "788c38b116959fe994866a2ae9727dcda5cd5698de8ab1f4a43b595fbb3b888d"
+          }
+        ],
+        "reason": "Resolver, pins e matriz adversarial executados no worktree atual.",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "Convergência entre tarefas, contrato e implementação em curso.",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/007-workflow-v3/tasks.md",
+            "sha256": "55af1c58127067e17040b3f68b38d903a56068dd7f2aa6fac9e1eb8cfbf33cca"
+          },
+          {
+            "path": "tests/validate_step_skill_registry_contract.py",
+            "sha256": "788c38b116959fe994866a2ae9727dcda5cd5698de8ab1f4a43b595fbb3b888d"
+          }
+        ],
+        "reason": "Converged: especificação, plano, tarefas e implementação não deixam trabalho remanescente na FASE-001.",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "reason": "Gate executável do resolver canônico em curso.",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "tests/validate_step_skill_registry_contract.py",
+            "sha256": "788c38b116959fe994866a2ae9727dcda5cd5698de8ab1f4a43b595fbb3b888d"
+          }
+        ],
+        "reason": "Verify passou: 103 contratos do registry canônico, pins e recusas adversariais.",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "reason": "Revisão independente pós-reparo iniciada.",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "tests/validate_step_skill_registry_contract.py",
+            "sha256": "788c38b116959fe994866a2ae9727dcda5cd5698de8ab1f4a43b595fbb3b888d"
+          },
+          {
+            "path": "tests/validate_v3_wiring_contract.py",
+            "sha256": "2f6a316f31d31264e15e68a9acd9338b416ff0113bb6db5ed3fc65d598fd208b"
+          }
+        ],
+        "reason": "Revisão independente pós-reparo aprovou registry, ordem, TOCTOU, V2 e fronteiras de atestação.",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "reason": "Entrega FASE-001 em fechamento documental; sem commit ou push autorizado.",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/007-workflow-v3/tasks.md",
+            "sha256": "55af1c58127067e17040b3f68b38d903a56068dd7f2aa6fac9e1eb8cfbf33cca"
+          },
+          {
+            "path": "tests/validate_step_skill_registry_contract.py",
+            "sha256": "788c38b116959fe994866a2ae9727dcda5cd5698de8ab1f4a43b595fbb3b888d"
+          }
+        ],
+        "reason": "FASE-001 entregue no worktree: 103 contratos do registry aprovados; commit e push permanecem fora do escopo autorizado.",
+        "state": "complete",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "reason": "FASE-001 concluída após revisão independente PASS; abrir FASE-002 conforme handoff exclusivo.",
+        "state": "turned",
+        "step": "phase-turn"
+      },
+      {
+        "evidence": [],
+        "reason": "Handoff FASE-002 recebido: migração explícita de Workflow V2 para V3.",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/008-workflow-v3-migration/spec.md",
+            "sha256": "ecd742dd2d128ffcf37469fd446b1fe53e1d64cfe5a0399caa7e48d628bea7be"
+          },
+          {
+            "path": "specs/008-workflow-v3-migration/checklists/requirements.md",
+            "sha256": "f8f77127cdd6d17844002091c9a3d5f58e68f86aafbec559018e76d8ed5fc651"
+          }
+        ],
+        "reason": "Especificação FASE-002 derivada do handoff exclusivo e com critérios executáveis.",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "reason": "Plano de migração V2 para V3 em elaboração.",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/008-workflow-v3-migration/plan.md",
+            "sha256": "f46acb3a122218927a373d4b8379bb9a10f36dbdbf03c9080d8c508688a5d631"
+          }
+        ],
+        "reason": "Plano fixa preview, pin, ordem imutável e compatibilidade V2.",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "reason": "Checklist de requisitos de migração em revisão.",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/008-workflow-v3-migration/checklists/requirements.md",
+            "sha256": "f8f77127cdd6d17844002091c9a3d5f58e68f86aafbec559018e76d8ed5fc651"
+          }
+        ],
+        "reason": "Checklist FASE-002 fechado sem lacuna de requisito.",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "reason": "Tarefas rastreáveis da migração em organização.",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/008-workflow-v3-migration/tasks.md",
+            "sha256": "0d6bf30eba8099cda79c080986bc41fd5f0e7662b8faec9da79fce62a497c804"
+          }
+        ],
+        "reason": "Tarefas FASE-002 mapeadas para implementação e contratos.",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "reason": "Análise cruzada de requisitos, plano e tarefas de migração.",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/008-workflow-v3-migration/spec.md",
+            "sha256": "ecd742dd2d128ffcf37469fd446b1fe53e1d64cfe5a0399caa7e48d628bea7be"
+          },
+          {
+            "path": "specs/008-workflow-v3-migration/tasks.md",
+            "sha256": "0d6bf30eba8099cda79c080986bc41fd5f0e7662b8faec9da79fce62a497c804"
+          }
+        ],
+        "reason": "Cobertura completa: requisitos, tarefas e contratos de migração estão alinhados.",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "reason": "Executor padrão assumindo tarefas FASE-002.",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/008-workflow-v3-migration/tasks.md",
+            "sha256": "0d6bf30eba8099cda79c080986bc41fd5f0e7662b8faec9da79fce62a497c804"
+          }
+        ],
+        "reason": "Executor padrão mantém todas as tarefas; nenhuma execução isolada foi autorizada.",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [],
+        "reason": "Implementação da migração e gates V3 em execução no worktree.",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_core/workflow_v3.py",
+            "sha256": "ade29ab0cf9db282e63c125dfd7058d108456549a0db0ee7d42bbe5b34a3106f"
+          },
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/ensure_workflow.py",
+            "sha256": "d626a3f107a4300b705471f70f268a4f78fbf05f081f0815b51ae8eb18f09865"
+          }
+        ],
+        "reason": "Migração preview/apply, pin e ordem canônica implementados e testados.",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "Convergência entre contrato de migração e implementação.",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/008-workflow-v3-migration/tasks.md",
+            "sha256": "0d6bf30eba8099cda79c080986bc41fd5f0e7662b8faec9da79fce62a497c804"
+          },
+          {
+            "path": "tests/validate_workflow_v3_contract.py",
+            "sha256": "e94a473e043c9b19532f717d6dfb8c2599b787f7af07b87985ca8a5f08b04723"
+          }
+        ],
+        "reason": "Nenhuma tarefa FASE-002 remanescente após convergência.",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "reason": "Executando contratos de migração Workflow V3.",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "tests/validate_workflow_v3_contract.py",
+            "sha256": "e94a473e043c9b19532f717d6dfb8c2599b787f7af07b87985ca8a5f08b04723"
+          },
+          {
+            "path": "tests/validate_v3_wiring_contract.py",
+            "sha256": "2f6a316f31d31264e15e68a9acd9338b416ff0113bb6db5ed3fc65d598fd208b"
+          }
+        ],
+        "reason": "Verify passou: 51 contratos de workflow e 46 de wiring.",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "reason": "Revisão independente já disponível para FASE-002.",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "tests/validate_workflow_v3_contract.py",
+            "sha256": "e94a473e043c9b19532f717d6dfb8c2599b787f7af07b87985ca8a5f08b04723"
+          },
+          {
+            "path": "tests/validate_v3_wiring_contract.py",
+            "sha256": "2f6a316f31d31264e15e68a9acd9338b416ff0113bb6db5ed3fc65d598fd208b"
+          }
+        ],
+        "reason": "Crítica independente PASS confirmou ordem, V2, pin, TOCTOU e JSON único.",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "reason": "Entrega FASE-002 em fechamento; sem commit ou push autorizado.",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/008-workflow-v3-migration/tasks.md",
+            "sha256": "0d6bf30eba8099cda79c080986bc41fd5f0e7662b8faec9da79fce62a497c804"
+          },
+          {
+            "path": "tests/validate_workflow_v3_contract.py",
+            "sha256": "e94a473e043c9b19532f717d6dfb8c2599b787f7af07b87985ca8a5f08b04723"
+          }
+        ],
+        "reason": "FASE-002 entregue no worktree com migração V3 e compatibilidade V2 verificadas.",
+        "state": "complete",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "reason": "FASE-002 concluída; abrir FASE-003 por handoff exclusivo.",
+        "state": "turned",
+        "step": "phase-turn"
+      },
+      {
+        "evidence": [],
+        "reason": "Handoff FASE-003 recebido: Work Item V3 e Project Store.",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/009-work-item-v3-store/spec.md",
+            "sha256": "d6220333a568c03e6f20bfe355d407eea401b3c6119dd1049c3ee9b8779b5ff6"
+          },
+          {
+            "path": "specs/009-work-item-v3-store/checklists/requirements.md",
+            "sha256": "55e192eafbc376c5ffb02f544c64e13e3b813445a64836a1369efdcd1ee71437"
+          }
+        ],
+        "reason": "Especificação FASE-003 derivada do handoff, com matriz de segurança executável.",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "reason": "Plano Work Item V3 e store em elaboração.",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/009-work-item-v3-store/plan.md",
+            "sha256": "9750fba2e0a7794c961464f83d86484fc4026aac70d3700eb13756fcee252ce1"
+          }
+        ],
+        "reason": "Plano fixa diretório FD, lock, CAS e identidade de projeto.",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "reason": "Checklist FASE-003 em revisão.",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/009-work-item-v3-store/checklists/requirements.md",
+            "sha256": "55e192eafbc376c5ffb02f544c64e13e3b813445a64836a1369efdcd1ee71437"
+          }
+        ],
+        "reason": "Checklist fechado sem lacuna de requisito.",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "reason": "Tarefas FASE-003 em organização.",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/009-work-item-v3-store/tasks.md",
+            "sha256": "bff61229b2e8aa6a558b902941ce268c548d3f1d1f424980a9b92c6cb8753677"
+          }
+        ],
+        "reason": "Tarefas mapeiam migração, store e contratos adversariais.",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "reason": "Análise cruzada da FASE-003.",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/009-work-item-v3-store/spec.md",
+            "sha256": "d6220333a568c03e6f20bfe355d407eea401b3c6119dd1049c3ee9b8779b5ff6"
+          },
+          {
+            "path": "specs/009-work-item-v3-store/tasks.md",
+            "sha256": "bff61229b2e8aa6a558b902941ce268c548d3f1d1f424980a9b92c6cb8753677"
+          }
+        ],
+        "reason": "Requisitos, plano e tarefas têm cobertura integral nos três contratos.",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "reason": "Executor padrão assumindo tarefas FASE-003.",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/009-work-item-v3-store/tasks.md",
+            "sha256": "bff61229b2e8aa6a558b902941ce268c548d3f1d1f424980a9b92c6cb8753677"
+          }
+        ],
+        "reason": "Executor padrão mantém tarefas FASE-003; sem execução isolada autorizada.",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [],
+        "reason": "Implementação Work Item V3 e store em execução.",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_core/work_item_v3.py",
+            "sha256": "2c52c56e06b2f37de6c91127d9878198a47498f1b3d9b89863b38fb48e55707f"
+          },
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_core/store.py",
+            "sha256": "6fac90b668c3710b645d29b6f372ad9a8586509ea47f45a27c7adca0a989d0bf"
+          }
+        ],
+        "reason": "Migração segura e store implementados no worktree.",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "Convergência FASE-003 em curso.",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/009-work-item-v3-store/tasks.md",
+            "sha256": "bff61229b2e8aa6a558b902941ce268c548d3f1d1f424980a9b92c6cb8753677"
+          },
+          {
+            "path": "tests/validate_work_item_v3_contract.py",
+            "sha256": "288a915f923608e0c05756b51efec67b672763972f3c659d53716120e5421845"
+          }
+        ],
+        "reason": "Convergência confirmou ausência de trabalho FASE-003 remanescente.",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "reason": "Executando contratos de migração e store.",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "tests/validate_work_item_v3_contract.py",
+            "sha256": "288a915f923608e0c05756b51efec67b672763972f3c659d53716120e5421845"
+          },
+          {
+            "path": "tests/validate_orchestrator_store_contract.py",
+            "sha256": "de8f3fb04018fbc4472030ed976f83070d383adedb0d3eb5db436d70f5d57552"
+          },
+          {
+            "path": "tests/validate_v3_wiring_contract.py",
+            "sha256": "2f6a316f31d31264e15e68a9acd9338b416ff0113bb6db5ed3fc65d598fd208b"
+          }
+        ],
+        "reason": "Verify passou: 72 Work Item V3, 67 store e 46 wiring.",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "reason": "Revisão independente pós-reparo disponível para FASE-003.",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "tests/validate_work_item_v3_contract.py",
+            "sha256": "288a915f923608e0c05756b51efec67b672763972f3c659d53716120e5421845"
+          },
+          {
+            "path": "tests/validate_orchestrator_store_contract.py",
+            "sha256": "de8f3fb04018fbc4472030ed976f83070d383adedb0d3eb5db436d70f5d57552"
+          },
+          {
+            "path": "tests/validate_v3_wiring_contract.py",
+            "sha256": "2f6a316f31d31264e15e68a9acd9338b416ff0113bb6db5ed3fc65d598fd208b"
+          }
+        ],
+        "reason": "Crítica independente PASS confirmou Work Item V3, store, TOCTOU e V2.",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "reason": "Entrega FASE-003 em fechamento; sem commit ou push autorizado.",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/009-work-item-v3-store/tasks.md",
+            "sha256": "bff61229b2e8aa6a558b902941ce268c548d3f1d1f424980a9b92c6cb8753677"
+          },
+          {
+            "path": "tests/validate_work_item_v3_contract.py",
+            "sha256": "288a915f923608e0c05756b51efec67b672763972f3c659d53716120e5421845"
+          }
+        ],
+        "reason": "FASE-003 entregue no worktree com migração e store verificadas.",
+        "state": "complete",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "reason": "FASE-003 concluída; abrir FASE-004 por handoff exclusivo.",
+        "state": "turned",
+        "step": "phase-turn"
+      },
+      {
+        "evidence": [],
+        "reason": "Handoff FASE-004 recebido: atestação e wiring V3 com prova nativa.",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/010-execution-attestation/spec.md",
+            "sha256": "c6c23e8f84a7cece7ba6409f77f8a3c375cb4eb037423e5d899cd30167deb5ab"
+          },
+          {
+            "path": "specs/010-execution-attestation/checklists/requirements.md",
+            "sha256": "613c237068ec50391dcb1c05f3282596dc4217188e31ede9f8a805d18574b427"
+          }
+        ],
+        "reason": "Especificação FASE-004 separa cadeia estrutural de prova nativa e registra BL-0001.",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "reason": "Plano de atestação e limite de capability em elaboração.",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/010-execution-attestation/plan.md",
+            "sha256": "4c201ddc25382d68138212ae6b06f64ebe9c6b2ef914f5497885bbcc9d34bf4c"
+          }
+        ],
+        "reason": "Plano exige verificador nativo e proíbe fabricar formato, chave ou capability.",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "reason": "Checklist de atestação em revisão.",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/010-execution-attestation/checklists/requirements.md",
+            "sha256": "613c237068ec50391dcb1c05f3282596dc4217188e31ede9f8a805d18574b427"
+          }
+        ],
+        "reason": "Checklist confirma a capability ausente como bloqueio explícito.",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "reason": "Tarefas estruturais e integração nativa em organização.",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/010-execution-attestation/tasks.md",
+            "sha256": "f4fc025d9737271aefa491b8580b0c3dccd00a3565dd615160e22a8151a63946"
+          }
+        ],
+        "reason": "Tarefas estruturais concluídas e integração nativa rastreada por BL-0001.",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "reason": "Análise cruzada da cadeia estrutural e requisito de proveniência.",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/010-execution-attestation/spec.md",
+            "sha256": "c6c23e8f84a7cece7ba6409f77f8a3c375cb4eb037423e5d899cd30167deb5ab"
+          },
+          {
+            "path": "specs/010-execution-attestation/tasks.md",
+            "sha256": "f4fc025d9737271aefa491b8580b0c3dccd00a3565dd615160e22a8151a63946"
+          }
+        ],
+        "reason": "Análise confirma que T005 requer autoridade externa inexistente; sem evidência não há PASS.",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "reason": "Executor padrão responsável pela fronteira de atestação.",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/010-execution-attestation/tasks.md",
+            "sha256": "f4fc025d9737271aefa491b8580b0c3dccd00a3565dd615160e22a8151a63946"
+          }
+        ],
+        "reason": "Executor padrão mantém as tarefas; nenhuma autoridade de runtime foi delegada.",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [],
+        "reason": "Validação da integração do verificador nativo iniciada.",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "BL-0001: runtime/catálogo não publica receipt assinado, verificador, trust anchor ou entrypoint nativo; não é permitido fabricar essa capability.",
+        "state": "blocked",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "Modelo cooperativo aceito pelo product owner; BL-0001 superseded por ADR-0004.",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+            "sha256": "f99371c3ad2e677870c3b7a4bb7628156c319ff91189925a97236237714aff52"
+          },
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+            "sha256": "34aa91d8af879db89577ad039b34bfdf6fbeed37398e8304243562f12f39f179"
+          },
+          {
+            "path": "tests/validate_attestation_contract.py",
+            "sha256": "b201ef7296f9902e5f8f2c486638a445c22c733cb329eff238d4a26aaa66277c"
+          },
+          {
+            "path": "tests/validate_v3_wiring_contract.py",
+            "sha256": "d5ec169be000b12d587075b299e04b078c13469971f04cccbe86f08bf8a1cb94"
+          },
+          {
+            "path": "specs/010-execution-attestation/spec.md",
+            "sha256": "86ca217076ae283e8d7d75e3e537d87e0c995da92f0b657ab2957ce21f172960"
+          }
+        ],
+        "reason": "Atestação cooperativa aceita cadeia estrutural correlacionada; contratos de atestação e wiring passaram.",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "Integração da decisão cooperativa, core, workflow e documentação em verificação.",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/assets/WORKFLOW.v3.template.md",
+            "sha256": "38255ebe38b47b5c53ad19130704f39798bd7ed6a93b76a888171048c4ab8dca"
+          },
+          {
+            "path": "specs/010-execution-attestation/plan.md",
+            "sha256": "67e21b7a7121366dd5c769247bce732c0bc85c4d8cc62dac8970044978d80922"
+          },
+          {
+            "path": ".grill/work-items/feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/docs/adr/ADR-0004.md",
+            "sha256": "62411432e30c9dec9cbfb1258fe34e3dad4fc45c7ae6260370cd5ca30c0071d4"
+          }
+        ],
+        "reason": "Core e contrato de Workflow V3 convergem no modelo de atestação cooperativa.",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "reason": "Contratos V3 executados após a mudança de trust model.",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "tests/validate_step_skill_registry_contract.py",
+            "sha256": "788c38b116959fe994866a2ae9727dcda5cd5698de8ab1f4a43b595fbb3b888d"
+          },
+          {
+            "path": "tests/validate_work_item_v3_contract.py",
+            "sha256": "288a915f923608e0c05756b51efec67b672763972f3c659d53716120e5421845"
+          },
+          {
+            "path": "tests/validate_workflow_v3_contract.py",
+            "sha256": "e94a473e043c9b19532f717d6dfb8c2599b787f7af07b87985ca8a5f08b04723"
+          },
+          {
+            "path": "tests/validate_attestation_contract.py",
+            "sha256": "b201ef7296f9902e5f8f2c486638a445c22c733cb329eff238d4a26aaa66277c"
+          },
+          {
+            "path": "tests/validate_orchestrator_store_contract.py",
+            "sha256": "de8f3fb04018fbc4472030ed976f83070d383adedb0d3eb5db436d70f5d57552"
+          },
+          {
+            "path": "tests/validate_v3_wiring_contract.py",
+            "sha256": "d5ec169be000b12d587075b299e04b078c13469971f04cccbe86f08bf8a1cb94"
+          },
+          {
+            "path": "tests/validate_checkpoint_contract.py",
+            "sha256": "482bed31dd427211f5b36e4c3161350b6a10c52e58ae88eff706374c53fcde65"
+          }
+        ],
+        "reason": "Sete contratos executados: 418 testes passaram; git diff --check passou.",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "reason": "Revisão final de contrato e governança após a decisão DQ-0005.",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/docs/adr/ADR-0004.md",
+            "sha256": "62411432e30c9dec9cbfb1258fe34e3dad4fc45c7ae6260370cd5ca30c0071d4"
+          },
+          {
+            "path": ".grill/work-items/feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/DECISION-FRONTIER.md",
+            "sha256": "ec08c8d7f6dd87aa5b7c1f1675a40d7b3763eb01a33f1ee6420e7536cf37c03c"
+          },
+          {
+            "path": "specs/010-execution-attestation/research.md",
+            "sha256": "b5ff9f2c789a1193336e2c72028eac8fc095edc106016eada88fc0f4d27592bf"
+          }
+        ],
+        "reason": "Trust boundary cooperativa documentada; contratos V3 e diff check sem falhas.",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "reason": "Implementação pronta; aguardando autorização explícita de release.",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "reason": "BL-0002: commit, merge e push não foram autorizados explicitamente.",
+        "state": "blocked",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "reason": "BL-0002 resolvido: product owner autorizou commit, merge e push.",
+        "state": "in-progress",
+        "step": "ship"
+      }
+    ],
+    "current_step": "ship",
+    "schema": "grill-development/v1",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "agent-assign",
+      "agent-execute",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "in-progress",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    }
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "in-progress",
+  "version": "1.2.0",
+  "work_id": "feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4",
+    "version": "v2"
+  }
+}

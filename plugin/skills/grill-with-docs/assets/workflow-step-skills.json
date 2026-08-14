@@ -1,0 +1,228 @@
+{
+  "schema": "workflow-step-skills/v1",
+  "workflow_version": "v3",
+  "registry_version": "1",
+  "runtimes": ["hermes", "claude", "codex"],
+  "steps": {
+    "specify": {
+      "skill_id": "speckit.specify",
+      "proposed_skill_id": "speckit.specify",
+      "required": true,
+      "human_authorization_required": false,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-specify",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "source_ref": "speckit-integration:claude@0.15.1",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    },
+    "plan": {
+      "skill_id": "speckit.plan",
+      "proposed_skill_id": "speckit.plan",
+      "required": true,
+      "human_authorization_required": false,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-plan",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "source_ref": "speckit-integration:claude@0.15.1",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    },
+    "checklist": {
+      "skill_id": "speckit.checklist",
+      "proposed_skill_id": "speckit.checklist",
+      "required": true,
+      "human_authorization_required": false,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-checklist",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "source_ref": "speckit-integration:claude@0.15.1",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    },
+    "tasks": {
+      "skill_id": "speckit.tasks",
+      "proposed_skill_id": "speckit.tasks",
+      "required": true,
+      "human_authorization_required": false,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-tasks",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "source_ref": "speckit-integration:claude@0.15.1",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    },
+    "analyze": {
+      "skill_id": "speckit.analyze",
+      "proposed_skill_id": "speckit.analyze",
+      "required": true,
+      "human_authorization_required": false,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-analyze",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "source_ref": "speckit-integration:claude@0.15.1",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    },
+    "agent-assign": {
+      "skill_id": "speckit.agent-assign.assign",
+      "proposed_skill_id": "agent-assign",
+      "required": true,
+      "human_authorization_required": false,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-agent-assign-assign",
+          "entrypoint_kind": "skill",
+          "minimum_version": "1.0.0",
+          "source_ref": "speckit-extension:agent-assign@1.0.0",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    },
+    "agent-execute": {
+      "skill_id": "speckit.agent-assign.execute",
+      "proposed_skill_id": "agent-execute",
+      "required": true,
+      "human_authorization_required": false,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-agent-assign-execute",
+          "entrypoint_kind": "skill",
+          "minimum_version": "1.0.0",
+          "source_ref": "speckit-extension:agent-assign@1.0.0",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    },
+    "converge": {
+      "skill_id": "speckit.converge",
+      "proposed_skill_id": "converge",
+      "required": true,
+      "human_authorization_required": false,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-converge",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "source_ref": "speckit-integration:claude@0.15.1",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    },
+    "verify": {
+      "skill_id": "speckit.verify-review-ship.verify",
+      "proposed_skill_id": "verify-review-ship.verify",
+      "required": true,
+      "human_authorization_required": false,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-verify-review-ship-verify",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.4.2",
+          "source_ref": "speckit-extension:verify-review-ship@0.4.2",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    },
+    "review": {
+      "skill_id": "speckit.verify-review-ship.review",
+      "proposed_skill_id": "verify-review-ship.review",
+      "required": true,
+      "human_authorization_required": false,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-verify-review-ship-review",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.4.2",
+          "source_ref": "speckit-extension:verify-review-ship@0.4.2",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    },
+    "ship": {
+      "skill_id": "speckit.verify-review-ship.ship",
+      "proposed_skill_id": "verify-review-ship.ship",
+      "required": true,
+      "human_authorization_required": true,
+      "allowed_entrypoints": ["skill", "command"],
+      "resolutions": {
+        "hermes": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"},
+        "claude": {
+          "resolved": true,
+          "adapter": "claude-code-skill/v1",
+          "entrypoint": "speckit-verify-review-ship-ship",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.4.2",
+          "source_ref": "speckit-extension:verify-review-ship@0.4.2",
+          "catalog_id": "claude-code-local-skills"
+        },
+        "codex": {"resolved": false, "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"}
+      }
+    }
+  }
+}
