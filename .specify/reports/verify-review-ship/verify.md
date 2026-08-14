@@ -1,7 +1,7 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree ca7b1a88e9ed8fff333524f8125c0230b358c308516ce40f13225dbb2ccbf161 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan f00191471b472ce2081c62c09eb9cf33502d547413331d4c6c4c9910e72a4b8f
+Source fingerprint: tree ca7b1a88e9ed8fff333524f8125c0230b358c308516ce40f13225dbb2ccbf161 / work 2ff03e22d0cd2d2c07037ade1fd35c1de982f92cc63e77d55038c5795df202d3 / plan f00191471b472ce2081c62c09eb9cf33502d547413331d4c6c4c9910e72a4b8f
 Converge: CONVERGED
 
 ### Operational Gates
@@ -14,11 +14,13 @@ Converge: CONVERGED
 | Step-skill registry | `python3 tests/validate_step_skill_registry_contract.py` | PASS | 103 tests. | Codex |
 | Branch lifecycle | `python3 tests/validate_checkpoint_contract.py` | PASS | 37 tests. | Codex |
 | Workspace compatibility | `python3 tests/validate_workspace_contract.py` | PASS | 66 tests; 1 environment skip. | Codex |
-| Diff hygiene | `git diff --check eacb0d8..0d79191` | PASS | No whitespace errors. | Independent critic |
+| Work-item decision audit | `python3 plugin/skills/grill-with-docs/scripts/audit_decisions.py ... --project-root . --json` | PASS | `GO`, FASE-002 selected. | Codex |
+| Auditor legacy/lifecycle contract | `python3 tests/validate_contract.py` | PASS | 31 tests. | Codex |
+| Diff hygiene | `git diff --check` | PASS | No whitespace errors. | Codex |
 
 ### Diff Hygiene
 
-The committed FASE-001 scope contains activation, V3 rebind, public-contract, and documentation artifacts only. No secret or environment file was found.
+The transition records FASE-001 as complete and FASE-002 as ready for specify. The append-only ledger preserves its historical schema and adds one typed lifecycle event. No runtime scope changed. No secret or environment file was found.
 
 ### Executable Scenarios
 
@@ -32,4 +34,4 @@ None.
 
 ### Next Action
 
-- PASS: technical review is approved and the isolated ship transaction may run.
+- PASS: independent review may approve the documented FASE-001 ship and FASE-002 handoff transition.

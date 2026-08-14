@@ -38,6 +38,9 @@ MODULE_KINDS = {"domain", "platform", "cross-cutting"}
 DEVELOPMENT_TYPES = {"frontend", "backend", "mobile", "integration", "data", "ml-ai", "infra-iac", "platform-devops", "security", "observability-sre", "qa", "documentation"}
 BL_STATES = {"open", "resolved", "superseded"}
 DQ_STATES = {"open", "resolved", "deferred", "split", "blocked", "out-of-scope"}
+ROUND_TRANSITIONS = {"resolved", "deferred", "split", "blocked", "out-of-scope"}
+LIFECYCLE_EVENTS = {"phase-turn"}
+LEGACY_ROUND_FIELDS = {"batch", "stage", "agent", "item", "gate", "evidence", "result"}
 HOTFIX_REQUIRED = ("scope", "reproduction", "evidence", "correction-test", "rollback", "constitution-evidence")
 SESSION_STATES = {"in-progress", "ready", "blocked", "safety-stop", "paused-user", "complete"}
 MILESTONE_STATES = {"in-progress", "blocked", "completed"}
@@ -535,6 +538,7 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
     if round_log and round_log.is_file():
         previous = 0
         seen_rounds: set[str] = set()
+        modern_round_schema_seen = False
         for line_number, line in enumerate(round_log.read_text(encoding="utf-8").splitlines(), 1):
             if not line.strip():
                 continue
@@ -555,10 +559,32 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
             if round_id in seen_rounds:
                 findings.append(f"ROUND-LOG: duplicate {round_id}")
             seen_rounds.add(round_id)
-            if record.get("question_id") not in dq_ids:
-                findings.append(f"ROUND-LOG linha {line_number}: question_id orphan")
-            if record.get("transition") not in {"resolved", "deferred", "split", "blocked", "out-of-scope"}:
-                findings.append(f"ROUND-LOG linha {line_number}: transition inválida")
+            record_type = record.get("record_type")
+            has_question = "question_id" in record
+            has_transition = "transition" in record
+            if record_type == "lifecycle":
+                modern_round_schema_seen = True
+                if has_question or has_transition:
+                    findings.append(f"ROUND-LOG linha {line_number}: lifecycle não aceita transição de decisão")
+                if record.get("event") not in LIFECYCLE_EVENTS:
+                    findings.append(f"ROUND-LOG linha {line_number}: lifecycle inválido")
+                if not LEGACY_ROUND_FIELDS.issubset(record):
+                    findings.append(f"ROUND-LOG linha {line_number}: lifecycle incompleto")
+            elif record_type is not None:
+                findings.append(f"ROUND-LOG linha {line_number}: record_type inválido")
+            elif has_question != has_transition:
+                findings.append(f"ROUND-LOG linha {line_number}: decisão incompleta")
+            elif has_question:
+                modern_round_schema_seen = True
+                if record.get("question_id") not in dq_ids:
+                    findings.append(f"ROUND-LOG linha {line_number}: question_id orphan")
+                if record.get("transition") not in ROUND_TRANSITIONS:
+                    findings.append(f"ROUND-LOG linha {line_number}: transition inválida")
+            else:
+                if modern_round_schema_seen:
+                    findings.append(f"ROUND-LOG linha {line_number}: legado após schema moderno")
+                elif not LEGACY_ROUND_FIELDS.issubset(record):
+                    findings.append(f"ROUND-LOG linha {line_number}: legado incompleto")
 
     ready = [phase_id for phase_id in execution_order if phases.get(phase_id) and phases[phase_id].state == "ready-for-specify"]
     incomplete = [phase_id for phase_id in execution_order if phases.get(phase_id) and phases[phase_id].state not in {"complete", "superseded"}]

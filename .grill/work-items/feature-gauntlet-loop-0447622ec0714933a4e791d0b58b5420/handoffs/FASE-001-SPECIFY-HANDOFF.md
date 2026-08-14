@@ -1,7 +1,7 @@
 # FASE-001 — Ativação explícita e contrato de configuração
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: Gauntlet Loop, Gauntlet Configuration, Gauntlet-Enabled Work Item, Model Tier, Canonical Skill
 - ADRs: ADR-0001, ADR-0004, ADR-0007

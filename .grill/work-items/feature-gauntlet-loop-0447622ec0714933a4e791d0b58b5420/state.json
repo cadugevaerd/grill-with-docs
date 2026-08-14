@@ -1,5 +1,5 @@
 {
-  "active_phase": "FASE-001",
+  "active_phase": "FASE-002",
   "audit_verdict": "pending",
   "capability": {
     "name": "module-decomposition",
@@ -333,10 +333,17 @@
         "reason": "FASE-001 verificada, revisada e aprovada; ship local concluído sem commit, merge, push ou publicação.",
         "state": "complete",
         "step": "ship"
+      },
+      {
+        "evidence": [],
+        "previous_execution_branch": "011-gauntlet-loop",
+        "reason": "FASE-001 integrada em origin/main no merge a0f071c; abrindo FASE-002 para estado durável, evidência e isolamento.",
+        "state": "turned",
+        "step": "phase-turn"
       }
     ],
-    "current_step": "complete",
-    "execution_branch": "011-gauntlet-loop",
+    "current_step": "specify",
+    "execution_branch": null,
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -352,17 +359,17 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "complete",
-      "agent-execute": "complete",
-      "analyze": "complete",
-      "checklist": "complete",
-      "converge": "complete",
-      "plan": "complete",
-      "review": "complete",
-      "ship": "complete",
-      "specify": "complete",
-      "tasks": "complete",
-      "verify": "complete"
+      "agent-assign": "pending",
+      "agent-execute": "pending",
+      "analyze": "pending",
+      "checklist": "pending",
+      "converge": "pending",
+      "plan": "pending",
+      "review": "pending",
+      "ship": "pending",
+      "specify": "pending",
+      "tasks": "pending",
+      "verify": "pending"
     }
   },
   "limits": {

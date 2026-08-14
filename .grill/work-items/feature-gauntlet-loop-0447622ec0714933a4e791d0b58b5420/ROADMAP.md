@@ -3,7 +3,7 @@
 - execution-order: FASE-001, FASE-002, FASE-003, FASE-004
 
 ## FASE-001 — Ativação explícita e contrato de configuração
-- state: ready-for-specify
+- state: complete
 - objetivo: um work item V3 apto pode ativar explicitamente o Gauntlet Loop no Claude Code, sem mudar os fluxos V2
 - scope-in: comandos de inicialização, execução, status, retomada e limpeza; configuração versionada; guardas de workflow V3, adapter Claude e sequência canônica; política de tiers e limite de cinco workers
 - scope-out: criação de workers, persistência de runs, integração de mudanças e revisão
@@ -15,7 +15,7 @@
 - delivery-units: DU-001
 
 ## FASE-002 — Estado durável, evidência e isolamento
-- state: planned
+- state: ready-for-specify
 - objetivo: cada run e worker mantém estado, evidências e worktrees isolados que podem ser recuperados sem autoridade externa
 - scope-in: extensão validada do Project Store e journal existente; leases e recuperação; Evidence Boundary do coordenador; Worker Worktrees e limpeza segura
 - scope-out: scheduler do Claude Code, paralelismo e lógica de converge/review
