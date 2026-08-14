@@ -1,6 +1,6 @@
 {
-  "active_phase": "FASE-004",
-  "audit_verdict": "pending",
+  "active_phase": null,
+  "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
     "schema": "v1",
@@ -947,9 +947,32 @@
         "reason": "BL-0002 resolvido: product owner autorizou commit, merge e push.",
         "state": "in-progress",
         "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+            "sha256": "f99371c3ad2e677870c3b7a4bb7628156c319ff91189925a97236237714aff52"
+          },
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+            "sha256": "34aa91d8af879db89577ad039b34bfdf6fbeed37398e8304243562f12f39f179"
+          },
+          {
+            "path": "tests/validate_v3_wiring_contract.py",
+            "sha256": "d5ec169be000b12d587075b299e04b078c13469971f04cccbe86f08bf8a1cb94"
+          },
+          {
+            "path": "tests/validate_checkpoint_contract.py",
+            "sha256": "482bed31dd427211f5b36e4c3161350b6a10c52e58ae88eff706374c53fcde65"
+          }
+        ],
+        "reason": "Commit e880283 integrado em main, testes V3 passaram no merge e 2326350 foi publicado em origin/main.",
+        "state": "complete",
+        "step": "ship"
       }
     ],
-    "current_step": "ship",
+    "current_step": "complete",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -972,7 +995,7 @@
       "converge": "complete",
       "plan": "complete",
       "review": "complete",
-      "ship": "in-progress",
+      "ship": "complete",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
@@ -985,11 +1008,11 @@
     "max_questions_per_run": 25,
     "max_scope_growth_streak": 3
   },
-  "milestone_status": "in-progress",
+  "milestone_status": "completed",
   "second_pass": {
     "new_material_dqs": 0
   },
-  "status": "in-progress",
+  "status": "complete",
   "version": "1.2.0",
   "work_id": "feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473",
   "workflow": {

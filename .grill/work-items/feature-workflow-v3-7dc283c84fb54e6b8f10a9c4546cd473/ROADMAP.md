@@ -39,7 +39,7 @@
 - delivery-units: DU-003
 
 ## FASE-004 — Atestação cooperativa e wiring V3
-- state: blocked
+- state: complete
 - objetivo: somente outputs com cadeia estrutural completa da skill canônica, no contexto correto, podem avançar uma etapa V3 cooperativa
 - scope-in: cadeia de atestação; detecção de replay e divergência; terminais imutáveis; tradução estável de diagnósticos; compatibilidade nas interfaces públicas
 - scope-out: execução direta de verify, review ou ship; defesa contra executor malicioso e proveniência criptográfica

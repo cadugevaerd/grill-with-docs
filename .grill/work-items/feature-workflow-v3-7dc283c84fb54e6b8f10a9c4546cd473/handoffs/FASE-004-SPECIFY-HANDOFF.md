@@ -1,7 +1,7 @@
 # FASE-004 — Atestação cooperativa e wiring V3
 
 - phase: FASE-004
-- state: blocked
+- state: complete
 - roadmap: ROADMAP.md#FASE-004
 - context-refs: Execution Attestation, Canonical Skill, Skill Resolution, Work Item V3
 - ADRs: ADR-0002, ADR-0003, ADR-0004
