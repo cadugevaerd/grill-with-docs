@@ -387,8 +387,31 @@ class WorkspaceV2Contract(unittest.TestCase):
         turn = after["audit"][-1]
         self.assertEqual((turn["step"], turn["state"]), ("phase-turn", "turned"))
         self.assertEqual(turn["reason"], "FASE-001 entregue, abrindo FASE-002")
-        # A forma do estado não muda: é o que dispensa migrar bundles existentes.
-        self.assertEqual(set(before), set(after))
+        # O binding é específico da fase: o turn arquiva sua origem e deixa a
+        # próxima fase sem binding até o novo specify canônico.
+        self.assertEqual(set(after), set(before))
+        self.assertIsNone(after["execution_branch"])
+        self.assertEqual(turn["previous_execution_branch"], before["execution_branch"])
+
+    def test_phase_turn_rejects_the_wrong_execution_branch_without_writing(self) -> None:
+        self._init_item(work_id="wrong-turn")
+        git(self.root, "checkout", "-qb", "011-gauntlet-loop")
+        self._run_full_cycle("wrong-turn", "bound-cycle")
+        self.assertEqual(self._development("wrong-turn")["execution_branch"], "011-gauntlet-loop")
+        git(self.root, "checkout", "-qb", "wrong-branch")
+        path = self.root / ".grill/work-items/wrong-turn/state.json"
+        before = path.read_bytes(), path.stat().st_mtime_ns
+
+        process, payload = invoke(
+            "phase-turn", self.root, "--work-id", "wrong-turn", "--reason", "wrong checkout"
+        )
+
+        self.assertEqual(
+            (process.returncode, payload["verdict"], payload["code"]),
+            (2, "BLOCKED", "EXECUTION-BRANCH-MISMATCH"),
+        )
+        self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), before)
+        self.assertFalse((self.root / ".grill/work-items/wrong-turn.lock").exists())
 
     def test_phase_turn_is_idempotent_and_writes_nothing_on_reuse(self) -> None:
         self._init_item(work_id="reuse")

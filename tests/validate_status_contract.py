@@ -51,32 +51,135 @@ class StatusPublicContract(unittest.TestCase):
         p.write_text(json.dumps(d,indent=2)+"\n",encoding="utf-8")
     def _findings(self, wid="work-a"):
         _,x=status(self.r); return next(w for w in x["work_items"] if w["work_id"]==wid)["findings"]
+    def _switch_to_phase_branch(self, name="011-gauntlet-loop"):
+        self.item(); self._git("add","."); self._git("commit","-qm","bundle")
+        self._git("checkout","-qb",name); return name
+    def _checkpoint(self, step, state):
+        p=cli(WS,"checkpoint",self.r,"--work-id","work-a","--step",step,
+              "--state",state,"--evidence","WORKFLOW.md","--reason",f"contract {step} {state}")
+        self.assertEqual(len(p.stdout.splitlines()),1,(p.stdout,p.stderr))
+        payload=json.loads(p.stdout); self.assertEqual(p.returncode,0,payload); self.assertEqual(p.stderr,"")
+        return payload
+    def _development(self):
+        path=self.r/".grill/work-items/work-a/state.json"
+        return json.loads(path.read_text(encoding="utf-8"))["development"]
 
-    # Os quatro quadrantes da deriva: em andamento ou terminal, no ramo registrado
-    # ou fora dele. Só um deles é anomalia.
+    # Branch gravada é provenance do init e também o fallback fail-closed até
+    # o primeiro checkpoint specify anexar explicitamente a branch de execução.
     def test_drift_is_silent_on_the_recorded_branch_however_many_commits(self):
         self.item(); self._git("add","."); self._git("commit","-qm","bundle")
         for n in range(3):
             (self.r/f"f{n}.txt").write_text("x",encoding="utf-8"); self._git("add","."); self._git("commit","-qm",f"c{n}")
         self.assertEqual(self._findings(),[])
-    def test_drift_fires_off_the_recorded_branch_while_the_branch_lives(self):
-        self.item(); self._git("add","."); self._git("commit","-qm","bundle")
-        self._git("branch","outra"); self._git("checkout","-q","outra")
+    def test_phase_branch_switch_without_binding_keeps_live_vs_recorded(self):
+        self._switch_to_phase_branch()
+        self._git("show-ref","--verify","refs/heads/main")
+        _,payload=status(self.r,"--work-id","work-a","--current-worktree")
+        item=payload["work_items"][0]; location=item["locations"][0]
+        self.assertIn("LIVE-VS-RECORDED",item["findings"])
+        self.assertEqual(item["recorded"]["branch"],"main")
+        self.assertEqual(location["branch"],"011-gauntlet-loop")
+        self.assertEqual(item["development"]["execution_branch"],"main")
+        self.assertNotEqual(item["recorded"]["branch"],location["branch"])
+
+    def test_specify_checkpoint_binds_phase_branch_and_status_exposes_it(self):
+        self._switch_to_phase_branch()
         self.assertIn("LIVE-VS-RECORDED",self._findings())
-    def test_drift_is_silent_once_the_recorded_branch_is_gone(self):
-        """Cada fase entrega no seu ramo: o do init morre no primeiro ship, e daí
-        em diante a comparação volta a ser insatisfazível, como a de head."""
+        checkpoint=self._checkpoint("specify","in-progress")
+        self.assertEqual(checkpoint["verdict"],"UPDATED")
+        self.assertEqual(checkpoint["execution_branch"],"011-gauntlet-loop")
+        development=self._development()
+        self.assertEqual(development["execution_branch"],"011-gauntlet-loop")
+        self.assertEqual(development["audit"][-1]["execution_branch"],"011-gauntlet-loop")
+
+        state_path=self.r/".grill/work-items/work-a/state.json"
+        before_reuse=state_path.read_bytes(),state_path.stat().st_mtime_ns
+        reused=self._checkpoint("specify","in-progress")
+        self.assertEqual(reused["verdict"],"REUSED")
+        self.assertEqual(reused["execution_branch"],"011-gauntlet-loop")
+        self.assertEqual((state_path.read_bytes(),state_path.stat().st_mtime_ns),before_reuse)
+        self.assertEqual(self._development()["audit"][-1]["execution_branch"],"011-gauntlet-loop")
+
+        process,payload=status(self.r,"--work-id","work-a","--current-worktree")
+        item=payload["work_items"][0]
+        self.assertEqual((process.returncode,payload["verdict"]),(0,"OK"),payload)
+        self.assertNotIn("LIVE-VS-RECORDED",item["findings"])
+        self.assertEqual(item["recorded"]["branch"],"main")
+        self.assertEqual(item["locations"][0]["branch"],"011-gauntlet-loop")
+        self.assertEqual(item["development"]["execution_branch"],"011-gauntlet-loop")
+
+    def test_phase_turn_archives_and_clears_phase_binding_then_next_specify_binds_new_branch(self):
+        self._switch_to_phase_branch(); self._checkpoint("specify","in-progress")
+        sequence=self._development()["sequence"]
+        self._checkpoint("specify","complete")
+        for step in sequence[1:]:
+            self._checkpoint(step,"in-progress"); self._checkpoint(step,"complete")
+        self.assertEqual(self._development()["execution_branch"],"011-gauntlet-loop")
+
+        turned=cli(WS,"phase-turn",self.r,"--work-id","work-a","--reason","next phase")
+        self.assertEqual(len(turned.stdout.splitlines()),1,(turned.stdout,turned.stderr))
+        turn_payload=json.loads(turned.stdout)
+        self.assertEqual((turned.returncode,turn_payload.get("verdict")),(0,"TURNED"),turn_payload)
+        development=self._development()
+        self.assertIsNone(development["execution_branch"])
+        self.assertEqual(
+            development["audit"][-1]["previous_execution_branch"],"011-gauntlet-loop")
+        _,payload=status(self.r,"--work-id","work-a","--current-worktree")
+        item=payload["work_items"][0]
+        self.assertNotIn("LIVE-VS-RECORDED",item["findings"])
+        self.assertNotIn("INVALID-DEVELOPMENT-SCHEMA",item["findings"])
+        self.assertIsNone(item["development"]["execution_branch"])
+
+        self._git("checkout","-qb","012-next-phase")
+        next_phase=self._checkpoint("specify","in-progress")
+        self.assertEqual(next_phase["execution_branch"],"012-next-phase")
+        development=self._development()
+        self.assertEqual(development["execution_branch"],"012-next-phase")
+        self.assertEqual(development["audit"][-1]["execution_branch"],"012-next-phase")
+        _,payload=status(self.r,"--work-id","work-a","--current-worktree")
+        item=payload["work_items"][0]
+        self.assertNotIn("LIVE-VS-RECORDED",item["findings"])
+        self.assertEqual(item["development"]["execution_branch"],"012-next-phase")
+
+    def test_advanced_legacy_ship_resume_establishes_binding_and_clears_live_finding(self):
+        self._switch_to_phase_branch(); state_path=self.r/".grill/work-items/work-a/state.json"
+        state=json.loads(state_path.read_text(encoding="utf-8")); development=state["development"]
+        self.assertNotIn("execution_branch",development)
+        development["steps"]={step:"complete" for step in development["sequence"]}
+        development["steps"]["ship"]="blocked"; development["current_step"]="ship"
+        development["audit"]=[
+            {"step":step,"state":"complete","evidence":[],"reason":"legacy cycle"}
+            for step in development["sequence"][:-1]
+        ]
+        development["audit"].append(
+            {"step":"ship","state":"blocked","evidence":[],"reason":"legacy interruption"})
+        state_path.write_text(json.dumps(state,sort_keys=True,indent=2)+"\n",encoding="utf-8")
+        self.assertIn("LIVE-VS-RECORDED",self._findings())
+
+        resumed=self._checkpoint("ship","in-progress")
+        self.assertEqual(resumed["verdict"],"UPDATED")
+        self.assertEqual(resumed["execution_branch"],"011-gauntlet-loop")
+        after=self._development()
+        self.assertEqual(after["execution_branch"],"011-gauntlet-loop")
+        self.assertEqual(after["audit"][-1]["execution_branch"],"011-gauntlet-loop")
+        self.assertEqual(after["steps"]["ship"],"in-progress")
+        _,projected=status(self.r,"--work-id","work-a","--current-worktree")
+        item=projected["work_items"][0]
+        self.assertNotIn("LIVE-VS-RECORDED",item["findings"])
+        self.assertEqual(item["development"]["execution_branch"],"011-gauntlet-loop")
+
+    def test_wrong_live_branch_is_silent_when_the_recorded_branch_is_gone(self):
         self.item(); self._git("add","."); self._git("commit","-qm","bundle")
         self._git("checkout","-qb","fase-dois"); self._git("branch","-D","main")
-        self.assertEqual(self._findings(),[])
-    def test_drift_is_silent_for_a_terminal_item_read_anywhere(self):
+        self.assertNotIn("LIVE-VS-RECORDED",self._findings())
+    def test_terminal_item_without_binding_is_silent_on_another_live_branch(self):
         self.item(); self._git("add","."); self._git("commit","-qm","bundle")
         self._terminal(); self._git("branch","outra"); self._git("checkout","-q","outra")
-        self.assertEqual(self._findings(),[])
-    def test_an_incomplete_milestone_is_not_terminal(self):
+        self.assertNotIn("LIVE-VS-RECORDED",self._findings())
+    def test_incomplete_milestone_without_binding_reports_wrong_live_branch(self):
         self.item(); self._git("add","."); self._git("commit","-qm","bundle")
         p=self.r/".grill/work-items/work-a/state.json"; d=json.loads(p.read_text(encoding="utf-8"))
-        d["status"]="complete"  # marco segue aberto: conservador é continuar alarmando
+        d["status"]="complete"
         p.write_text(json.dumps(d,indent=2)+"\n",encoding="utf-8")
         self._git("branch","outra"); self._git("checkout","-q","outra")
         self.assertIn("LIVE-VS-RECORDED",self._findings())

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Contract matrix for grill-work-item/v3: dual-read, qualified ids, preview-first migration."""
-import json, os, shlex, shutil, socket, stat, subprocess, sys, tempfile, threading, time, unittest
+import contextlib, importlib.util, io, json, os, shlex, shutil, socket, stat, subprocess, sys, tempfile, threading, time, unittest
 from pathlib import Path
 from unittest import mock
 
@@ -9,8 +9,10 @@ PLUGIN=REPO/'plugin'
 SCRIPTS=PLUGIN/'skills/grill-with-docs/scripts'
 WORKSPACE=SCRIPTS/'grill_workspace.py'
 TEMPLATE=PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.template.md'
+V3_TEMPLATE=PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.v3.template.md'
 sys.path.insert(0,str(SCRIPTS))
 from grill_core import work_item_v3 as M  # noqa: E402
+from grill_core import workflow_v3 as WV3  # noqa: E402
 
 WORK_ID='wx'
 SOURCE={'kind':'backlog-request','request_key':'a'*64,'relation':'non-blocking','source_ref':'gauntlet/run-1/F-003'}
@@ -123,6 +125,45 @@ def cli_status(root):
 
 def snapshot(root):
  return {p.relative_to(root).as_posix():(p.read_bytes(),p.stat().st_mtime_ns) for p in sorted(root.rglob('*')) if p.is_file()}
+
+def load_workspace_module():
+ spec=importlib.util.spec_from_file_location('work_item_v3_contract_workspace',WORKSPACE)
+ assert spec is not None and spec.loader is not None
+ module=importlib.util.module_from_spec(spec); sys.modules[spec.name]=module
+ spec.loader.exec_module(module)
+ # Fault-injection cases call the same public main()/parser boundary as a
+ # subprocess, but share this module instance so the already-public
+ # descriptor helpers can be patched without a production-only test hook.
+ module._GRILL_CORE['work_item_v3']=M
+ return module
+
+CLI=load_workspace_module()
+
+def render_v3_workflow_bytes():
+ rendered=WV3.render_v3(V3_TEMPLATE.read_text(encoding='utf-8'),WV3.registry_state()['sha256'])
+ assert '__REGISTRY_SHA256__' not in rendered
+ return rendered.encode('utf-8')
+
+def invoke_workspace(*args):
+ completed=subprocess.run([sys.executable,str(WORKSPACE),*(str(value) for value in args)],text=True,capture_output=True)
+ lines=completed.stdout.splitlines()
+ assert len(lines)==1,f'expected one JSON line: stdout={completed.stdout!r} stderr={completed.stderr!r}'
+ return completed,json.loads(lines[0])
+
+def invoke_workspace_in_process(*args):
+ output=io.StringIO(); errors=io.StringIO()
+ with contextlib.redirect_stdout(output),contextlib.redirect_stderr(errors):
+  returncode=CLI.main([str(value) for value in args])
+ lines=output.getvalue().splitlines()
+ assert len(lines)==1,f'expected one JSON line: stdout={output.getvalue()!r} stderr={errors.getvalue()!r}'
+ return returncode,json.loads(lines[0]),errors.getvalue()
+
+def build_rebind_repo(root):
+ """Create the contract's legacy state: V3 item still pinned to V2 workflow."""
+ build_v2_repo(root)
+ migrated,payload=invoke_workspace('migrate-v3',root,'--work-id',WORK_ID,'--apply')
+ assert migrated.returncode==0 and payload.get('verdict')=='APPLIED',payload
+ (root/'WORKFLOW.md').write_bytes(render_v3_workflow_bytes())
 
 class WorkItemV3Contract(unittest.TestCase):
  @classmethod
@@ -608,6 +649,52 @@ class WorkItemV3Contract(unittest.TestCase):
   os.chmod(self.path,0o640)
   M.migrate_bundle(self.item,apply=True)
   self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode),0o640)
+ @unittest.skipUnless(os.name=='posix' and os.rename in os.supports_dir_fd,'descriptor-relative replace unavailable')
+ def test_descriptor_replace_interruption_preserves_the_prior_document(self):
+  """A failed final rename may not damage either bytes or mode.
+
+  The candidate models a rebind (only workflow identity and its dependent
+  immutable hash change), while this focused test stays below CLI policy so
+  the fault is injected into the actual atomic primitive.
+  """
+  os.chmod(self.path,0o640); before=self.path.read_bytes()
+  candidate=json.loads(before)
+  candidate['immutable']['workflow']['sha256']='f'*64
+  candidate['immutable_sha256']=M.immutable_sha256(candidate['immutable'])
+  directory_fd=os.open(self.item,os.O_RDONLY|getattr(os,'O_DIRECTORY',0))
+  try:
+   supported=set(M.os.supports_dir_fd)
+   with mock.patch.object(M.os,'rename',side_effect=OSError('simulated interrupted rename')) as interrupted_rename:
+    # Preserve the platform capability probe while replacing only the call
+    # outcome; otherwise the MagicMock itself looks like an unsupported API.
+    with mock.patch.object(M.os,'supports_dir_fd',supported|{interrupted_rename}):
+     with self.assertRaises(OSError):
+      M._atomic_replace_at(directory_fd,'WORK-ITEM.json',M.document_bytes(candidate),mode=0o640)
+  finally:
+   os.close(directory_fd)
+  self.assertEqual(self.path.read_bytes(),before)
+  self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode),0o640)
+  self.assertFalse(any(p.name.endswith('.tmp') for p in self.item.iterdir()))
+ @unittest.skipUnless(os.name=='posix' and hasattr(os,'fchmod') and os.rename in os.supports_dir_fd,
+                      'descriptor-relative mode restoration unavailable')
+ def test_descriptor_replace_fchmod_failure_is_named_and_writes_nothing(self):
+  """Mode restoration is part of the commit, never a best-effort hint."""
+  os.chmod(self.path,0o640); before=self.path.read_bytes()
+  candidate=json.loads(before)
+  candidate['immutable']['workflow']['sha256']='e'*64
+  candidate['immutable_sha256']=M.immutable_sha256(candidate['immutable'])
+  directory_fd=os.open(self.item,os.O_RDONLY|getattr(os,'O_DIRECTORY',0))
+  try:
+   with mock.patch.object(M.os,'fchmod',side_effect=OSError('simulated fchmod failure')), \
+        mock.patch.object(M.os,'fdopen',wraps=M.os.fdopen) as opened:
+    error=self.failure(M._atomic_replace_at,directory_fd,'WORK-ITEM.json',M.document_bytes(candidate),mode=0o640)
+    opened.assert_not_called()
+  finally:
+   os.close(directory_fd)
+  self.assertEqual(error.code,'MODE-PRESERVATION-FAILED')
+  self.assertEqual(self.path.read_bytes(),before)
+  self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode),0o640)
+  self.assertFalse(any(p.name.endswith('.tmp') for p in self.item.iterdir()))
 
  # --- structured errors, never raw exceptions (round-3 gap) ------------
  @unittest.skipUnless(os.name=='posix','permission bits are POSIX-only')
@@ -678,5 +765,184 @@ class WorkItemV3Contract(unittest.TestCase):
   data=self.document(); frozen=json.dumps(data,sort_keys=True)
   M.upgrade_metadata(data,parent_work_id='feature-auth-a1b2',source=dict(SOURCE))
   self.assertEqual(frozen,json.dumps(data,sort_keys=True))
+
+class RebindWorkflowContract(unittest.TestCase):
+ """Public contract for an explicit legacy-V3 workflow authority rebind."""
+ def setUp(self):
+  self.t=tempfile.TemporaryDirectory(); self.root=Path(self.t.name)
+  build_rebind_repo(self.root)
+  self.item=self.root/'.grill/work-items'/WORK_ID; self.path=self.item/'WORK-ITEM.json'
+  self.current_workflow_sha256=M.hash_bytes((self.root/'WORKFLOW.md').read_bytes())
+  self.assertEqual(self.document()['schema'],M.SCHEMA_V3)
+  self.assertNotEqual(self.document()['immutable']['workflow']['sha256'],self.current_workflow_sha256)
+ def tearDown(self): self.t.cleanup()
+ def document(self): return json.loads(self.path.read_text(encoding='utf-8'))
+ def invoke(self,*flags): return invoke_workspace('migrate-v3',self.root,'--work-id',WORK_ID,'--rebind-workflow',*flags)
+ def in_process(self,*flags):
+  CLI._GRILL_CORE['work_item_v3']=M
+  return invoke_workspace_in_process('migrate-v3',self.root,'--work-id',WORK_ID,'--rebind-workflow',*flags)
+ def without_document(self,value):
+  result=dict(value); result.pop('WORK-ITEM.json',None); return result
+ def without_root_document(self,value):
+  result=dict(value); result.pop(f'.grill/work-items/{WORK_ID}/WORK-ITEM.json',None); return result
+
+ def test_rebind_preview_reports_both_digests_and_writes_nothing(self):
+  before=snapshot(self.root); prior=self.document()['immutable']['workflow']['sha256']
+  process,payload=self.invoke()
+  self.assertEqual(process.stderr,'')
+  self.assertEqual((process.returncode,payload.get('verdict'),payload.get('operation')),
+                   (0,'PREVIEW','rebind-workflow'),payload)
+  self.assertEqual(payload.get('from_workflow_sha256'),prior)
+  self.assertEqual(payload.get('to_workflow_sha256'),self.current_workflow_sha256)
+  self.assertEqual(snapshot(self.root),before)
+  self.assertFalse((self.root/'.grill/locks'/f'{WORK_ID}.lock').exists())
+
+ def test_rebind_apply_reloads_workflow_inside_commit_window_and_never_binds_stale_a(self):
+  workflow=self.root/'WORKFLOW.md'
+  workflow_a=workflow.read_bytes(); workflow_b=workflow_a+b'\n'
+  digest_a=M.hash_bytes(workflow_a); digest_b=M.hash_bytes(workflow_b)
+  self.assertNotEqual(digest_a,digest_b)
+  self.assertEqual(WV3.execution_gate(workflow_a.decode('utf-8')).status,'OK')
+  self.assertEqual(WV3.execution_gate(workflow_b.decode('utf-8')).status,'OK')
+
+  workflow_v3=CLI.grill_core_module('workflow_v3')
+  original_load=workflow_v3.load_workflow; observed={'loads':0}
+  def publish_b_after_first_load(root):
+   loaded=original_load(root); observed['loads']+=1
+   if observed['loads']==1:
+    self.assertEqual(loaded[1],workflow_a)
+    workflow.write_bytes(workflow_b)
+   return loaded
+
+  CLI._GRILL_CORE['workflow_v3']=workflow_v3
+  with mock.patch.object(workflow_v3,'load_workflow',side_effect=publish_b_after_first_load):
+   returncode,payload,stderr=self.in_process('--apply')
+  self.assertEqual(stderr,'')
+  self.assertEqual(observed['loads'],2)
+  self.assertEqual((returncode,payload.get('verdict'),payload.get('operation')),
+                   (0,'APPLIED','rebind-workflow'),payload)
+  self.assertEqual(payload.get('to_workflow_sha256'),digest_b)
+  self.assertNotEqual(payload.get('to_workflow_sha256'),digest_a)
+  self.assertEqual(self.document()['immutable']['workflow']['sha256'],digest_b)
+  self.assertFalse((self.root/'.grill/locks'/f'{WORK_ID}.lock').exists())
+
+ def test_rebind_v2_workflow_is_blocked_in_preview_and_apply_without_any_write(self):
+  (self.root/'WORKFLOW.md').write_bytes(TEMPLATE.read_bytes())
+  before=snapshot(self.root)
+  for flags in ((),('--apply',)):
+   with self.subTest(flags=flags):
+    process,payload=self.invoke(*flags)
+    self.assertEqual(process.stderr,'')
+    self.assertEqual((process.returncode,payload.get('verdict'),payload.get('code')),
+                     (2,'BLOCKED','WORKFLOW-INCOMPATIBLE'),payload)
+    self.assertEqual(snapshot(self.root),before)
+    self.assertFalse((self.root/'.grill/locks'/f'{WORK_ID}.lock').exists())
+
+ def test_rebind_forged_v3_registry_pin_is_blocked_without_any_write(self):
+  workflow=self.root/'WORKFLOW.md'; live_pin=WV3.registry_state()['sha256'].encode('ascii')
+  forged=workflow.read_bytes().replace(live_pin,b'sha256:'+b'0'*64)
+  self.assertNotEqual(forged,workflow.read_bytes())
+  workflow.write_bytes(forged); before=snapshot(self.root)
+  process,payload=self.invoke('--apply')
+  self.assertEqual(process.stderr,'')
+  self.assertEqual((process.returncode,payload.get('verdict'),payload.get('code')),
+                   (2,'BLOCKED','REGISTRY-PIN-DIVERGENT'),payload)
+  self.assertEqual(snapshot(self.root),before)
+  self.assertFalse((self.root/'.grill/locks'/f'{WORK_ID}.lock').exists())
+
+ def test_rebind_safe_descriptor_unavailable_is_named_and_root_unchanged(self):
+  before=snapshot(self.root)
+  def unavailable(*_args,**_kwargs):
+   raise CLI.CliFailure(CLI.EXIT_BLOCKED,'BLOCKED','SAFE-DIRECTORY-FD-UNAVAILABLE',WORK_ID)
+  with mock.patch.object(CLI,'open_development_item_fd',side_effect=unavailable):
+   for flags in ((),('--apply',)):
+    with self.subTest(flags=flags):
+     returncode,payload,stderr=self.in_process(*flags)
+     self.assertEqual(stderr,'')
+     self.assertEqual((returncode,payload.get('verdict'),payload.get('code')),
+                      (2,'BLOCKED','SAFE-DIRECTORY-FD-UNAVAILABLE'),payload)
+     self.assertEqual(snapshot(self.root),before)
+     self.assertFalse((self.root/'.grill/locks'/f'{WORK_ID}.lock').exists())
+
+ @unittest.skipUnless(os.name=='posix','file mode bits are POSIX-only')
+ def test_rebind_apply_changes_only_binding_and_hash_and_preserves_extension_and_mode(self):
+  before=self.document()
+  before['consumer_extension']={'owner':'external','nested':{'keep':[1,2,3]}}
+  self.path.write_bytes(M.document_bytes(before)); os.chmod(self.path,0o640)
+  before=self.document(); before_root=snapshot(self.root)
+  process,payload=self.invoke('--apply')
+  self.assertEqual(process.stderr,'')
+  self.assertEqual((process.returncode,payload.get('verdict'),payload.get('operation')),
+                   (0,'APPLIED','rebind-workflow'),payload)
+  after=self.document(); M.validate_metadata(after,WORK_ID)
+  expected_immutable=json.loads(json.dumps(before['immutable']))
+  expected_immutable['workflow']['sha256']=self.current_workflow_sha256
+  self.assertEqual(after['immutable'],expected_immutable)
+  self.assertEqual(after['immutable_sha256'],M.immutable_sha256(expected_immutable))
+  for key,value in before.items():
+   if key not in {'immutable','immutable_sha256'}:
+    self.assertEqual(after.get(key),value,key)
+  self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode),0o640)
+  self.assertEqual(self.without_root_document(snapshot(self.root)),self.without_root_document(before_root))
+
+ def test_rebind_apply_is_idempotent_and_second_apply_is_byte_identical(self):
+  first_process,first=self.invoke('--apply')
+  self.assertEqual((first_process.returncode,first.get('verdict')),(0,'APPLIED'),first)
+  after_first=snapshot(self.root)
+  second_process,second=self.invoke('--apply')
+  self.assertEqual((second_process.returncode,second.get('verdict'),second.get('operation')),
+                   (0,'REUSED','rebind-workflow'),second)
+  self.assertEqual(snapshot(self.root),after_first)
+
+ def test_rebind_stale_whole_document_cas_is_blocked_without_lost_update(self):
+  """Mutate an unrelated field immediately after the decision read."""
+  before_root=snapshot(self.root)
+  original=M.read_document_with_digest_at; observed={'reads':0}
+  def racing_read(directory_fd,name='WORK-ITEM.json'):
+   document,digest=original(directory_fd,name); observed['reads']+=1
+   if observed['reads']==1:
+    external=json.loads(json.dumps(document))
+    external['consumer_extension']={'writer':'outside-the-lock-domain'}
+    observed['external_bytes']=M.document_bytes(external)
+    self.path.write_bytes(observed['external_bytes'])
+   return document,digest
+  with mock.patch.object(M,'read_document_with_digest_at',side_effect=racing_read):
+   returncode,payload,stderr=self.in_process('--apply')
+  self.assertEqual(stderr,'')
+  self.assertGreaterEqual(observed['reads'],2)
+  self.assertEqual((returncode,payload.get('verdict'),payload.get('code')),
+                   (2,'BLOCKED','STATE-DIVERGENCE'),payload)
+  self.assertEqual(self.path.read_bytes(),observed['external_bytes'])
+  self.assertEqual(self.without_root_document(snapshot(self.root)),self.without_root_document(before_root))
+  self.assertFalse((self.root/'.grill/locks'/f'{WORK_ID}.lock').exists())
+
+ def test_rebind_interrupted_final_rename_preserves_prior_document(self):
+  before_root=snapshot(self.root); before=self.path.read_bytes(); before_mode=stat.S_IMODE(os.stat(self.path).st_mode)
+  supported=set(M.os.supports_dir_fd)
+  with mock.patch.object(M.os,'rename',side_effect=OSError('simulated interrupted rename')) as interrupted_rename:
+   with mock.patch.object(M.os,'supports_dir_fd',supported|{interrupted_rename}):
+    returncode,payload,stderr=self.in_process('--apply')
+  self.assertEqual(stderr,'')
+  self.assertEqual((returncode,payload.get('verdict'),payload.get('code')),
+                   (2,'BLOCKED','FILESYSTEM'),payload)
+  self.assertEqual(self.path.read_bytes(),before)
+  self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode),before_mode)
+  self.assertEqual(snapshot(self.root),before_root)
+  self.assertFalse(any(p.name.endswith('.tmp') for p in self.item.iterdir()))
+  self.assertFalse((self.root/'.grill/locks'/f'{WORK_ID}.lock').exists())
+
+ @unittest.skipUnless(os.name=='posix' and hasattr(os,'fchmod'),'fchmod unavailable')
+ def test_rebind_fchmod_failure_is_named_and_preserves_prior_document(self):
+  os.chmod(self.path,0o640); before_root=snapshot(self.root); before=self.path.read_bytes()
+  with mock.patch.object(M.os,'fchmod',side_effect=OSError('simulated fchmod failure')):
+   returncode,payload,stderr=self.in_process('--apply')
+  self.assertEqual(stderr,'')
+  self.assertEqual((returncode,payload.get('verdict'),payload.get('code')),
+                   (2,'BLOCKED','MODE-PRESERVATION-FAILED'),payload)
+  self.assertEqual(self.path.read_bytes(),before)
+  self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode),0o640)
+  self.assertEqual(snapshot(self.root),before_root)
+  self.assertFalse(any(p.name.endswith('.tmp') for p in self.item.iterdir()))
+  self.assertFalse((self.root/'.grill/locks'/f'{WORK_ID}.lock').exists())
 
 if __name__=='__main__': unittest.main()

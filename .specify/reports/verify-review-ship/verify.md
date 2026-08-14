@@ -1,39 +1,35 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree 865be940ae3243a8ae0ad07d9323072658bf228ed8f1bd444bb8221816e0fc75 / work 5ca57aa376734971ba8aa511e74f275034b333b684fb07fd8f7d0e7ba0ff7329 / plan 88814086ed1b31a2530b2b7b99f389353f1062e24107a7c01b06c9d3cc5f6479
+Source fingerprint: tree ca7b1a88e9ed8fff333524f8125c0230b358c308516ce40f13225dbb2ccbf161 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan f00191471b472ce2081c62c09eb9cf33502d547413331d4c6c4c9910e72a4b8f
 Converge: CONVERGED
-
-Evidência em `specs/002-publish-fanout/converge.md`, produzida contra clones dos dois marketplaces publicados.
 
 ### Operational Gates
 
 | Gate | Command | Result | Evidence | Validator |
 |---|---|---|---|---|
-| tests | `python3 tests/run_validators.py` | PASS | 267 testes, exit 0, 1 skip de ambiente | orquestrador |
-| tests (alvo) | `python3 tests/validate_publish_contract.py` | PASS | 30 testes, OK | orquestrador |
-| build / lint / typecheck / format | — | SKIPPED | nenhuma dessas ferramentas existe no repositório | orquestrador |
-| security | inspeção do manuseio de segredo no workflow | PASS | token vai por `http.extraheader`, nunca na URL do remote; `::add-mask::` antes de exportar; `persist-credentials: false` no checkout canônico | orquestrador |
-| quickstart/contracts | publicador contra clones reais dos dois marketplaces | PASS | UPDATED, CREATED, UNCHANGED e BLOCKED conforme `contracts/cli.md` | orquestrador |
-| workflow YAML | `yaml.safe_load` | PASS | jobs `release` e `publish`; `fail-fast: false`; `paths: plugin/**`; permissões mínimas | orquestrador |
+| Full contract suite | `python3 tests/run_validators.py` | PASS | All validators passed. | Codex |
+| Gauntlet activation | `python3 tests/validate_gauntlet_activation_contract.py` | PASS | 43 tests. | Codex |
+| V3 migration and rebind | `python3 tests/validate_work_item_v3_contract.py` | PASS | 84 tests. | Codex |
+| Step-skill registry | `python3 tests/validate_step_skill_registry_contract.py` | PASS | 103 tests. | Codex |
+| Branch lifecycle | `python3 tests/validate_checkpoint_contract.py` | PASS | 37 tests. | Codex |
+| Workspace compatibility | `python3 tests/validate_workspace_contract.py` | PASS | 66 tests; 1 environment skip. | Codex |
+| Diff hygiene | `git diff --check eacb0d8..0d79191` | PASS | No whitespace errors. | Independent critic |
 
 ### Diff Hygiene
 
-- Alterados: dois arquivos novos em `tests/`, um workflow novo, artefatos de `specs/002-publish-fanout/`.
-- Nada em `plugin/`; `ci.yml` intocado.
-- Nenhum segredo, credencial ou arquivo gerado no diff.
-- O segredo `MARKETPLACE_PUBLISH_TOKEN` **não existe** no repositório e não foi criado: instalar um PAT de escopo amplo é ato humano. Na sua ausência o workflow reprova no primeiro passo com erro nomeado.
+The committed FASE-001 scope contains activation, V3 rebind, public-contract, and documentation artifacts only. No secret or environment file was found.
 
 ### Executable Scenarios
 
-Os cenários de `contracts/cli.md` foram exercitados contra os índices reais dos dois marketplaces e têm teste correspondente que roda sem rede e sem credencial. Os dois defeitos encontrados durante a convergência ganharam teste de regressão.
-
-O que **não** foi exercitado: a publicação de ponta a ponta pelo GitHub Actions, porque depende do segredo. Fica para a FASE-003.
+- Claude-only activation, strict configuration, eleven canonical skills, worker limit 1..5, and stale identity handling.
+- Descriptor-safe activation/rebind writes, lock ownership failure paths, and V2 compatibility.
+- Phase-local execution-branch binding, legacy resumption, and no-write rejection of wrong-branch mutations.
 
 ### Failures / Blockers
 
-Nenhum. Limite conhecido e declarado: a prova é local; a primeira execução real do workflow ainda não aconteceu.
+None.
 
 ### Next Action
 
-- PASS: run `/speckit.verify-review-ship.review`
+- PASS: technical review is approved and the isolated ship transaction may run.

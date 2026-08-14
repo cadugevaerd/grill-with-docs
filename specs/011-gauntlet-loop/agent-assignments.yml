@@ -1,0 +1,124 @@
+# Agent Assignments
+# Feature: 011-gauntlet-loop
+# Command: /speckit.agent-assign.assign
+# Execution occurs locally in Codex; these are role and tier constraints, not a runtime dispatch record.
+
+assignment_policy:
+  max_workers: 5
+  execution_tier: medium
+  markdown_tier: small
+  planning_and_review_tier: large
+  phase_one_parallelism: 2
+  scheduler: unavailable-in-FASE-001
+
+agents_scanned:
+  - name: "Minimal Change Engineer"
+    source: user
+    description: "Minimum-scope Python implementation specialist."
+  - name: "API Tester"
+    source: user
+    description: "Public CLI and contract-validator specialist."
+  - name: "Technical Writer"
+    source: user
+    description: "Developer documentation specialist."
+  - name: "Software Architect"
+    source: user
+    description: "Planning and architecture review specialist."
+  - name: "Code Reviewer"
+    source: user
+    description: "Correctness, security, and maintainability reviewer."
+
+assignments:
+  T001:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Immutable packaged asset; scope must stay limited to the release asset."
+  T002:
+    agent: "API Tester"
+    requested_tier: medium
+    reason: "Public migration contract and failure-path tests."
+  T003:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Descriptor-safe primitive with a narrow mode-preservation change."
+  T004:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Additive public CLI migration command."
+  T005:
+    agent: "API Tester"
+    requested_tier: medium
+    reason: "Focused contract validation of rebind invariants."
+  T006:
+    agent: "API Tester"
+    requested_tier: medium
+    reason: "Activation contract is specified through public CLI tests."
+  T007:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Core strict schema, proof, and transaction implementation."
+  T008:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Additive gauntlet-init CLI boundary."
+  T009:
+    agent: "API Tester"
+    requested_tier: medium
+    reason: "MVP activation behavior regression gate."
+  T010:
+    agent: "API Tester"
+    requested_tier: medium
+    reason: "Negative, no-mutation, and one-JSON contract cases."
+  T011:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Closed error translation and safe-path hardening."
+  T012:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Public error-boundary implementation."
+  T013:
+    agent: "API Tester"
+    requested_tier: medium
+    reason: "Unsafe activation regression gate."
+  T014:
+    agent: "API Tester"
+    requested_tier: medium
+    reason: "Status and control-surface contract cases."
+  T015:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Read-only status and admission-only control implementation."
+  T016:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Additive public control commands."
+  T017:
+    agent: "API Tester"
+    requested_tier: medium
+    reason: "Phase-boundary regression gate."
+  T018:
+    agent: default
+    requested_tier: small
+    reason: "Markdown-only reconciliation; no scanned specialist declares a small model."
+  T019:
+    agent: "API Tester"
+    requested_tier: medium
+    reason: "Full reproducible validator evidence."
+  T020:
+    agent: "Code Reviewer"
+    requested_tier: medium
+    reason: "Diff and governed-version check; the later formal review gate remains large."
+
+deferred_stage_policy:
+  specify: large
+  plan: large
+  checklist: small
+  tasks: medium
+  analyze: large
+  agent-assign: large
+  agent-execute: medium
+  converge: medium
+  verify: medium
+  review: large
+  ship: large

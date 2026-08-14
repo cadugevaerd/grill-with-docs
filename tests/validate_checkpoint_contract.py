@@ -36,6 +36,16 @@ class CheckpointContract(unittest.TestCase):
  def test_directory_evidence_rejected(self): (self.r/'dir').mkdir(); self.call('specify','in-progress'); self.assertEqual(json.loads(self.call('specify','complete',evidence=['dir']).stdout)['code'],'EVIDENCE-NOT-REGULAR')
  def test_blocked_requires_reason(self): self.call('specify','in-progress'); self.assertEqual(json.loads(self.call('specify','blocked').stdout)['code'],'REASON-REQUIRED')
  def test_blocked_retry(self): self.call('specify','in-progress'); self.call('specify','blocked',reason='wait'); self.assertEqual(self.call('specify','in-progress').returncode,0)
+ def test_bound_branch_rejects_complete_and_blocked_without_writing(self):
+  subprocess.run(['git','-C',str(self.r),'checkout','-qb','011-gauntlet-loop'],check=True)
+  self.assertEqual(self.call('specify','in-progress').returncode,0)
+  subprocess.run(['git','-C',str(self.r),'checkout','-qb','wrong-branch'],check=True)
+  state=self.r/'.grill/work-items/wx/state.json'; before=(state.read_bytes(),state.stat().st_mtime_ns)
+  for requested in (self.call('specify','complete',evidence=['e']),self.call('specify','blocked',reason='wait')):
+   payload=json.loads(requested.stdout)
+   self.assertEqual((requested.returncode,payload['verdict'],payload['code']),(2,'BLOCKED','EXECUTION-BRANCH-MISMATCH'))
+   self.assertEqual((state.read_bytes(),state.stat().st_mtime_ns),before)
+   self.assertFalse((self.r/'.grill/work-items/wx.lock').exists())
  def test_reused_includes_evidence_and_reason(self): self.call('specify','in-progress'); self.call('specify','complete',evidence=['e'],reason='done'); p=self.call('specify','complete',evidence=['e'],reason='done'); self.assertEqual(json.loads(p.stdout)['verdict'],'REUSED')
  def test_divergent_same_state_is_exit_two(self): self.call('specify','in-progress'); p=self.call('specify','in-progress',reason='different'); self.assertEqual(p.returncode,2); self.assertEqual(json.loads(p.stdout)['code'],'STATE-DIVERGENCE')
  def test_current_step_first_pending(self): self.call('specify','in-progress'); p=self.call('specify','complete',evidence=['e']); self.assertEqual(json.loads(p.stdout)['current_step'],'plan')
