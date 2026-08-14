@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import errno
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -66,9 +68,110 @@ def sibling(name: str) -> Any:
         module = importlib.util.module_from_spec(spec)
         # dataclass resolution looks the module up in sys.modules while the body runs.
         sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                spec.loader.exec_module(module)
+        except BaseException as exc:
+            sys.modules.pop(spec.name, None)
+            raise ImportError(f"unable to load sibling {name}") from exc
         _SIBLINGS[name] = module
     return _SIBLINGS[name]
+
+
+_GRILL_CORE: dict[str, Any] = {}
+
+
+def grill_core_module(name: str) -> Any:
+    """Load a ``grill_core/<name>.py`` module by path, same mechanism as ``sibling()``.
+
+    The v3 library (work_item_v3.py, workflow_v3.py and its other modules)
+    lives one directory deeper than the flat scripts/ siblings ``sibling()``
+    targets, so ``.with_name()`` cannot reach it (it rejects a name containing
+    a path separator). This is peça E's own loader (LD-004): it is the only
+    piece authorised to wire grill_core into the public CLI, so the cache is
+    kept separate from ``_SIBLINGS`` rather than generalising that loader.
+    Only ``work_item_v3`` is actually loaded this round -- see gaps_deferred.
+    """
+    if name not in _GRILL_CORE:
+        path = Path(__file__).resolve().with_name("grill_core") / f"{name}.py"
+        spec = importlib.util.spec_from_file_location(f"grill_core_{name}", path)
+        if spec is None or spec.loader is None:
+            raise ImportError(name)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        try:
+            # The public CLI owns stdout's one-JSON contract.  A plugin core
+            # must not be able to prepend import-time diagnostic noise before
+            # this boundary renders its structured failure.
+            with contextlib.redirect_stdout(io.StringIO()):
+                spec.loader.exec_module(module)
+        except BaseException as exc:
+            # A grill_core module is an optional capability behind this public
+            # boundary.  Its arbitrary import-time failure must retain the
+            # CLI's one-JSON/EXIT_BLOCKED contract instead of escaping as an
+            # interpreter traceback (where exit 1 misleadingly means NO-GO).
+            sys.modules.pop(spec.name, None)
+            raise ImportError(f"unable to load grill_core.{name}") from exc
+        _GRILL_CORE[name] = module
+    return _GRILL_CORE[name]
+
+
+# LD-002 revisada: the eight codes literally named by §22/§23 -- the ones a
+# reviewer judges the wiring against by name -- get an explicit, tested
+# table entry. A code that already belongs to the live v2 contract
+# (METADATA-SCHEMA, LOCK-CONTENTION, IMMUTABLE-TAMPERED, WORK-ITEM-MISSING,
+# ...) is not in this table and must pass through unchanged: reusing the
+# existing code *is* the correct behaviour, never to be mistaken for one of
+# the eight and rewritten.
+V3_CODE_TRANSLATION: dict[str, str] = {
+    "BLOCKED_CAPABILITY": "BLOCKED-CAPABILITY",
+    "STALE_LEASE": "STALE-LEASE",
+    "ORCHESTRATOR_INVALID": "ORCHESTRATOR-INVALID",
+    "STALE_PLAN": "STALE-PLAN",
+    "UNATTESTED_STEP_OUTPUT": "UNATTESTED-STEP-OUTPUT",
+    "STALE_SKILL_RESOLUTION": "STALE-SKILL-RESOLUTION",
+    "PROJECT_IDENTITY_DIVERGENCE": "PROJECT-IDENTITY-DIVERGENCE",
+    "STATE_DIVERGENCE": "STATE-DIVERGENCE",
+}
+# grill_core.work_item_v3's own module docstring (LD-002 revisada, applied to
+# its full vocabulary, not just the eight plan-literal names) mints new
+# SCREAMING_SNAKE codes for every v3-only condition as its validation grows
+# (WORKTREE_PATH_FORBIDDEN, INVALID_PARENT, WORK_ITEM_V3_REQUIRED,
+# V3_READERS_NOT_WIRED, ... -- the exact set is that module's to evolve, not
+# this one's to enumerate). The live v2 contract has never used an
+# underscore in ~200 assertions, so any code shaped like SCREAMING_SNAKE is,
+# by that convention alone, v3-only vocabulary that still needs routing even
+# when it is not one of the eight names above. A code that already contains
+# a hyphen (the v2 spelling, reused on purpose by v3 modules) is left alone.
+_SNAKE_CODE_RE = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
+
+
+def translate_v3_code(code: str) -> str:
+    """Translate a v3 code to the live SCREAMING-KEBAB vocabulary; identity otherwise."""
+    translated = V3_CODE_TRANSLATION.get(code)
+    if translated is not None:
+        return translated
+    if "-" not in code and _SNAKE_CODE_RE.fullmatch(code):
+        return code.replace("_", "-")
+    return code
+
+
+def raise_from_work_item_error(error: Any) -> NoReturn:
+    """Re-raise a ``grill_core.work_item_v3.WorkItemError`` as ``CliFailure``.
+
+    Runs every code through :func:`translate_v3_code` at this exact boundary
+    (LD-002 revisada) so no v3 module output reaches the public JSON payload
+    unrouted through the table, and carries the structured ``details`` dict
+    over as ``extra`` so callers (e.g. WORK-ITEM-V3-REQUIRED) keep their
+    diagnostic fields instead of collapsing to a bare message.
+    """
+    raise CliFailure(
+        error.exit_code,
+        error.verdict,
+        translate_v3_code(error.code),
+        error.message,
+        extra=dict(error.details) if error.details else None,
+    ) from error
 
 
 class JsonParser(argparse.ArgumentParser):
@@ -83,11 +186,18 @@ class CliFailure(Exception):
     code: str
     message: str
     findings: list[str] | None = None
+    # Peça E / LD-004 item 5: carries a translated grill_core.work_item_v3
+    # WorkItemError's `details` dict (work_id, operation, migration hints, ...)
+    # across the CLI boundary without inventing a second payload shape.
+    extra: dict[str, Any] | None = None
 
     def payload(self) -> dict[str, Any]:
         result: dict[str, Any] = {"verdict": self.verdict, "code": self.code, "error": self.message}
         if self.findings:
             result["findings"] = sorted(set(self.findings))
+        if self.extra:
+            for key, value in self.extra.items():
+                result.setdefault(key, value)
         return result
 
 
@@ -709,10 +819,51 @@ def validated_hotfix(bundle: ItemBundle) -> dict[str, Any]:
     return hotfix
 
 
+SCHEMA_WORK_ITEM_V3 = "grill-work-item/v3"
+# LD-010 item 4: field names that only ever belong to a v3 immutable block
+# (mirrors grill_core.work_item_v3.V3_IMMUTABLE_FIELDS minus "worktree_key"'s
+# sibling path-guard keys, which validate_metadata never needs to duplicate
+# here -- only the presence check does). Kept as a small local literal, not
+# imported from grill_core, so the v2 fast path stays free of any load-time
+# dependency on it, matching this function's existing "zero behavioural
+# change for v2" contract.
+V3_ORPHAN_IMMUTABLE_FIELDS = ("parent_work_id", "source", "worktree_key")
+
+
 def validate_metadata(metadata: dict[str, Any], expected_work_id: str | None = None) -> dict[str, Any]:
+    """Dual-read v2/v3 validator (LD-004 peça E, item 1).
+
+    A v2 document takes the exact path this function has always taken --
+    zero behavioural change for any pre-v3 consumer, byte for byte. A v3
+    document's *form* is delegated to grill_core.work_item_v3 (the schema's
+    owner module); this function only translates its exceptions at the CLI
+    boundary. The branch is decided from the raw, unvalidated probe alone --
+    the real (hash-checked) schema read happens inside whichever path is
+    taken, exactly as before.
+    """
+    probe = metadata.get("immutable") if isinstance(metadata, dict) else None
+    probe_schema = probe.get("schema") if isinstance(probe, dict) else None
+    if probe_schema == SCHEMA_WORK_ITEM_V3:
+        work_item_v3 = grill_core_module("work_item_v3")
+        try:
+            return work_item_v3.validate_metadata(metadata, expected_work_id)
+        except work_item_v3.WorkItemError as error:
+            raise_from_work_item_error(error)
     immutable = metadata.get("immutable")
     if not isinstance(immutable, dict) or metadata.get("immutable_sha256") != hash_bytes(canonical(immutable)):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IMMUTABLE-TAMPERED", expected_work_id or "unknown")
+    # Downgrade guard (LD-010 item 4 / §22 Core "snapshot local divergente ...
+    # falha fechado"). The branch above (v2 vs v3) is chosen from
+    # `immutable.schema` alone -- exactly the field an attacker controls.
+    # Recomputing immutable_sha256 with THIS module's own canonicalizer over a
+    # tampered immutable block that claims schema=v2 while still carrying v3
+    # fields (parent_work_id, source, worktree_key -- including a path-escape
+    # worktree_key payload) is self-consistent, so the hash check above alone
+    # does not catch it; nothing below this point has ever known those v3
+    # field names exist. Migration is monotonic: once a document carries any
+    # v3-shaped field it can never again validate as v2.
+    if any(name in immutable for name in V3_ORPHAN_IMMUTABLE_FIELDS) or "orchestration" in metadata:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code("STATE_DIVERGENCE"), expected_work_id or immutable.get("work_id") or "unknown")
     if (
         immutable.get("schema") != "grill-work-item/v2"
         or not isinstance(immutable.get("work_id"), str)
@@ -1740,11 +1891,92 @@ def resolve_development_item(root: Path, work_id: str) -> Path:
     if not WORK_ID_RE.fullmatch(work_id):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", work_id)
     item = root / ".grill" / "work-items" / work_id
+    try:
+        # Checking only `item.is_symlink()` follows an unsafe ancestor such as
+        # `.grill/work-items -> /outside`, allowing an apply to mutate bytes
+        # outside the project.  The lexical chain guard rejects every ancestor
+        # before this command opens, locks, or writes the bundle.
+        reject_symlink_chain(root, item, allow_missing=False)
+    except CliFailure as exc:
+        if exc.code == "SYMLINK-REJECTED":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORK-ITEM-SYMLINK", work_id) from exc
+        raise
     if item.is_symlink():
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORK-ITEM-SYMLINK", work_id)
     if not item.is_dir():
         raise CliFailure(EXIT_NO_GO, "NO-GO", "WORK-ITEM-MISSING", work_id)
     return item
+
+
+def open_development_item_fd(root: Path, work_id: str) -> int:
+    """Open a work-item directory through no-follow ancestor descriptors.
+
+    The returned descriptor pins the directory that was verified underneath
+    ``root``.  A later rename of ``.grill/work-items`` can no longer redirect
+    a migration's reads or write to an outside tree.  Platforms without the
+    required openat primitives fail closed rather than fall back to a
+    path-based mutation with that TOCTOU exposure.
+    """
+    if not (hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW") and os.open in os.supports_dir_fd):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SAFE-DIRECTORY-FD-UNAVAILABLE", work_id)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    descriptors: list[int] = []
+    try:
+        current = os.open(root, flags)
+        descriptors.append(current)
+        for component in (".grill", "work-items", work_id):
+            current = os.open(component, flags, dir_fd=current)
+            descriptors.append(current)
+        result = descriptors.pop()
+        return result
+    except FileNotFoundError as exc:
+        raise CliFailure(EXIT_NO_GO, "NO-GO", "WORK-ITEM-MISSING", work_id) from exc
+    except OSError as exc:
+        # Linux reports O_DIRECTORY|O_NOFOLLOW on a symlink as ENOTDIR;
+        # other POSIX kernels use ELOOP.  Both mean this ancestry cannot be
+        # trusted for a state-changing work-item operation.
+        code = "WORK-ITEM-SYMLINK" if exc.errno in {errno.ELOOP, errno.EMLINK, errno.ENOTDIR} else "UNSAFE-WORK-ITEM"
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, work_id) from exc
+    finally:
+        for descriptor in descriptors:
+            os.close(descriptor)
+
+
+def migrate_v3_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Preview-first ``grill-work-item/v2`` -> ``/v3`` bundle upgrade (LD-004 item 2).
+
+    Delegates entirely to ``grill_core.work_item_v3.migrate_bundle``, which
+    already is preview-first (``apply=False`` never writes and takes no lock),
+    idempotent (``REUSED`` on a second apply) and CAS-guarded on write. This
+    function only resolves/locks the target bundle the same way every other
+    mutating work-item command does, and translates the module's exceptions at
+    the CLI boundary. It is the real, callable replacement the payload of
+    ``WORK-ITEM-V3-REQUIRED`` (grill_core.work_item_v3.require_v3) points a
+    caller at today via ``migration_capability``.
+    """
+    root = project_root(args.root)
+    item = resolve_development_item(root, args.work_id)
+    work_item_v3 = grill_core_module("work_item_v3")
+    lock = acquire_lock(root, args.work_id, item) if args.apply else None
+    item_fd: int | None = None
+    try:
+        item_fd = open_development_item_fd(root, args.work_id)
+        try:
+            result = work_item_v3.migrate_bundle(
+                item,
+                apply=args.apply,
+                item_dir_fd=item_fd,
+                lock_held=lock is not None,
+            )
+        except work_item_v3.WorkItemError as error:
+            raise_from_work_item_error(error)
+        exit_code = EXIT_OK if result.get("verdict") in {"PREVIEW", "REUSED", "APPLIED"} else EXIT_BLOCKED
+        return result, exit_code
+    finally:
+        if item_fd is not None:
+            os.close(item_fd)
+        if lock is not None:
+            shutil.rmtree(lock, ignore_errors=True)
 
 
 def global_snapshotter(root: Path) -> Callable[[], dict[str, tuple[bytes, int]]]:
@@ -1777,6 +2009,92 @@ def read_development_state(root: Path, item: Path, work_id: str) -> tuple[Path, 
     if not isinstance(state, dict):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STATE", work_id)
     return path, state
+
+
+def v3_checkpoint_attestation_required(root: Path) -> bool:
+    """Return whether the materialised workflow activates the v3 receipt gate.
+
+    V2 work items retain their byte-compatible lifecycle.  A v3 marker (or a
+    human-equivalent v3 frontier) is different: an incompatible document is a
+    block, never a quiet downgrade to the unauthenticated v2 checkpoint path.
+    """
+    workflow_v3 = grill_core_module("workflow_v3")
+    workflow_path = root / "WORKFLOW.md"
+    try:
+        text = safe_read(workflow_path, root=root, utf8=True)
+        v3_declared = workflow_v3.compatible_v3(text) or workflow_v3.marker_version(text) == "v3"
+        if not v3_declared:
+            return False
+        gate = workflow_v3.execution_gate(text)
+    except workflow_v3.Failure as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.message) from exc
+    if gate.status != "OK":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(gate.code or "WORKFLOW_INCOMPATIBLE"), "WORKFLOW.md")
+    return True
+
+
+def load_checkpoint_attestation(root: Path, value: str) -> dict[str, Any]:
+    """Read one caller-named receipt bundle without following symlinks."""
+    path = Path(value)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ATTESTATION-PATH", value)
+    full_path = root / path
+    try:
+        raw = safe_read_regular_fd(root, full_path)
+        document = json.loads(raw.decode("utf-8"))
+    except UnicodeError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ATTESTATION", value) from exc
+    except json.JSONDecodeError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ATTESTATION", value) from exc
+    except CliFailure as exc:
+        if exc.code in {"SYMLINK-REJECTED", "UNSAFE-FILE", "EVIDENCE-NOT-REGULAR"}:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-SYMLINK", value) from exc
+        raise
+    if not isinstance(document, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ATTESTATION", value)
+    return document
+
+
+def verify_checkpoint_attestation(
+    root: Path,
+    development: dict[str, Any],
+    *,
+    work_id: str,
+    step_id: str,
+    attestation_path: str | None,
+) -> dict[str, Any]:
+    """Verify and bind the full canonical chain before a v3 completion."""
+    if not attestation_path:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-REQUIRED", step_id)
+    attestation = grill_core_module("attestation")
+    store = grill_core_module("store")
+    bundle = load_checkpoint_attestation(root, attestation_path)
+    try:
+        project_id = store.project_identity(root)["project_id"]
+        previous = None
+        index = SEQUENCE.index(step_id)
+        outputs = development.get("attested_outputs", {})
+        if not isinstance(outputs, dict):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-STATE-DIVERGENCE", work_id)
+        if index:
+            previous = outputs.get(SEQUENCE[index - 1])
+            if not isinstance(previous, dict):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-PREDECESSOR-MISSING", SEQUENCE[index - 1])
+        verdict = attestation.judge_checkpoint_attestation(
+            bundle,
+            project_id=project_id,
+            work_item_id=work_id,
+            step_id=step_id,
+            campaign=development.get("attestation_campaign"),
+            predecessor_output=previous,
+        )
+    except CliFailure:
+        raise
+    except attestation.AttestationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.reason) from exc
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.message) from exc
+    return {"path": attestation_path, **verdict}
 
 
 def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -1837,6 +2155,7 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 return {"verdict":"REUSED", "work_id":args.work_id, **payload, "current_step":development.get("current_step")}, EXIT_OK
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STATE-DIVERGENCE", args.step)
         index = sequence.index(args.step)
+        attestation_result: dict[str, Any] | None = None
         if args.state == "in-progress":
             if current not in {"pending", "blocked"} or any(steps.get(s) != "complete" for s in sequence[:index]):
                 # Uma fase inteiramente concluída não é transição inválida: é fase
@@ -1853,10 +2172,22 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-TRANSITION", args.step)
             if args.step == "ship" and not (steps.get("verify") == steps.get("review") == "complete"):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SHIP-GATE", args.step)
+            if v3_checkpoint_attestation_required(root):
+                attestation_result = verify_checkpoint_attestation(
+                    root,
+                    development,
+                    work_id=args.work_id,
+                    step_id=args.step,
+                    attestation_path=args.attestation,
+                )
         elif args.state == "blocked":
             if current != "in-progress" or not reason:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "REASON-REQUIRED", args.step)
         steps[args.step] = args.state; audit.append(payload)
+        if attestation_result is not None:
+            development["attestation_campaign"] = attestation_result["campaign"]
+            outputs = development.setdefault("attested_outputs", {})
+            outputs[args.step] = attestation_result["output"]
         development["current_step"] = next((s for s in sequence if steps.get(s) != "complete"), "complete")
         atomic_write(root, path, (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode())
         return {"verdict":"UPDATED", "work_id":args.work_id, **payload, "current_step":development["current_step"]}, EXIT_OK
@@ -1997,12 +2328,17 @@ def build_parser() -> JsonParser:
     migrate_parser.add_argument("--work-id")
     migrate_parser.add_argument("--base-ref")
     migrate_parser.add_argument("--apply", action="store_true")
+    migrate_v3_parser = subparsers.add_parser("migrate-v3")
+    migrate_v3_parser.add_argument("root")
+    migrate_v3_parser.add_argument("--work-id", required=True)
+    migrate_v3_parser.add_argument("--apply", action="store_true")
     checkpoint_parser = subparsers.add_parser("checkpoint")
     checkpoint_parser.add_argument("root")
     checkpoint_parser.add_argument("--work-id", required=True)
     checkpoint_parser.add_argument("--step", required=True)
     checkpoint_parser.add_argument("--state", choices=("in-progress", "complete", "blocked"), required=True)
     checkpoint_parser.add_argument("--evidence", action="append", default=[])
+    checkpoint_parser.add_argument("--attestation")
     checkpoint_parser.add_argument("--reason", default="")
     checkpoint_parser.add_argument("--initialize-legacy", action="store_true")
     checkpoint_parser.add_argument("--from-step")
@@ -2034,6 +2370,7 @@ def main(argv: list[str] | None = None) -> int:
             "audit": audit_command,
             "reconcile": reconcile_command,
             "migrate": migrate_command,
+            "migrate-v3": migrate_v3_command,
             "hotfix": hotfix_command,
             "hotfix-go": hotfix_go_command,
             "checkpoint": checkpoint_command,
@@ -2054,8 +2391,22 @@ def main(argv: list[str] | None = None) -> int:
         if exc.filename2 is not None:
             payload["path2"] = diagnostic_path(exc.filename2)
         exit_code = EXIT_BLOCKED
+    except (ImportError, SyntaxError) as exc:
+        # §5.7 / 22 Core: exactly one JSON document on stdout, always -- even
+        # when grill_core_module()'s exec_module() hits a syntactically broken
+        # or unloadable grill_core/*.py sibling. Previously unhandled: the CLI
+        # exited 1 with empty stdout and a raw traceback on stderr, which is
+        # itself an out-of-contract exit code (1 means NO-GO here, not an
+        # interpreter-level failure) as well as a broken stdout contract.
+        payload = {"verdict": "BLOCKED", "code": "GRILL-CORE-UNAVAILABLE", "error": type(exc).__name__, "detail": str(exc)}
+        exit_code = EXIT_BLOCKED
     except (UnicodeError, json.JSONDecodeError) as exc:
         payload = {"verdict": "BLOCKED", "code": "UNEXPECTED-INPUT", "error": type(exc).__name__}
+        exit_code = EXIT_BLOCKED
+    except Exception as exc:
+        # Public commands are protocol boundaries: unexpected core failures
+        # cannot turn into a traceback/exit 1 after having emitted no JSON.
+        payload = {"verdict": "BLOCKED", "code": "UNEXPECTED-FAILURE", "error": type(exc).__name__}
         exit_code = EXIT_BLOCKED
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     return exit_code

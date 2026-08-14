@@ -1,0 +1,7 @@
+{
+  "schema": "workflow-trusted-catalogs/v1",
+  "workflow_version": "v3",
+  "catalogs": {
+    "claude-code-local-skills": "sha256:6b2f2b3651e336fd2e8f860ff4fbec541f116b9473f38aab8e1814f57f30f336"
+  }
+}
