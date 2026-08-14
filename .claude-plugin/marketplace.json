@@ -8,7 +8,7 @@
     {
       "name": "grill-with-docs",
       "source": "./plugin",
-      "version": "2.5.3",
+      "version": "2.5.4",
       "description": "Planejamento arquitetural e entrega Delivery First com auditoria e reconciliação fail-closed.",
       "tags": ["development", "architecture", "planning", "delivery-first"]
     }
