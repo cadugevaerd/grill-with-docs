@@ -82,16 +82,27 @@
     },
     {
       "evidence": [
-        ".specify/memory/constitution.md#789b55f4",
-        "CONSTITUTION-CHECK.md"
+        ".specify/memory/constitution.md#Bump obrigatório do plugin",
+        ".github/workflows/publish.yml#Exigir bump antes de publicar",
+        "tests/validate_bump_gate_contract.py"
+      ],
+      "heading": "Bump obrigatório do plugin",
+      "id": "bump-obrigat-rio-do-plugin",
+      "justification": "A regra agora exige bump SemVer para toda alteração distribuída e o publish repete esse gate no push para main antes da tag imutável.",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        ".specify/memory/constitution.md#38b899e2",
+        "WORK-ITEM.json"
       ],
       "heading": "Governance",
       "id": "governance",
-      "justification": "A Constituicao foi lida como read-only e seu SHA-256 esta fixado no metadata e neste check; nada nesta sessao a emendou, substituiu ou enfraqueceu.",
+      "justification": "A Constituição 1.1.0 foi revalidada com a nova regra de publicação e seu SHA-256 está fixado no metadata e neste check.",
       "status": "PASS"
     }
   ],
-  "constitution_sha256": "789b55f46909c6861995740082199d912614bca7b23be4e0da5c73d824e94350",
+  "constitution_sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
   "constitution_state": "present"
 }
 ```

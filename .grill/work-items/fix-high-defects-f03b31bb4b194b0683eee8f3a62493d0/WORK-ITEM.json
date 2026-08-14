@@ -12,7 +12,7 @@
     "branch": "fix/high-defects",
     "constitution": {
       "path": ".specify/memory/constitution.md",
-      "sha256": "789b55f46909c6861995740082199d912614bca7b23be4e0da5c73d824e94350",
+      "sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
       "state": "present"
     },
     "head": "e107b19d1a1e3ec6032df5c2b0a37c2b11cd7cec",
@@ -25,7 +25,7 @@
       "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4"
     }
   },
-  "immutable_sha256": "0f642310fd38455e8e9260553ba5a9f2678b35e8b50a3e47171883dcb996178e",
+  "immutable_sha256": "e092703777ddc144aa9da4b5bf9141ee43c55ea6d77d44df20f9ee1a1fe62ea1",
   "initial_artifacts": {
     "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
     "CONSTITUTION-CHECK.md": "477330022fa8999d443b9de231d94a082fe3eaf3f1a85446ad95765909d502dd",

@@ -1,9 +1,9 @@
 <!-- grill-with-docs-constitution:v1 -->
 # Grill Constitution
 
-- version: 1.0.0
+- version: 1.1.0
 - ratified: 2026-08-11
-- last-amended: 2026-08-11
+- last-amended: 2026-08-14
 - governance: Grill lifecycle governance; changes require review, evidence, and work-item traceability.
 
 ## Core Principles
@@ -28,6 +28,9 @@ Ambiguidade, corrupção, ausência de evidência ou violação MUST bloquear; n
 
 ### Rastreabilidade
 Decisões, mudanças, fases, módulos, DUs, receipts e gates MUST ser rastreáveis ao work item e ao commit.
+
+### Bump obrigatório do plugin
+Toda alteração em `plugin/**` MUST incrementar a versão SemVer antes de merge ou push. A versão MUST permanecer idêntica nos manifests, marketplaces, documentação de distribuição e validador; o gate de bump MUST executar tanto na PR quanto antes da tag de publicação. Nunca reutilize uma tag publicada nem edite um marketplace para contornar um bump ausente.
 
 ## Governance
 

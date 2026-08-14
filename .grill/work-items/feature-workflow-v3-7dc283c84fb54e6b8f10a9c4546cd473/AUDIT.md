@@ -2,7 +2,7 @@
 
 - scope: `/home/carlosaraujo/Documentos/Projetos/grill-with-docs`
 - verdict: GO
-- constitution: `.specify/memory/constitution.md` / `789b55f46909c6861995740082199d912614bca7b23be4e0da5c73d824e94350`
+- constitution: `.specify/memory/constitution.md` / `38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6` (revalidated 2026-08-14)
 - workflow: `WORKFLOW.md` / V2 remains active; V3 template is additive and tested
 - completed-phases: FASE-001, FASE-002, FASE-003, FASE-004
 - active-phase: none

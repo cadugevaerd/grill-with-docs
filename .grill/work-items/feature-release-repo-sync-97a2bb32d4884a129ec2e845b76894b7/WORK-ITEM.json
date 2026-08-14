@@ -12,7 +12,7 @@
     "branch": "feat/release-repo-sync",
     "constitution": {
       "path": ".specify/memory/constitution.md",
-      "sha256": "789b55f46909c6861995740082199d912614bca7b23be4e0da5c73d824e94350",
+      "sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
       "state": "present"
     },
     "head": "8f72cef93cf79b5987cf1ca2afa440761656e73c",
@@ -25,7 +25,7 @@
       "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4"
     }
   },
-  "immutable_sha256": "452712bd6a518c6b3f9860f7f075f1627d2111cd1e6078bc0718616ebf609f49",
+  "immutable_sha256": "46db6b536fea7f1286bee098df219f6f43a5e42b397c8b2832c8fd568e1deecf",
   "initial_artifacts": {
     "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
     "CONSTITUTION-CHECK.md": "477330022fa8999d443b9de231d94a082fe3eaf3f1a85446ad95765909d502dd",

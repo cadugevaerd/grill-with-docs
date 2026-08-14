@@ -33,6 +33,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # PRs já exigem o bump; esta segunda fronteira cobre push direto em main
+      # antes de qualquer tag imutável ou escrita em marketplace.
+      - name: Exigir bump antes de publicar
+        if: ${{ github.event_name == 'push' }}
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python tests/check_version_bump.py --base-ref "$BASE_SHA" --head-ref "$HEAD_SHA"
+
       - name: Resolver versão e commit
         id: resolve
         run: |

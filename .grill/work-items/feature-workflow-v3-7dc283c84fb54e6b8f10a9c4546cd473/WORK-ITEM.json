@@ -12,7 +12,7 @@
     "branch": "feat/v3-gauntlet",
     "constitution": {
       "path": ".specify/memory/constitution.md",
-      "sha256": "789b55f46909c6861995740082199d912614bca7b23be4e0da5c73d824e94350",
+      "sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
       "state": "present"
     },
     "head": "3a1d9cac03f05cc5b0c2e195518c5f0b7bb91700",
@@ -25,7 +25,7 @@
       "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4"
     }
   },
-  "immutable_sha256": "b9ae322edd7f257a1bd6471ce489aa1d0397d9c8701c6cb6859abf4a6d9db62d",
+  "immutable_sha256": "199fe60c39c04b4e85140538bcb8223fd33307fa86866f964b3c7b15e51ca863",
   "initial_artifacts": {
     "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
     "CONSTITUTION-CHECK.md": "477330022fa8999d443b9de231d94a082fe3eaf3f1a85446ad95765909d502dd",

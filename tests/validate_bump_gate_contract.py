@@ -298,6 +298,8 @@ class WorkflowWiring(unittest.TestCase):
     ROOT = TESTS.parent
     GATE = ROOT / ".github/workflows/bump-gate.yml"
     CI = ROOT / ".github/workflows/ci.yml"
+    PUBLISH = ROOT / ".github/workflows/publish.yml"
+    CONSTITUTION = ROOT / ".specify/memory/constitution.md"
 
     def load_yaml(self, path: Path) -> dict:
         try:
@@ -328,6 +330,33 @@ class WorkflowWiring(unittest.TestCase):
         enforce = next(s for s in job["steps"] if "check_version_bump.py" in str(s.get("run", "")))
         self.assertEqual(enforce["env"]["BASE_SHA"], "${{ github.event.pull_request.base.sha }}")
         self.assertNotIn("github.base_ref", str(enforce))
+
+    def test_publish_rechecks_a_main_push_before_creating_an_immutable_tag(self) -> None:
+        document = self.load_yaml(self.PUBLISH)
+        release = document["jobs"]["release"]
+        checkout = next(step for step in release["steps"] if "checkout" in str(step.get("uses", "")))
+        self.assertEqual(checkout["with"]["fetch-depth"], 0)
+        enforce_index, enforce = next(
+            (index, step)
+            for index, step in enumerate(release["steps"])
+            if "check_version_bump.py" in str(step.get("run", ""))
+        )
+        tag_index = next(
+            index for index, step in enumerate(release["steps"])
+            if step.get("name") == "Criar a tag, recusando remarcação"
+        )
+        self.assertLess(enforce_index, tag_index)
+        self.assertEqual(enforce["if"], "${{ github.event_name == 'push' }}")
+        self.assertEqual(enforce["env"]["BASE_SHA"], "${{ github.event.before }}")
+        self.assertEqual(enforce["env"]["HEAD_SHA"], "${{ github.sha }}")
+        self.assertIn('--base-ref "$BASE_SHA" --head-ref "$HEAD_SHA"', enforce["run"])
+
+    def test_constitution_requires_a_semver_bump_for_distributed_changes(self) -> None:
+        text = self.CONSTITUTION.read_text(encoding="utf-8")
+        self.assertIn("- version: 1.1.0", text)
+        self.assertIn("### Bump obrigatório do plugin", text)
+        self.assertIn("`plugin/**` MUST incrementar a versão SemVer", text)
+        self.assertIn("antes da tag de publicação", text)
 
     def test_the_matrix_workflow_no_longer_owns_the_gate(self) -> None:
         document = self.load_yaml(self.CI)

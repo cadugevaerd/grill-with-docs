@@ -4,7 +4,7 @@
 - verdict: GO
 - selected-phase: none — milestone completa
 - selected-handoff: none — milestone completa
-- constitution: .specify/memory/constitution.md + 789b55f46909c6861995740082199d912614bca7b23be4e0da5c73d824e94350
+- constitution: .specify/memory/constitution.md + 38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6 (revalidated 2026-08-14)
 - workflow: WORKFLOW.md + a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4 + v2
 - second-pass-new-material-dqs: 0
 
