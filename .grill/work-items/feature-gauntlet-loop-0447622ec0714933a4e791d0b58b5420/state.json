@@ -1,0 +1,387 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "pending",
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
+    "state": "present"
+  },
+  "development": {
+    "audit": [
+      {
+        "evidence": [],
+        "reason": "Especificação FASE-001 executada localmente no Codex; crítica independente pendente de registro.",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/011-gauntlet-loop/spec.md",
+            "sha256": "ca1dec12994ae39f43188bf0348aa26c0c1f8ca0fe691bbb1628b20de0c9c2f7"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/checklists/requirements.md",
+            "sha256": "1d2585ee1ce60dac5a08fbe924ddcea1fbbca3766a83cc8dee201ab7820d0930"
+          },
+          {
+            "path": ".specify/feature.json",
+            "sha256": "078f508750cd6b90837f478bed7073ffa8b0fd239ac81c9a0dfd0cf3f219360d"
+          }
+        ],
+        "reason": "Especificação e checklist validados por crítica independente: PASS.",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "reason": "Plano técnico FASE-001 em elaboração e crítica independente iniciada.",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/011-gauntlet-loop/plan.md",
+            "sha256": "582f92b9135c22124eae3b5a10601dafc59c194e97a04a8303f2c27531c8076b"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/research.md",
+            "sha256": "91a3faf2de254d72fdc60ca86457688f5522aff98a65d85fbf0ee586cf4e07fc"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/data-model.md",
+            "sha256": "4afb214bc21a72ac4fdf5c8f6d57c8e1381e5370f77560808ab62b0e8dfa4178"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/contracts/gauntlet-cli.md",
+            "sha256": "04e654f059c805fd68c009f377c61fa103fa8d1adcd5314c6dda0eb91a7cc6d8"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/quickstart.md",
+            "sha256": "d61c0125173b257f5cd9401cc03a1ef069fb44e3ee41cbb7c9c51e7674d823a9"
+          }
+        ],
+        "reason": "Plano, pesquisa, modelo, contrato e quickstart passaram em crítica independente.",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "reason": "Checklist de requisitos FASE-001 em validação independente.",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/011-gauntlet-loop/checklists/activation-requirements.md",
+            "sha256": "798191b3784a6fea6aecd5ac75dbf3c501d8de74256d2881f23f85d5997b9adc"
+          }
+        ],
+        "reason": "Checklist de requisitos fechado após crítica independente.",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/011-gauntlet-loop/tasks.md",
+            "sha256": "b281b959d96c162bdafc8ae4b87394dbd83d04cbe5efb719f115421c1f7c504b"
+          }
+        ],
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/011-gauntlet-loop/tasks.md",
+            "sha256": "7e48c563e288d8b9588f390ee1747cdbacafe03081be50a8c1ecaae84e7e59bb"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/execution-dag.json",
+            "sha256": "daa41acaf9bf3fa40ea2dd5017f94654c421028c85514fe46f502ef5f3e641d7"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/011-gauntlet-loop/spec.md",
+            "sha256": "03923a976b710bc1173de54c0ffc14cf9fa9c9765b2d0eb3d2003215a156d664"
+          }
+        ],
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/011-gauntlet-loop/spec.md",
+            "sha256": "03923a976b710bc1173de54c0ffc14cf9fa9c9765b2d0eb3d2003215a156d664"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/plan.md",
+            "sha256": "cc99bc9148f870594f1fd12a7cb309df5cd8ca045d67b39b802f6e52c701be29"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/tasks.md",
+            "sha256": "7e48c563e288d8b9588f390ee1747cdbacafe03081be50a8c1ecaae84e7e59bb"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/011-gauntlet-loop/agent-assignments.yml",
+            "sha256": "34125d09fdb5925cd95af0494b5f755aae375401f2d5dbb232e1c5a3f16ba2fc"
+          }
+        ],
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/011-gauntlet-loop/agent-assignments.yml",
+            "sha256": "34125d09fdb5925cd95af0494b5f755aae375401f2d5dbb232e1c5a3f16ba2fc"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/execution-dag.json",
+            "sha256": "daa41acaf9bf3fa40ea2dd5017f94654c421028c85514fe46f502ef5f3e641d7"
+          }
+        ],
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_core/work_item_v3.py",
+            "sha256": "dbd89f8d576b68f86a8579c49912a78ef698a4df77344b683f6bd3e1576a317d"
+          },
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+            "sha256": "98f801632048009b049d7d292c4572a74cbd526dc543358bcae18e4fa72d6b38"
+          },
+          {
+            "path": "tests/validate_work_item_v3_contract.py",
+            "sha256": "edbb43c87031cdbb784bfa71edc7f3432e14c3c0e387955688e2775f4292d734"
+          }
+        ],
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet.py",
+            "sha256": "dd84c2a3ba6961b6301c483f80ef6dd4c337b2231506f7810c43bcc9bb4d5125"
+          },
+          {
+            "path": "tests/validate_gauntlet_activation_contract.py",
+            "sha256": "45af1d61491c5c140a43b4850e1638df05e8aa8163e103f29e1bc3880004f295"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/tasks.md",
+            "sha256": "f4b85463c68313a9445e48ecec930a641b03b8eb1de4b03c0b01c2863c819b16"
+          }
+        ],
+        "reason": "All 20 FASE-001 tasks complete with independent review and full validation.",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "reason": "Assessing implemented FASE-001 against its approved spec, plan, tasks, and Constitution.",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/011-gauntlet-loop/spec.md",
+            "sha256": "03923a976b710bc1173de54c0ffc14cf9fa9c9765b2d0eb3d2003215a156d664"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/plan.md",
+            "sha256": "cc99bc9148f870594f1fd12a7cb309df5cd8ca045d67b39b802f6e52c701be29"
+          },
+          {
+            "path": "specs/011-gauntlet-loop/tasks.md",
+            "sha256": "f4b85463c68313a9445e48ecec930a641b03b8eb1de4b03c0b01c2863c819b16"
+          },
+          {
+            "path": "tests/validate_gauntlet_activation_contract.py",
+            "sha256": "45af1d61491c5c140a43b4850e1638df05e8aa8163e103f29e1bc3880004f295"
+          }
+        ],
+        "reason": "Converged: no actionable implementation gap against FASE-001 spec, plan, tasks, and Constitution.",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "reason": "Running fresh executable gates and diff hygiene against the converged FASE-001 source.",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/verify.md",
+            "sha256": "5c653732e689b90cf505037a9d7a25a379b112916ded301d3870089107ceff3b"
+          },
+          {
+            "path": "tests/validate_gauntlet_activation_contract.py",
+            "sha256": "45af1d61491c5c140a43b4850e1638df05e8aa8163e103f29e1bc3880004f295"
+          },
+          {
+            "path": "tests/validate_step_skill_registry_contract.py",
+            "sha256": "a3e8b97ffffb0299ce80a63e58099ca084ccc99c08ad8486cc85699c8468bb94"
+          }
+        ],
+        "reason": "Verify PASS with matching source fingerprint and complete validator suite.",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/verify.md",
+            "sha256": "665f3c38685079d98bd92fad9e835e2c93ac60d6718b30ef0b17a02bc073f139"
+          }
+        ],
+        "reason": "Revisão FASE-001 iniciada após Verify PASS com fingerprint canônico.",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/review.md",
+            "sha256": "55705dd91a5e9196fb93d2ac69fc21539cd374c0574404f1a791825d66225534"
+          }
+        ],
+        "reason": "Review APPROVE: revisão independente sem findings Critical ou Important.",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/review.md",
+            "sha256": "55705dd91a5e9196fb93d2ac69fc21539cd374c0574404f1a791825d66225534"
+          }
+        ],
+        "reason": "Dry-run de ship após Review APPROVE; nenhum commit, merge ou push será executado.",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/review.md",
+            "sha256": "55705dd91a5e9196fb93d2ac69fc21539cd374c0574404f1a791825d66225534"
+          }
+        ],
+        "reason": "DRY-RUN BLOCKED: status LIVE-VS-RECORDED (item registra branch main, worktree usa 011-gauntlet-loop); SemVer/publicação são agregados na FASE-004.",
+        "state": "blocked",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/review.md",
+            "sha256": "55705dd91a5e9196fb93d2ac69fc21539cd374c0574404f1a791825d66225534"
+          }
+        ],
+        "execution_branch": "011-gauntlet-loop",
+        "reason": "Retomada auditada: a branch operacional 011-gauntlet-loop substitui a provenance imutável de init para este ciclo legado.",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/verify.md",
+            "sha256": "aaa6ad587a9a889143f55127bdea0975d97ebc4a5e23860c992b4e975939a68c"
+          },
+          {
+            "path": ".specify/reports/verify-review-ship/review.md",
+            "sha256": "2acc0cd18fdc0a51c04c75a0751527d4c9c2835a4dc5b2d3da0c16ed9e90688b"
+          }
+        ],
+        "execution_branch": "011-gauntlet-loop",
+        "reason": "FASE-001 verificada, revisada e aprovada; ship local concluído sem commit, merge, push ou publicação.",
+        "state": "complete",
+        "step": "ship"
+      }
+    ],
+    "current_step": "complete",
+    "execution_branch": "011-gauntlet-loop",
+    "schema": "grill-development/v1",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "agent-assign",
+      "agent-execute",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "complete",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    }
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "in-progress",
+  "version": "1.2.0",
+  "work_id": "feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4",
+    "version": "v2"
+  }
+}

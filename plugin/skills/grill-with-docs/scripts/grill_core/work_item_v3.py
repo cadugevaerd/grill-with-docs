@@ -411,6 +411,11 @@ def production_cli_wires_migrate_v3() -> tuple[bool, str | None]:
     for action in migrate_v3_parser._actions:
         if not action.option_strings or action.dest == "help":
             continue
+        # ``require_v3`` advertises the v2-to-v3 upgrade only.  New optional
+        # migration operations such as ``--rebind-workflow`` have their own
+        # explicit contract and must not alter this established suggestion.
+        if action.dest not in {"work_id", "apply"}:
+            continue
         flag = action.option_strings[-1]
         if action.required:
             flags.append(f"{flag} ID" if "work" in action.dest else flag)
@@ -684,8 +689,11 @@ def _atomic_replace_at(directory_fd: int, name: str, data: bytes, *, mode: int |
         if mode is not None:
             try:
                 os.fchmod(descriptor, mode)
-            except OSError:
-                pass
+            except OSError as exc:
+                raise blocked(
+                    "MODE-PRESERVATION-FAILED",
+                    "could not preserve WORK-ITEM.json mode before replacement",
+                ) from exc
         with os.fdopen(descriptor, "wb", closefd=True) as stream:
             descriptor = None
             stream.write(data)
@@ -1044,6 +1052,107 @@ def migrate_bundle(
             persisted, persisted_document_sha256 = read_current()
             if persisted != upgraded or persisted_document_sha256 != hash_bytes(data):
                 raise blocked("STATE_DIVERGENCE", "persisted document does not match the migrated document", work_id=work_id)
+            validate_metadata(persisted, work_id)
+            return {**preview, "verdict": "APPLIED", "writes": ["WORK-ITEM.json"], "document_sha256": hash_bytes(data)}
+    except WorkItemError:
+        raise
+    except OSError as exc:
+        raise blocked("FILESYSTEM", f"filesystem-error:{type(exc).__name__}", work_id=work_id) from exc
+
+def rebind_workflow_bundle(
+    item_dir: Path,
+    *,
+    workflow_sha256: str,
+    apply: bool = False,
+    item_dir_fd: int | None = None,
+    lock_held: bool = False,
+) -> dict[str, Any]:
+    """Explicitly rebind one v3 item's workflow identity.
+
+    Migration intentionally preserves the historic workflow digest.  This
+    narrow, preview-first operation is the only way to make that binding
+    current: it changes the one immutable digest plus its dependent immutable
+    hash, preserves all unrelated document fields and uses the same whole-file
+    CAS and descriptor-relative replace as ``migrate_bundle``.
+    """
+    if not isinstance(workflow_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", workflow_sha256):
+        raise blocked("INVALID_WORKFLOW_SHA256", "workflow sha256 must be a lowercase SHA-256 digest")
+    item_dir = Path(item_dir)
+    work_id = item_dir.name
+    path = item_dir / "WORK-ITEM.json"
+    if lock_held and item_dir_fd is None:
+        raise blocked("UNSAFE-FILE", "lock_held requires a pinned work-item directory descriptor")
+    if item_dir_fd is not None:
+        try:
+            if not stat.S_ISDIR(os.fstat(item_dir_fd).st_mode):
+                raise blocked("UNSAFE-FILE", "work-item descriptor is not a directory")
+        except OSError as exc:
+            raise blocked("UNSAFE-FILE", "work-item descriptor is unavailable") from exc
+
+        def read_current() -> tuple[dict[str, Any], str]:
+            return read_document_with_digest_at(item_dir_fd)
+
+        def original_mode() -> int:
+            return stat.S_IMODE(os.stat("WORK-ITEM.json", dir_fd=item_dir_fd, follow_symlinks=False).st_mode)
+
+        def replace_current(data: bytes, mode: int) -> None:
+            _atomic_replace_at(item_dir_fd, "WORK-ITEM.json", data, mode=mode)
+    else:
+        def read_current() -> tuple[dict[str, Any], str]:
+            return read_document_with_digest(path)
+
+        def original_mode() -> int:
+            return stat.S_IMODE(os.stat(path, follow_symlinks=False).st_mode)
+
+        def replace_current(data: bytes, mode: int) -> None:
+            _atomic_replace(path, data, mode=mode)
+
+    def decide(metadata: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        immutable = validate_metadata(metadata, work_id)
+        if immutable["schema"] != SCHEMA_V3:
+            raise blocked("WORK_ITEM_V3_REQUIRED", "workflow rebind requires a v3 work item", work_id=work_id)
+        binding = immutable["workflow"]
+        current_sha256 = binding.get("sha256")
+        if not isinstance(current_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", current_sha256):
+            raise blocked("INVALID_WORKFLOW_SHA256", "work item workflow binding has no SHA-256 digest", work_id=work_id)
+        base = {
+            "work_id": work_id,
+            "operation": "rebind-workflow",
+            "from_workflow_sha256": current_sha256,
+            "to_workflow_sha256": workflow_sha256,
+        }
+        if current_sha256 == workflow_sha256:
+            return {**base, "verdict": "REUSED", "writes": []}, None
+        rebound = json.loads(json.dumps(metadata))
+        rebound_immutable = rebound["immutable"]
+        rebound_immutable["workflow"]["sha256"] = workflow_sha256
+        rebound["immutable_sha256"] = immutable_sha256(rebound_immutable)
+        return {**base, "verdict": "PREVIEW", "writes": []}, rebound
+
+    if not apply:
+        preview, _ = decide(read_current()[0])
+        return preview
+
+    try:
+        lock_context = _HeldBundleLock() if lock_held else _BundleLock(item_dir, work_id)
+        with lock_context:
+            metadata, baseline_document_sha256 = read_current()
+            preview, rebound = decide(metadata)
+            if rebound is None:
+                return preview
+            data = document_bytes(rebound)
+            preserved_mode = original_mode()
+            _, current_document_sha256 = read_current()
+            if current_document_sha256 != baseline_document_sha256:
+                raise blocked(
+                    "STATE_DIVERGENCE",
+                    "WORK-ITEM.json changed between read and workflow rebind",
+                    work_id=work_id,
+                )
+            replace_current(data, preserved_mode)
+            persisted, persisted_document_sha256 = read_current()
+            if persisted != rebound or persisted_document_sha256 != hash_bytes(data):
+                raise blocked("STATE_DIVERGENCE", "persisted document does not match the rebound document", work_id=work_id)
             validate_metadata(persisted, work_id)
             return {**preview, "verdict": "APPLIED", "writes": ["WORK-ITEM.json"], "document_sha256": hash_bytes(data)}
     except WorkItemError:

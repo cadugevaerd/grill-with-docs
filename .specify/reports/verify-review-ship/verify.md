@@ -1,39 +1,32 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree 865be940ae3243a8ae0ad07d9323072658bf228ed8f1bd444bb8221816e0fc75 / work 5ca57aa376734971ba8aa511e74f275034b333b684fb07fd8f7d0e7ba0ff7329 / plan 88814086ed1b31a2530b2b7b99f389353f1062e24107a7c01b06c9d3cc5f6479
+Source fingerprint: tree 3f0d271d74a4fa6cc132b7dc294610b32ce82ecf7d6dcc9764f65e3b0c255505 / work 3cb594c79b58273317ab16cd6c6b257759f8591a16340cd3e50b7686fa07c236 / plan 6758fe34289c52470072a36c72a150dd19acfb035cff6a4dec53a4929f213cc2
 Converge: CONVERGED
-
-Evidência em `specs/002-publish-fanout/converge.md`, produzida contra clones dos dois marketplaces publicados.
 
 ### Operational Gates
 
-| Gate | Command | Result | Evidence | Validator |
-|---|---|---|---|---|
-| tests | `python3 tests/run_validators.py` | PASS | 267 testes, exit 0, 1 skip de ambiente | orquestrador |
-| tests (alvo) | `python3 tests/validate_publish_contract.py` | PASS | 30 testes, OK | orquestrador |
-| build / lint / typecheck / format | — | SKIPPED | nenhuma dessas ferramentas existe no repositório | orquestrador |
-| security | inspeção do manuseio de segredo no workflow | PASS | token vai por `http.extraheader`, nunca na URL do remote; `::add-mask::` antes de exportar; `persist-credentials: false` no checkout canônico | orquestrador |
-| quickstart/contracts | publicador contra clones reais dos dois marketplaces | PASS | UPDATED, CREATED, UNCHANGED e BLOCKED conforme `contracts/cli.md` | orquestrador |
-| workflow YAML | `yaml.safe_load` | PASS | jobs `release` e `publish`; `fail-fast: false`; `paths: plugin/**`; permissões mínimas | orquestrador |
+| Gate | Command | Result | Evidence |
+|---|---|---|---|
+| Full contract suite | `python3 tests/run_validators.py` | PASS | All validators passed; workspace contract: 66 passed, 1 environment skip. |
+| Gauntlet activation | `python3 tests/validate_gauntlet_activation_contract.py` | PASS | 43 tests. |
+| V3 migration and rebind | `python3 tests/validate_work_item_v3_contract.py` | PASS | 84 tests. |
+| Step-skill registry | `python3 tests/validate_step_skill_registry_contract.py` | PASS | 103 tests. |
+| Branch lifecycle | `python3 tests/validate_checkpoint_contract.py` | PASS | 37 tests. |
+| Compile | `python3 -m py_compile .../gauntlet.py .../step_skills.py .../grill_workspace.py` | PASS | Python sources compile. |
+| Diff hygiene | `git diff --check` | PASS | No whitespace errors. |
 
-### Diff Hygiene
+### Coverage
 
-- Alterados: dois arquivos novos em `tests/`, um workflow novo, artefatos de `specs/002-publish-fanout/`.
-- Nada em `plugin/`; `ci.yml` intocado.
-- Nenhum segredo, credencial ou arquivo gerado no diff.
-- O segredo `MARKETPLACE_PUBLISH_TOKEN` **não existe** no repositório e não foi criado: instalar um PAT de escopo amplo é ato humano. Na sua ausência o workflow reprova no primeiro passo com erro nomeado.
+- Claude-only activation; exact 11-step tier map; workers 1..5; stall threshold 15; strict configuration and identity proofs.
+- Global/config and per-item locks; short/failed owner writes; safe descriptor paths; CAS and atomic replacement; V2 compatibility.
+- Workflow rebind pins the workflow re-read in the commit window; catalog trust uses an internal hardcoded snapshot and cannot be supplied by callers.
+- Each phase binds its branch explicitly. Legacy resumed cycles backfill it in audit; a phase turn archives the previous branch and leaves the next phase unbound until `specify` starts it. Every checkpoint mutation and phase turn reject a mismatched branch.
 
-### Executable Scenarios
+### Independent Review
 
-Os cenários de `contracts/cli.md` foram exercitados contra os índices reais dos dois marketplaces e têm teste correspondente que roda sem rede e sem credencial. Os dois defeitos encontrados durante a convergência ganharam teste de regressão.
-
-O que **não** foi exercitado: a publicação de ponta a ponta pelo GitHub Actions, porque depende do segredo. Fica para a FASE-003.
-
-### Failures / Blockers
-
-Nenhum. Limite conhecido e declarado: a prova é local; a primeira execução real do workflow ainda não aconteceu.
+PASS. The final reviewer found no Critical or Important issue: branch mismatch is blocked for `in-progress`, `complete`, `blocked`, and `phase-turn`; phase-local rebinding and the legacy backfill remain covered.
 
 ### Next Action
 
-- PASS: run `/speckit.verify-review-ship.review`
+- PASS: complete the local `ship` checkpoint. Plugin release remains aggregated in FASE-004.

@@ -613,27 +613,8 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-def load_trusted_catalogs(path: Path | None = None) -> dict[str, str]:
-    """The digest a catalogue must match to be trusted lives here, in versioned
-    bytes on disk -- never in a ``Mapping`` the caller assembles at call time.
-
-    Round-2 finding (gaps 1 and 4): with ``trusted_catalogs`` as a plain
-    argument, an attacker who controls both the catalogue bytes AND the
-    ``trusted_catalogs`` argument can mutate ``content_sha256``/
-    ``manifest_sha256`` on any entry, recompute ``catalog_sha256`` over the
-    tampered entries (the legitimate-publisher move ``validate_catalog``
-    itself cannot distinguish from a real republish) and simply declare the
-    new digest trusted in the same call -- ``resolve_workflow_skill`` had no
-    independent anchor to check it against. ``resolve_workflow_skill`` calls
-    this by default when ``trusted_catalogs`` is omitted, so the authorized
-    digest for each ``catalog_id`` only ever changes via a commit to this
-    file, not via an argument.
-    """
-    target = TRUSTED_CATALOGS_PATH if path is None else Path(path)
-    try:
-        raw = target.read_bytes()
-    except OSError as exc:
-        raise _blocked("TRUSTED_CATALOGS_UNREADABLE", path=target.name) from exc
+def _parse_trusted_catalogs(raw: bytes) -> dict[str, str]:
+    """Validate one immutable trusted-catalog byte snapshot."""
     try:
         document = parse_strict(raw)
     except CanonicalizationError as exc:
@@ -658,19 +639,35 @@ def load_trusted_catalogs(path: Path | None = None) -> dict[str, str]:
     return out
 
 
+def _load_trusted_catalogs_snapshot(path: Path | None = None) -> tuple[bytes, dict[str, str]]:
+    """Read and validate one versioned trust snapshot from an asset path."""
+    target = TRUSTED_CATALOGS_PATH if path is None else Path(path)
+    try:
+        raw = target.read_bytes()
+    except OSError as exc:
+        raise _blocked("TRUSTED_CATALOGS_UNREADABLE", path=target.name) from exc
+    return raw, _parse_trusted_catalogs(raw)
+
+
+def load_trusted_catalogs(path: Path | None = None) -> dict[str, str]:
+    """Load the versioned trust asset from disk, never a caller Mapping."""
+    return _load_trusted_catalogs_snapshot(path)[1]
+
+
 # --------------------------------------------------------------------------
 # the resolver
 # --------------------------------------------------------------------------
 
 
-def resolve_workflow_skill(
+def _resolve_workflow_skill(
     step_id: str,
     runtime: str,
     registry_sha256_expected: str,
     *,
     registry: bytes | None = None,
     catalog: Mapping[str, Any] | None = None,
-    trusted_catalogs_path: Path | str | None = None,
+    trusted_catalogs: Mapping[str, str],
+    trusted_catalogs_bytes: bytes | None = None,
     pinned_resolution: Mapping[str, Any] | None = None,
     resolver_version: str = RESOLVER_VERSION,
 ) -> dict[str, Any]:
@@ -688,18 +685,8 @@ def resolve_workflow_skill(
     files collapse onto one digest (round-1 finding: probe2). Omit it to load
     and hash the shipped asset from disk.
 
-    ``trusted_catalogs_path``, when omitted (``None``), loads
-    ``load_trusted_catalogs()``'s default -- the versioned asset on disk.
-    Round-2 findings (gaps 1 and 4) closed the *default*, but the signature
-    used to still accept the trust pin as a caller-assembled ``Mapping``
-    (``trusted_catalogs=``): an attacker who controls both the catalogue bytes
-    and that argument could mutate a catalogue entry, recompute
-    ``catalog_sha256`` over the tampered entries and simply declare the new
-    digest trusted in the same call, with nothing external to check it against
-    (round-3 finding, ``scratchpad/atk/a3.py`` variant 3b). The pin can now
-    only be overridden by pointing at a *path* -- real parsed bytes on disk,
-    the same as the shipped default -- never an in-memory dict a caller
-    improvises to match whatever catalogue it is also handing in.
+    The parsed trust map is internal: public callers use the wrapper below,
+    which reads a versioned asset path.  It is never caller-provided.
 
     Returns a ``skill-resolution/v1`` document. Raises ``SkillResolutionError``
     with ``BLOCKED_CAPABILITY`` or ``STALE_SKILL_RESOLUTION`` otherwise. It never
@@ -728,12 +715,7 @@ def resolve_workflow_skill(
     if catalog["catalog_id"] != pinned["catalog_id"]:
         raise _blocked("CATALOG_MISMATCH", expected=pinned["catalog_id"], got=catalog["catalog_id"])
 
-    # None (the default) means "no override": load_trusted_catalogs() reads
-    # the versioned asset from disk. Any other value is a path to a different
-    # file the caller wants loaded instead -- never an in-memory Mapping the
-    # caller (or an attacker who also controls the catalogue) assembles at
-    # call time (round-3 finding, a3.py variant 3b).
-    trusted = load_trusted_catalogs(trusted_catalogs_path)
+    trusted = trusted_catalogs
     if catalog["catalog_id"] not in trusted:
         raise _blocked("UNTRUSTED_CATALOG", catalog_id=catalog["catalog_id"])
     authorized_digest = trusted[catalog["catalog_id"]]
@@ -817,6 +799,56 @@ def resolve_workflow_skill(
 
     resolution["skill_resolution_sha256"] = sha256_jcs(resolution)
     return resolution
+
+
+def resolve_workflow_skill(
+    step_id: str,
+    runtime: str,
+    registry_sha256_expected: str,
+    *,
+    registry: bytes | None = None,
+    catalog: Mapping[str, Any] | None = None,
+    trusted_catalogs_path: Path | str | None = None,
+    pinned_resolution: Mapping[str, Any] | None = None,
+    resolver_version: str = RESOLVER_VERSION,
+) -> dict[str, Any]:
+    """Resolve one skill against a trust asset path, never caller trust data."""
+    trusted = load_trusted_catalogs(
+        None if trusted_catalogs_path is None else Path(trusted_catalogs_path)
+    )
+    return _resolve_workflow_skill(
+        step_id,
+        runtime,
+        registry_sha256_expected,
+        registry=registry,
+        catalog=catalog,
+        trusted_catalogs=trusted,
+        pinned_resolution=pinned_resolution,
+        resolver_version=resolver_version,
+    )
+
+
+def resolve_shipped_workflow_skills(
+    step_ids: tuple[str, ...],
+    runtime: str,
+    registry_sha256_expected: str,
+    *,
+    registry: bytes,
+    catalog: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], bytes]:
+    """Resolve a batch using one hardcoded shipped trust-asset snapshot."""
+    trusted_bytes, trusted = _load_trusted_catalogs_snapshot()
+    return [
+        _resolve_workflow_skill(
+            step_id,
+            runtime,
+            registry_sha256_expected,
+            registry=registry,
+            catalog=catalog,
+            trusted_catalogs=trusted,
+        )
+        for step_id in step_ids
+    ], trusted_bytes
 
 
 #: Fields a persisted preflight resolution pins. Any drift is STALE_SKILL_RESOLUTION.

@@ -84,22 +84,27 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
             findings.append("INVALID-DEVELOPMENT-SEQUENCE")
     phases, phase_states, modules, units, types = phases_and_map(bundle.files)
     lv = live(root)
-    # O head gravado é o do instante do `init`, anterior ao bundle existir: nenhum
-    # commit que contenha o bundle pode igualá-lo, então compará-lo emitia um
-    # achado que disparava sempre, para todo work item, mascarando bloqueio real.
-    # O branch é comparável — mas só enquanto se trabalha nele. Depois do ship
-    # ele é mergeado e apagado, e a diferença passa a ser esperada. Os dois heads
-    # continuam na saída, em `recorded` e em `locations`, para quem precisar da
-    # diferença calculá-la.
-    # E o branch registrado só é comparável enquanto ele existir: o protocolo
-    # entrega uma fase por branch, então o branch do `init` morre no primeiro
-    # ship e um work item multi-fase passaria a alarmar para sempre da segunda
-    # fase em diante — o mesmo defeito, um nível acima.
+    # `immutable.branch` is creation provenance. The first canonical
+    # `specify` checkpoint records a separate execution branch after the
+    # before-specify hook has created it; old bundles without that field keep
+    # their historic immutable binding. This preserves the wrong-branch gate
+    # without mistaking a legitimate post-init branch creation for drift.
+    execution_branch = immutable.get("branch")
+    if tracking == "tracked" and isinstance(dev, dict) and "execution_branch" in dev:
+        candidate = dev["execution_branch"]
+        # `None` is the explicit boundary between phases.  No phase has begun
+        # yet, therefore there is no execution branch to compare; the next
+        # canonical specify checkpoint must create one before work resumes.
+        if candidate is None:
+            execution_branch = None
+        elif not isinstance(candidate, str) or not candidate:
+            findings.append("INVALID-DEVELOPMENT-SCHEMA")
+        else:
+            execution_branch = candidate
     terminal = state.get("status") == "complete" and state.get("milestone_status") == "completed"
-    recorded_branch = immutable.get("branch")
-    recorded_alive = bool(recorded_branch) and bool(
-        git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{recorded_branch}"))
-    if not terminal and recorded_alive and recorded_branch != lv["branch"]:
+    branch_alive = bool(execution_branch) and bool(
+        git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{execution_branch}"))
+    if not terminal and branch_alive and execution_branch != lv["branch"]:
         findings.append("LIVE-VS-RECORDED")
     # Re-read all governance evidence through the same no-follow reader used by
     # writes.  The bundle walk is not sufficient: a symlink can be introduced
@@ -124,7 +129,7 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
     item_location = {"worktree": str(root), "path": bundle.origin, "branch": lv["branch"], "head": lv["head"], "dirty": lv["dirty"], "current": False}
     active = state.get("active_phase")
     snapshot = {name: {"size": len(data), "mtime_ns": (Path(bundle.origin) / name).stat().st_mtime_ns} for name, data in sorted(bundle.files.items())}
-    return {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": {"status": state.get("status"), "milestone_status": state.get("milestone_status"), "active_phase": active, "phase_state": phase_states.get(active, state.get("phase_state")), "execution_order": phases, "phases": phase_states, "modules": modules, "delivery_units": units, "development_types": types}, "development": {"tracking": tracking, "current_step": current, "completed": completed, "blocked": blocked, "steps": steps}, "governance": {"constitution": {"state": constitution.get("state"), "path": constitution.get("path"), "hash": constitution.get("sha256")}, "check": {"state": "present" if check is not None else "missing", "hash": digest(check) if check is not None else None}, "audit": {"verdict": state.get("audit_verdict"), "hash": digest(audit) if audit is not None else None}, "reconciled": {"path": str(receipt) if receipt_bytes is not None else None, "hash": digest(receipt_bytes) if receipt_bytes is not None else None}}, "blockers": blocked, "findings": sorted(findings), "next_gate": "BLOCKED" if findings or blocked else (SEQUENCE[len(completed)] if len(completed) < len(SEQUENCE) else "complete")}
+    return {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": {"status": state.get("status"), "milestone_status": state.get("milestone_status"), "active_phase": active, "phase_state": phase_states.get(active, state.get("phase_state")), "execution_order": phases, "phases": phase_states, "modules": modules, "delivery_units": units, "development_types": types}, "development": {"tracking": tracking, "current_step": current, "completed": completed, "blocked": blocked, "steps": steps, "execution_branch": execution_branch}, "governance": {"constitution": {"state": constitution.get("state"), "path": constitution.get("path"), "hash": constitution.get("sha256")}, "check": {"state": "present" if check is not None else "missing", "hash": digest(check) if check is not None else None}, "audit": {"verdict": state.get("audit_verdict"), "hash": digest(audit) if audit is not None else None}, "reconciled": {"path": str(receipt) if receipt_bytes is not None else None, "hash": digest(receipt_bytes) if receipt_bytes is not None else None}}, "blockers": blocked, "findings": sorted(findings), "next_gate": "BLOCKED" if findings or blocked else (SEQUENCE[len(completed)] if len(completed) < len(SEQUENCE) else "complete")}
 
 def worktree_roots(root: Path, current: bool) -> list[Path]:
     if current: return [root]

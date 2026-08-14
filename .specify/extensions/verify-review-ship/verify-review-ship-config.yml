@@ -1,0 +1,9 @@
+# Gate reports and the two append-only checkpoint files do not alter reviewed
+# implementation. Work Item authorities (handoffs, plans, ADRs) stay included.
+converge:
+  fingerprint_exclude:
+    - ".specify/reports/verify-review-ship/**"
+    - "specs/**/verify.md"
+    - "specs/**/review.md"
+    - ".grill/work-items/**/state.json"
+    - ".grill/work-items/**/ROUND-LOG.jsonl"

@@ -56,6 +56,7 @@ MANAGED_GLOBAL = {".grill/global/ROADMAP.md", ".grill/global/AUDIT.md"}
 CHECK_START = "<!-- grill-constitution-check:start -->"
 CHECK_END = "<!-- grill-constitution-check:end -->"
 _SIBLINGS: dict[str, Any] = {}
+_MISSING = object()
 
 
 def sibling(name: str) -> Any:
@@ -1957,17 +1958,70 @@ def migrate_v3_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     item = resolve_development_item(root, args.work_id)
     work_item_v3 = grill_core_module("work_item_v3")
+    rebind_workflow = bool(getattr(args, "rebind_workflow", False))
+    workflow_sha256: str | None = None
+    if rebind_workflow:
+        workflow_v3 = grill_core_module("workflow_v3")
+        try:
+            _, workflow_bytes, workflow_text = workflow_v3.load_workflow(root)
+            gate = workflow_v3.execution_gate(workflow_text)
+        except workflow_v3.Failure as error:
+            code = workflow_v3.CLI_CODE_ALIASES.get(error.code, error.code.replace("_", "-"))
+            raise CliFailure(
+                error.exit_code,
+                error.verdict,
+                code,
+                error.message,
+                extra=dict(error.extra) if error.extra else None,
+            ) from error
+        if gate.status != "OK":
+            code = workflow_v3.CLI_CODE_ALIASES.get(gate.code or "WORKFLOW_INCOMPATIBLE", (gate.code or "WORKFLOW_INCOMPATIBLE").replace("_", "-"))
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, "current workflow is not eligible for rebind")
+        workflow_sha256 = hash_bytes(workflow_bytes)
     lock = acquire_lock(root, args.work_id, item) if args.apply else None
     item_fd: int | None = None
     try:
         item_fd = open_development_item_fd(root, args.work_id)
         try:
-            result = work_item_v3.migrate_bundle(
-                item,
-                apply=args.apply,
-                item_dir_fd=item_fd,
-                lock_held=lock is not None,
-            )
+            if rebind_workflow:
+                if args.apply:
+                    # Preview's workflow identity is informational.  A write
+                    # must instead bind the workflow accepted while its
+                    # work-item commit window is held, never an earlier read.
+                    try:
+                        _, workflow_bytes, workflow_text = workflow_v3.load_workflow(root)
+                        gate = workflow_v3.execution_gate(workflow_text)
+                    except workflow_v3.Failure as error:
+                        code = workflow_v3.CLI_CODE_ALIASES.get(error.code, error.code.replace("_", "-"))
+                        raise CliFailure(
+                            error.exit_code,
+                            error.verdict,
+                            code,
+                            error.message,
+                            extra=dict(error.extra) if error.extra else None,
+                        ) from error
+                    if gate.status != "OK":
+                        code = workflow_v3.CLI_CODE_ALIASES.get(
+                            gate.code or "WORKFLOW_INCOMPATIBLE",
+                            (gate.code or "WORKFLOW_INCOMPATIBLE").replace("_", "-"),
+                        )
+                        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, "current workflow is not eligible for rebind")
+                    workflow_sha256 = hash_bytes(workflow_bytes)
+                assert workflow_sha256 is not None
+                result = work_item_v3.rebind_workflow_bundle(
+                    item,
+                    workflow_sha256=workflow_sha256,
+                    apply=args.apply,
+                    item_dir_fd=item_fd,
+                    lock_held=lock is not None,
+                )
+            else:
+                result = work_item_v3.migrate_bundle(
+                    item,
+                    apply=args.apply,
+                    item_dir_fd=item_fd,
+                    lock_held=lock is not None,
+                )
         except work_item_v3.WorkItemError as error:
             raise_from_work_item_error(error)
         exit_code = EXIT_OK if result.get("verdict") in {"PREVIEW", "REUSED", "APPLIED"} else EXIT_BLOCKED
@@ -1977,6 +2031,167 @@ def migrate_v3_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             os.close(item_fd)
         if lock is not None:
             shutil.rmtree(lock, ignore_errors=True)
+
+
+def gauntlet_init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Explicitly activate one verified V3 work item for the FASE-001 Gauntlet."""
+    root = project_root(args.root)
+    resolve_development_item(root, args.work_id)
+    gauntlet = grill_core_module("gauntlet")
+    workflow_v3 = grill_core_module("workflow_v3")
+    work_item_v3 = grill_core_module("work_item_v3")
+    step_skills = grill_core_module("step_skills")
+    config_lock: Any | None = None
+    item_lock: Any | None = None
+    item_fd: int | None = None
+    try:
+        # A configuration map is shared by every work item, so serialize its
+        # writer first. The existing item lock follows it; rebind takes only
+        # that latter lock, which makes this ordering deadlock-free.
+        try:
+            config_lock = gauntlet.acquire_config_lock(root)
+        except gauntlet.GauntletError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
+        try:
+            item_lock = gauntlet.acquire_work_item_lock(config_lock.grill_fd, args.work_id)
+        except gauntlet.GauntletError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
+        try:
+            item_fd = gauntlet.open_work_item_fd(config_lock.grill_fd, args.work_id)
+        except gauntlet.GauntletError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
+        try:
+            try:
+                _, workflow_bytes, workflow_text = workflow_v3.load_workflow(root)
+            except workflow_v3.Failure as error:
+                code = workflow_v3.CLI_CODE_ALIASES.get(error.code, error.code.replace("_", "-"))
+                raise CliFailure(
+                    error.exit_code,
+                    error.verdict,
+                    code,
+                    error.message,
+                    extra=dict(error.extra) if error.extra else None,
+                ) from error
+            verdict = gauntlet.activate(
+                root=root,
+                work_id=args.work_id,
+                max_workers=args.max_workers,
+                item_dir_fd=item_fd,
+                grill_fd=config_lock.grill_fd,
+                workflow_bytes=workflow_bytes,
+                workflow_text=workflow_text,
+                workflow_v3=workflow_v3,
+                work_item_v3=work_item_v3,
+                step_skills=step_skills,
+            )
+        except gauntlet.GauntletError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
+        return {
+            "verdict": verdict,
+            "work_id": args.work_id,
+            "config": ".grill/gauntlet.yaml",
+            "max_workers": args.max_workers,
+            "stall_minutes": 15,
+            "runtime": "claude",
+        }, EXIT_OK
+    finally:
+        if item_fd is not None:
+            os.close(item_fd)
+        if item_lock is not None:
+            gauntlet.release_work_item_lock(item_lock)
+        if config_lock is not None:
+            gauntlet.release_config_lock(config_lock)
+
+
+def resolve_gauntlet_subject(root: Path, work_id: str) -> Path:
+    """Resolve a control subject with its closed top-level denial contract."""
+    try:
+        return resolve_development_item(root, work_id)
+    except CliFailure as error:
+        # Control commands distinguish invalid subjects from a projected
+        # eligibility failure.  Their public boundary is always BLOCKED.
+        if error.verdict != "BLOCKED":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+        raise
+
+
+def gauntlet_activation_projection(args: argparse.Namespace) -> tuple[Path, str, str | None]:
+    """Read one valid subject's FASE-001 activation state without a lock or write."""
+    root = project_root(args.root)
+    resolve_gauntlet_subject(root, args.work_id)
+    # Loading the capability precedes the point at which a status subject can
+    # be safely projected. An unloadable core is therefore a top-level public
+    # failure, never a synthetic STATUS response.
+    gauntlet = grill_core_module("gauntlet")
+    workflow_v3 = grill_core_module("workflow_v3")
+    work_item_v3 = grill_core_module("work_item_v3")
+    step_skills = grill_core_module("step_skills")
+    item_fd: int | None = None
+    grill_fd: int | None = None
+    try:
+        try:
+            item_fd = open_development_item_fd(root, args.work_id)
+        except CliFailure as error:
+            return root, "BLOCKED", "SAFE-PATH-UNAVAILABLE" if error.code == "SAFE-DIRECTORY-FD-UNAVAILABLE" else error.code
+        try:
+            grill_fd = gauntlet.open_config_directory(root)
+        except gauntlet.GauntletError as error:
+            return root, "BLOCKED", error.code
+        try:
+            _, workflow_bytes, workflow_text = workflow_v3.load_workflow(root)
+        except workflow_v3.Failure as error:
+            code = workflow_v3.CLI_CODE_ALIASES.get(error.code, error.code.replace("_", "-"))
+            return root, "BLOCKED", code
+        try:
+            state, reason = gauntlet.activation_state(
+                root=root,
+                work_id=args.work_id,
+                item_dir_fd=item_fd,
+                grill_fd=grill_fd,
+                workflow_bytes=workflow_bytes,
+                workflow_text=workflow_text,
+                workflow_v3=workflow_v3,
+                work_item_v3=work_item_v3,
+                step_skills=step_skills,
+            )
+        except gauntlet.GauntletError as error:
+            return root, "BLOCKED", error.code
+        return root, state, reason
+    finally:
+        if item_fd is not None:
+            os.close(item_fd)
+        if grill_fd is not None:
+            os.close(grill_fd)
+
+
+def gauntlet_status_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    _, state, reason = gauntlet_activation_projection(args)
+    payload: dict[str, Any] = {"verdict": "STATUS", "work_id": args.work_id, "activation_state": state}
+    if state in {"STALE", "BLOCKED"}:
+        payload["reason"] = reason or "ELIGIBILITY-UNAVAILABLE"
+    return payload, EXIT_OK
+
+
+def gauntlet_run_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    _, state, reason = gauntlet_activation_projection(args)
+    if state == "ACTIVATED":
+        return {"verdict": "RUN-ADMITTED", "work_id": args.work_id, "runtime": "claude"}, EXIT_OK
+    if state == "ELIGIBLE":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-REQUIRED", "Gauntlet activation is required", extra={"work_id": args.work_id})
+    raise CliFailure(EXIT_BLOCKED, "BLOCKED", reason or "ACTIVATION-REQUIRED", "Gauntlet admission is not currently eligible", extra={"work_id": args.work_id})
+
+
+def gauntlet_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    _, state, _ = gauntlet_activation_projection(args)
+    if state != "ACTIVATED":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-REQUIRED", "a current Gauntlet activation is required", extra={"work_id": args.work_id})
+    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "durable scheduling is not available in FASE-001", extra={"work_id": args.work_id})
+
+
+def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    root = project_root(args.root)
+    resolve_gauntlet_subject(root, args.work_id)
+    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "cleanup is unavailable before durable scheduling", extra={"work_id": args.work_id})
 
 
 def global_snapshotter(root: Path) -> Callable[[], dict[str, tuple[bytes, int]]]:
@@ -2148,7 +2363,33 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 raise
             evidence.append({"path": ep.as_posix(), "sha256": hash_bytes(data)})
         reason = args.reason.strip()
+        execution_branch: str | None = None
+        # The binding belongs to one phase, not to the whole work item.  A
+        # first `specify` normally creates it; an older in-flight state may
+        # have progressed past that checkpoint, so its next resumed transition
+        # records the observed branch as an explicit, audited backfill instead
+        # of remaining permanently blocked on init provenance.
+        existing_branch = development.get("execution_branch", _MISSING)
+        execution_branch = git_optional(root, "branch", "--show-current")
+        if not execution_branch:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DETACHED-HEAD", "checkpoint requires an attached execution branch")
+        run_git(root, "check-ref-format", "--branch", execution_branch)
+        if existing_branch is _MISSING or existing_branch is None:
+            # Explicit backfill for legacy/in-between-phase cycles.  It becomes
+            # durable only after the requested state transition is valid.
+            pass
+        elif not isinstance(existing_branch, str) or not existing_branch:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
+        elif existing_branch != execution_branch:
+            raise CliFailure(
+                EXIT_BLOCKED,
+                "BLOCKED",
+                "EXECUTION-BRANCH-MISMATCH",
+                f"work item is bound to {existing_branch}",
+            )
         payload = {"step": args.step, "state": args.state, "evidence": evidence, "reason": reason}
+        if execution_branch is not None:
+            payload["execution_branch"] = execution_branch
         audit = development.setdefault("audit", [])
         if current == args.state:
             if audit and audit[-1] == payload:
@@ -2183,6 +2424,8 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         elif args.state == "blocked":
             if current != "in-progress" or not reason:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "REASON-REQUIRED", args.step)
+        if execution_branch is not None:
+            development["execution_branch"] = execution_branch
         steps[args.step] = args.state; audit.append(payload)
         if attestation_result is not None:
             development["attestation_campaign"] = attestation_result["campaign"]
@@ -2238,14 +2481,37 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
 
         development["steps"] = {step: "pending" for step in sequence}
         development["current_step"] = sequence[0]
-        # Mesmo shape das demais entradas da trilha, com um step fora de SEQUENCE:
-        # acrescentar um campo de fase mudaria a forma do estado e exigiria migrar
-        # bundles existentes, que é justamente o que esta decisão evita.
+        previous_execution_branch = development.get("execution_branch", _MISSING)
+        if previous_execution_branch is _MISSING or previous_execution_branch is None:
+            previous_execution_branch = git_optional(root, "branch", "--show-current")
+            if not previous_execution_branch:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DETACHED-HEAD", "phase turn requires an attached execution branch")
+            run_git(root, "check-ref-format", "--branch", previous_execution_branch)
+        elif not isinstance(previous_execution_branch, str) or not previous_execution_branch:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
+        else:
+            live_branch = git_optional(root, "branch", "--show-current")
+            if not live_branch:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DETACHED-HEAD", "phase turn requires an attached execution branch")
+            run_git(root, "check-ref-format", "--branch", live_branch)
+            if live_branch != previous_execution_branch:
+                raise CliFailure(
+                    EXIT_BLOCKED,
+                    "BLOCKED",
+                    "EXECUTION-BRANCH-MISMATCH",
+                    f"work item is bound to {previous_execution_branch}",
+                )
+        # The prior branch remains in append-only audit history.  The active
+        # binding is deliberately cleared so the first `specify` of the next
+        # phase can bind its own branch.
+        development["execution_branch"] = None
         development["audit"].append(
-            {"step": "phase-turn", "state": "turned", "evidence": [], "reason": reason})
+            {"step": "phase-turn", "state": "turned", "evidence": [], "reason": reason,
+             "previous_execution_branch": previous_execution_branch})
         atomic_write(root, path, (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode())
         return {"verdict": "TURNED", "work_id": args.work_id, "reason": reason,
-                "current_step": development["current_step"]}, EXIT_OK
+                "current_step": development["current_step"],
+                "previous_execution_branch": previous_execution_branch}, EXIT_OK
     finally:
         shutil.rmtree(lock, ignore_errors=True)
         if snapshot_global() != global_before:
@@ -2331,7 +2597,16 @@ def build_parser() -> JsonParser:
     migrate_v3_parser = subparsers.add_parser("migrate-v3")
     migrate_v3_parser.add_argument("root")
     migrate_v3_parser.add_argument("--work-id", required=True)
+    migrate_v3_parser.add_argument("--rebind-workflow", action="store_true")
     migrate_v3_parser.add_argument("--apply", action="store_true")
+    gauntlet_init_parser = subparsers.add_parser("gauntlet-init")
+    gauntlet_init_parser.add_argument("root")
+    gauntlet_init_parser.add_argument("--work-id", required=True)
+    gauntlet_init_parser.add_argument("--max-workers", type=int, required=True)
+    for command in ("gauntlet-status", "gauntlet-run", "gauntlet-resume", "gauntlet-cleanup"):
+        control_parser = subparsers.add_parser(command)
+        control_parser.add_argument("root")
+        control_parser.add_argument("--work-id", required=True)
     checkpoint_parser = subparsers.add_parser("checkpoint")
     checkpoint_parser.add_argument("root")
     checkpoint_parser.add_argument("--work-id", required=True)
@@ -2371,6 +2646,11 @@ def main(argv: list[str] | None = None) -> int:
             "reconcile": reconcile_command,
             "migrate": migrate_command,
             "migrate-v3": migrate_v3_command,
+            "gauntlet-init": gauntlet_init_command,
+            "gauntlet-status": gauntlet_status_command,
+            "gauntlet-run": gauntlet_run_command,
+            "gauntlet-resume": gauntlet_resume_command,
+            "gauntlet-cleanup": gauntlet_cleanup_command,
             "hotfix": hotfix_command,
             "hotfix-go": hotfix_go_command,
             "checkpoint": checkpoint_command,

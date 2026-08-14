@@ -8,7 +8,7 @@ invocation, BLOCKED_CAPABILITY, STALE_SKILL_RESOLUTION, no DIRECT|EMULATED|BEST_
 Stdlib only, no network, no real specify/node/backlogctl: the runtime catalogue is a
 frozen fixture captured read-only from `.claude/skills` during phase 0.
 """
-import contextlib, copy, hashlib, importlib.util, json, sys, tempfile, unittest
+import ast, contextlib, copy, hashlib, importlib.util, json, sys, tempfile, unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -1220,10 +1220,122 @@ class Hygiene(Base):
         self.assertEqual(len(cat["entries"]), 11)
         self.assertTrue(all(e["native_invocation"] for e in cat["entries"]))
 
-    def test_public_cli_is_untouched_this_round(self):
+    def test_public_cli_exposes_only_the_approved_gauntlet_bindings(self):
+        """FASE-001 may bind the resolver only behind its five new commands."""
         text = (SCRIPTS / "grill_workspace.py").read_text(encoding="utf-8")
-        self.assertNotIn("step_skills", text)
-        self.assertNotIn("workflow-step-skills", text)
+        tree = ast.parse(text)
+        functions = {
+            node.name: node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        expected_handlers = {
+            "gauntlet-init": "gauntlet_init_command",
+            "gauntlet-status": "gauntlet_status_command",
+            "gauntlet-run": "gauntlet_run_command",
+            "gauntlet-resume": "gauntlet_resume_command",
+            "gauntlet-cleanup": "gauntlet_cleanup_command",
+        }
+
+        parser_commands = {
+            call.args[0].value
+            for call in ast.walk(functions["build_parser"])
+            if isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "add_parser"
+            and call.args
+            and isinstance(call.args[0], ast.Constant)
+            and isinstance(call.args[0].value, str)
+        }
+        for loop in ast.walk(functions["build_parser"]):
+            if not (
+                isinstance(loop, ast.For)
+                and isinstance(loop.target, ast.Name)
+                and isinstance(loop.iter, (ast.Tuple, ast.List))
+            ):
+                continue
+            loop_registers_target = any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "add_parser"
+                and call.args
+                and isinstance(call.args[0], ast.Name)
+                and call.args[0].id == loop.target.id
+                for statement in loop.body
+                for call in ast.walk(statement)
+            )
+            if loop_registers_target:
+                parser_commands.update(
+                    item.value
+                    for item in loop.iter.elts
+                    if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                )
+        self.assertTrue(expected_handlers.keys() <= parser_commands)
+
+        handler_bindings = {}
+        for node in ast.walk(functions["main"]):
+            if not isinstance(node, ast.Dict):
+                continue
+            candidate = {}
+            for key, value in zip(node.keys, node.values):
+                if (
+                    isinstance(key, ast.Constant)
+                    and isinstance(key.value, str)
+                    and isinstance(value, ast.Name)
+                ):
+                    candidate[key.value] = value.id
+            if expected_handlers.keys() <= candidate.keys():
+                handler_bindings = candidate
+                break
+        self.assertEqual(
+            {command: handler_bindings.get(command) for command in expected_handlers},
+            expected_handlers,
+        )
+
+        permitted_loaders = {"gauntlet_init_command", "gauntlet_activation_projection"}
+        sensitive_modules = {"gauntlet", "step_skills"}
+        observed_loaders = set()
+        for function_name, function in functions.items():
+            for call in ast.walk(function):
+                if (
+                    isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Name)
+                    and call.func.id == "grill_core_module"
+                    and call.args
+                    and isinstance(call.args[0], ast.Constant)
+                    and call.args[0].value in sensitive_modules
+                ):
+                    observed_loaders.add(function_name)
+        self.assertEqual(observed_loaders, permitted_loaders)
+
+        local_calls = {
+            function_name: {
+                call.func.id
+                for call in ast.walk(function)
+                if isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Name)
+                and call.func.id in functions
+            }
+            for function_name, function in functions.items()
+        }
+
+        def reachable(function_name):
+            seen = set()
+            pending = [function_name]
+            while pending:
+                current = pending.pop()
+                if current in seen:
+                    continue
+                seen.add(current)
+                pending.extend(local_calls.get(current, set()) - seen)
+            return seen
+
+        for command, handler in handler_bindings.items():
+            if command not in expected_handlers:
+                self.assertFalse(
+                    reachable(handler) & permitted_loaders,
+                    f"legacy command {command!r} reaches the Gauntlet resolver",
+                )
 
     def test_trusted_catalogs_asset_exists_and_is_versioned_next_to_the_registry(self):
         self.assertTrue(TRUSTED_CATALOGS_ASSET.is_file())
