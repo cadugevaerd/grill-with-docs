@@ -661,6 +661,34 @@
         "reason": "FASE-002 integrada e publicada em origin/main (c5a3161); abrindo FASE-003.",
         "state": "turned",
         "step": "phase-turn"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/013-scheduler-waves/spec.md",
+            "sha256": "e1508a40c6af2ef684086470902f9daef2256e0c69d976ae9e08cd3fec77fcff"
+          },
+          {
+            "path": ".grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/docs/adr/ADR-0012.md",
+            "sha256": "214be40f68660947ac9c64483f396ffe248e98c0f9cf02e0b8c7c1a753694d62"
+          },
+          {
+            "path": ".grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/docs/adr/ADR-0013.md",
+            "sha256": "9f46be67280c1a7a52dbaa83af5295ac756672ddcee83369d2bb16748bc5697a"
+          },
+          {
+            "path": ".grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/docs/adr/ADR-0014.md",
+            "sha256": "50cf870e51d55f29c615e29673e4b2270fa9d8b6bb5f3662167ae67a47548a88"
+          },
+          {
+            "path": ".grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/DECISION-BACKLOG.md",
+            "sha256": "701fad17dc03e42b64284a23100e909c12f35eb47de81ab6144da2e8475a9c64"
+          }
+        ],
+        "execution_branch": "013-scheduler-waves",
+        "reason": "FASE-003 specify pausado apos 3 rodadas de critica independente (opus): round 1 achou 5 blockers/4 majors, round 2 achou 3 blockers novos + confirmou parte do round 1, round 3 achou 3 blockers novos (particao no->macroetapa indefinida, sinal de progresso/heartbeat inexistente no codigo shipado, 'terminal' indefinido pra 10/11 macroetapas) + 6 majors. DQ-0007/0008/0009 resolvidas via entrevista com o operador (ADR-0012/0013/0014), mas gaps remanescentes sao de engenharia real, nao wording. Operador escolheu pausar em vez de forcar 4a rodada as cegas.",
+        "state": "blocked",
+        "step": "specify"
       }
     ],
     "current_step": "specify",
@@ -688,7 +716,7 @@
       "plan": "complete",
       "review": "complete",
       "ship": "complete",
-      "specify": "complete",
+      "specify": "blocked",
       "tasks": "complete",
       "verify": "complete"
     }

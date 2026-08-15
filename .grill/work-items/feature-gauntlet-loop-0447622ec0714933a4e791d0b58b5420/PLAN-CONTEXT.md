@@ -26,15 +26,17 @@ O coordenador é a única Evidence Boundary: workers não recebem acesso ao Stor
 
 ## FASE-003 — Scheduler Claude e waves do DAG
 - phase: FASE-003
-- ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0007
-- BLs: none
+- ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0007, ADR-0012, ADR-0013, ADR-0014
+- BLs: BL-0001
 - delivery-units: DU-003
 - development-type: platform-devops
 
 ### HOW
-A Canonical Skill `tasks` produz um Execution DAG versionado com nós, dependências, escopo, artefatos esperados e tier mínimo. O scheduler valida essa estrutura e somente coloca em wave nós sem dependências pendentes; cada macroetapa recebe seu subagente líder e `agent-execute` pode ocupar até cinco Worker Worktrees simultâneos. As onze macroetapas V3 permanecem ordenadas e não são extensíveis nesta primeira versão.
+A Canonical Skill `tasks` produz um Execution DAG versionado com nós, dependências, escopo, artefatos esperados e tier mínimo — a FASE-003 não escreve um gerador de DAG separado; ela despacha a própria macroetapa `tasks` a um subagente líder e consome o DAG que essa macroetapa produz como saída (ADR-0014). O scheduler valida essa estrutura e somente coloca em wave nós `parallel:true` sem dependências pendentes; cada uma das onze macroetapas V3 recebe seu próprio subagente líder, despachado em sequência fixa e nunca em paralelo com outra macroetapa, e somente `agent-execute` pode ocupar até cinco Worker Worktrees simultâneos via Execution Wave. As onze macroetapas permanecem ordenadas e não são extensíveis nesta primeira versão.
 
-O adapter Claude usa a interface nativa não interativa com modelo selecionável e saída estruturada em stream, iniciado no worktree do worker e sem shell implícito. O watchdog trata ausência de progresso por quinze minutos: substitui uma vez o worker ou relança uma vez o Loop no mesmo run; recorrência bloqueia com diagnóstico. Somente timeout ou limite temporário classificado recebe retry automático; retomada fora desse caso exige validação explícita do estado persistido.
+O cap de 1 a 5 workers fixado na ativação é concorrente, não cumulativo: um worker terminal libera seu slot e um worker de substituição por stall ou um retry de falha transitória contam contra esse mesmo cap (ADR-0012), o que exige estender a contagem do Store para ignorar workers terminais. O Store também ganha um ciclo de vida real de wave — estados além do `DECLARED` congelado e a regra de que só a wave superada é imutável, nunca o mapa inteiro (ADR-0013) — para que uma run com mais de cinco nós independentes avance por waves sucessivas.
+
+O adapter Claude usa a interface nativa não interativa com modelo selecionável e saída estruturada em stream, iniciado no worktree do worker e sem shell implícito. O watchdog trata ausência de progresso por quinze minutos, medida como ausência de nova transição de lease correlacionada ao worker: substitui uma vez o worker ou relança uma vez o Loop no mesmo run através do mecanismo de recovery já existente na FASE-002, e recorrência bloqueia com diagnóstico. Somente falha classificada como transitória recebe retry automático, contado contra o mesmo cap concorrente; retomada fora desse caso exige validação explícita do estado persistido.
 
 ## FASE-004 — Convergência, revisão e entrega verificável
 - phase: FASE-004

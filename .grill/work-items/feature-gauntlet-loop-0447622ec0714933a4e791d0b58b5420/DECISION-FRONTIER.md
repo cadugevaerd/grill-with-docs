@@ -60,4 +60,34 @@
 - depends-on: DQ-0003, DQ-0004
 - final-ref: ADR-0008
 
+## DQ-0007 — O cap de workers da ativação é concorrente ou cumulativo por run?
+- phase: FASE-003
+- fingerprint: cap-worker-concorrente-nao-cumulativo
+- impact: high
+- state: resolved
+- context-refs: Execution Wave, Worker Worktree
+- artifacts: ADR-0012, ROADMAP#FASE-003
+- depends-on: DQ-0003
+- final-ref: ADR-0012
+
+## DQ-0008 — Como o Store representa mais de uma wave por run?
+- phase: FASE-003
+- fingerprint: wave-lifecycle-append-only-store-extension
+- impact: high
+- state: resolved
+- context-refs: Execution Wave, Execution DAG
+- artifacts: ADR-0013, ROADMAP#FASE-003
+- depends-on: DQ-0004, DQ-0007
+- final-ref: ADR-0013
+
+## DQ-0009 — A FASE-003 gera o Execution DAG ou só consome o que a macroetapa tasks produz?
+- phase: FASE-003
+- fingerprint: dag-e-output-de-tasks-nao-gerador-dedicado
+- impact: high
+- state: resolved
+- context-refs: Execution DAG, Canonical Skill
+- artifacts: ADR-0014, ROADMAP#FASE-003
+- depends-on: DQ-0004
+- final-ref: ADR-0014
+
 > Estados: open | resolved | deferred | split | blocked | out-of-scope. Não duplique fingerprints abertos.
