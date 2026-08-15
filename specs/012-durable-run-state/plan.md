@@ -38,7 +38,7 @@ Extend the existing project-scoped Store with a strict optional Gauntlet run blo
 | Verify/review antes de ship | Public validators and a new independent review remain mandatory gates before any isolated ship transaction. | PASS |
 | Fail-closed sem waiver | Invalid activation, Store, run, lease, capability, worktree, Git, identity, and cleanup conditions return named blocks before unsafe state changes. | PASS |
 | Rastreabilidade | Snapshot revision, chained journal, immutable receipts, base revision, and public evidence use stable run/worker identities. | PASS |
-| Bump obrigatório do plugin | This is an unreleased feature branch. FASE-004 synchronizes every distribution surface to `2.6.0` before any merge, push, tag, or publication. | PASS |
+| Bump obrigatório do plugin | FASE-002 bumps the version to `2.6.0` across all eight distribution surfaces in this same commit, satisfying the constitution directly (no deferral). | PASS |
 
 ## Research Decisions
 

@@ -1434,139 +1434,42 @@ def transact_with_event(root: str | Path, mutate: Callable[[dict[str, Any]], dic
 def _recover_pending_transition_locked(paths: StorePaths, root: str | Path, *, now: Callable[[], str] | None = None) -> Snapshot:
     """Finish exactly one WAL candidate, or abandon pre-semantic residue."""
     pending = _pending_path(paths)
-    if True:  # retains the raw recovery body under one fail-closed wrapper
-
 
     # Everything below is deliberately a raw recovery reader.  The caller
     # maps malformed/unverifiable WAL to its dedicated operator action code.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        if _lstat(pending) is None: return _require(paths)
-        intent = loads(_decode(_read_regular(pending), pending))
-        if not isinstance(intent, dict) or set(intent) != {"schema", "candidate", "event", "receipt"} or intent["schema"] != "grill-transition-wal/v1": _invalid("invalid pending transition intent")
-        event, receipt = _transition_fields(intent["event"], intent["receipt"]); event = _bind_receipt_hash(event, receipt)
-        candidate = _validate_document(intent["candidate"], paths.orchestrator)
-        records = _validated_journal_records(paths)
-        matches = [r for r in records if r.get("event") == event["event"] and all(r.get(k) == v for k, v in event.items() if k != "event")]
-        if len(matches) > 1: _fail(STATE_DIVERGENCE, "duplicate semantic event in pending transition")
-        if not matches:
-            _remove_pending(paths)
-            return _require(paths)
-        receipt_file = receipt_path(root, receipt["category"], receipt["name"])
-        _verify_transition_receipt(receipt_file, event, receipt)
-        _validate_candidate_transition(candidate, event, matches[0]["sequence"])
-        current = _snapshot_from(_read_regular(paths.orchestrator), paths.orchestrator)
-        _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
-        if current.revision == candidate["revision"]:
-            if current.content_sha256 != candidate["content_sha256"]: _fail(STATE_DIVERGENCE, "published snapshot differs from pending candidate")
-            _remove_pending(paths); return _require(paths)
-        if current.revision != candidate["revision"] - 1: _fail(STATE_DIVERGENCE, "pending candidate revision is not next")
-        anchors = [r for r in records if r.get("event") == COMMIT_EVENT and r.get("revision") == candidate["revision"]]
-        if len(anchors) > 1 or (anchors and anchors[0].get("snapshot_sha256") != candidate["content_sha256"]): _fail(STATE_DIVERGENCE, "pending commit anchor diverges")
-        if anchors:
-            if records[-1] != anchors[0] or len(records) < 2 or records[-2] != matches[0]: _fail(STATE_DIVERGENCE, "semantic event is already anchored or not current")
-        elif records[-1] != matches[0]:
-            _fail(STATE_DIVERGENCE, "semantic event is not the journal tail")
-        anchor = anchors[0] if anchors else _append_record_locked(paths, _commit_fields(candidate["revision"], candidate["content_sha256"]), now)
-        candidate = dict(candidate); candidate["journal_head"] = {"sequence": anchor["sequence"], "record_sha256": anchor["content_sha256"]}
-        _write_worktree_receipts(paths, candidate)
-        _write_document(paths, candidate)
+    if _lstat(pending) is None: return _require(paths)
+    intent = loads(_decode(_read_regular(pending), pending))
+    if not isinstance(intent, dict) or set(intent) != {"schema", "candidate", "event", "receipt"} or intent["schema"] != "grill-transition-wal/v1": _invalid("invalid pending transition intent")
+    event, receipt = _transition_fields(intent["event"], intent["receipt"]); event = _bind_receipt_hash(event, receipt)
+    candidate = _validate_document(intent["candidate"], paths.orchestrator)
+    records = _validated_journal_records(paths)
+    matches = [r for r in records if r.get("event") == event["event"] and all(r.get(k) == v for k, v in event.items() if k != "event")]
+    if len(matches) > 1: _fail(STATE_DIVERGENCE, "duplicate semantic event in pending transition")
+    if not matches:
         _remove_pending(paths)
         return _require(paths)
+    receipt_file = receipt_path(root, receipt["category"], receipt["name"])
+    _verify_transition_receipt(receipt_file, event, receipt)
+    _validate_candidate_transition(candidate, event, matches[0]["sequence"])
+    current = _snapshot_from(_read_regular(paths.orchestrator), paths.orchestrator)
+    _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
+    if current.revision == candidate["revision"]:
+        if current.content_sha256 != candidate["content_sha256"]: _fail(STATE_DIVERGENCE, "published snapshot differs from pending candidate")
+        _remove_pending(paths); return _require(paths)
+    if current.revision != candidate["revision"] - 1: _fail(STATE_DIVERGENCE, "pending candidate revision is not next")
+    anchors = [r for r in records if r.get("event") == COMMIT_EVENT and r.get("revision") == candidate["revision"]]
+    if len(anchors) > 1 or (anchors and anchors[0].get("snapshot_sha256") != candidate["content_sha256"]): _fail(STATE_DIVERGENCE, "pending commit anchor diverges")
+    if anchors:
+        if records[-1] != anchors[0] or len(records) < 2 or records[-2] != matches[0]: _fail(STATE_DIVERGENCE, "semantic event is already anchored or not current")
+    elif records[-1] != matches[0]:
+        _fail(STATE_DIVERGENCE, "semantic event is not the journal tail")
+    anchor = anchors[0] if anchors else _append_record_locked(paths, _commit_fields(candidate["revision"], candidate["content_sha256"]), now)
+    candidate = dict(candidate); candidate["journal_head"] = {"sequence": anchor["sequence"], "record_sha256": anchor["content_sha256"]}
+    _write_worktree_receipts(paths, candidate)
+    _write_document(paths, candidate)
+    _remove_pending(paths)
+    return _require(paths)
 
 
 def recover_pending_transition(root: str | Path, *, now: Callable[[], str] | None = None, timeout: float = LOCK_TIMEOUT) -> Snapshot:
