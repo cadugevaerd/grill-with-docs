@@ -631,6 +631,13 @@
         "reason": "Review APPROVE em tree f816e317b0e0dc2b2d72b069b0a28652777b952d: 0 Critical, 12 Important não-bloqueantes. Rodada 1 achou MISSING-BUMP (Critical); reparo bumpou 2.6.0 nas oito superfícies e removeu bloco morto em store.py; rodada 2 (crítico independente fresco) reproduziu todos os gates (803 testes, bump-gate PASS) e aprovou.",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Iniciando ship transaction FASE-002: merge --no-ff em main, gates completos, push direto (sem PR), conforme WORKFLOW.md fases A-E.",
+        "state": "in-progress",
+        "step": "ship"
       }
     ],
     "current_step": "ship",
@@ -657,7 +664,7 @@
       "converge": "complete",
       "plan": "complete",
       "review": "complete",
-      "ship": "pending",
+      "ship": "in-progress",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
