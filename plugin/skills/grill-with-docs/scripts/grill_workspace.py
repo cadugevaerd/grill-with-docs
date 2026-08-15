@@ -2165,33 +2165,163 @@ def gauntlet_activation_projection(args: argparse.Namespace) -> tuple[Path, str,
 
 
 def gauntlet_status_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    _, state, reason = gauntlet_activation_projection(args)
+    root, state, reason = gauntlet_activation_projection(args)
     payload: dict[str, Any] = {"verdict": "STATUS", "work_id": args.work_id, "activation_state": state}
     if state in {"STALE", "BLOCKED"}:
         payload["reason"] = reason or "ELIGIBILITY-UNAVAILABLE"
+        return payload, EXIT_OK
+    # Run state is a FASE-002 projection layered on the existing, read-only
+    # FASE-001 activation projection.  An activation does not initialise the
+    # Store, so status before the first admission deliberately has no `run`.
+    gauntlet_runs = grill_core_module("gauntlet_runs")
+    if gauntlet_runs.store.store_exists(root):
+        try:
+            run = gauntlet_runs.project_run(root, args.work_id, args.run_id)
+        except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+            code = gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code) if isinstance(error, gauntlet_runs.store.StoreError) else error.code
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
+        if run is not None:
+            payload["run"] = run
+    elif args.run_id is not None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RUN-NOT-FOUND", "requested durable run does not exist", extra={"work_id": args.work_id})
     return payload, EXIT_OK
 
 
+def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[str, str]]:
+    """Build a durable admission only from a newly verified FASE-001 proof.
+
+    The activation-state projection is intentionally repeated here instead of
+    trusting a prior status call: each mutable FASE-002 command must prove the
+    current activation for itself.  The resulting hashes use the exact config
+    record and bytes observed by this proof boundary; no formatted or prefixed
+    digest enters the Store.
+    """
+    root = project_root(args.root)
+    resolve_gauntlet_subject(root, args.work_id)
+    gauntlet = grill_core_module("gauntlet")
+    workflow_v3 = grill_core_module("workflow_v3")
+    work_item_v3 = grill_core_module("work_item_v3")
+    step_skills = grill_core_module("step_skills")
+    gauntlet_runs = grill_core_module("gauntlet_runs")
+    item_fd: int | None = None
+    grill_fd: int | None = None
+    try:
+        item_fd = open_development_item_fd(root, args.work_id)
+        grill_fd = gauntlet.open_config_directory(root)
+        try:
+            _, workflow_bytes, workflow_text = workflow_v3.load_workflow(root)
+        except workflow_v3.Failure as error:
+            code = workflow_v3.CLI_CODE_ALIASES.get(error.code, error.code.replace("_", "-"))
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message) from error
+        try:
+            state, reason = gauntlet.activation_state(
+                root=root, work_id=args.work_id, item_dir_fd=item_fd, grill_fd=grill_fd,
+                workflow_bytes=workflow_bytes, workflow_text=workflow_text,
+                workflow_v3=workflow_v3, work_item_v3=work_item_v3, step_skills=step_skills,
+            )
+        except gauntlet.GauntletError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
+        if state != "ACTIVATED":
+            code = "ACTIVATION-REQUIRED" if state == "ELIGIBLE" else (reason or "ACTIVATION-REQUIRED")
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, "a current Gauntlet activation is required", extra={"work_id": args.work_id})
+        try:
+            proof = gauntlet.current_activation(
+                root=root, work_id=args.work_id, item_dir_fd=item_fd, workflow_bytes=workflow_bytes,
+                workflow_text=workflow_text, workflow_v3=workflow_v3,
+                work_item_v3=work_item_v3, step_skills=step_skills,
+            )
+            config, config_bytes, _ = gauntlet._read_config(grill_fd)
+        except gauntlet.GauntletError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
+        record = config["activations"].get(args.work_id)
+        identity = {key: proof[key] for key in ("work_item_id", "work_item", "workflow", "runtime", "catalog")}
+        if config_bytes is None or record is None:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-REQUIRED", "a current Gauntlet activation is required", extra={"work_id": args.work_id})
+        if any(record.get(key) != value for key, value in identity.items()):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-STALE", "Gauntlet activation identity is stale", extra={"work_id": args.work_id})
+        base_commit = git_optional(root, "rev-parse", "HEAD")
+        if not re.fullmatch(r"[0-9a-f]{40}", base_commit):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "BASE-COMMIT-UNAVAILABLE", "current Git base commit is unavailable", extra={"work_id": args.work_id})
+        try:
+            admission = gauntlet_runs.admission_from_proof(
+                activation=record,
+                work_item_sha256=proof["work_item"]["document_sha256"],
+                workflow_sha256=hash_bytes(workflow_bytes),
+                config_sha256=hash_bytes(config_bytes),
+                base_commit=base_commit,
+            )
+        except gauntlet_runs.GauntletRunError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra={"work_id": args.work_id}) from error
+        return root, gauntlet_runs, admission
+    finally:
+        if item_fd is not None:
+            os.close(item_fd)
+        if grill_fd is not None:
+            os.close(grill_fd)
+
+
 def gauntlet_run_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    _, state, reason = gauntlet_activation_projection(args)
-    if state == "ACTIVATED":
-        return {"verdict": "RUN-ADMITTED", "work_id": args.work_id, "runtime": "claude"}, EXIT_OK
-    if state == "ELIGIBLE":
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-REQUIRED", "Gauntlet activation is required", extra={"work_id": args.work_id})
-    raise CliFailure(EXIT_BLOCKED, "BLOCKED", reason or "ACTIVATION-REQUIRED", "Gauntlet admission is not currently eligible", extra={"work_id": args.work_id})
+    root, gauntlet_runs, admission = gauntlet_run_admission(args)
+    try:
+        return gauntlet_runs.admit_or_reuse_run(root, args.work_id, admission), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code) if isinstance(error, gauntlet_runs.store.StoreError) else error.code
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
 def gauntlet_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    _, state, _ = gauntlet_activation_projection(args)
-    if state != "ACTIVATED":
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-REQUIRED", "a current Gauntlet activation is required", extra={"work_id": args.work_id})
-    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "durable scheduling is not available in FASE-001", extra={"work_id": args.work_id})
+    # Retain the FASE-001 control boundary for callers that did not select a
+    # durable run.  FASE-002 recovery is deliberately opt-in via --run-id.
+    if args.run_id is None:
+        _, state, _ = gauntlet_activation_projection(args)
+        if state != "ACTIVATED":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-REQUIRED", "a current Gauntlet activation is required", extra={"work_id": args.work_id})
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "durable recovery requires --run-id", extra={"work_id": args.work_id})
+    root, gauntlet_runs, admission = gauntlet_run_admission(args)
+    try:
+        return gauntlet_runs.record_resume_decision(root, args.work_id, args.run_id, admission), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code) if isinstance(error, gauntlet_runs.store.StoreError) else error.code
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
 def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    root = project_root(args.root)
-    resolve_gauntlet_subject(root, args.work_id)
-    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "cleanup is unavailable before durable scheduling", extra={"work_id": args.work_id})
+    # Retain the FASE-001 control response for the legacy form.  The durable
+    # worker lifecycle is selected only by the complete run/worker pair, so
+    # an older caller cannot accidentally target a workspace.
+    if args.run_id is None and args.worker_id is None:
+        root = project_root(args.root)
+        resolve_gauntlet_subject(root, args.work_id)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "cleanup is unavailable before durable scheduling", extra={"work_id": args.work_id})
+    if args.run_id is None or args.worker_id is None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--run-id and --worker-id must be supplied together", extra={"work_id": args.work_id})
+    root, gauntlet_runs, admission = gauntlet_run_admission(args)
+    try:
+        result = gauntlet_runs.cleanup_worker(root, args.work_id, args.run_id, args.worker_id, admission)
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
+    # PRESERVED is a deliberate, non-mutating safety result rather than a
+    # core error; preserve its diagnostic verdict but make it a blocked CLI
+    # outcome so automation cannot mistake preservation for cleanup.
+    return result, EXIT_OK if result.get("verdict") in {"CLEANED", "REUSED"} else EXIT_BLOCKED
+
+
+def gauntlet_prepare_worker_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Prepare one passive, scoped worker workspace from a fresh admission."""
+    root, gauntlet_runs, admission = gauntlet_run_admission(args)
+    try:
+        return gauntlet_runs.prepare_worker(
+            root, args.work_id, args.run_id, args.worker_id, args.scope, admission
+        ), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        # Store's public vocabulary predates this adapter and uses a small
+        # alias table.  Every core/store failure crosses this one JSON
+        # boundary as a kebab-cased BLOCKED response.
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
 def global_snapshotter(root: Path) -> Callable[[], dict[str, tuple[bytes, int]]]:
@@ -2603,10 +2733,27 @@ def build_parser() -> JsonParser:
     gauntlet_init_parser.add_argument("root")
     gauntlet_init_parser.add_argument("--work-id", required=True)
     gauntlet_init_parser.add_argument("--max-workers", type=int, required=True)
-    for command in ("gauntlet-status", "gauntlet-run", "gauntlet-resume", "gauntlet-cleanup"):
+    for command in ("gauntlet-status", "gauntlet-run", "gauntlet-cleanup"):
         control_parser = subparsers.add_parser(command)
         control_parser.add_argument("root")
         control_parser.add_argument("--work-id", required=True)
+        if command == "gauntlet-status":
+            control_parser.add_argument("--run-id")
+        elif command == "gauntlet-cleanup":
+            # Optional individually for the legacy FASE-001 command; the
+            # handler requires the pair before selecting durable cleanup.
+            control_parser.add_argument("--run-id")
+            control_parser.add_argument("--worker-id")
+    prepare_worker_parser = subparsers.add_parser("gauntlet-prepare-worker")
+    prepare_worker_parser.add_argument("root")
+    prepare_worker_parser.add_argument("--work-id", required=True)
+    prepare_worker_parser.add_argument("--run-id", required=True)
+    prepare_worker_parser.add_argument("--worker-id", required=True)
+    prepare_worker_parser.add_argument("--scope", action="append", required=True)
+    gauntlet_resume_parser = subparsers.add_parser("gauntlet-resume")
+    gauntlet_resume_parser.add_argument("root")
+    gauntlet_resume_parser.add_argument("--work-id", required=True)
+    gauntlet_resume_parser.add_argument("--run-id")
     checkpoint_parser = subparsers.add_parser("checkpoint")
     checkpoint_parser.add_argument("root")
     checkpoint_parser.add_argument("--work-id", required=True)
@@ -2650,6 +2797,7 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-status": gauntlet_status_command,
             "gauntlet-run": gauntlet_run_command,
             "gauntlet-resume": gauntlet_resume_command,
+            "gauntlet-prepare-worker": gauntlet_prepare_worker_command,
             "gauntlet-cleanup": gauntlet_cleanup_command,
             "hotfix": hotfix_command,
             "hotfix-go": hotfix_go_command,

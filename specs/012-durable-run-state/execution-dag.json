@@ -1,0 +1,27 @@
+{
+  "schema": "grill-gauntlet-execution-dag/v1",
+  "feature": "012-durable-run-state",
+  "max_workers": 5,
+  "nodes": [
+    {"id":"T001","depends_on":[],"tier":"medium","parallel":true,"files":["tests/validate_orchestrator_store_contract.py"]},
+    {"id":"T002","depends_on":[],"tier":"medium","parallel":true,"files":["tests/validate_gauntlet_run_contract.py"]},
+    {"id":"T003","depends_on":["T001"],"tier":"medium","parallel":false,"files":["plugin/skills/grill-with-docs/scripts/grill_core/store.py"]},
+    {"id":"T004","depends_on":["T003"],"tier":"medium","parallel":false,"files":["plugin/skills/grill-with-docs/scripts/grill_core/store.py"]},
+    {"id":"T005","depends_on":["T002","T004"],"tier":"medium","parallel":false,"files":["tests/validate_orchestrator_store_contract.py"]},
+    {"id":"T006","depends_on":["T005"],"tier":"medium","parallel":true,"files":["tests/validate_gauntlet_run_contract.py"]},
+    {"id":"T007","depends_on":["T006"],"tier":"medium","parallel":false,"files":["plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py"]},
+    {"id":"T008","depends_on":["T007"],"tier":"medium","parallel":false,"files":["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]},
+    {"id":"T009","depends_on":["T008"],"tier":"medium","parallel":false,"files":["tests/validate_gauntlet_run_contract.py"]},
+    {"id":"T010","depends_on":["T009"],"tier":"medium","parallel":true,"files":["tests/validate_gauntlet_run_contract.py"]},
+    {"id":"T011","depends_on":["T010"],"tier":"medium","parallel":false,"files":["plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py"]},
+    {"id":"T012","depends_on":["T011"],"tier":"medium","parallel":false,"files":["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]},
+    {"id":"T013","depends_on":["T012"],"tier":"medium","parallel":false,"files":["tests/validate_gauntlet_run_contract.py"]},
+    {"id":"T014","depends_on":["T013"],"tier":"medium","parallel":false,"files":["tests/validate_gauntlet_run_contract.py"]},
+    {"id":"T015","depends_on":["T014"],"tier":"medium","parallel":false,"files":["plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py"]},
+    {"id":"T016","depends_on":["T015"],"tier":"medium","parallel":false,"files":["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]},
+    {"id":"T017","depends_on":["T013","T016"],"tier":"medium","parallel":false,"files":["tests/validate_gauntlet_run_contract.py","tests/validate_workspace_contract.py"]},
+    {"id":"T018","depends_on":["T017"],"tier":"small","parallel":true,"files":["specs/012-durable-run-state/quickstart.md"]},
+    {"id":"T019","depends_on":["T017","T018"],"tier":"medium","parallel":false,"files":["tests/run_validators.py",".specify/reports/verify-review-ship/verify.md"]},
+    {"id":"T020","depends_on":["T019"],"tier":"large","parallel":false,"files":[".specify/reports/verify-review-ship/review.md"]}
+  ]
+}

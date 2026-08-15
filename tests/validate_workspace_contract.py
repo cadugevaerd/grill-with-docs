@@ -277,6 +277,41 @@ class WorkspaceV2Contract(unittest.TestCase):
         state = json.loads((first / "state.json").read_text(encoding="utf-8"))
         self.assertEqual(state["workflow"]["version"], "v2")
 
+    def test_v2_item_rejects_durable_worker_controls_without_workspace_mutation(self) -> None:
+        """New FASE-002 controls must not upgrade or otherwise disturb V2 items."""
+        self._init_item(work_id="v2-durable-controls")
+        before = snapshot(self.root)
+        head_before = git(self.root, "rev-parse", "HEAD")
+        branch_before = git(self.root, "branch", "--show-current")
+        status_before = git(self.root, "status", "--porcelain=v1", "--untracked-files=all")
+        worktrees_before = git(self.root, "worktree", "list", "--porcelain")
+        commands = (
+            ("gauntlet-run", ()),
+            ("gauntlet-resume", ("--run-id", "run-v2-control-a1b2")),
+            (
+                "gauntlet-prepare-worker",
+                ("--run-id", "run-v2-control-a1b2", "--worker-id", "worker-v2", "--scope", "plugin"),
+            ),
+            (
+                "gauntlet-cleanup",
+                ("--run-id", "run-v2-control-a1b2", "--worker-id", "worker-v2"),
+            ),
+        )
+        for command, arguments in commands:
+            with self.subTest(command=command):
+                process, payload = invoke(command, self.root, "--work-id", "v2-durable-controls", *arguments)
+                self.assertEqual(process.stderr, "")
+                self.assertEqual(
+                    (process.returncode, payload.get("verdict"), payload.get("code")),
+                    (2, "BLOCKED", "WORKFLOW-INCOMPATIBLE"),
+                    payload,
+                )
+                self.assertEqual(snapshot(self.root), before)
+                self.assertEqual(git(self.root, "rev-parse", "HEAD"), head_before)
+                self.assertEqual(git(self.root, "branch", "--show-current"), branch_before)
+                self.assertEqual(git(self.root, "status", "--porcelain=v1", "--untracked-files=all"), status_before)
+                self.assertEqual(git(self.root, "worktree", "list", "--porcelain"), worktrees_before)
+
     def test_init_reuse_identity_conflict_and_immutable_tamper(self) -> None:
         item = self._init_item(work_id="stable-id")
         process, payload = invoke("init", self.root, "--type", "feature", "--slug", "alpha", "--work-id", "stable-id")

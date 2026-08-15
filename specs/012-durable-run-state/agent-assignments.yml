@@ -1,0 +1,117 @@
+# Agent Assignments
+# Feature: 012-durable-run-state
+# Command contract: speckit.agent-assign.assign
+# Execution runtime: Codex native agents only; no Claude invocation.
+
+assignment_policy:
+  max_workers: 5
+  runtime: codex-native
+  documentation_tier: small
+  implementation_and_test_tier: medium
+  planning_and_review_tier: large
+  concurrent_writer_rule: distinct files only; otherwise serialize
+  scheduler: unavailable-in-FASE-002
+
+agents_scanned:
+  - name: "Minimal Change Engineer"
+    source: user-agent-definition
+    description: "Minimum-scope Python implementation specialist."
+  - name: "Test Results Analyzer"
+    source: user-agent-definition
+    description: "Contract test and evidence specialist."
+  - name: "Document Generator"
+    source: user-agent-definition
+    description: "Markdown/documentation maintenance specialist."
+  - name: "Backend Architect"
+    source: user-agent-definition
+    description: "Durable state and transaction architecture specialist."
+  - name: "Code Reviewer"
+    source: user-agent-definition
+    description: "Independent correctness and security reviewer."
+
+assignments:
+  T001:
+    agent: "Test Results Analyzer"
+    requested_tier: medium
+    reason: "Red Store schema and WAL recovery contract cases."
+  T002:
+    agent: "Test Results Analyzer"
+    requested_tier: medium
+    reason: "Public CLI fixture and snapshot harness."
+  T003:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Closed Store schema and state-validation change."
+  T004:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Transactional WAL and receipt primitives."
+  T005:
+    agent: "Test Results Analyzer"
+    requested_tier: medium
+    reason: "Store regression and preservation evidence."
+  T006:
+    agent: "Test Results Analyzer"
+    requested_tier: medium
+    reason: "Tester-first durable admission and recovery cases."
+  T007:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Coordinator-only run and lease core module."
+  T008:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Public CLI wiring after activation proof."
+  T009:
+    agent: "Test Results Analyzer"
+    requested_tier: medium
+    reason: "MVP behavior, V2, and no-dispatch proof."
+  T010:
+    agent: "Test Results Analyzer"
+    requested_tier: medium
+    reason: "Correlation, receipt, authority, and status cases."
+  T011:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Coordinator-owned evidence reference implementation."
+  T012:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Status projection and public error boundary."
+  T013:
+    agent: "Test Results Analyzer"
+    requested_tier: medium
+    reason: "Evidence-boundary and future-attestation regression proof."
+  T014:
+    agent: "Test Results Analyzer"
+    requested_tier: medium
+    reason: "Serialized worktree and cleanup fault-injection matrix."
+  T015:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Derived Git worktree intent/reconciliation implementation."
+  T016:
+    agent: "Minimal Change Engineer"
+    requested_tier: medium
+    reason: "Prepare/cleanup CLI commands without dispatch expansion."
+  T017:
+    agent: "Test Results Analyzer"
+    requested_tier: medium
+    reason: "Preservation, exact cleanup, and V2 compatibility evidence."
+  T018:
+    agent: "Document Generator"
+    requested_tier: small
+    reason: "Markdown-only quickstart reconciliation."
+  T019:
+    agent: "Test Results Analyzer"
+    requested_tier: medium
+    reason: "Reproducible full validator evidence."
+  T020:
+    agent: "Code Reviewer"
+    requested_tier: large
+    reason: "Fresh independent read-only review; builder cannot approve."
+
+design_review:
+  agent: "Backend Architect"
+  requested_tier: large
+  reason: "Review WAL, Store/Git intent protocol, and phase boundary before execution."

@@ -38,6 +38,13 @@ WORK_ID = "gauntlet-ready-a1b2"
 SECOND_WORK_ID = "gauntlet-second-b2c3"
 CONFIG_RELATIVE = ".grill/gauntlet.yaml"
 
+# FASE-002 admission is the first command allowed to materialize coordinator
+# state.  Import the Store only to inspect that public durable boundary; all
+# transitions below still enter through the CLI.
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+from grill_core import store
+
 ADAPTER = "claude-code-skill/v1"
 MINIMUM_BY_STEP = {
     "specify": "large",
@@ -1428,7 +1435,7 @@ class GauntletInitContract(unittest.TestCase):
         self.assert_control_read_only(self.root, before)
         self.assertFalse(self.config.exists())
 
-    def test_run_admits_current_activation_without_run_worker_worktree_or_receipt(self) -> None:
+    def test_run_creates_durable_admission_without_worker_or_worktree_artifacts(self) -> None:
         activated_process, activated = self.activate(3)
         self.assert_activation_output(activated_process, activated, "ACTIVATED", 3)
         branch_before = git(self.root, "branch", "--show-current")
@@ -1438,14 +1445,42 @@ class GauntletInitContract(unittest.TestCase):
         process, payload = self.control("gauntlet-run")
         self.assertEqual(process.stderr, "")
         self.assertEqual(process.returncode, 0, payload)
+        self.assertEqual(payload.get("verdict"), "RUN-CREATED", payload)
+        self.assertEqual(payload.get("work_id"), WORK_ID, payload)
+        self.assertRegex(payload.get("run_id", ""), r"^run-[A-Za-z0-9][A-Za-z0-9._-]*$")
+        self.assertRegex(payload.get("base_commit", ""), r"^[0-9a-f]{40}$")
+
+        # V2's activation/configuration contract remains unchanged: admission
+        # must not create a worker, worktree, or project-side execution file.
+        # Its sole intentional mutation is the common-Git durable Store.
+        after = file_snapshot(self.root)
         self.assertEqual(
-            payload,
-            {"verdict": "RUN-ADMITTED", "work_id": WORK_ID, "runtime": "claude"},
+            {path: value for path, value in after.items() if not path.startswith(".git/grill/")},
+            before,
         )
-        self.assert_control_read_only(self.root, before)
+        self.assertFalse((self.root / ".grill" / "workers").exists())
+        self.assertFalse((self.root / ".grill" / "runs").exists())
         self.assertEqual(git(self.root, "branch", "--show-current"), branch_before)
         self.assertEqual(git(self.root, "worktree", "list", "--porcelain"), worktrees_before)
         self.assertEqual(git(self.root, "status", "--porcelain"), status_before)
+
+        paths = store.store_paths(self.root)
+        snapshot = store.read_snapshot(self.root)
+        run = snapshot.document["work_items"][WORK_ID]["gauntlet"]["runs"][payload["run_id"]]
+        self.assertEqual(run["state"], "ADMITTED")
+        self.assertEqual(run["workers"], {})
+        self.assertEqual(run["admission"]["base_commit"], payload["base_commit"])
+
+        admitted = [event for event in store.read_events(self.root) if event.get("event") == "gauntlet.run.admitted"]
+        self.assertEqual(len(admitted), 1)
+        event = admitted[0]
+        self.assertEqual((event["work_id"], event["run_id"], event["base_commit"]), (WORK_ID, payload["run_id"], payload["base_commit"]))
+        receipt = store.receipt_path(self.root, "runtime", f"gauntlet-run-admit-{payload['run_id']}")
+        self.assertTrue(receipt.is_file())
+        receipt_payload = strict_json_bytes(receipt.read_bytes(), source=str(receipt))
+        self.assertEqual(receipt_payload["run_id"], payload["run_id"])
+        self.assertEqual(store.jcs_sha256(receipt_payload), event["receipt_sha256"])
+        self.assertFalse((paths.locks / store.PENDING_TRANSITION_NAME).exists())
 
     def test_run_revalidates_and_blocks_stale_activation_without_artifacts(self) -> None:
         activated_process, activated = self.activate(3)
