@@ -15,7 +15,7 @@
 - delivery-units: DU-001
 
 ## FASE-002 — Estado durável, evidência e isolamento
-- state: ready-for-specify
+- state: complete
 - objetivo: cada run e worker mantém estado, evidências e worktrees isolados que podem ser recuperados sem autoridade externa
 - scope-in: extensão validada do Project Store e journal existente; leases e recuperação; Evidence Boundary do coordenador; Worker Worktrees e limpeza segura
 - scope-out: scheduler do Claude Code, paralelismo e lógica de converge/review
@@ -27,13 +27,13 @@
 - delivery-units: DU-002
 
 ## FASE-003 — Scheduler Claude e waves do DAG
-- state: planned
+- state: ready-for-specify
 - objetivo: o Loop despacha cada macroetapa a subagentes Claude e executa em paralelo somente os nós independentes do Execution DAG
 - scope-in: adapter nativo Claude Code; mapeamento de tiers; criação e observação de workers; DAG versionado; waves de até cinco workers; retry transitório e Stall Recovery automática
 - scope-out: runtimes Codex/Hermes, resolução automática de conflitos e reparo automático pós-review
 - context-refs: Execution DAG, Model Tier, Capability Grant, Autonomous Run, Stall Recovery
 - ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0007
-- BLs: BL-0001
+- BLs: none
 - depends-on: FASE-001, FASE-002
 - specify-handoff: handoffs/FASE-003-SPECIFY-HANDOFF.md
 - delivery-units: DU-003

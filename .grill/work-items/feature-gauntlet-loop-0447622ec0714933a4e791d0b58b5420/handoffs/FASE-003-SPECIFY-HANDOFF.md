@@ -1,7 +1,7 @@
 # FASE-003 — Scheduler Claude e waves do DAG
 
 - phase: FASE-003
-- state: planned
+- state: ready-for-specify
 - roadmap: ROADMAP.md#FASE-003
 - context-refs: Execution DAG, Model Tier, Capability Grant, Autonomous Run, Stall Recovery
 - ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0007

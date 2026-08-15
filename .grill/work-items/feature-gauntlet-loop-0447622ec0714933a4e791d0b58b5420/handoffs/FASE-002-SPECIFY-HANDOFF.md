@@ -1,7 +1,7 @@
 # FASE-002 — Estado durável, evidência e isolamento
 
 - phase: FASE-002
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-002
 - context-refs: Resumable Run, Evidence Boundary, Worker Worktree, Capability Grant, Stall Recovery
 - ADRs: ADR-0003, ADR-0005, ADR-0006, ADR-0010
