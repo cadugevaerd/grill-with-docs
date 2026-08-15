@@ -1,199 +1,200 @@
-## Review Report
+Verdict: APPROVE
 
-Verdict: REQUEST-CHANGES
-Source fingerprint: 9190ecb4bb48b4324d9a2a94b0c38d8f0823d7e9 (tree 284ea5616d5ba3a3ebc5cba9f8a557c3c8db6d34) / independent read-only review of `git diff origin/main...HEAD` (22 files, +4200/-49), of `specs/012-durable-run-state/{spec,plan,data-model,research,quickstart,tasks}.md` and `contracts/gauntlet-run-cli.md`, of `.specify/memory/constitution.md` and ADR-0003/0005/0006/0010, plus test evidence re-executed by this reviewer on this exact tree (not inherited from `verify.md`).
+Source fingerprint: `f816e317b0e0dc2b2d72b069b0a28652777b952d` (git tree `5e8884ad4587801fad9a2da26ec2ada974232c00`) / canonical `tree 69927f59bdaa5bcfa3932cdf1f630b19b7e090390eaa90955ad340c7ca218f1a`, `work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (clean tree), `plan cfc91bf4512d07b742ae6760a9e16ecac83a5757bd90f94609d0c935d2e11e4f` — fresh, independent read-only review of `git diff origin/main...HEAD` reviewed as one final state (33 files, +4289/−71, both commits `9190ecb` and `f816e31` together), of `specs/012-durable-run-state/{spec,plan,data-model,research,quickstart,tasks}.md` and `contracts/gauntlet-run-cli.md`, of `.specify/memory/constitution.md` and ADR-0003/0005/0006/0010. Every gate below was re-executed by this reviewer on this exact tree; nothing is inherited from `verify.md` or from any prior review round.
 
-Reproduced gate evidence (all run by this reviewer at the fingerprint above):
+Reproduced gate evidence:
 
 | Command | Result |
 |---|---|
+| `python3 tests/check_version_bump.py --base-ref origin/main` | **PASS — `BUMPED: plugin/ mudou e a versão aumentou de 2.5.4 para 2.6.0`, exit 0** |
+| `python3 tests/validate_distribution.py` | PASS — `distribution: OK`, exit 0 |
 | `python3 tests/validate_orchestrator_store_contract.py` | PASS — Ran 85 tests, OK, exit 0 |
 | `python3 tests/validate_gauntlet_run_contract.py` | PASS — Ran 23 tests, OK, exit 0 |
 | `python3 tests/validate_workspace_contract.py` | PASS — Ran 67 tests, OK (skipped=1), exit 0 |
 | `python3 tests/validate_step_skill_registry_contract.py` | PASS — Ran 103 tests, OK, exit 0 |
-| `python3 tests/validate_gauntlet_activation_contract.py` | PASS — Ran 43 tests, OK, exit 0 |
-| `python3 tests/run_validators.py` | PASS — 18 validators, 803 tests, 1 skip, exit 0 |
+| `python3 tests/run_validators.py` | PASS — 18 validators, 803 tests, 1 environment skip, exit 0 |
 | `git diff --check origin/main...HEAD` | PASS — no whitespace errors, exit 0 |
-| `python3 tests/check_version_bump.py --base-ref origin/main` | **FAIL — `MISSING-BUMP`, exit 1** |
+| `python3 -c "import ast; ast.parse(open('plugin/skills/grill-with-docs/scripts/grill_core/store.py').read())"` | PASS — parses, exit 0 |
 
-The last row is the blocking gap. It was not run in `verify.md` and is not covered by `run_validators.py`.
+The blocking gap from the previous round is closed. `2.6.0` is present and verified independently at all eight surfaces required by `CLAUDE.md`: `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`, `VERSION` in `tests/validate_distribution.py`, the `# Grill with Docs v2.6.0` heading in `plugin/skills/grill-with-docs/SKILL.md`, the `# Protocolo de sessão v2.6.0` heading in `plugin/skills/grill-with-docs/references/session-protocol.md`, and the `**v2.6.0` heading in `README.md`. The bump is in this branch's own commit `f816e31`, not merely asserted in prose.
+
+`specs/012-durable-run-state/plan.md:41` now reads "FASE-002 bumps the version to `2.6.0` across all eight distribution surfaces in this same commit, satisfying the constitution directly (no deferral)." The previous deferral to FASE-004 — which the constitution's *Fail-closed sem waiver* clause forbids as an implicit waiver — is gone, and `.grill/.../ROADMAP.md` was corrected so FASE-004 no longer claims `2.6.0` as its own bump. The claim matches the tree.
+
+### Dead-code cleanup verification
+
+`_recover_pending_transition_locked` in `plugin/skills/grill-with-docs/scripts/grill_core/store.py:1434` was checked directly rather than trusted. Comparing the function at `9190ecb` against `f816e31` by AST:
+
+- The old body was `[docstring, pending = _pending_path(paths), If(test=Constant(True), body=[…29 statements…], orelse=[])]`.
+- The new body is those same 29 statements at function level.
+- Statement-by-statement `ast.dump` comparison of `old.body[:-1] + wrapper.body` against `new.body` is **identical**, with identical signature and return annotation.
+- Diffing every top-level definition in the module between the two commits, `_recover_pending_transition_locked` is the **only** one whose AST changed at all, and it changed only by losing the always-true wrapper.
+
+The cleanup is a pure `if True:` unwrap plus dedent plus removal of ~98 blank lines. No logic, no branch, no guard, and no `orelse` was dropped. The two explanatory comments were kept and moved adjacent to the code they describe. Behaviour is identical.
 
 ### Test Quality
 
-Strong, and stronger than the phase required. The store suite adds 20 tests that are genuinely adversarial rather than confirmatory:
+Strong, and adversarial rather than confirmatory.
 
-- `test_wal_recovery_is_deterministic_at_every_receipt_event_anchor_snapshot_and_intent_boundary` injects a fault at all six declared WAL boundaries (`after-intent`, `after-receipt`, `after-event`, `after-anchor`, `after-snapshot`, `after-intent-removal`), asserts the exact published/not-published outcome per boundary, asserts byte identity of `orchestrator.json` when not published, and re-runs recovery to prove idempotency. This is the hardest thing in the diff and it is the best-tested.
-- `test_concurrent_receipt_collision_has_one_winner_and_leaves_no_wal_residue` uses a real two-thread barrier and asserts exactly one winner, one `STATE_DIVERGENCE` loser, an empty `locks/` directory, and no WAL residue — then proves the store still accepts the next transition.
-- Tamper tests rewrite the pending intent (`test_recovery_rejects_pending_candidate_with_transition_sequence_not_owned_by_semantic_event`, `..._with_illegal_admitted_to_complete_jump`, `..._malformed_pending_wal...`) with a recomputed `content_sha256` so they defeat the cheap hash check and exercise the real correlation logic.
-- The run-contract suite asserts negative space, not just verdicts: `assert_no_execution_artifacts`, `store_snapshot`, `root_snapshot` and `worktree_snapshot` comparisons make "no write" an actual byte/tree assertion in the stale, unsafe-grant, forged-evidence, and V2 cases.
-- Eight-way concurrency on both admission and resume (`test_eight_concurrent_identical_admissions...`, `..._eligible_resumes...`) covers the reuse-vs-conflict convergence path that the `ADMISSION-CONFLICT` / `RECOVERY-NOT-ELIGIBLE` catch blocks in `gauntlet_runs.py` exist to serve.
-- `tests/validate_workspace_contract.py::test_v2_item_rejects_durable_worker_controls_without_workspace_mutation` is the right FR-012 regression: it drives all four new controls at a V2 item and asserts `WORKFLOW-INCOMPATIBLE` plus unchanged HEAD, branch, `status --porcelain`, and `worktree list`.
+- `test_wal_recovery_is_deterministic_at_every_receipt_event_anchor_snapshot_and_intent_boundary` injects a fault at all six declared WAL boundaries (`after-intent`, `after-receipt`, `after-event`, `after-anchor`, `after-snapshot`, `after-intent-removal`), asserts the exact published/not-published outcome per boundary, asserts byte identity of `orchestrator.json` when not published, and re-runs recovery to prove idempotency. The hardest code in the diff is the best-tested.
+- `test_concurrent_receipt_collision_has_one_winner_and_leaves_no_wal_residue` uses a real two-thread barrier and asserts exactly one winner, one `STATE_DIVERGENCE` loser, an empty `locks/`, no WAL residue, and that the store still accepts the next transition.
+- Tamper tests rewrite the pending intent with a **recomputed** `content_sha256`, so they defeat the cheap hash check and exercise the real correlation logic rather than the digest short-circuit.
+- "No write" is a byte assertion, not a verdict assertion. `_file_snapshot` in `tests/validate_gauntlet_run_contract.py:91` captures content **plus mode plus `st_mtime_ns`**, and `store_snapshot` / `root_snapshot` / `worktree_snapshot` are compared before and after every stale, unsafe-grant, forged-evidence, and V2 case.
+- Eight-way concurrency on both admission and resume covers the reuse-vs-conflict convergence that the `ADMISSION-CONFLICT` / `RECOVERY-NOT-ELIGIBLE` catch blocks exist to serve.
+- `tests/validate_workspace_contract.py:280` `test_v2_item_rejects_durable_worker_controls_without_workspace_mutation` is the right FR-012 regression: it drives all four new controls at a V2 item and asserts `(2, "BLOCKED", "WORKFLOW-INCOMPATIBLE")` plus unchanged file snapshot, HEAD, branch, `status --porcelain=v1 --untracked-files=all`, and `worktree list --porcelain`.
 
-Gaps worth naming rather than blocking:
+Two pre-existing tests were modified; both were checked for weakening and neither was weakened:
 
-- The `CLEANED` success path is only reachable in tests via Store-side fixture seeding, because nothing in FASE-002 can set `converged`/`cleanup_eligible` to `true` (see Important #6). The removal logic is therefore proven against synthetic state, never against state the shipped CLI can produce.
-- No test asserts the cost or the file-count sensitivity of the status receipt scan (Important #1).
-- No test pins which run `gauntlet-status` selects when several runs exist for one work item (Important #3).
+- `tests/validate_gauntlet_activation_contract.py` replaced the exact-payload `RUN-ADMITTED` assertion and dropped `assert_control_read_only` in favour of a file snapshot that excludes `.git/grill/`. That exclusion is legitimate — the Store is the intended durable write target — and the test **gained** assertions on Store run state, the journal event, the receipt bytes, `jcs_sha256(receipt) == event["receipt_sha256"]`, and the absence of WAL residue.
+- `tests/validate_step_skill_registry_contract.py` widened `permitted_loaders` by exactly one entry (`gauntlet_run_admission`) with an in-place rationale. Narrow and defensible.
+
+Gaps worth naming rather than blocking: no test pins the default run selection (Important #3); no test covers the receipt-scan cost (Important #1); `.git` as a non-first scope segment is not in the unsafe-scope table (Important #7).
 
 ### Runtime Correctness
 
-Scope is clean. I looked specifically for FASE-003/004 leakage and found none:
+Scope discipline is clean. I looked specifically for FASE-003/004 leakage and found none.
 
-- The only `subprocess` calls in `gauntlet_runs.py` are `git` (`cat-file -e`, `worktree list/add/remove`, `show-ref`, `status`). No model invocation, no `claude`, no shell.
-- No threads, timers, watchdogs, heartbeats, signal handlers, or background processes anywhere in the diff.
-- `WAVE_STATES = frozenset({"DECLARED"})` in `store.py` makes wave *progression* structurally unrepresentable, and `WAVE_ID` is the hard-coded constant `"wave-0001"`. Wave selection cannot be expressed, not merely unimplemented.
-- No convergence, review, ship, push, publish, or release path is added. `gauntlet-cleanup` and `gauntlet-resume` retain their FASE-001 `SCHEDULING-NOT-AVAILABLE` response for the legacy argument form, so the older control surface did not silently change meaning.
-- `record_resume_decision` caps recovery at exactly one (`recovery_count in (0, 1)` enforced in Store validation *and* in the transition edge table `RECOVERY_RECORDED -> {RECOVERY_RECORDED, BLOCKED, COMPLETE}`), matching FR-010's "one recorded decision, no automatic replacement/relaunch/retry" and correctly deferring ADR-0005's 15-minute automatic substitution to FASE-003.
+- Every `subprocess` call in the entire `plugin/` diff was enumerated. There are exactly two call sites, both `git`: `cat-file -e`, `worktree list --porcelain`, `show-ref --verify --quiet`, `worktree add -b`, `status --porcelain`, `worktree remove`. No model invocation, no `claude`, no shell.
+- A keyword scan of every added line under `plugin/` returned **zero** hits for `push`, `fetch`, `clone`, `remote`, `pull`, `ls-remote`, `claude`, `anthropic`, `model`, `http`, `api_key`. No network authority exists.
+- No threads, timers, watchdogs, heartbeats, signal handlers, `time.sleep`, or background processes anywhere in the diff.
+- `WAVE_STATES = frozenset({"DECLARED"})` makes wave *progression* structurally unrepresentable, and `WAVE_ID` is the hard-coded constant `"wave-0001"`. Wave selection cannot be expressed, not merely left unimplemented.
+- No convergence, review, ship, publish, or release path is added. `gauntlet-resume` and `gauntlet-cleanup` retain their FASE-001 `SCHEDULING-NOT-AVAILABLE` response for the legacy argument form, so the older control surface did not silently change meaning.
+- `record_resume_decision` caps recovery at exactly one, enforced in Store validation (`recovery_count in (0, 1)`) *and* in the edge table (`RECOVERY_RECORDED -> {RECOVERY_RECORDED, BLOCKED, COMPLETE}`), matching FR-010 and correctly deferring ADR-0005's automatic 15-minute substitution to FASE-003.
 
-Two behavioural notes:
+Three behavioural notes, all plan- or spec-conformant:
 
-- `admit_or_reuse_run` calls `store.bootstrap(root)`. FASE-001 activation deliberately had no Store side effect, so `gauntlet-run` is now the first command that can create the project Store. This is a real behaviour change, it is commented in place, and it only happens after the full activation proof — but it is not stated in `plan.md` or `contracts/gauntlet-run-cli.md`, which both describe `gauntlet-run` purely as a record-creating command.
-- `_matching_run` requires exact admission equality, and `admission.base_commit` is `git rev-parse HEAD` at the time of the call. Any commit to the repository therefore makes the next `gauntlet-run` create a *new* run rather than reuse. `plan.md` §Scale/Scope explicitly permits multiple retained runs, so this is plan-conformant, but it sits awkwardly against the literal FR-003/SC-001 wording ("without creating a second run") and it interacts badly with the status default-run selection (Important #3).
+- `RESUME-RECORDED` is not reachable from CLI-produced state alone: nothing in FASE-002 sets a run to `RECOVERY_ELIGIBLE`. An expired or interrupted lease therefore always yields `RECOVERY-NOT-ELIGIBLE`. This is *not* an FR-010 violation — FR-010's own text says "otherwise the run is blocked with a diagnostic reason", and spec US1 scenario 1 says "Given an admitted run with a **recorded** recovery-eligible state", i.e. the spec already assumes a prior recorder. The outcome is deterministic in both branches.
+- `admit_or_reuse_run` calls `store.bootstrap(root)` (`gauntlet_runs.py:328`). FASE-001 activation deliberately had no Store side effect, so `gauntlet-run` is now the first command that can create the project Store. Correct in itself (it runs only after the full activation proof, and the V2 test proves no Store is created for incompatible items) but undocumented — Important #8.
+- `_matching_run` requires exact admission equality and `admission.base_commit` is `git rev-parse HEAD` at call time, so any repository commit makes the next `gauntlet-run` create a *new* run. `plan.md` §Scale/Scope explicitly permits multiple retained runs, so this is plan-conformant, but it interacts with Important #3 and #4.
 
 ### Readability
 
-Mostly good, with one real defect and one stylistic pattern that will cost future reviewers.
+Good. The defect flagged in the previous round — the `if True:` block plus ~98 blank lines in the most safety-critical function in the diff — is gone, verified by AST above.
 
-The defect: `plugin/skills/grill-with-docs/scripts/grill_core/store.py:1437` opens `_recover_pending_transition_locked` with
+The remaining stylistic pattern is unchanged: `store.py` and `gauntlet_runs.py` use dense single-line `if <long condition>: _invalid(...)` and semicolon-joined statements (`gauntlet_runs.py:798`, `store.py::_validate_gauntlet_worker`), several exceeding 300 characters. It is internally consistent with the surrounding file, so this is a preference call rather than a defect — but the gauntlet validators are the densest code in the module and are exactly what a reviewer must read most carefully.
 
-```python
-    if True:  # retains the raw recovery body under one fail-closed wrapper
-```
-
-followed by **98 blank lines** (1440–1537 contain only two orphan comments) before the body resumes at line 1538. This is refactor residue — a removed `try:` that was replaced by an always-true guard and never cleaned up. It sits in the single most safety-critical function in the diff, it inflates the function to ~135 lines of which ~100 are empty, and any future reader will reasonably wonder what invariant the `if True:` is protecting. `git diff --check` does not catch it because the lines are genuinely empty.
-
-The pattern: `store.py` and `gauntlet_runs.py` both use dense single-line `if <long condition>: _invalid(...)` and semicolon-joined statements (e.g. `gauntlet_runs.py:798`, `store.py` `_validate_gauntlet_worker`). Several validation lines exceed 300 characters. It is internally consistent and the surrounding file already leans compact, so this is a preference call, not a defect — but the gauntlet validators are the densest code in the module and they are exactly the code a reviewer must read most carefully.
-
-Positives: the comments earn their place. They explain *why* (`# This must run under the same lock as intent creation: otherwise two concurrent calls can both observe an empty name...`, the `ADMISSION-CONFLICT` convergence rationale, the `_workspace_target_absent` note that `git worktree remove` intentionally leaves the branch). Names are honest: `_require_active_lease`, `_workspace_target_absent`, `_verify_coordinator_receipt` all say what they enforce.
+The comments earn their place: they explain *why*, not *what* (`# This must run under the same lock as intent creation: otherwise two concurrent calls can both observe an empty name…`, the `ADMISSION-CONFLICT` convergence rationale, the `_workspace_target_absent` note that `git worktree remove` intentionally leaves the branch behind). Names are honest — `_require_active_lease`, `_workspace_target_absent`, `_verify_coordinator_receipt` all say what they enforce.
 
 ### Architecture
 
-The core decision — extend the existing Project Store with a strict optional per-work-item block rather than add a second authority — is right and is implemented as designed. Specifics that hold up:
+The core decision — extend the existing Project Store with a strict optional per-work-item block rather than stand up a second authority — is right and is implemented as designed.
 
-- `transact_with_event` is a genuine WAL, not an event/snapshot pair. The intent is written and fsynced with the full candidate document before any receipt, event, or anchor exists, and it is removed only after the snapshot is published. `recover_pending_transition` runs before every mutable FASE-002 command and never before read-only status, matching `plan.md` §"Run transition and evidence boundary" exactly.
-- The generic write paths (`write_snapshot`, `transact`) call `_validate_gauntlet_state_transitions(...)` **without** `allow_existing_gauntlet_changes`, so any gauntlet mutation through the ordinary Store API is rejected with `STATE_DIVERGENCE`. Only `transact_with_event` passes the flag. This is the load-bearing architectural boundary of the phase and it is enforced in the Store, not in the CLI — correct, and covered by `test_generic_transact_cannot_bypass_existing_run_state_admission_or_evidence`.
-- State edges live in the Store (`run_edges`, `worker_edges`), so the durable graph is authoritative regardless of which future caller writes it. `_validate_document` runs before `_validate_gauntlet_state_transitions` on every path, so the edge checker's unguarded subscripting (`new_run["admission"]`, `worker["state"]`) is safe.
+- `transact_with_event` is a genuine write-ahead log, not an event/snapshot pair. The intent is written and fsynced with the full candidate document *before* any receipt, event, or anchor exists, and removed only after the snapshot is published and re-read. `recover_pending_transition` runs before every mutable FASE-002 command and never before read-only status, matching `plan.md` §"Run transition and evidence boundary" exactly.
+- The generic write paths call `_validate_gauntlet_state_transitions(...)` **without** `allow_existing_gauntlet_changes` — verified at `store.py:1232` (`write_snapshot`) and `store.py:1260` (`transact`), against `store.py:1414` where only `transact_with_event` passes the flag. Any gauntlet mutation through the ordinary Store API is rejected with `STATE_DIVERGENCE`. This is the load-bearing architectural boundary of the phase, and it is enforced in the Store rather than in the CLI, so no future caller can route around it.
+- `_validate_document` provably precedes `_validate_gauntlet_state_transitions` on all three write paths, so the edge checker's unguarded subscripting (`new_run["admission"]`, `worker["state"]`) is safe by construction.
+- State edges live in the Store (`run_edges`, `worker_edges`), so the durable graph is authoritative regardless of which future caller writes it.
 - The CLI is a thin adapter. `gauntlet_run_admission` re-proves the FASE-001 activation for every mutable command rather than trusting a prior status call, and it is the only place raw bytes are hashed into the admission identity.
 
-Layering concern: `gauntlet_runs.py` reaches into five Store privates — `store._validate_directory`, `store._validate_regular`, `store._read_regular`, `store._decode`, `store._receipt_payload`. The plan says these helpers are "Store-owned"; in practice the receipt-verification half of the evidence boundary lives in `gauntlet_runs` and borrows Store internals to do it. It works today because both modules ship together, but it means a Store refactor can silently break the evidence boundary without any signature changing.
+Layering concerns are Important #5 (five Store privates borrowed by `gauntlet_runs`), #9 (worker worktrees are created inside the Store root), and #10 (admission is a one-way door for work-item removal).
 
 ### Security
 
-This is the dimension the phase exists for, and the coordinator/worker authority split holds. Checked explicitly against ADR-0006 (menor privilégio) and ADR-0010 (Evidence Boundary):
+This is the dimension the phase exists for, and the coordinator/worker authority split holds. Checked explicitly against ADR-0006 (menor privilégio do worker) and ADR-0010 (Evidence Boundary local).
 
-- **Worker cannot obtain Store or receipt authority.** There is no API in the diff that a worker process could call to write coordinator state. Grants are a passive recorded allowlist (`_GRANT_CAPABILITIES = ["git-local", "workspace-read-write"]`), Store validation constrains `grant.capabilities` to a subset of that exact frozenset, and no code path reads a grant to authorise anything. FASE-002 records the boundary; it does not yet enforce a runtime sandbox, which `plan.md` states outright ("Same-UID hostile-process isolation is explicitly out of scope").
-- **Receipts are content-bound, not name-trusted.** `_bind_receipt_hash` recomputes the JCS digest of the durable payload and rejects any event whose `receipt_sha256` does not name those exact bytes. `_write_immutable_receipt` refuses to overwrite an existing receipt with different bytes (`STATE_DIVERGENCE`) and re-reads after write. `_verify_coordinator_receipt` refuses to trust a receipt by name at all — it re-reads bytes and requires `raw == jcs(receipt) + b"\n"` plus full correlation equality. Forged and `sha256:`-prefixed digests are rejected without mutation (`test_worker_originated_or_prefixed_digest_evidence_is_rejected_without_mutation`).
-- **Worker-scoped evidence is fenced.** `_transition_fields` requires all three of `worker_id`/`lease_id`/`fencing_token` or none, and `_candidate_transition` requires the named lease and positive fencing token to already exist in the candidate document. Evidence naming an unrecorded worker or lease is rejected (`test_worker_evidence_cannot_name_an_unrecorded_worker_or_lease`).
-- **Path authority is derived, never supplied.** `_workspace_identity` builds its single target as `store.git_common_dir(root) / "grill" / f"wt-{run_id}-{worker_id}"`, with `work_id`/`run_id`/`worker_id` each validated by `SAFE_NAME_RE` (`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`, no `/`, no `.`-only, no `..`). No caller can inject a host path or a ref name. The branch (`grill/<work>/<run>/<worker>`) is likewise derived and re-validated in Store (`startswith("grill/")`, no `..` segment, no control characters).
-- **No-follow / symlink handling.** `_workspace_git_state` returns `DIVERGENT` immediately for a symlinked target, before any Git call or removal, and `_workspace_target_absent` treats `is_symlink()` as present. Receipt reads go through `store._validate_regular` / `_read_regular`. Hooks and status remain read-only.
-- **Cleanup never scans or guesses.** `cleanup_worker` accepts exactly one validated pair, re-derives the unique target, and requires `TERMINAL` + `clean` + `converged` + `cleanup_eligible` + `EXACT` Git identity. It then re-checks `git status --porcelain` in the exact worktree immediately before `git worktree remove` — i.e. the recorded `clean` predicate is deliberately not trusted as a substitute for live evidence. `test_cleanup_preserves_terminal_eligible_worker_when_exact_worktree_is_untracked_dirty` proves this. Every rejection returns `PRESERVED` with no deletion.
-- **Fail-closed on every denial.** `main()` has a catch-all `except Exception` that emits `{"verdict":"BLOCKED","code":"UNEXPECTED-FAILURE"}` at `EXIT_BLOCKED`, so even an unhandled `KeyError` inside a `mutate` closure cannot produce a traceback or an out-of-contract exit code. Tests assert `process.stderr == ""` on the denial paths.
-- The `_mutex` change that restores the lock directory's `st_atime_ns`/`st_mtime_ns` is a deliberate forensic-invariance measure so a rejected request is tree-identical; it is best-effort (`except OSError: pass`) and does not weaken locking.
+- **A worker cannot obtain Store or receipt authority.** There is no API in the diff a worker process could call to write coordinator state. Grants are a passive recorded allowlist (`_GRANT_CAPABILITIES = ["git-local", "workspace-read-write"]`); Store validation constrains `grant.capabilities` to a subset of that exact frozenset; and no code path reads a grant to authorise anything. FASE-002 records the boundary and does not yet enforce a runtime sandbox, which `plan.md` states outright.
+- **Receipts are content-bound, never name-trusted.** `_bind_receipt_hash` recomputes the JCS digest of the durable payload and rejects any event whose `receipt_sha256` does not name those exact bytes. `_write_immutable_receipt` refuses to overwrite an existing receipt with different bytes and re-reads after writing. `_verify_coordinator_receipt` refuses to trust a receipt by name at all: it re-reads bytes and requires `raw == jcs(receipt) + b"\n"` plus full correlation equality. Forged and `sha256:`-prefixed digests are rejected without mutation.
+- **Worker-scoped evidence is fenced.** `_transition_fields` requires all three of `worker_id`/`lease_id`/`fencing_token` or none; `_candidate_transition` requires the named lease and a positive fencing token to already exist in the candidate document. Evidence naming an unrecorded worker or lease is rejected.
+- **Path authority is derived, never supplied.** `_workspace_identity` builds its single target as `store.git_common_dir(root) / "grill" / f"wt-{run_id}-{worker_id}"`, with `work_id`/`run_id`/`worker_id` each validated by `SAFE_NAME_RE` (`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$` — no `/`, no `..`). No caller can inject a host path or a ref name. The branch `grill/<work>/<run>/<worker>` is likewise derived and re-validated in the Store.
+- **Symlink handling.** `_workspace_git_state` returns `DIVERGENT` immediately for a symlinked target, before any Git call or removal, and `_workspace_target_absent` treats `is_symlink()` as present. `git_common_dir` rejects a symlinked common directory outright.
+- **Cleanup never scans or guesses, and never deletes committed work.** `cleanup_worker` accepts exactly one validated pair, re-derives the unique target, and requires `TERMINAL` + `clean` + `converged` + `cleanup_eligible` + `EXACT` Git identity. `EXACT` requires the registered block to contain the literal lines `HEAD <base_commit>` and `branch refs/heads/<derived>`, matched as exact list elements rather than substrings — so a worktree whose HEAD has advanced (i.e. one containing committed work) classifies as `DIVERGENT` and is preserved. It then re-runs `git status --porcelain` inside the exact worktree immediately before `git worktree remove`; the recorded `clean` predicate is deliberately not accepted as a substitute for live evidence. Every rejection returns `PRESERVED` with no deletion, and `gauntlet_cleanup_command` maps `PRESERVED` to `EXIT_BLOCKED` so automation cannot mistake preservation for cleanup.
+- **Fail-closed on every denial.** `main()` has a catch-all that emits `{"verdict":"BLOCKED","code":"UNEXPECTED-FAILURE"}` at `EXIT_BLOCKED`, so an unhandled exception inside a `mutate` closure cannot produce a traceback or an out-of-contract exit code. Tests assert `process.stderr == ""` on denial paths.
+- The `_mutex` change restoring the lock directory's `st_atime_ns`/`st_mtime_ns` is a deliberate forensic-invariance measure so a rejected request is tree-identical; it is best-effort (`except OSError: pass`) and does not weaken locking.
 
-One residual, non-blocking: `_strict_scopes` rejects `..`, absolute paths, backslashes, control characters, and `.git` **as the first segment only**. A scope such as `plugin/.git` or a symlinked scope path is recordable. Harmless in FASE-002 because grants are inert, but this record is what FASE-003 will enforce against.
+Residual, non-blocking: Important #7 (`.git` rejected only at the first scope segment), #9 (worktree placement inside the Store root), and #12 (the fencing token is always `1`).
 
 ### Performance
 
-Adequate for the phase, with one growth curve that should be fixed before FASE-003 multiplies transition volume.
+Adequate for a local CLI, with two growth curves that FASE-003 will steepen.
 
-`_verify_coordinator_receipt` (`gauntlet_runs.py:243`) resolves the event's bare receipt digest by iterating **every** `*.json` file under `receipts/runtime`, reading each one in full, parsing it, and JCS-hashing it, then requiring exactly one match. Every `gauntlet-status` call pays this. The receipt count grows monotonically — one per run admission, per resume, and per worker `declared`/`preparing`/`prepared`/`cleaning`/`cleaned` transition — and nothing ever prunes it. Status is therefore O(all runtime receipts ever written) in both file opens and bytes read, which contradicts `plan.md` §Technical Context ("Admission, status, resume, preparation, and cleanup use bounded local I/O"). The design reason is sound (a receipt *name* must never be an accepted input), but the fix is cheap: derive the filename from the content digest, or persist the coordinator-owned locator alongside `receipt_sha256` in `last_transition`.
+- Every mutable command holds one global Store lock for one transaction and performs bounded local I/O. No network, no background work.
+- `_verify_coordinator_receipt` (`gauntlet_runs.py:243`) reads and JCS-hashes **every** `.json` file in `receipts/runtime/` on every `gauntlet-status` projection, to find the one whose digest matches. Cost is O(runtime receipts) per status call. Today each admission writes 1 receipt and each worker preparation writes 3–4, so a work item with several runs and workers is already dozens of file reads per status.
+- Runs are never pruned and never removable (Important #4 and #10), and `orchestrator.json` is fully parsed, schema-validated, and edge-validated on every read and every write. Since any repository commit forces a new run on the next `gauntlet-run`, a developer running admission after each commit accumulates one permanent run per commit.
 
-Secondary: `runs` has no cardinality cap (workers are capped at 5 per run by `_validate_gauntlet_block`), and every commit produces a new admission identity, so `orchestrator.json` grows without bound for an actively developed work item. Each growth also re-validates the whole document on every Store read.
-
-Everything else is bounded: one Store transaction per material transition under the existing global lock, no network, no background process, admission retry capped at 3 total attempts.
+Neither is a correctness problem and neither should hold this merge; both should be owned explicitly before FASE-003 multiplies transition volume.
 
 ### Critical Issues
 
-**1. 🔴 Constitution "Bump obrigatório do plugin" — merging or pushing this branch as-is violates it; the gate fails today.**
-
-The diff modifies three files under `plugin/**`:
-
-- `plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py` (new, 862 lines)
-- `plugin/skills/grill-with-docs/scripts/grill_core/store.py` (+461)
-- `plugin/skills/grill-with-docs/scripts/grill_workspace.py` (+163/-15)
-
-The declared version is `2.5.4` at HEAD and `2.5.4` at `origin/main` in all four manifests. No distribution surface was touched. Reproduced:
-
-```
-$ python3 tests/check_version_bump.py --base-ref origin/main
-FAIL MISSING-BUMP: plugin/ mudou sem bump. Versão na base de merge: 2.5.4; versão no HEAD: 2.5.4.
-A versão declarada em plugin/.claude-plugin/plugin.json precisa aumentar.
-$ echo $?
-1
-```
-
-This is the exact command `.github/workflows/bump-gate.yml` runs. The constitution says: *"Toda alteração em `plugin/**` MUST incrementar a versão SemVer antes de merge ou push."* Since this review gates a **direct merge and push to `origin/main` with no PR**, the gate will never run in CI — the check exists precisely for this and it fails.
-
-Note that the full validator suite does **not** catch this and neither did `verify.md`. `tests/validate_distribution.py` prints `distribution: OK` because it only checks *internal consistency* of `2.5.4` across the eight surfaces; `tests/validate_bump_gate_contract.py` (44 tests, OK) tests the gate's own logic against fixtures, not this branch. A green `run_validators.py` is not evidence of bump compliance.
-
-`plan.md` §Constitution Check marks this clause `PASS` on the grounds that *"FASE-004 synchronizes every distribution surface to 2.6.0 before any merge, push, tag, or publication."* That deferral is itself the problem: the constitution's "Fail-closed sem waiver" clause states *"não existe waiver implícito"*, and a plan row cannot grant one. Either the bump lands in this commit, or the merge does not happen until FASE-004 lands with it.
-
-**Required before merge/push — pick one:**
-
-- (a) Bump to `2.6.0` in this branch across all eight surfaces named in `CLAUDE.md` (`plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`, the `VERSION` constant in `tests/validate_distribution.py`, the `# Grill with Docs vX.Y.Z` heading in `plugin/skills/grill-with-docs/SKILL.md`, the `# Protocolo de sessão vX.Y.Z` heading in `plugin/skills/grill-with-docs/references/session-protocol.md`, and the `**vX.Y.Z` heading in `README.md`), then re-run `tests/validate_distribution.py` and `tests/check_version_bump.py --base-ref origin/main`; **or**
-- (b) hold the merge until FASE-004 delivers the synchronized bump, and keep this branch unpushed until then.
-
-Nothing else in this diff blocks. Everything below is a follow-up.
+None.
 
 ### Important Issues
 
-**1. 🟡 `gauntlet-status` reads and hashes every runtime receipt on every call** — `plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py:243` (`_verify_coordinator_receipt`).
+Numbering is preserved from the previous round so that the `BL-0001` evidence pointer in `.grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/DECISION-BACKLOG.md` remains valid. Items #9–#12 are new in this round.
 
-**Why:** the journal event stores only a bare `receipt_sha256`, so resolving it to bytes requires a full directory scan with a per-file read + parse + JCS hash. Receipts accumulate one per transition forever. Status cost grows linearly with total project history, which contradicts `plan.md`'s "bounded local I/O" constraint for status and will get materially worse once FASE-003 adds per-wave and per-dispatch transitions.
+**1. 🟡 `gauntlet-status` reads every runtime receipt on every projection** — `plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py:243`.
 
-**Suggestion:** keep the "never trust a caller-supplied receipt name" rule, but make the lookup O(1) — either name the receipt file after its content digest, or persist a coordinator-owned locator next to `receipt_sha256` in `last_transition` and still verify the bytes after opening it.
+**Why:** the receipt is located by scanning `receipts/runtime/` and hashing each candidate, because only the bare digest is persisted. It is correct and safely fail-closed, but the cost is linear in total runtime receipts and no test pins it. FASE-003 multiplies transitions per run.
 
-**2. 🟡 Dead `if True:` block with 98 blank lines inside the WAL recovery function** — `plugin/skills/grill-with-docs/scripts/grill_core/store.py:1437-1537`.
+**Suggestion:** persist the coordinator-owned receipt *name* alongside the digest in `last_transition` (the name is already derived and closed, never caller-supplied), verify bytes at that one path, and keep the digest check as the authority.
 
-**Why:** `_recover_pending_transition_locked` is the function that decides whether an interrupted transition becomes authoritative. Leaving refactor residue (`if True:  # retains the raw recovery body under one fail-closed wrapper` followed by ~100 empty lines) inside it makes the safest-critical code in the diff look unfinished and hides the actual body 100 lines below its signature. `git diff --check` cannot flag it because the lines are truly empty.
+**2. ✅ Resolved in `f816e31`** — the `if True:` block and ~98 blank lines in `_recover_pending_transition_locked` are gone. Verified by AST comparison to be a pure dedent with no behaviour change.
 
-**Suggestion:** delete the `if True:` guard, dedent the body, and keep the two explanatory comments adjacent to the code they describe.
+**3. 🟡 `gauntlet-status` without `--run-id` picks the lexicographically largest run id** — `gauntlet_runs.py:406` (`run_id = sorted(runs)[-1]`).
 
-**3. 🟡 `gauntlet-status` without `--run-id` picks the lexicographically largest run id** — `plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py:406` (`run_id = sorted(runs)[-1]`).
+**Why:** run ids are `run-<sha256(admission)[:24]>`, so lexicographic order is effectively random. With more than one run for a work item, the default status can project an old `BLOCKED` run while an `ADMITTED` one exists. SC-001 asks the operator to identify the affected run from one stable projection; this is stable but arbitrary, which is the wrong property for a diagnosis command.
 
-**Why:** run ids are `run-<sha256[:24]>` of the admission, so lexicographic order is effectively random. With more than one run for a work item, the default status can project an old `BLOCKED` run while an `ADMITTED` one exists. SC-001 asks an operator to *"identify the affected run and its recovery state from one stable run projection"*; this is stable but arbitrary, which is the wrong property for a diagnosis command.
-
-**Suggestion:** select by the highest `last_transition.event_sequence` (monotonic, coordinator-owned, already validated), or project all runs and let the operator choose. Add a test pinning the selection rule either way.
+**Suggestion:** select by the highest `last_transition.event_sequence` (monotonic, coordinator-owned, already validated), or project all runs. Add a test pinning the rule either way.
 
 **4. 🟡 Runs accumulate without bound, and any commit forces a new one** — `gauntlet_runs.py:139` (`_matching_run`) plus `_validate_gauntlet_block` in `store.py`.
 
-**Why:** `base_commit` comes from `git rev-parse HEAD` at admission, and reuse requires exact admission equality, so `gauntlet-run` after any commit creates a second run. Workers are capped at 5 per run but `runs` has no cap, so `orchestrator.json` grows monotonically for an active work item and is fully re-validated on every Store read. `plan.md` permits multiple runs, so this is not a scope violation — but the growth is unmanaged and there is no retention or `COMPLETE`-pruning story.
+**Why:** `base_commit` is `git rev-parse HEAD` at admission and reuse requires exact admission equality. Workers are capped at 5 per run, but `runs` has no cap, and the whole document is re-validated on every Store read. `plan.md` permits multiple runs, so this is not a scope violation, but the growth is unmanaged with no retention or `COMPLETE`-pruning story.
 
-**Suggestion:** cap `runs` per work item in Store validation (as workers already are), and decide now whether terminal runs are pruned or archived — before FASE-003 makes runs cheap to create.
+**Suggestion:** cap `runs` per work item in Store validation as workers already are, and decide now whether terminal runs are pruned or archived — before FASE-003 makes runs cheap to create.
 
 **5. 🟡 `gauntlet_runs.py` depends on five Store private helpers** — `store._validate_directory`, `store._validate_regular`, `store._read_regular`, `store._decode`, `store._receipt_payload`.
 
-**Why:** `plan.md` places the evidence boundary behind "Store-owned" helpers, but receipt verification is implemented in `gauntlet_runs` using Store internals. Nothing in the type signatures or the test suite would flag a Store refactor that changed `_receipt_payload`'s key ordering or `_read_regular`'s no-follow semantics, yet either would silently alter what the evidence boundary accepts.
+**Why:** `plan.md` places the evidence boundary behind "Store-owned" helpers, but the receipt-verification half is implemented in `gauntlet_runs` using Store internals. Nothing in the signatures or the test suite would flag a Store refactor changing `_receipt_payload` key ordering or `_read_regular` no-follow semantics, yet either would silently alter what the evidence boundary accepts.
 
-**Suggestion:** promote the receipt-verification primitive into `store` as a public function (e.g. `verify_receipt_for_event`) so the boundary is one module's responsibility and its contract is testable in the Store suite.
+**Suggestion:** promote the primitive into `store` as a public function (e.g. `verify_receipt_for_event`) so the boundary is one module's responsibility and is testable in the Store suite.
 
-**6. 🟡 The `CLEANED` path cannot be reached through the public CLI in FASE-002** — `gauntlet_runs.py:811`, `prepare_worker` sets `converged: False` / `cleanup_eligible: False` and no FASE-002 command sets them true.
+**6. 🟡 The `CLEANED` path cannot be reached through the public CLI in FASE-002** — `gauntlet_runs.py:811`; `prepare_worker` sets `converged: False` / `cleanup_eligible: False` and no FASE-002 command sets them true, nor does anything set a worker to `TERMINAL`.
 
-**Why:** this is the documented phase boundary (`quickstart.md` says so plainly), so it is not a defect. But it means the destructive branch of `cleanup_worker` — the only code in the diff that deletes anything — is exercised solely against state written by test-side Store fixtures, never against state the shipped CLI can produce. There is currently no traceable owner for "who records convergence and eligibility".
+**Why:** this is the documented phase boundary (`quickstart.md` says so plainly), so it is not a defect. But it means the destructive branch of `cleanup_worker` — the only code in the diff that deletes anything — is exercised solely against state written by test-side Store fixtures, never against state the shipped CLI can produce. There is no traceable owner for "who records convergence and eligibility".
 
 **Suggestion:** add an explicit FASE-003/FASE-004 handoff line naming the command that will set `converged`/`cleanup_eligible`, and keep the fixture-seeded cleanup tests as the contract that command must satisfy.
 
-**7. 🟡 Grant scope validation only rejects `.git` at the first path segment** — `gauntlet_runs.py:502` (`pieces[0] == ".git"`).
+**7. 🟡 Grant scope validation only rejects `.git` at the first path segment** — `gauntlet_runs.py:502` (`pieces[0] == ".git"`). The Store-side `_safe_relative_path` does not reject `.git` at all.
 
-**Why:** `plugin/.git`, `a/b/.git`, or a scope path that is a symlink to somewhere outside the project are all recordable. Inert in FASE-002 because grants are passive, but this record is exactly what FASE-003 will enforce a worker against, so a permissive record now becomes a permissive sandbox later.
+**Why:** `plugin/.git`, `a/b/.git`, or a scope path that is a symlink out of the project are all recordable. Inert in FASE-002 because grants are passive, but this record is exactly what FASE-003 will enforce against, so a permissive record now becomes a permissive sandbox later.
 
-**Suggestion:** reject `.git` at any segment and decide the symlink policy for scope paths in the same commit that starts enforcing grants.
+**Suggestion:** reject `.git` at any segment in both validators and decide the symlink policy for scope paths in the same commit that starts enforcing grants.
 
-**8. 🟡 `gauntlet-run` now bootstraps the project Store, which is undocumented in the contract** — `gauntlet_runs.py:328` (`store.bootstrap(root)`).
+**8. 🟡 `gauntlet-run` now bootstraps the project Store, which the contract does not mention** — `gauntlet_runs.py:328` (`store.bootstrap(root)`).
 
-**Why:** FASE-001 activation had no Store side effect by design. `contracts/gauntlet-run-cli.md` describes `gauntlet-run` only as creating or reusing a run record and states it "never creates a worker, worktree, process, dispatch, or skill invocation" — it says nothing about initialising the Store. The behaviour is correct (it runs only after the full activation proof, and the V2 test proves no Store is created for incompatible items) but it is a real side effect that the published contract does not mention.
+**Why:** FASE-001 activation had no Store side effect by design. `contracts/gauntlet-run-cli.md` describes `gauntlet-run` only as creating or reusing a run record and says it "never creates a worker, worktree, process, dispatch, or skill invocation" — it says nothing about initialising the Store. The behaviour is correct and the V2 test proves no Store is created for incompatible items, but it is a real side effect the published contract omits.
 
 **Suggestion:** one line in `contracts/gauntlet-run-cli.md` and `quickstart.md` stating that first admission initialises the project Store.
 
+**9. 🟡 Worker worktrees are created *inside* the coordinator Store root** — `gauntlet_runs.py:518` derives `store.git_common_dir(root) / "grill" / key`, and `store.py:529` defines the Store root as `<git-common-dir>/grill`.
+
+**Why:** the derived worktree lands at `.git/grill/wt-<run>-<worker>/`, a sibling of `orchestrator.json`, `events.jsonl`, `events-head.json`, `locks/`, `receipts/`, and `policies/`. Nothing enumerates the Store root today, so there is no functional breakage and no test fails. But FASE-002 exists to establish isolation, and the workspace FASE-003 will hand to a worker process is one `..` away from the entire coordinator evidence store. `plan.md` scopes same-UID OS sandboxing out, which is fair — but a *sibling* location such as `<git-common-dir>/grill-workers/` would mean that even an accidental relative-path escape lands outside the evidence store, at the cost of one constant. The same code base already treats the Store root's layout as meaningful: `transact_with_event`'s own comment says the WAL intent is placed under `locks` "so bootstrap's declared public layout stays unchanged", and an entire worktree is a far larger layout intrusion than a lock file.
+
+**Suggestion:** move the derived target out of the Store root before FASE-003 hardens any path assumption against it.
+
+**10. 🟡 Admission is a one-way door: a gauntlet-bearing work item can never be removed from the Store** — `store.py::_validate_gauntlet_state_transitions`, first loop.
+
+**Why:** the removal guards ("existing gauntlet block cannot be removed", "existing gauntlet run cannot be removed", "existing gauntlet worker cannot be removed") apply on **all** write paths, including `transact_with_event`. Work-item removal is a real, tested flow — `tests/validate_orchestrator_store_contract.py:564` exercises `store.transact(..., lambda d: {**d, 'work_items': {}})` with the comment "work-a legitimately removed from the snapshot", and `_check_receipt_consistency`'s docstring reasons about "a later work-item removal". After a single `gauntlet-run`, that flow permanently fails for that work item. No shipped CLI command removes work items today, so there is no live regression, but the irreversibility is undocumented and interacts with #4's unbounded growth.
+
+**Suggestion:** state the preservation guarantee explicitly in `data-model.md` and decide whether a coordinator-authorised archival transition is needed before FASE-004 has to retire a completed milestone.
+
+**11. 🟡 `verify.md`'s recorded source fingerprint no longer matches the tree being merged.**
+
+**Why:** `.specify/reports/verify-review-ship/verify.md` records `tree 5d610b15… / work d46facc5…`, but `source-fingerprint.sh specs/012-durable-run-state` at HEAD returns `tree 69927f59… / work e3b0c442…` (clean). The T019 verify evidence was captured before `f816e31` landed the bump and the dedent, and verify.md itself closes with "run independent review with the same source fingerprint" — which is not literally satisfiable. The substance is fully re-established by this review: every gate was re-run at the shipping tree, and the only executable change between the two trees is provably behaviour-neutral. This is a traceability gap, not a correctness one.
+
+**Suggestion:** regenerate `verify.md`'s fingerprint line against HEAD before the ship transaction, or record in it that the review at `f816e31` supersedes it.
+
+**12. 🟡 The fencing token is always `1`** — `gauntlet_runs.py:661` (`_new_coordinator_lease`) and the reconciliation lease at `:734`.
+
+**Why:** a constant token is deliberate here — receipt payloads must be byte-stable across repeated commands, which is why `lease_id` and the token are both derived rather than random or clock-based — and FASE-002 only ever creates one lease per worker, so nothing can be fenced incorrectly today. But a fencing token whose purpose is to order lease generations cannot do so at a constant value, and Store validation only requires it to be positive.
+
+**Suggestion:** when FASE-003 introduces lease re-acquisition, make the token monotonic per worker and add a Store edge check that it never decreases.
+
 ### Final Recommendation
 
-**REQUEST-CHANGES.** The engineering is sound and I would approve it on technical merit alone — the WAL is a genuine write-ahead log with correct recovery at all six fault boundaries, the coordinator/worker authority split is enforced in the Store rather than in the CLI (so it cannot be bypassed by a future caller), path and ref derivation admit no caller-supplied input, cleanup re-verifies live Git state instead of trusting its own recorded predicate, and the scope discipline is exemplary: no scheduler, no worker execution, no convergence, no dispatch, no network. All 803 tests across 18 validators pass on this exact tree, reproduced independently, and `git diff --check` is clean.
+**APPROVE** — safe to merge `--no-ff` and push to `origin/main` directly, at tree `f816e317b0e0dc2b2d72b069b0a28652777b952d` exactly.
 
-The single blocking gap is procedural but non-negotiable: **`plugin/**` changed and the SemVer version did not.** `python3 tests/check_version_bump.py --base-ref origin/main` fails with `MISSING-BUMP` right now, and this review gates a direct merge and push to `origin/main` with no PR — meaning CI will never catch it. `plan.md` defers the bump to FASE-004, but the constitution's "Fail-closed sem waiver" clause forbids exactly that kind of implicit waiver, and its bump clause says "antes de merge ou push", not "antes de publicação".
+Every gate required for this decision was reproduced by this reviewer on this tree, including the one that blocked the previous round: `python3 tests/check_version_bump.py --base-ref origin/main` reports `PASS BUMPED … 2.5.4 para 2.6.0` at exit 0, `python3 tests/validate_distribution.py` reports `distribution: OK`, and all eight distribution surfaces were inspected individually and read `2.6.0`. `plan.md`'s Constitution Check no longer claims a deferred or implicit waiver, which satisfies *Bump obrigatório do plugin* and *Fail-closed sem waiver* directly rather than by exception. The `if True:` residue was removed and proven behaviour-neutral by AST comparison, so the fix-up commit introduced no risk of its own. 803 tests across 18 validators pass with one environment skip, and `git diff --check` is clean.
 
-**To convert this to APPROVE, one of:**
+On technical merit the phase is well built: the WAL is a genuine write-ahead log with deterministic recovery at all six declared fault boundaries; the coordinator/worker authority split is enforced in the Store rather than the CLI, so no future caller can bypass it; receipts are content-bound and never trusted by name; path and ref derivation admit no caller-supplied input; cleanup re-verifies live Git state instead of trusting its own recorded predicate and structurally refuses to delete a worktree containing committed work; and the scope discipline is exemplary — no scheduler, no worker execution, no convergence, no review, no ship, no dispatch, no network. ADR-0003, ADR-0006, and ADR-0010 are honoured, and ADR-0005's automatic substitution is correctly deferred rather than partially implemented.
 
-1. Bump to `2.6.0` in this branch across all eight surfaces listed in `CLAUDE.md`, then re-run `python3 tests/validate_distribution.py`, `python3 tests/check_version_bump.py --base-ref origin/main`, and `python3 tests/run_validators.py`, and record the three results here; **or**
-2. Hold the merge (and the push) until FASE-004 delivers the synchronized bump in the same push.
+Zero Critical Issues. Twelve Important Issues, of which #2 is already resolved; none of the remaining eleven should hold this merge. Two are worth doing before FASE-003 rather than after, because both get more expensive once a scheduler depends on them: **#9** (move worker worktrees out of the Store root) and **#1** (persist the receipt name so status stops scanning). **#11** is a two-minute pre-ship hygiene fix on `verify.md`.
 
-Important issues 1–8 are follow-ups and none of them should hold the merge once the bump lands. I would prioritise #2 (dead block in the recovery function — trivial, and it is in the code future readers most need to trust) and #1 (status receipt scan — cheap now, expensive to retrofit after FASE-003 multiplies transition volume).
+Recommended sequencing: apply the #11 fingerprint refresh, then merge `--no-ff` and push. If any further commit lands on this branch first, this approval does not carry over — the version-bump gate and the full suite must be re-run at the new tree.

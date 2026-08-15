@@ -612,9 +612,28 @@
         "reason": "Pausado por solicitação do operador antes da revisão independente e do ship.",
         "state": "blocked",
         "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Retomando review FASE-002 por instrução direta do operador (/goal); crítico independente fresco será executado sobre o commit atual.",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/review.md",
+            "sha256": "cf6170dcbdc5e2fe7f609b828028bd0a0cfb62c0070701874b95721873233fa0"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Review APPROVE em tree f816e317b0e0dc2b2d72b069b0a28652777b952d: 0 Critical, 12 Important não-bloqueantes. Rodada 1 achou MISSING-BUMP (Critical); reparo bumpou 2.6.0 nas oito superfícies e removeu bloco morto em store.py; rodada 2 (crítico independente fresco) reproduziu todos os gates (803 testes, bump-gate PASS) e aprovou.",
+        "state": "complete",
+        "step": "review"
       }
     ],
-    "current_step": "review",
+    "current_step": "ship",
     "execution_branch": "012-durable-run-state",
     "schema": "grill-development/v1",
     "sequence": [
@@ -637,7 +656,7 @@
       "checklist": "complete",
       "converge": "complete",
       "plan": "complete",
-      "review": "blocked",
+      "review": "complete",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
