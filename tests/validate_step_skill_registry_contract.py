@@ -1221,7 +1221,7 @@ class Hygiene(Base):
         self.assertTrue(all(e["native_invocation"] for e in cat["entries"]))
 
     def test_public_cli_exposes_only_the_approved_gauntlet_bindings(self):
-        """FASE-001 may bind the resolver only behind its five new commands."""
+        """Only the closed FASE-001/002 Gauntlet controls may bind its resolver."""
         text = (SCRIPTS / "grill_workspace.py").read_text(encoding="utf-8")
         tree = ast.parse(text)
         functions = {
@@ -1234,6 +1234,7 @@ class Hygiene(Base):
             "gauntlet-status": "gauntlet_status_command",
             "gauntlet-run": "gauntlet_run_command",
             "gauntlet-resume": "gauntlet_resume_command",
+            "gauntlet-prepare-worker": "gauntlet_prepare_worker_command",
             "gauntlet-cleanup": "gauntlet_cleanup_command",
         }
 
@@ -1292,7 +1293,15 @@ class Hygiene(Base):
             expected_handlers,
         )
 
-        permitted_loaders = {"gauntlet_init_command", "gauntlet_activation_projection"}
+        # FASE-002 repeats the FASE-001 proof at the mutable admission
+        # boundary; it is the sole additional approved loader.  Keep this
+        # narrow so legacy handlers cannot reach Gauntlet/step-skill state
+        # through a newly introduced helper.
+        permitted_loaders = {
+            "gauntlet_init_command",
+            "gauntlet_activation_projection",
+            "gauntlet_run_admission",
+        }
         sensitive_modules = {"gauntlet", "step_skills"}
         observed_loaders = set()
         for function_name, function in functions.items():

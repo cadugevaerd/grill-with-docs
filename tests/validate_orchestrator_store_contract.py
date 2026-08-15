@@ -5,7 +5,7 @@ Plan clauses under test: 5.2, 5.4, 5.5 invariants 10-14, 5.5.1 (seven bootstrap
 steps) and 22/Core (lock, CAS, revision, hash, fsync, rename, re-read, UTF-8,
 symlink/traversal, event journal, read-only status/preview, exit codes).
 """
-import concurrent.futures, hashlib, json, multiprocessing, os, subprocess, sys, tempfile, unittest
+import concurrent.futures, hashlib, json, multiprocessing, os, subprocess, sys, tempfile, threading, unittest
 from pathlib import Path
 from unittest import mock
 REPO=Path(__file__).resolve().parents[1]
@@ -17,6 +17,32 @@ LINUX=sys.platform.startswith('linux')
 CLOCK=lambda: '2026-01-01T00:00:00Z'
 def WORK_ITEM(lifecycle='ACTIVE',slug='auth',type_='feature',worktree=None,monitoring=None):
  return {'type':type_,'slug':slug,'lifecycle':lifecycle,'worktree':worktree,'monitoring':monitoring}
+def GAUNTLET_RECEIPT(input_sha256='1'*64,name='gauntlet-run-alpha-1',base_commit='e'*40):
+ return {
+  'category':'runtime','name':name,
+  'work_id':'gauntlet-work','run_id':'run-alpha-1','wave_id':'wave-0001',
+  'base_commit':base_commit,'input_sha256':input_sha256,'output_sha256':None,
+ }
+def GAUNTLET_EVENT(receipt=None):
+ receipt=GAUNTLET_RECEIPT() if receipt is None else receipt
+ return {
+  'event':'gauntlet.run.admitted','work_id':'gauntlet-work','run_id':'run-alpha-1',
+  'wave_id':'wave-0001','base_commit':receipt['base_commit'],'input_sha256':receipt['input_sha256'],
+  'output_sha256':None,'receipt_sha256':store.jcs_sha256(receipt),
+ }
+def GAUNTLET_RUN(state='ADMITTED',recovery_count=0,workers=None):
+ return {
+  'admission':{
+   'activation_sha256':'a'*64,'work_item_sha256':'b'*64,
+   'workflow_sha256':'c'*64,'config_sha256':'d'*64,'base_commit':'e'*40,
+  },
+  'state':state,'recovery_count':recovery_count,
+  'waves':{'wave-0001':{'state':'DECLARED'}},
+  'workers':{} if workers is None else workers,
+  'last_transition':{'event_sequence':1,'receipt_sha256':GAUNTLET_EVENT()['receipt_sha256']},
+ }
+def GAUNTLET_BLOCK(runs=None):
+ return {'schema':'grill-gauntlet-runs/v1','runs':{'run-alpha-1':GAUNTLET_RUN()} if runs is None else runs}
 def _mp_append_events(root,count,tag):
  sys.path.insert(0,str(SCRIPTS))
  from grill_core import store as _store
@@ -539,5 +565,318 @@ class StoreContract(unittest.TestCase):
   self.assertTrue(receipt.is_file())  # the receipt is durable; the snapshot does not own deleting it
   with self.assertRaises(store.StoreError) as ctx: store.read_snapshot(self.r)
   self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertIn('work-a',ctx.exception.message)
+
+ # --- FASE-002: optional durable Gauntlet run block ----------------------
+ # These cases deliberately exercise Store validation directly.  The public
+ # CLI may project these records later, but it must never be the validator of
+ # coordinator-owned durable state.
+ def test_gauntlet_block_is_optional_and_a_valid_closed_record_round_trips(self):
+  self.register()
+  plain=store.transact(self.r,lambda d: {**d,'work_items':{'plain-work':WORK_ITEM()}},now=CLOCK)
+  self.assertNotIn('gauntlet',plain.document['work_items']['plain-work'])
+  before=self.paths().orchestrator.read_bytes()
+  with self.assertRaises(store.StoreError) as ctx:
+   store.transact(self.r,lambda d: {**d,'work_items':{**d['work_items'],'gauntlet-work':{**WORK_ITEM(slug='gauntlet'),'gauntlet':GAUNTLET_BLOCK()}}},now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+  written=self._gauntlet_transition()
+  block=written.document['work_items']['gauntlet-work']['gauntlet']
+  self.assertEqual(block['schema'],'grill-gauntlet-runs/v1')
+  self.assertEqual(store.read_snapshot(self.r).document['work_items']['gauntlet-work']['gauntlet'],block)
+
+ def test_gauntlet_block_rejects_unknown_keys_and_malformed_run_shape_without_write(self):
+  self.register(); before=self.paths().orchestrator.read_bytes()
+  cases=(
+   {'schema':'grill-gauntlet-runs/v1','runs':{},'extra':True},
+   {'schema':'grill-gauntlet-runs/v2','runs':{}},
+   {'schema':'grill-gauntlet-runs/v1','runs':[]},
+   {'schema':'grill-gauntlet-runs/v1','runs':{'../run':GAUNTLET_RUN()}},
+   {'schema':'grill-gauntlet-runs/v1','runs':{'run-alpha-1':{'state':'ADMITTED'}}},
+   {'schema':'grill-gauntlet-runs/v1','runs':{'run-alpha-1':{**GAUNTLET_RUN(),'unknown':True}}},
+  )
+  for bad in cases:
+   with self.subTest(bad=bad):
+    try: self._gauntlet_transition(block=bad)
+    except store.StoreError as exc: self.assertEqual(exc.code,'ORCHESTRATOR_INVALID')
+    else: self.fail('malformed gauntlet block was accepted')
+    self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_gauntlet_block_rejects_invalid_enums_hashes_and_worker_authority_without_write(self):
+  self.register(); before=self.paths().orchestrator.read_bytes(); good=GAUNTLET_RUN()
+  bad_runs=(
+   {**good,'state':'RUNNING'},
+   {**good,'recovery_count':2},
+   {**good,'recovery_count':True},
+   {**good,'admission':{**good['admission'],'activation_sha256':'not-a-hash'}},
+   {**good,'admission':{**good['admission'],'base_commit':'f'*39}},
+   {**good,'waves':{'wave-0001':{'state':'SCHEDULED'}}},
+   {**good,'workers':{'worker-a':{'state':'EXECUTING','lease':None,'grant':None,'workspace':None}}},
+   {**good,'workers':{'../worker':{'state':'DECLARED','lease':None,'grant':None,'workspace':None}}},
+   {**good,'workers':{'worker-a':{
+    'state':'DECLARED','lease':None,
+    'grant':{'scope_paths':['../escape'],'capabilities':['store-write']},'workspace':None,
+   }}},
+  )
+  for run in bad_runs:
+   with self.subTest(run=run):
+    try: self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':run}))
+    except store.StoreError as exc: self.assertEqual(exc.code,'ORCHESTRATOR_INVALID')
+    else: self.fail('invalid gauntlet run was accepted')
+    self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_gauntlet_enum_fields_reject_unhashable_values_as_named_no_write_failures(self):
+  self.register(); before=self.paths().orchestrator.read_bytes(); valid=GAUNTLET_RUN()
+  lease={'lease_id':'lease-a','fencing_token':1,'acquired_at':CLOCK(),'expires_at':CLOCK(),'state':{},'recovery_count':0}
+  malformed=(
+   {**valid,'state':[]},
+   {**valid,'waves':{'wave-0001':{'state':[]}}},
+   {**valid,'workers':{'worker-a':{'state':'DECLARED','lease':lease,'grant':None,'workspace':None}}},
+   {**valid,'workers':{'worker-a':{'state':'DECLARED','lease':None,'grant':{'scope_paths':['plugin'],'capabilities':[[]]},'workspace':None}}},
+  )
+  for run in malformed:
+   with self.subTest(run=run):
+    try: self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':run}))
+    except store.StoreError as exc: self.assertEqual(exc.code,'ORCHESTRATOR_INVALID')
+    else: self.fail('unhashable gauntlet enum value was accepted')
+    self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_gauntlet_worker_count_scopes_and_workspace_branch_fail_closed_without_write(self):
+  self.register(); before=self.paths().orchestrator.read_bytes(); valid=GAUNTLET_RUN()
+  declared={'state':'DECLARED','lease':None,'grant':None,'workspace':None}
+  six_workers={f'worker-{n}':dict(declared) for n in range(6)}
+  bad_runs=(
+   {**valid,'workers':six_workers},
+   {**valid,'workers':{'worker-a':{'state':'DECLARED','lease':None,'grant':{'scope_paths':['safe\x00path'],'capabilities':['git-local']},'workspace':None}}},
+   {**valid,'workers':{'worker-a':{'state':'DECLARED','lease':None,'grant':{'scope_paths':['safe\x1fpath'],'capabilities':['git-local']},'workspace':None}}},
+   *({**valid,'workers':{'worker-a':{'state':'DECLARED','lease':None,'grant':None,'workspace':{'worktree_key':'wt-a','branch':branch,'base_commit':'e'*40,'clean':False,'converged':False,'cleanup_eligible':False}}}} for branch in ('bad\x00branch','bad\x1fbranch','/host/path','../escape','nested/path')),
+  )
+  for run in bad_runs:
+   with self.subTest(run=run):
+    try: self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':run}))
+    except store.StoreError as exc: self.assertEqual(exc.code,'ORCHESTRATOR_INVALID')
+    else: self.fail('unsafe worker declaration was accepted')
+    self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_state_machine_rejects_direct_run_and_worker_jumps_without_write(self):
+  self.register(); absent_complete=GAUNTLET_RUN(state='COMPLETE')
+  before=self.paths().orchestrator.read_bytes()
+  with self.assertRaises(store.StoreError) as ctx:
+   store.transact(self.r,lambda d: {**d,'work_items':{'gauntlet-work':{**WORK_ITEM(slug='gauntlet'),'gauntlet':GAUNTLET_BLOCK({'run-alpha-1':absent_complete})}}},now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+  admitted=GAUNTLET_RUN(workers={'worker-a':{'state':'DECLARED','lease':None,'grant':None,'workspace':None}})
+  self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':admitted}))
+  before=self.paths().orchestrator.read_bytes()
+  def jump_run(d):
+   d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['state']='COMPLETE'; return d
+  with self.assertRaises(store.StoreError) as ctx: store.transact(self.r,jump_run,now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+  def jump_worker(d):
+   d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['workers']['worker-a']['state']='PREPARED'; return d
+  with self.assertRaises(store.StoreError) as ctx: store.transact(self.r,jump_worker,now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_generic_transact_cannot_drop_or_rename_existing_gauntlet_entities(self):
+  self.register(); workers={'worker-a':{'state':'DECLARED','lease':None,'grant':None,'workspace':None}}
+  self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=workers)}))
+  before=self.paths().orchestrator.read_bytes()
+  def drop_block(d): d['work_items']['gauntlet-work'].pop('gauntlet'); return d
+  def remove_run(d): d['work_items']['gauntlet-work']['gauntlet']['runs'].clear(); return d
+  def rename_run(d):
+   runs=d['work_items']['gauntlet-work']['gauntlet']['runs']; runs['run-renamed']=runs.pop('run-alpha-1'); return d
+  def remove_wave(d): d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['waves'].clear(); return d
+  def remove_worker(d): d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['workers'].clear(); return d
+  for mutate in (drop_block,remove_run,rename_run,remove_wave,remove_worker):
+   with self.subTest(mutate=mutate.__name__), self.assertRaises(store.StoreError) as ctx: store.transact(self.r,mutate,now=CLOCK)
+   self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_generic_transact_cannot_bypass_existing_run_state_admission_or_evidence(self):
+  self.register(); self._gauntlet_transition()
+  before=self.paths().orchestrator.read_bytes()
+  def alter_state(d): d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['state']='RECOVERY_ELIGIBLE'; return d
+  def alter_admission(d): d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['admission']['config_sha256']='9'*64; return d
+  def alter_evidence(d): d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['last_transition']={'event_sequence':2,'receipt_sha256':'8'*64}; return d
+  for mutate in (alter_state,alter_admission,alter_evidence):
+   with self.subTest(mutate=mutate.__name__), self.assertRaises(store.StoreError) as ctx: store.transact(self.r,mutate,now=CLOCK)
+   self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def _gauntlet_transition(self,*,event=None,receipt=None,fault=None,block=None,mutate=None):
+  receipt=GAUNTLET_RECEIPT() if receipt is None else receipt
+  event=GAUNTLET_EVENT(receipt) if event is None else event
+  block=GAUNTLET_BLOCK() if block is None else block
+  def add_block(d):
+   d={**d,'work_items':{**d['work_items'],'gauntlet-work':{**WORK_ITEM(slug='gauntlet'),'gauntlet':block}}}
+   return mutate(d) if mutate is not None else d
+  return store.transact_with_event(
+   self.r,
+   add_block,
+   event=event,receipt=receipt,now=CLOCK,fault=fault,
+  )
+
+ def test_transact_with_event_commits_one_correlated_receipt_event_anchor_and_snapshot(self):
+  self.register(); snapshot=self._gauntlet_transition()
+  self.assertEqual(snapshot.revision,2)
+  self.assertIn('gauntlet-work',snapshot.document['work_items'])
+  receipt=self.paths().receipts/'runtime'/'gauntlet-run-alpha-1.json'
+  self.assertTrue(receipt.is_file())
+  recorded=json.loads(receipt.read_text(encoding='utf-8'))
+  event=GAUNTLET_EVENT(GAUNTLET_RECEIPT())
+  self.assertEqual(recorded,GAUNTLET_RECEIPT())
+  self.assertEqual(event['receipt_sha256'],store.jcs_sha256(recorded))
+  events=store.read_events(self.r)
+  semantic=[record for record in events if record.get('event')=='gauntlet.run.admitted']
+  self.assertEqual(len(semantic),1)
+  for field,value in event.items(): self.assertEqual(semantic[0][field],value)
+  self.assertEqual(store.read_snapshot(self.r).document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['last_transition']['event_sequence'],semantic[0]['sequence'])
+
+ def test_transact_with_event_rejects_admitted_to_complete_jump_without_write(self):
+  self.register()
+  self._gauntlet_transition()
+  before=tree(self.paths().root)
+  def jump(d):
+   d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['state']='COMPLETE'; return d
+  receipt=GAUNTLET_RECEIPT(name='gauntlet-run-complete-jump')
+  with self.assertRaises(store.StoreError) as ctx:
+   store.transact_with_event(self.r,jump,event=GAUNTLET_EVENT(receipt),receipt=receipt,now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE')
+  self.assertEqual(tree(self.paths().root),before)
+
+ def test_transition_rejects_forged_receipt_digest_without_any_write(self):
+  self.register(); before=tree(self.paths().root); receipt=GAUNTLET_RECEIPT(); event=GAUNTLET_EVENT(receipt)
+  event['receipt_sha256']='0'*64
+  with self.assertRaises(store.StoreError) as ctx: self._gauntlet_transition(event=event,receipt=receipt)
+  self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID')
+  self.assertEqual(tree(self.paths().root),before)
+
+ def test_receipt_name_collision_with_different_bytes_blocks_and_preserves_first_evidence(self):
+  self.register(); self._gauntlet_transition()
+  receipt_path=self.paths().receipts/'runtime'/'gauntlet-run-alpha-1.json'
+  before=tree(self.paths().root); before_receipt=receipt_path.read_bytes(); before_snapshot=self.paths().orchestrator.read_bytes(); before_events=self.paths().events.read_bytes()
+  conflicting=GAUNTLET_RECEIPT(input_sha256='2'*64); event=GAUNTLET_EVENT(conflicting)
+  with self.assertRaises(store.StoreError) as ctx: self._gauntlet_transition(event=event,receipt=conflicting)
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE')
+  self.assertEqual(tree(self.paths().root),before)
+  self.assertEqual(receipt_path.read_bytes(),before_receipt)
+  self.assertEqual(self.paths().orchestrator.read_bytes(),before_snapshot)
+  self.assertEqual(self.paths().events.read_bytes(),before_events)
+  next_receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-2')
+  self.assertEqual(self._gauntlet_transition(receipt=next_receipt).revision,3)
+
+ def test_concurrent_receipt_collision_has_one_winner_and_leaves_no_wal_residue(self):
+  self.register(); barrier=threading.Barrier(2)
+  def contend(input_sha256):
+   receipt=GAUNTLET_RECEIPT(input_sha256=input_sha256,name='gauntlet-race-receipt')
+   event=GAUNTLET_EVENT(receipt)
+   def admit(d):
+    return {**d,'work_items':{**d['work_items'],'gauntlet-work':{**WORK_ITEM(slug='gauntlet'),'gauntlet':GAUNTLET_BLOCK()}}}
+   barrier.wait(timeout=2)
+   try: return store.transact_with_event(self.r,admit,event=event,receipt=receipt,now=CLOCK,timeout=2)
+   except store.StoreError as exc: return exc
+  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+   results=[future.result(timeout=5) for future in (pool.submit(contend,'3'*64),pool.submit(contend,'4'*64))]
+  winners=[result for result in results if isinstance(result,store.Snapshot)]
+  losers=[result for result in results if isinstance(result,store.StoreError)]
+  self.assertEqual(len(winners),1); self.assertEqual(len(losers),1); self.assertEqual(losers[0].code,'STATE_DIVERGENCE')
+  self.assertEqual(winners[0].revision,2)
+  paths=self.paths(); after_race=tree(paths.root)
+  self.assertFalse((paths.locks/store.PENDING_TRANSITION_NAME).exists())
+  self.assertEqual(list(paths.locks.iterdir()),[])
+  snapshot=store.read_snapshot(self.r)
+  self.assertEqual(snapshot.revision,2); self.assertEqual(tree(paths.root),after_race)
+  semantic=[event for event in store.read_events(self.r) if event.get('event')=='gauntlet.run.admitted']
+  self.assertEqual(len(semantic),1)
+  self.assertIn(json.loads((paths.receipts/'runtime'/'gauntlet-race-receipt.json').read_text(encoding='utf-8')), [GAUNTLET_RECEIPT(input_sha256='3'*64,name='gauntlet-race-receipt'),GAUNTLET_RECEIPT(input_sha256='4'*64,name='gauntlet-race-receipt')])
+  next_receipt=GAUNTLET_RECEIPT(input_sha256='5'*64,name='gauntlet-race-after')
+  self.assertEqual(self._gauntlet_transition(receipt=next_receipt).revision,3)
+  self.assertFalse((paths.locks/store.PENDING_TRANSITION_NAME).exists())
+  self.assertEqual(list(paths.locks.iterdir()),[])
+
+ def test_recovery_rejects_pending_candidate_with_transition_sequence_not_owned_by_semantic_event(self):
+  class InjectedFault(RuntimeError): pass
+  self.register(); before_snapshot=self.paths().orchestrator.read_bytes()
+  def interrupt(point):
+   if point=='after-event': raise InjectedFault(point)
+  with self.assertRaises(InjectedFault): self._gauntlet_transition(fault=interrupt)
+  pending=self.paths().locks/store.PENDING_TRANSITION_NAME
+  intent=json.loads(pending.read_text(encoding='utf-8'))
+  run=intent['candidate']['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']
+  run['last_transition']['event_sequence']+=1
+  intent['candidate'].pop('content_sha256',None)
+  intent['candidate']['content_sha256']=store.content_hash(intent['candidate'])
+  pending.write_bytes(store.jcs(intent)+b'\n')
+  before_events=self.paths().events.read_bytes()
+  with self.assertRaises(store.StoreError) as ctx: store.recover_pending_transition(self.r,now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STORE_RECOVERY_REQUIRED')
+  self.assertEqual(self.paths().orchestrator.read_bytes(),before_snapshot)
+  self.assertEqual(self.paths().events.read_bytes(),before_events)
+  self.assertEqual(store.read_snapshot(self.r).revision,1)
+
+ def test_recovery_rejects_pending_candidate_with_illegal_admitted_to_complete_jump(self):
+  class InjectedFault(RuntimeError): pass
+  self.register(); before_snapshot=self.paths().orchestrator.read_bytes()
+  def interrupt(point):
+   if point=='after-event': raise InjectedFault(point)
+  with self.assertRaises(InjectedFault): self._gauntlet_transition(fault=interrupt)
+  pending=self.paths().locks/store.PENDING_TRANSITION_NAME; intent=json.loads(pending.read_text(encoding='utf-8'))
+  intent['candidate']['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['state']='COMPLETE'
+  intent['candidate'].pop('content_sha256',None); intent['candidate']['content_sha256']=store.content_hash(intent['candidate'])
+  pending.write_bytes(store.jcs(intent)+b'\n'); before_events=self.paths().events.read_bytes()
+  with self.assertRaises(store.StoreError) as ctx: store.recover_pending_transition(self.r,now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STORE_RECOVERY_REQUIRED')
+  self.assertEqual(self.paths().orchestrator.read_bytes(),before_snapshot)
+  self.assertEqual(self.paths().events.read_bytes(),before_events)
+  self.assertEqual(store.read_snapshot(self.r).revision,1)
+
+ def test_transact_with_event_rejects_existing_admission_config_and_base_drift_without_write(self):
+  self.register(); self._gauntlet_transition()
+  before=tree(self.paths().root)
+  def config_drift(d):
+   d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['admission']['config_sha256']='9'*64; return d
+  config_receipt=GAUNTLET_RECEIPT(name='gauntlet-config-drift')
+  with self.assertRaises(store.StoreError) as ctx:
+   store.transact_with_event(self.r,config_drift,event=GAUNTLET_EVENT(config_receipt),receipt=config_receipt,now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(tree(self.paths().root),before)
+  def base_drift(d):
+   d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['admission']['base_commit']='9'*40; return d
+  base_receipt=GAUNTLET_RECEIPT(name='gauntlet-base-drift',base_commit='9'*40)
+  with self.assertRaises(store.StoreError) as ctx:
+   store.transact_with_event(self.r,base_drift,event=GAUNTLET_EVENT(base_receipt),receipt=base_receipt,now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(tree(self.paths().root),before)
+
+ def test_recovery_of_malformed_pending_wal_is_named_and_never_rewrites_evidence(self):
+  class InjectedFault(RuntimeError): pass
+  self.register()
+  def interrupt(point):
+   if point=='after-intent': raise InjectedFault(point)
+  with self.assertRaises(InjectedFault): self._gauntlet_transition(fault=interrupt)
+  pending=self.paths().locks/store.PENDING_TRANSITION_NAME
+  pending.write_bytes(b'{"schema":')
+  before=tree(self.paths().root)
+  with self.assertRaises(store.StoreError) as ctx: store.recover_pending_transition(self.r,now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STORE_RECOVERY_REQUIRED')
+  self.assertEqual(tree(self.paths().root),before)
+  self.assertEqual(pending.read_bytes(),b'{"schema":')
+
+ def test_wal_recovery_is_deterministic_at_every_receipt_event_anchor_snapshot_and_intent_boundary(self):
+  class InjectedFault(RuntimeError): pass
+  # Before semantic evidence exists, recovery may only abandon the intent;
+  # after it exists, it must finish the exact candidate rather than creating a
+  # second event/receipt/revision.  Receipt-before-event is intentionally
+  # non-authoritative diagnostic residue.
+  expected_published={'after-intent':False,'after-receipt':False,'after-event':True,'after-anchor':True,'after-snapshot':True,'after-intent-removal':True}
+  for boundary,published in expected_published.items():
+   with self.subTest(boundary=boundary):
+    self.tearDown(); self.setUp(); self.register(); before=self.paths().orchestrator.read_bytes()
+    def interrupt(reached,b=boundary):
+     if reached==b: raise InjectedFault(b)
+    with self.assertRaises(InjectedFault): self._gauntlet_transition(fault=interrupt)
+    recovered=store.recover_pending_transition(self.r,now=CLOCK)
+    snapshot=store.read_snapshot(self.r)
+    self.assertEqual(snapshot.revision,2 if published else 1)
+    self.assertEqual('gauntlet-work' in snapshot.document['work_items'],published)
+    semantic=[event for event in store.read_events(self.r) if event.get('event')=='gauntlet.run.admitted']
+    self.assertEqual(len(semantic),1 if published else 0)
+    if not published: self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+    # Recovery is idempotent and cannot manufacture another transition.
+    again=store.recover_pending_transition(self.r,now=CLOCK)
+    self.assertEqual((again.revision,store.read_snapshot(self.r).revision),(snapshot.revision,snapshot.revision))
 
 if __name__=='__main__': unittest.main()

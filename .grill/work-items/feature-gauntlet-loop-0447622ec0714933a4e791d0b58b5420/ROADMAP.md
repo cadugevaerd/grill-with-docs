@@ -33,7 +33,7 @@
 - scope-out: runtimes Codex/Hermes, resolução automática de conflitos e reparo automático pós-review
 - context-refs: Execution DAG, Model Tier, Capability Grant, Autonomous Run, Stall Recovery
 - ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0007
-- BLs: none
+- BLs: BL-0001
 - depends-on: FASE-001, FASE-002
 - specify-handoff: handoffs/FASE-003-SPECIFY-HANDOFF.md
 - delivery-units: DU-003
@@ -41,7 +41,7 @@
 ## FASE-004 — Convergência, revisão e entrega verificável
 - state: planned
 - objetivo: resultados paralelos convergem de modo fail-closed e chegam ao gate humano de ship somente após revisão independente
-- scope-in: converge serial; bloqueio de conflito; verify e review independentes; Run Status Events; testes de contrato e atualização de distribuição para 2.6.0
+- scope-in: converge serial; bloqueio de conflito; verify e review independentes; Run Status Events; testes de contrato e atualização de distribuição com bump SemVer próprio (2.6.0 já consumido pela FASE-002)
 - scope-out: resolução automática de conflito, ciclo automático de reparo após review reprovado e push/release direto
 - context-refs: Integration Conflict, Independent Review, Review Block, Autonomous Run, Canonical Skill
 - ADRs: ADR-0002, ADR-0008, ADR-0009, ADR-0011

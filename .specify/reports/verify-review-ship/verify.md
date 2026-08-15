@@ -1,32 +1,35 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree ca7b1a88e9ed8fff333524f8125c0230b358c308516ce40f13225dbb2ccbf161 / work 2ff03e22d0cd2d2c07037ade1fd35c1de982f92cc63e77d55038c5795df202d3 / plan f00191471b472ce2081c62c09eb9cf33502d547413331d4c6c4c9910e72a4b8f
+Source fingerprint: commit f816e317b0e0dc2b2d72b069b0a28652777b952d / tree 5e8884ad4587801fad9a2da26ec2ada974232c00 (2 commits ahead of origin/main: 9190ecb + f816e31)
 Converge: CONVERGED
+
+Re-verified after the ship-gate repair commit (`f816e31`): version bump to 2.6.0 across all eight distribution surfaces, dead `if True:` WAL-recovery block removed (behavior-identical, AST-confirmed). Supersedes the prior fingerprint (tree `5d610b15...`), which predated that commit. Independently reproduced a second time by a fresh critic in `.specify/reports/verify-review-ship/review.md` (Verdict: APPROVE, pinned to this same tree).
 
 ### Operational Gates
 
 | Gate | Command | Result | Evidence | Validator |
 |---|---|---|---|---|
-| Full contract suite | `python3 tests/run_validators.py` | PASS | All validators passed. | Codex |
-| Gauntlet activation | `python3 tests/validate_gauntlet_activation_contract.py` | PASS | 43 tests. | Codex |
-| V3 migration and rebind | `python3 tests/validate_work_item_v3_contract.py` | PASS | 84 tests. | Codex |
-| Step-skill registry | `python3 tests/validate_step_skill_registry_contract.py` | PASS | 103 tests. | Codex |
-| Branch lifecycle | `python3 tests/validate_checkpoint_contract.py` | PASS | 37 tests. | Codex |
-| Workspace compatibility | `python3 tests/validate_workspace_contract.py` | PASS | 66 tests; 1 environment skip. | Codex |
-| Work-item decision audit | `python3 plugin/skills/grill-with-docs/scripts/audit_decisions.py ... --project-root . --json` | PASS | `GO`, FASE-002 selected. | Codex |
-| Auditor legacy/lifecycle contract | `python3 tests/validate_contract.py` | PASS | 31 tests. | Codex |
-| Diff hygiene | `git diff --check` | PASS | No whitespace errors. | Codex |
+| Store contract | `python3 tests/validate_orchestrator_store_contract.py` | PASS | 85 tests. | Codex + Claude (independent re-run) |
+| Durable-run contract | `python3 tests/validate_gauntlet_run_contract.py` | PASS | 23 tests. | Codex + Claude (independent re-run) |
+| Full contract suite | `python3 tests/run_validators.py` | PASS | 18 validators, 803 tests, 1 skip, exit 0. | Codex + Claude (independent re-run) |
+| Workspace compatibility | `python3 tests/validate_workspace_contract.py` | PASS | 67 tests; 1 host-specific skip. | Codex + Claude (independent re-run) |
+| Registry hygiene | `python3 tests/validate_step_skill_registry_contract.py` | PASS | 103 tests; only the closed FASE-001/002 Gauntlet commands reach the resolver. | Codex + Claude (independent re-run) |
+| Diff hygiene | `git diff --check origin/main...HEAD` | PASS | No whitespace errors. | Codex + Claude (independent re-run) |
+| Distribution consistency | `python3 tests/validate_distribution.py` | PASS | `distribution: OK`; version 2.6.0 identical across all eight surfaces. | Claude |
+| Version bump (constitutional gate) | `python3 tests/check_version_bump.py --base-ref origin/main` | PASS | `BUMPED: plugin/ mudou e a versão aumentou de 2.5.4 para 2.6.0`, exit 0. | Claude |
 
 ### Diff Hygiene
 
-The transition records FASE-001 as complete and FASE-002 as ready for specify. The append-only ledger preserves its historical schema and adds one typed lifecycle event. No runtime scope changed. No secret or environment file was found.
+The diff is limited to the durable Store/WAL, coordinator-only run/worktree boundary, public CLI wiring, public contract tests, FASE-002 specification artifacts, and work-item state. Gate reports and mutable work-item checkpoint files are excluded by the configured canonical fingerprint.
 
 ### Executable Scenarios
 
-- Claude-only activation, strict configuration, eleven canonical skills, worker limit 1..5, and stale identity handling.
-- Descriptor-safe activation/rebind writes, lock ownership failure paths, and V2 compatibility.
-- Phase-local execution-branch binding, legacy resumption, and no-write rejection of wrong-branch mutations.
+- A current V3 activation creates or reuses one durable run; explicit resume records one decision without dispatching work.
+- Store receipts, journal events, transitions, leases, grants, and recovery intents are fail-closed and transactionally correlated.
+- Run status is read-only; forged evidence and stale identity block without mutation.
+- Only the exact clean, terminal, converged, recorded-eligible worker target is removed; dirty, expired, orphaned, or V2 cases preserve state.
+- No worker subprocess, scheduler, retry/relaunch, convergence, review, ship, publication, or network authority is introduced.
 
 ### Failures / Blockers
 
@@ -34,4 +37,4 @@ None.
 
 ### Next Action
 
-- PASS: independent review may approve the documented FASE-001 ship and FASE-002 handoff transition.
+- PASS: run independent review with the same source fingerprint.

@@ -340,10 +340,308 @@
         "reason": "FASE-001 integrada em origin/main no merge a0f071c; abrindo FASE-002 para estado durável, evidência e isolamento.",
         "state": "turned",
         "step": "phase-turn"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/spec.md",
+            "sha256": "6cccecf6e2519d6b89ecc272386b6a7de544c186643af81b18a2aefb61856109"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "FASE-002 especificada diretamente pelo Codex a partir do handoff imutável.",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/spec.md",
+            "sha256": "a2f16b43341510dc90f09079106a5969e9861e0bc4e40301838eea93f64a9f34"
+          },
+          {
+            "path": "specs/012-durable-run-state/checklists/requirements.md",
+            "sha256": "58b762b97b556635c125b52173001f8f43c9feea98e798b30b04810ca7fed692"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "FASE-002 especificada e aprovada por crítica independente.",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/plan.md",
+            "sha256": "a619e0f0aaf60c7b33c9e021fc48f10c90e75a0ca5817b0220ff51f0aab91a18"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Planejamento técnico FASE-002 em revisão independente.",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/plan.md",
+            "sha256": "a619e0f0aaf60c7b33c9e021fc48f10c90e75a0ca5817b0220ff51f0aab91a18"
+          },
+          {
+            "path": "specs/012-durable-run-state/research.md",
+            "sha256": "3ac6aaa4be26df64b346405120e4f82477a4df467d808791e04e85bc94471146"
+          },
+          {
+            "path": "specs/012-durable-run-state/data-model.md",
+            "sha256": "33e965baa6a703016e8e38d7d0850dc89971155b4a4f5b04c2f7f56e252a8c12"
+          },
+          {
+            "path": "specs/012-durable-run-state/contracts/gauntlet-run-cli.md",
+            "sha256": "a51a52877fb31d45aa4da1ae25611697f35db543fcff29251f7d9a4f7b7db671"
+          },
+          {
+            "path": "specs/012-durable-run-state/quickstart.md",
+            "sha256": "3fb06708580bafc37c9ead118d9fcc9b882f5f1435590bb03ff584aca342eb01"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Plano FASE-002 aprovado por crítica independente.",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/checklists/durable-run-requirements.md",
+            "sha256": "88b3f19debbec33ede35b2ab09925ea5a4e2c0e471c331cc78cb0152c548cbd4"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Checklist de requisitos FASE-002 em revisão independente.",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/checklists/durable-run-requirements.md",
+            "sha256": "88b3f19debbec33ede35b2ab09925ea5a4e2c0e471c331cc78cb0152c548cbd4"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Checklist FASE-002 aprovado por crítica independente.",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/tasks.md",
+            "sha256": "f0ddd3aa932d076ea7510bb94829262d3b48bbc2b4fb3788de20273bfc1e660b"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "DAG FASE-002 em revisão independente.",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/tasks.md",
+            "sha256": "f0ddd3aa932d076ea7510bb94829262d3b48bbc2b4fb3788de20273bfc1e660b"
+          },
+          {
+            "path": "specs/012-durable-run-state/execution-dag.json",
+            "sha256": "29afc9211693d8fc90908380b572b1e2d07c0a767ed6a99f7318bcc2af51cc57"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "DAG FASE-002 aprovado por crítica independente.",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/spec.md",
+            "sha256": "403868f52813071d6586b42d7010d674567bbcd13437acc41918f00bd1458210"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Análise cruzada FASE-002 em revisão independente.",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/spec.md",
+            "sha256": "403868f52813071d6586b42d7010d674567bbcd13437acc41918f00bd1458210"
+          },
+          {
+            "path": "specs/012-durable-run-state/plan.md",
+            "sha256": "297df112310bd4d04eef8f5cc225b7dd9c03ede76663668457656fdd4dc074bc"
+          },
+          {
+            "path": "specs/012-durable-run-state/tasks.md",
+            "sha256": "5a0fce3cbe54c150752e126082c808512fee8e7ce34a3c4ae4da25e7a8c1dee8"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Análise cruzada FASE-002 aprovada por crítica independente.",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/agent-assignments.yml",
+            "sha256": "947bf253b969227086cd1d0452590a17a17aab57d39769535f1112312aa62f6a"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Codex-native assignment validation passed: coverage, tiers, agent registry, and DAG isolation.",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/agent-assignments.yml",
+            "sha256": "947bf253b969227086cd1d0452590a17a17aab57d39769535f1112312aa62f6a"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Independent review approved native Codex assignments; no Claude invocation.",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/tasks.md",
+            "sha256": "5a0fce3cbe54c150752e126082c808512fee8e7ce34a3c4ae4da25e7a8c1dee8"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Starting Codex-native FASE-002 execution with tester-first isolated tasks T001 and T002.",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/tasks.md",
+            "sha256": "ca1ced431faf9b478325aa0850d3b91901d074e364194bd6cbb4f3e1a4a63084"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "T001-T018 concluídas; convergência manual não encontrou tarefas adicionais.",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/tasks.md",
+            "sha256": "ca1ced431faf9b478325aa0850d3b91901d074e364194bd6cbb4f3e1a4a63084"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Iniciando gate de convergência.",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/012-durable-run-state/tasks.md",
+            "sha256": "ca1ced431faf9b478325aa0850d3b91901d074e364194bd6cbb4f3e1a4a63084"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Converged: implementação satisfaz spec, plan e tarefas T001-T018.",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/verify.md",
+            "sha256": "8f17369cc5fb270b391d6c0f666a5259077289894fdd0097a830bad3200c76a3"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Validadores FASE-002 aprovados.",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/verify.md",
+            "sha256": "8f17369cc5fb270b391d6c0f666a5259077289894fdd0097a830bad3200c76a3"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Verify PASS com fingerprint 5d610b1541f8-d46facc5c748-cfc91bf4512d.",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/verify.md",
+            "sha256": "8f17369cc5fb270b391d6c0f666a5259077289894fdd0097a830bad3200c76a3"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Preparando pausa solicitada pelo operador.",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/verify.md",
+            "sha256": "8f17369cc5fb270b391d6c0f666a5259077289894fdd0097a830bad3200c76a3"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Pausado por solicitação do operador antes da revisão independente e do ship.",
+        "state": "blocked",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Retomando review FASE-002 por instrução direta do operador (/goal); crítico independente fresco será executado sobre o commit atual.",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/review.md",
+            "sha256": "cf6170dcbdc5e2fe7f609b828028bd0a0cfb62c0070701874b95721873233fa0"
+          }
+        ],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Review APPROVE em tree f816e317b0e0dc2b2d72b069b0a28652777b952d: 0 Critical, 12 Important não-bloqueantes. Rodada 1 achou MISSING-BUMP (Critical); reparo bumpou 2.6.0 nas oito superfícies e removeu bloco morto em store.py; rodada 2 (crítico independente fresco) reproduziu todos os gates (803 testes, bump-gate PASS) e aprovou.",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "012-durable-run-state",
+        "reason": "Iniciando ship transaction FASE-002: merge --no-ff em main, gates completos, push direto (sem PR), conforme WORKFLOW.md fases A-E.",
+        "state": "in-progress",
+        "step": "ship"
       }
     ],
-    "current_step": "specify",
-    "execution_branch": null,
+    "current_step": "ship",
+    "execution_branch": "012-durable-run-state",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -359,17 +657,17 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "pending",
-      "agent-execute": "pending",
-      "analyze": "pending",
-      "checklist": "pending",
-      "converge": "pending",
-      "plan": "pending",
-      "review": "pending",
-      "ship": "pending",
-      "specify": "pending",
-      "tasks": "pending",
-      "verify": "pending"
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "in-progress",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
     }
   },
   "limits": {

@@ -118,6 +118,7 @@ ORCHESTRATOR_INVALID = "ORCHESTRATOR_INVALID"
 PROJECT_IDENTITY_DIVERGENCE = "PROJECT_IDENTITY_DIVERGENCE"
 STATE_DIVERGENCE = "STATE_DIVERGENCE"
 LOCK_CONTENTION = "LOCK_CONTENTION"
+STORE_RECOVERY_REQUIRED = "STORE_RECOVERY_REQUIRED"
 # Every code this module can raise, paired with the process exit code the CLI
 # must return for it.  2 is EXIT_BLOCKED in grill_workspace.
 EXIT_BY_CODE = {
@@ -125,6 +126,7 @@ EXIT_BY_CODE = {
     PROJECT_IDENTITY_DIVERGENCE: 2,
     STATE_DIVERGENCE: 2,
     LOCK_CONTENTION: 2,
+    STORE_RECOVERY_REQUIRED: 2,
 }
 # Translation table for the wiring round; the live CLI vocabulary is kebab.
 KEBAB_ALIASES = {
@@ -132,6 +134,7 @@ KEBAB_ALIASES = {
     PROJECT_IDENTITY_DIVERGENCE: "PROJECT-IDENTITY-DIVERGENCE",
     STATE_DIVERGENCE: "STATE-DIVERGENCE",
     LOCK_CONTENTION: "LOCK-CONTENTION",
+    STORE_RECOVERY_REQUIRED: "STORE-RECOVERY-REQUIRED",
 }
 
 WORK_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,100}$")
@@ -176,6 +179,16 @@ BACKLOG_LINK_STATES = frozenset(
         "TRACKED", "NEEDS_RECONCILIATION", "CHILD_READY_FOR_GRILL",
     }
 )
+
+# FASE-002 durable-run records are deliberately closed: this module owns the
+# persistence boundary, while scheduling remains outside it.
+GAUNTLET_SCHEMA = "grill-gauntlet-runs/v1"
+RUN_STATES = frozenset({"ADMITTED", "RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "BLOCKED", "COMPLETE"})
+WORKER_STATES = frozenset({"DECLARED", "PREPARING", "PREPARED", "CLEANING", "CLEANED", "ORPHANED", "RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "FAILED", "STALLED", "BLOCKED", "CONFLICT", "TERMINAL"})
+LEASE_STATES = frozenset({"ACTIVE", "EXPIRED", "RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "RELEASED"})
+WAVE_STATES = frozenset({"DECLARED"})
+GRANT_CAPABILITIES = frozenset({"git-local", "workspace-read-write"})
+PENDING_TRANSITION_NAME = "pending-transition.json"
 
 # Append-only journal anchoring (plan §22/Core "journal corrompido, truncado
 # ou com hash divergente" + "snapshot local divergente ... do journal").
@@ -585,6 +598,7 @@ def _stale_lock(lock: Path) -> bool:
 @contextmanager
 def _mutex(directory: Path, name: str, timeout: float) -> Iterator[Path]:
     _validate_directory(directory)
+    directory_times = directory.stat()
     lock = directory / name
     deadline = time.monotonic() + timeout
     while True:
@@ -625,6 +639,13 @@ def _mutex(directory: Path, name: str, timeout: float) -> Iterator[Path]:
         yield lock
     finally:
         shutil.rmtree(lock, ignore_errors=True)
+        # Lock acquisition is coordination metadata, not durable evidence.
+        # Preserve the directory timestamp so a rejected/no-op request is
+        # observably byte-and-tree identical to callers doing forensic checks.
+        try:
+            os.utime(directory, ns=(directory_times.st_atime_ns, directory_times.st_mtime_ns))
+        except OSError:
+            pass
 
 
 @contextmanager
@@ -707,6 +728,68 @@ def _validate_monitoring_block(monitoring: Any, work_id: str) -> None:
             _invalid(f"invalid monitoring.{key}: {work_id}")
 
 
+def _closed_object(value: Any, keys: set[str] | frozenset[str], label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != set(keys):
+        _invalid(f"invalid {label} keys")
+    return value
+
+
+def _safe_relative_path(path: Any, label: str) -> None:
+    if not isinstance(path, str) or not path or path.startswith("/") or "\\" in path or any(ord(char) < 32 or ord(char) == 127 for char in path):
+        _invalid(f"invalid {label}")
+    pieces = path.split("/")
+    if any(not piece or piece in {".", ".."} for piece in pieces):
+        _invalid(f"invalid {label}")
+
+
+def _validate_gauntlet_worker(worker: Any, run: dict[str, Any], worker_id: str) -> None:
+    worker = _closed_object(worker, {"state", "lease", "grant", "workspace"}, f"worker {worker_id}")
+    if not isinstance(worker["state"], str) or worker["state"] not in WORKER_STATES:
+        _invalid(f"invalid worker state: {worker_id}")
+    lease = worker["lease"]
+    if lease is not None:
+        lease = _closed_object(lease, {"lease_id", "fencing_token", "acquired_at", "expires_at", "state", "recovery_count"}, f"worker lease {worker_id}")
+        if not isinstance(lease["lease_id"], str) or not SAFE_NAME_RE.match(lease["lease_id"]): _invalid(f"invalid worker lease_id: {worker_id}")
+        if type(lease["fencing_token"]) is not int or lease["fencing_token"] <= 0: _invalid(f"invalid worker fencing_token: {worker_id}")
+        if not isinstance(lease["state"], str) or lease["state"] not in LEASE_STATES or type(lease["recovery_count"]) is not int or lease["recovery_count"] not in (0, 1): _invalid(f"invalid worker lease state: {worker_id}")
+        for field in ("acquired_at", "expires_at"):
+            if not isinstance(lease[field], str) or not RFC3339_RE.match(lease[field]): _invalid(f"invalid worker lease {field}: {worker_id}")
+    grant = worker["grant"]
+    if grant is not None:
+        grant = _closed_object(grant, {"scope_paths", "capabilities"}, f"worker grant {worker_id}")
+        if not isinstance(grant["scope_paths"], list) or not grant["scope_paths"]: _invalid(f"invalid grant scope_paths: {worker_id}")
+        for path in grant["scope_paths"]: _safe_relative_path(path, f"grant scope path: {worker_id}")
+        if len(set(grant["scope_paths"])) != len(grant["scope_paths"]): _invalid(f"duplicate grant scope path: {worker_id}")
+        if not isinstance(grant["capabilities"], list) or any(not isinstance(capability, str) for capability in grant["capabilities"]) or not set(grant["capabilities"]).issubset(GRANT_CAPABILITIES) or len(set(grant["capabilities"])) != len(grant["capabilities"]): _invalid(f"invalid grant capabilities: {worker_id}")
+    workspace = worker["workspace"]
+    if workspace is not None:
+        workspace = _closed_object(workspace, {"worktree_key", "branch", "base_commit", "clean", "converged", "cleanup_eligible"}, f"worker workspace {worker_id}")
+        if not isinstance(workspace["worktree_key"], str) or not SAFE_NAME_RE.match(workspace["worktree_key"]): _invalid(f"invalid workspace key: {worker_id}")
+        if not isinstance(workspace["branch"], str) or not workspace["branch"].startswith("grill/") or ".." in workspace["branch"].split("/") or any(ord(char) < 32 or ord(char) == 127 for char in workspace["branch"]) or not (isinstance(workspace["base_commit"], str) and HEX40_RE.match(workspace["base_commit"])): _invalid(f"invalid workspace: {worker_id}")
+        if workspace["base_commit"] != run["admission"]["base_commit"]: _invalid(f"workspace base commit differs: {worker_id}")
+        if any(type(workspace[key]) is not bool for key in ("clean", "converged", "cleanup_eligible")): _invalid(f"invalid workspace flags: {worker_id}")
+
+
+def _validate_gauntlet_block(value: Any, work_id: str) -> None:
+    block = _closed_object(value, {"schema", "runs"}, f"gauntlet block: {work_id}")
+    if block["schema"] != GAUNTLET_SCHEMA or not isinstance(block["runs"], dict): _invalid(f"invalid gauntlet block: {work_id}")
+    for run_id, run in block["runs"].items():
+        if not isinstance(run_id, str) or not SAFE_NAME_RE.match(run_id): _invalid(f"invalid gauntlet run id: {work_id}")
+        run = _closed_object(run, {"admission", "state", "recovery_count", "waves", "workers", "last_transition"}, f"gauntlet run {run_id}")
+        admission = _closed_object(run["admission"], {"activation_sha256", "work_item_sha256", "workflow_sha256", "config_sha256", "base_commit"}, f"gauntlet admission {run_id}")
+        if any(not isinstance(admission[key], str) or not HEX64_RE.match(admission[key]) for key in ("activation_sha256", "work_item_sha256", "workflow_sha256", "config_sha256")) or not isinstance(admission["base_commit"], str) or not HEX40_RE.match(admission["base_commit"]): _invalid(f"invalid gauntlet admission: {run_id}")
+        if not isinstance(run["state"], str) or run["state"] not in RUN_STATES or type(run["recovery_count"]) is not int or run["recovery_count"] not in (0, 1): _invalid(f"invalid gauntlet run state: {run_id}")
+        if not isinstance(run["waves"], dict) or not isinstance(run["workers"], dict): _invalid(f"invalid gauntlet maps: {run_id}")
+        for wave_id, wave in run["waves"].items():
+            if not isinstance(wave_id, str) or not SAFE_NAME_RE.match(wave_id) or not isinstance(wave, dict) or set(wave) != {"state"} or not isinstance(wave["state"], str) or wave["state"] not in WAVE_STATES: _invalid(f"invalid gauntlet wave: {run_id}")
+        transition = _closed_object(run["last_transition"], {"event_sequence", "receipt_sha256"}, f"gauntlet last_transition {run_id}")
+        if type(transition["event_sequence"]) is not int or transition["event_sequence"] < 1 or not isinstance(transition["receipt_sha256"], str) or not HEX64_RE.match(transition["receipt_sha256"]): _invalid(f"invalid gauntlet last_transition: {run_id}")
+        if len(run["workers"]) > 5: _invalid(f"too many gauntlet workers: {run_id}")
+        for worker_id, worker in run["workers"].items():
+            if not isinstance(worker_id, str) or not SAFE_NAME_RE.match(worker_id): _invalid(f"invalid gauntlet worker id: {run_id}")
+            _validate_gauntlet_worker(worker, run, worker_id)
+
+
 def _validate_work_items(work_items: Any) -> None:
     """Plan §5.4: ``work_items`` maps a safe ``work_id`` to an object with at
     least ``type``/``slug``/``lifecycle``/``worktree``/``monitoring``."""
@@ -725,6 +808,8 @@ def _validate_work_items(work_items: Any) -> None:
             _invalid(f"invalid work item lifecycle: {work_id}")
         _validate_worktree_block(item.get("worktree"), work_id)
         _validate_monitoring_block(item.get("monitoring"), work_id)
+        if "gauntlet" in item:
+            _validate_gauntlet_block(item["gauntlet"], work_id)
 
 
 def _validate_dispatch_control(dispatch_control: Any) -> None:
@@ -800,6 +885,64 @@ def _validate_document(document: Any, path: Path) -> dict[str, Any]:
     if digest != expected:
         _invalid(f"content hash mismatch: {path}")
     return document
+
+
+def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: dict[str, Any], *, allow_existing_gauntlet_changes: bool = False) -> None:
+    """Guard the durable state graph even when callers use generic Store CAS.
+    The Store is the authority for legal persisted edges, not the future CLI."""
+    run_edges = {
+        "ADMITTED": {"ADMITTED", "RECOVERY_ELIGIBLE", "BLOCKED"},
+        "RECOVERY_ELIGIBLE": {"RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "BLOCKED"},
+        "RECOVERY_RECORDED": {"RECOVERY_RECORDED", "BLOCKED", "COMPLETE"},
+        "BLOCKED": {"BLOCKED"}, "COMPLETE": {"COMPLETE"},
+    }
+    worker_edges = {
+        "DECLARED": {"DECLARED", "PREPARING", "BLOCKED"},
+        "PREPARING": {"PREPARING", "PREPARED", "ORPHANED"},
+        "PREPARED": {"PREPARED", "TERMINAL", "FAILED", "STALLED", "BLOCKED", "CONFLICT", "ORPHANED"},
+        "TERMINAL": {"TERMINAL", "CLEANING"}, "CLEANING": {"CLEANING", "CLEANED", "ORPHANED"},
+        "CLEANED": {"CLEANED"}, "ORPHANED": {"ORPHANED"}, "FAILED": {"FAILED"}, "STALLED": {"STALLED"}, "BLOCKED": {"BLOCKED"}, "CONFLICT": {"CONFLICT"},
+        "RECOVERY_ELIGIBLE": {"RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "BLOCKED"}, "RECOVERY_RECORDED": {"RECOVERY_RECORDED", "BLOCKED"},
+    }
+    old_items, new_items = previous.get("work_items", {}), candidate.get("work_items", {})
+    for work_id, old_item in old_items.items():
+        if not isinstance(old_item, dict) or "gauntlet" not in old_item:
+            continue
+        new_item = new_items.get(work_id)
+        if not isinstance(new_item, dict) or "gauntlet" not in new_item:
+            _fail(STATE_DIVERGENCE, f"existing gauntlet block cannot be removed: {work_id}")
+        if not allow_existing_gauntlet_changes and jcs(old_item["gauntlet"]) != jcs(new_item["gauntlet"]):
+            _fail(STATE_DIVERGENCE, f"gauntlet changes require transact_with_event: {work_id}")
+    for work_id, new_item in new_items.items():
+        new_runs = new_item.get("gauntlet", {}).get("runs", {}) if isinstance(new_item, dict) else {}
+        old_runs = old_items.get(work_id, {}).get("gauntlet", {}).get("runs", {}) if isinstance(old_items.get(work_id), dict) else {}
+        if not allow_existing_gauntlet_changes and isinstance(new_item, dict) and "gauntlet" in new_item and not old_runs:
+            _fail(STATE_DIVERGENCE, f"gauntlet changes require transact_with_event: {work_id}")
+        for run_id, old_run in old_runs.items():
+            if run_id not in new_runs:
+                _fail(STATE_DIVERGENCE, f"existing gauntlet run cannot be removed: {run_id}")
+            new_run = new_runs[run_id]
+            if jcs(new_run["admission"]) != jcs(old_run["admission"]):
+                _fail(STATE_DIVERGENCE, f"gauntlet admission is immutable: {run_id}")
+            if jcs(new_run["waves"]) != jcs(old_run["waves"]):
+                _fail(STATE_DIVERGENCE, f"gauntlet wave identity is immutable: {run_id}")
+        for run_id, new_run in new_runs.items():
+            old_run = old_runs.get(run_id)
+            if old_run is None:
+                if new_run["state"] != "ADMITTED": _fail(STATE_DIVERGENCE, f"new gauntlet run must start ADMITTED: {run_id}")
+                for worker_id, worker in new_run["workers"].items():
+                    if worker["state"] != "DECLARED": _fail(STATE_DIVERGENCE, f"new gauntlet worker must start DECLARED: {worker_id}")
+                continue
+            if new_run["state"] not in run_edges.get(old_run["state"], set()): _fail(STATE_DIVERGENCE, f"invalid gauntlet run transition: {run_id}")
+            old_workers = old_run.get("workers", {})
+            for worker_id in old_workers:
+                if worker_id not in new_run["workers"]:
+                    _fail(STATE_DIVERGENCE, f"existing gauntlet worker cannot be removed: {worker_id}")
+            for worker_id, worker in new_run["workers"].items():
+                old_worker = old_workers.get(worker_id)
+                if old_worker is None:
+                    if worker["state"] != "DECLARED": _fail(STATE_DIVERGENCE, f"new gauntlet worker must start DECLARED: {worker_id}")
+                elif worker["state"] not in worker_edges.get(old_worker["state"], set()): _fail(STATE_DIVERGENCE, f"invalid gauntlet worker transition: {worker_id}")
 
 
 def _snapshot_from(data: bytes, path: Path) -> Snapshot:
@@ -1086,6 +1229,7 @@ def write_snapshot(
         if candidate["revision"] <= current.revision:
             _fail(STATE_DIVERGENCE, "revision must increase monotonically")
         _validate_document(candidate, paths.orchestrator)
+        _validate_gauntlet_state_transitions(current.document, candidate)
         if jcs(candidate["project"]) != jcs(current.document["project"]):
             _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
         candidate = _finalize_commit(paths, candidate, now)
@@ -1113,10 +1257,230 @@ def transact(
             )
         candidate = stamp(proposed, current.revision + 1, _now(now))
         _validate_document(candidate, paths.orchestrator)
+        _validate_gauntlet_state_transitions(current.document, candidate)
         if jcs(candidate["project"]) != jcs(current.document["project"]):
             _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
         candidate = _finalize_commit(paths, candidate, now)
         return _write_document(paths, candidate)
+
+
+# --------------------------------------------------------------------------
+# Durable semantic transition (FASE-002 WAL)
+# --------------------------------------------------------------------------
+
+def _pending_path(paths: StorePaths) -> Path:
+    return paths.locks / PENDING_TRANSITION_NAME
+
+
+def _remove_pending(paths: StorePaths) -> None:
+    try:
+        _pending_path(paths).unlink()
+    except FileNotFoundError:
+        return
+    _fsync_directory(paths.locks)
+
+
+def _transition_fields(event: Any, receipt: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not isinstance(event, dict) or not isinstance(receipt, dict): _invalid("transition event and receipt must be objects")
+    required = {"event", "work_id", "run_id", "wave_id", "base_commit", "input_sha256", "output_sha256", "receipt_sha256"}
+    optional = {"worker_id", "lease_id", "fencing_token"}
+    if set(event) - required - optional or not required.issubset(event): _invalid("invalid transition event keys")
+    if not isinstance(event["event"], str) or not event["event"] or event["event"] == COMMIT_EVENT: _invalid("invalid transition event")
+    for key in ("work_id", "run_id", "wave_id"):
+        if not isinstance(event[key], str) or not SAFE_NAME_RE.match(event[key]): _invalid(f"invalid transition {key}")
+    if not isinstance(event["base_commit"], str) or not HEX40_RE.match(event["base_commit"]): _invalid("invalid transition base_commit")
+    for key in ("input_sha256", "receipt_sha256"):
+        if not isinstance(event[key], str) or not HEX64_RE.match(event[key]): _invalid(f"invalid transition {key}")
+    if event["output_sha256"] is not None and (not isinstance(event["output_sha256"], str) or not HEX64_RE.match(event["output_sha256"])): _invalid("invalid transition output_sha256")
+    present_worker = [key in event for key in optional]
+    if any(present_worker) and not all(present_worker): _invalid("incomplete worker transition authority")
+    if all(present_worker):
+        if not isinstance(event["worker_id"], str) or not SAFE_NAME_RE.match(event["worker_id"]) or not isinstance(event["lease_id"], str) or not SAFE_NAME_RE.match(event["lease_id"]) or type(event["fencing_token"]) is not int or event["fencing_token"] <= 0: _invalid("invalid worker transition authority")
+    if set(receipt) != {"category", "name", "work_id", "run_id", "wave_id", "base_commit", "input_sha256", "output_sha256"}: _invalid("invalid transition receipt keys")
+    if receipt["category"] not in RECEIPT_CATEGORIES or not isinstance(receipt["name"], str) or not SAFE_NAME_RE.match(receipt["name"]): _invalid("invalid transition receipt location")
+    for key in ("work_id", "run_id", "wave_id", "base_commit", "input_sha256", "output_sha256"):
+        if receipt[key] != event[key]: _invalid(f"receipt/event correlation mismatch: {key}")
+    return copy.deepcopy(event), copy.deepcopy(receipt)
+
+
+def _receipt_payload(event: dict[str, Any], receipt: dict[str, Any]) -> dict[str, Any]:
+    """The durable receipt deliberately excludes its own digest, avoiding a
+    circular hash.  Its JCS SHA-256 is the authoritative receipt reference."""
+    return {"category": receipt["category"], "name": receipt["name"], **{key: event[key] for key in event if key not in {"event", "receipt_sha256"}}}
+
+
+def _bind_receipt_hash(event: dict[str, Any], receipt: dict[str, Any]) -> dict[str, Any]:
+    expected = jcs_sha256(_receipt_payload(event, receipt))
+    if event["receipt_sha256"] != expected:
+        _invalid("transition receipt_sha256 does not name the durable receipt JCS bytes")
+    return event
+
+
+def _write_immutable_receipt(path: Path, payload: dict[str, Any]) -> str:
+    """Create a receipt once, or prove that the existing bytes are identical.
+    A receipt name is an evidence identifier, never an overwrite slot."""
+    expected_bytes = jcs(payload) + b"\n"
+    info = _lstat(path)
+    if info is None:
+        _atomic_write_json(path, payload)
+    else:
+        _validate_regular(path)
+        if _read_regular(path) != expected_bytes:
+            _fail(STATE_DIVERGENCE, f"receipt collision with different bytes: {path}")
+    reread = _read_regular(path)
+    if reread != expected_bytes:
+        _fail(STATE_DIVERGENCE, f"receipt changed during verification: {path}")
+    parsed = loads(_decode(reread, path))
+    if parsed != payload or jcs_sha256(parsed) != jcs_sha256(payload):
+        _fail(STATE_DIVERGENCE, f"receipt hash verification failed: {path}")
+    return jcs_sha256(parsed)
+
+
+def _verify_transition_receipt(path: Path, event: dict[str, Any], receipt: dict[str, Any]) -> None:
+    """Raw re-read used by recovery; no receipt is trusted merely by name."""
+    payload = _receipt_payload(event, receipt)
+    if _lstat(path) is None: _fail(STATE_DIVERGENCE, "semantic event lacks its receipt")
+    _validate_regular(path)
+    raw = _read_regular(path)
+    if raw != jcs(payload) + b"\n": _fail(STATE_DIVERGENCE, "pending receipt bytes diverge from intent")
+    recorded = loads(_decode(raw, path))
+    if recorded != payload or jcs_sha256(recorded) != event["receipt_sha256"]:
+        _fail(STATE_DIVERGENCE, "pending receipt hash diverges from event")
+
+
+def _candidate_transition(candidate: dict[str, Any], event: dict[str, Any], sequence: int, now: Callable[[], str] | None) -> dict[str, Any]:
+    try:
+        run = candidate["work_items"][event["work_id"]]["gauntlet"]["runs"][event["run_id"]]
+    except (KeyError, TypeError):
+        _invalid("transition does not name a candidate gauntlet run")
+    if event["wave_id"] not in run.get("waves", {}): _invalid("transition does not name a candidate wave")
+    if run["admission"]["base_commit"] != event["base_commit"]: _invalid("transition base commit does not match admission")
+    if "worker_id" in event:
+        worker = run.get("workers", {}).get(event["worker_id"])
+        lease = worker.get("lease") if isinstance(worker, dict) else None
+        if not isinstance(lease, dict) or lease.get("lease_id") != event["lease_id"] or lease.get("fencing_token") != event["fencing_token"]:
+            _invalid("worker transition authority does not match candidate worker lease")
+    run["last_transition"] = {"event_sequence": sequence, "receipt_sha256": event["receipt_sha256"]}
+    return stamp(candidate, candidate["revision"], _now(now))
+
+
+def _validate_candidate_transition(candidate: dict[str, Any], event: dict[str, Any], sequence: int) -> None:
+    try:
+        run = candidate["work_items"][event["work_id"]]["gauntlet"]["runs"][event["run_id"]]
+    except (KeyError, TypeError):
+        _fail(STATE_DIVERGENCE, "pending candidate does not name its gauntlet run")
+    if event["wave_id"] not in run.get("waves", {}) or run.get("admission", {}).get("base_commit") != event["base_commit"]:
+        _fail(STATE_DIVERGENCE, "pending candidate transition correlation diverges")
+    if "worker_id" in event:
+        worker = run.get("workers", {}).get(event["worker_id"])
+        lease = worker.get("lease") if isinstance(worker, dict) else None
+        if not isinstance(lease, dict) or lease.get("lease_id") != event["lease_id"] or lease.get("fencing_token") != event["fencing_token"]:
+            _fail(STATE_DIVERGENCE, "pending worker transition authority diverges")
+    if run.get("last_transition") != {"event_sequence": sequence, "receipt_sha256": event["receipt_sha256"]}:
+        _fail(STATE_DIVERGENCE, "pending candidate last_transition diverges from semantic event")
+
+
+def _fault(fault: Callable[[str], Any] | None, point: str) -> None:
+    if fault is not None: fault(point)
+
+
+def transact_with_event(root: str | Path, mutate: Callable[[dict[str, Any]], dict[str, Any]], *, event: dict[str, Any], receipt: dict[str, Any], now: Callable[[], str] | None = None, timeout: float = LOCK_TIMEOUT, fault: Callable[[str], Any] | None = None) -> Snapshot:
+    """Atomically publish one receipt, semantic event and snapshot via a recoverable WAL.
+
+    The intent is intentionally stored under ``locks`` so bootstrap's declared
+    public layout stays unchanged.  It is opaque state, never a status input.
+    """
+    paths = store_paths(root); event, receipt = _transition_fields(event, receipt); event = _bind_receipt_hash(event, receipt)
+    receipt_target = receipt_path(root, receipt["category"], receipt["name"])
+    receipt_payload = _receipt_payload(event, receipt)
+    with orchestrator_lock(paths, timeout):
+        if _lstat(_pending_path(paths)) is not None: _fail(STATE_DIVERGENCE, "pending transition requires recovery")
+        # This must run under the same lock as intent creation: otherwise two
+        # concurrent calls can both observe an empty name and one can leave a
+        # pre-semantic WAL after the other publishes different evidence.
+        if _lstat(receipt_target) is not None:
+            _validate_regular(receipt_target)
+            if _read_regular(receipt_target) != jcs(receipt_payload) + b"\n":
+                _fail(STATE_DIVERGENCE, f"receipt collision with different bytes: {receipt_target}")
+        current = _require(paths)
+        proposed = mutate(copy.deepcopy(current.document))
+        if not isinstance(proposed, dict) or proposed.get("revision") != current.revision: _fail(STATE_DIVERGENCE, "transition mutation carries a stale revision")
+        # The next semantic record is known under the global lock and is part
+        # of the durable candidate before its intent is made visible.
+        sequence, _ = _next_seq_and_prev(paths)
+        proposed = stamp(proposed, current.revision + 1, _now(now))
+        candidate = _candidate_transition(proposed, event, sequence, now)
+        _validate_document(candidate, paths.orchestrator)
+        _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
+        if jcs(candidate["project"]) != jcs(current.document["project"]): _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
+        intent = {"schema": "grill-transition-wal/v1", "candidate": candidate, "event": event, "receipt": receipt}
+        _atomic_write_json(_pending_path(paths), intent); _fault(fault, "after-intent")
+        durable_digest = _write_immutable_receipt(receipt_target, receipt_payload)
+        if durable_digest != event["receipt_sha256"]: _fail(STATE_DIVERGENCE, "durable receipt hash differs from transition")
+        _fault(fault, "after-receipt")
+        semantic = _append_record_locked(paths, event, now)
+        if semantic["sequence"] != sequence: _fail(STATE_DIVERGENCE, "semantic event sequence changed under lock")
+        _fault(fault, "after-event")
+        candidate["journal_head"] = {"sequence": _append_record_locked(paths, _commit_fields(candidate["revision"], candidate["content_sha256"]), now)["sequence"], "record_sha256": ""}
+        # Re-read the just-appended anchor to avoid duplicating record-hash logic.
+        anchor = _validated_journal_records(paths)[-1]
+        candidate["journal_head"]["record_sha256"] = anchor["content_sha256"]
+        _write_worktree_receipts(paths, candidate); _fault(fault, "after-anchor")
+        snapshot = _write_document(paths, candidate); _fault(fault, "after-snapshot")
+        _remove_pending(paths); _fault(fault, "after-intent-removal")
+        return snapshot
+
+
+def _recover_pending_transition_locked(paths: StorePaths, root: str | Path, *, now: Callable[[], str] | None = None) -> Snapshot:
+    """Finish exactly one WAL candidate, or abandon pre-semantic residue."""
+    pending = _pending_path(paths)
+
+    # Everything below is deliberately a raw recovery reader.  The caller
+    # maps malformed/unverifiable WAL to its dedicated operator action code.
+
+    if _lstat(pending) is None: return _require(paths)
+    intent = loads(_decode(_read_regular(pending), pending))
+    if not isinstance(intent, dict) or set(intent) != {"schema", "candidate", "event", "receipt"} or intent["schema"] != "grill-transition-wal/v1": _invalid("invalid pending transition intent")
+    event, receipt = _transition_fields(intent["event"], intent["receipt"]); event = _bind_receipt_hash(event, receipt)
+    candidate = _validate_document(intent["candidate"], paths.orchestrator)
+    records = _validated_journal_records(paths)
+    matches = [r for r in records if r.get("event") == event["event"] and all(r.get(k) == v for k, v in event.items() if k != "event")]
+    if len(matches) > 1: _fail(STATE_DIVERGENCE, "duplicate semantic event in pending transition")
+    if not matches:
+        _remove_pending(paths)
+        return _require(paths)
+    receipt_file = receipt_path(root, receipt["category"], receipt["name"])
+    _verify_transition_receipt(receipt_file, event, receipt)
+    _validate_candidate_transition(candidate, event, matches[0]["sequence"])
+    current = _snapshot_from(_read_regular(paths.orchestrator), paths.orchestrator)
+    _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
+    if current.revision == candidate["revision"]:
+        if current.content_sha256 != candidate["content_sha256"]: _fail(STATE_DIVERGENCE, "published snapshot differs from pending candidate")
+        _remove_pending(paths); return _require(paths)
+    if current.revision != candidate["revision"] - 1: _fail(STATE_DIVERGENCE, "pending candidate revision is not next")
+    anchors = [r for r in records if r.get("event") == COMMIT_EVENT and r.get("revision") == candidate["revision"]]
+    if len(anchors) > 1 or (anchors and anchors[0].get("snapshot_sha256") != candidate["content_sha256"]): _fail(STATE_DIVERGENCE, "pending commit anchor diverges")
+    if anchors:
+        if records[-1] != anchors[0] or len(records) < 2 or records[-2] != matches[0]: _fail(STATE_DIVERGENCE, "semantic event is already anchored or not current")
+    elif records[-1] != matches[0]:
+        _fail(STATE_DIVERGENCE, "semantic event is not the journal tail")
+    anchor = anchors[0] if anchors else _append_record_locked(paths, _commit_fields(candidate["revision"], candidate["content_sha256"]), now)
+    candidate = dict(candidate); candidate["journal_head"] = {"sequence": anchor["sequence"], "record_sha256": anchor["content_sha256"]}
+    _write_worktree_receipts(paths, candidate)
+    _write_document(paths, candidate)
+    _remove_pending(paths)
+    return _require(paths)
+
+
+def recover_pending_transition(root: str | Path, *, now: Callable[[], str] | None = None, timeout: float = LOCK_TIMEOUT) -> Snapshot:
+    paths = store_paths(root)
+    with orchestrator_lock(paths, timeout):
+        if _lstat(_pending_path(paths)) is None:
+            return _require(paths)
+        try:
+            return _recover_pending_transition_locked(paths, root, now=now)
+        except StoreError as exc:
+            _fail(STORE_RECOVERY_REQUIRED, exc.message)
 
 
 # --------------------------------------------------------------------------
