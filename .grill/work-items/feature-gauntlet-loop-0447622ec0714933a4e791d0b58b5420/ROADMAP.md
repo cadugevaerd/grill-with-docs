@@ -50,7 +50,7 @@
 - depends-on: FASE-003
 - specify-handoff: handoffs/FASE-004-SPECIFY-HANDOFF.md
 - delivery-units: DU-004
-- nota: deliverable substantivo (spec, plan, tasks, implementação — T001-T032 —, testes, 1 round de review independente com verdito APPROVE) pronto nesta sessão. `state: blocked` reflete só o ledger formal V3, mesma lacuna de BL-0003 na FASE-003: `checkpoint --step specify --state complete` exige bundle genuíno que esta sessão não fabrica (BL-0004).
+- nota: deliverable substantivo (spec, plan, tasks, implementação — T001-T032 —, testes, 1 round de review independente com verdito APPROVE) já commitado e publicado em `origin/main` (`37fd179`), por confirmação explícita do operador. `state: blocked` reflete só o ledger formal V3, mesma lacuna de BL-0003 na FASE-003: `phase-turn` confirmado bloqueado (`PHASE-INCOMPLETE: specify`, verificado read-only, sem mutação de estado) até existir checkpoint genuíno (BL-0004).
 
 > Estados: `planned | ready-for-specify | blocked | complete | superseded`. `complete` e `superseded` são terminais. `execution-order` é explícita, topológica e independente dos números de fase. Cada fase tem um handoff exclusivo; somente a primeira incompleta pode ficar `ready-for-specify`. Se todas forem terminais e não houver BL/DQ material aberto, grave `milestone_status=completed`, `state.status=complete`, `active_phase=null` e `audit_verdict=GO`; a auditoria retorna `MILESTONE-COMPLETE`.
 
