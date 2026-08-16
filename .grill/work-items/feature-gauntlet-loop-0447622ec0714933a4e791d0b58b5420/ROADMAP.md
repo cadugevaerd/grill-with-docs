@@ -27,7 +27,7 @@
 - delivery-units: DU-002
 
 ## FASE-003 — Scheduler Claude e waves do DAG
-- state: blocked
+- state: complete
 - objetivo: o Loop despacha cada macroetapa a subagentes Claude e executa em paralelo somente os nós independentes do Execution DAG
 - scope-in: adapter nativo Claude Code; mapeamento de tiers; criação e observação de workers; DAG versionado; waves de até cinco workers; retry transitório e Stall Recovery automática
 - scope-out: runtimes Codex/Hermes, resolução automática de conflitos e reparo automático pós-review
@@ -37,10 +37,10 @@
 - depends-on: FASE-001, FASE-002
 - specify-handoff: handoffs/FASE-003-SPECIFY-HANDOFF.md
 - delivery-units: DU-003
-- nota: deliverable substantivo (spec, plan, tasks, implementação, testes, 3 rounds de review independente) já commitado, mergeado e publicado em `origin/main` (`4ac6746`), por confirmação explícita do operador. `state: blocked` reflete só o ledger formal V3 — `phase-turn` recusa `PHASE-INCOMPLETE: specify` até existir checkpoint genuíno (BL-0003). BL-0001 resolvido.
+- nota: deliverable substantivo (spec, plan, tasks, implementação, testes, 3 rounds de review independente) commitado, mergeado e publicado em `origin/main` (`4ac6746`), por confirmação explícita do operador. `state: complete` fechado por decisão explícita do operador em chat (2026-08-16) — sem checkpoint V3 genuíno (BL-0003, resolvido pela mesma decisão, não por attestation fabricada). BL-0001 e BL-0002 resolvidos por engenharia real; BL-0003 resolvido por decisão do operador.
 
 ## FASE-004 — Convergência, revisão e entrega verificável
-- state: blocked
+- state: complete
 - objetivo: resultados paralelos convergem de modo fail-closed e chegam ao gate humano de ship somente após revisão independente
 - scope-in: converge serial; bloqueio de conflito; verify e review independentes; Run Status Events; testes de contrato e atualização de distribuição com bump SemVer próprio (2.8.0 — 2.6.0 já consumido pela FASE-002, 2.7.0 já consumido pela FASE-003)
 - scope-out: resolução automática de conflito, ciclo automático de reparo após review reprovado e push/release direto
@@ -50,7 +50,7 @@
 - depends-on: FASE-003
 - specify-handoff: handoffs/FASE-004-SPECIFY-HANDOFF.md
 - delivery-units: DU-004
-- nota: deliverable substantivo (spec, plan, tasks, implementação — T001-T032 —, testes, 1 round de review independente com verdito APPROVE) já commitado e publicado em `origin/main` (`37fd179`), por confirmação explícita do operador. `state: blocked` reflete só o ledger formal V3, mesma lacuna de BL-0003 na FASE-003: `phase-turn` confirmado bloqueado (`PHASE-INCOMPLETE: specify`, verificado read-only, sem mutação de estado) até existir checkpoint genuíno (BL-0004).
+- nota: deliverable substantivo (spec, plan, tasks, implementação — T001-T032 —, testes, 1 round de review independente com verdito APPROVE) commitado e publicado em `origin/main` (`37fd179`/`6ce3f4b`), por confirmação explícita do operador. `state: complete` fechado por decisão explícita do operador em chat (2026-08-16) — sem checkpoint V3 genuíno (BL-0004, resolvido pela mesma decisão, não por attestation fabricada).
 
 > Estados: `planned | ready-for-specify | blocked | complete | superseded`. `complete` e `superseded` são terminais. `execution-order` é explícita, topológica e independente dos números de fase. Cada fase tem um handoff exclusivo; somente a primeira incompleta pode ficar `ready-for-specify`. Se todas forem terminais e não houver BL/DQ material aberto, grave `milestone_status=completed`, `state.status=complete`, `active_phase=null` e `audit_verdict=GO`; a auditoria retorna `MILESTONE-COMPLETE`.
 

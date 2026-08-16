@@ -1,6 +1,6 @@
 {
-  "active_phase": "FASE-003",
-  "audit_verdict": "pending",
+  "active_phase": null,
+  "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
     "schema": "v1",
@@ -696,6 +696,19 @@
         "reason": "spec.md, ADR-0015-0019 e precode-foundation.json (aprovado) prontos apos 9 rodadas de critica independente; checkpoint --state complete requer bundle de attestation real (dispatch_intent/invocation_started/invocation_terminal/step_output) que esta sessao nao tem ferramenta pra gerar legitimamente -- speckit-specify generico nao produz esse formato. Aguardando ferramenta de attestation real (Codex ou equivalente) pra fechar o passo.",
         "state": "in-progress",
         "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/verify.md"
+          },
+          {
+            "path": ".specify/reports/verify-review-ship/review.md"
+          }
+        ],
+        "reason": "Milestone fechado por decisao explicita do operador em chat (2026-08-16), nao por attestation V3 genuina. FASE-003 (commit 4ac6746) e FASE-004 (commits 37fd179/6ce3f4b) publicados em origin/main, cada um com verify PASS + review APPROVE independentes. BL-0003/BL-0004 resolvidos pela mesma decisao -- nenhuma cadeia dispatch_intent/invocation_started/invocation_terminal/step_output foi produzida ou fabricada para o passo specify de FASE-003/FASE-004.",
+        "state": "complete",
+        "step": "ship"
       }
     ],
     "current_step": "specify",
@@ -735,11 +748,11 @@
     "max_questions_per_run": 25,
     "max_scope_growth_streak": 3
   },
-  "milestone_status": "in-progress",
+  "milestone_status": "completed",
   "second_pass": {
     "new_material_dqs": 0
   },
-  "status": "in-progress",
+  "status": "complete",
   "version": "1.2.0",
   "work_id": "feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420",
   "workflow": {

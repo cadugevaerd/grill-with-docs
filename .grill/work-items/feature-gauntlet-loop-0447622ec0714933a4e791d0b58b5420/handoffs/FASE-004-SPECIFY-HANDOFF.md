@@ -1,7 +1,7 @@
 # FASE-004 — Convergência, revisão e entrega verificável
 
 - phase: FASE-004
-- state: blocked
+- state: complete
 - roadmap: ROADMAP.md#FASE-004
 - context-refs: Integration Conflict, Independent Review, Review Block, Autonomous Run, Canonical Skill
 - ADRs: ADR-0002, ADR-0008, ADR-0009, ADR-0011, ADR-0020, ADR-0021, ADR-0022, ADR-0023
