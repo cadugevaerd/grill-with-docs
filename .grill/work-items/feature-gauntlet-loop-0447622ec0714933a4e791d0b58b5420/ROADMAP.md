@@ -27,16 +27,17 @@
 - delivery-units: DU-002
 
 ## FASE-003 — Scheduler Claude e waves do DAG
-- state: ready-for-specify
+- state: blocked
 - objetivo: o Loop despacha cada macroetapa a subagentes Claude e executa em paralelo somente os nós independentes do Execution DAG
 - scope-in: adapter nativo Claude Code; mapeamento de tiers; criação e observação de workers; DAG versionado; waves de até cinco workers; retry transitório e Stall Recovery automática
 - scope-out: runtimes Codex/Hermes, resolução automática de conflitos e reparo automático pós-review
 - context-refs: Execution DAG, Model Tier, Capability Grant, Autonomous Run, Stall Recovery, Execution Wave
 - ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0007, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019
-- BLs: BL-0001
+- BLs: BL-0003
 - depends-on: FASE-001, FASE-002
 - specify-handoff: handoffs/FASE-003-SPECIFY-HANDOFF.md
 - delivery-units: DU-003
+- nota: deliverable substantivo (spec, plan, tasks, implementação, testes, 3 rounds de review independente) já commitado, mergeado e publicado em `origin/main` (`4ac6746`), por confirmação explícita do operador. `state: blocked` reflete só o ledger formal V3 — `phase-turn` recusa `PHASE-INCOMPLETE: specify` até existir checkpoint genuíno (BL-0003). BL-0001 resolvido.
 
 ## FASE-004 — Convergência, revisão e entrega verificável
 - state: planned
