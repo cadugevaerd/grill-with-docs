@@ -27,7 +27,7 @@ O coordenador é a única Evidence Boundary: workers não recebem acesso ao Stor
 ## FASE-003 — Scheduler Claude e waves do DAG
 - phase: FASE-003
 - ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0007, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019
-- BLs: BL-0001
+- BLs: BL-0001, BL-0002, BL-0003
 - delivery-units: DU-003
 - development-type: platform-devops
 

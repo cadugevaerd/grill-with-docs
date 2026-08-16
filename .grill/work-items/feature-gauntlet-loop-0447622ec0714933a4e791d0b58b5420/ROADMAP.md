@@ -33,7 +33,7 @@
 - scope-out: runtimes Codex/Hermes, resolução automática de conflitos e reparo automático pós-review
 - context-refs: Execution DAG, Model Tier, Capability Grant, Autonomous Run, Stall Recovery, Execution Wave
 - ADRs: ADR-0001, ADR-0004, ADR-0005, ADR-0007, ADR-0012, ADR-0013, ADR-0014, ADR-0015, ADR-0016, ADR-0017, ADR-0018, ADR-0019
-- BLs: BL-0003
+- BLs: BL-0001, BL-0002, BL-0003
 - depends-on: FASE-001, FASE-002
 - specify-handoff: handoffs/FASE-003-SPECIFY-HANDOFF.md
 - delivery-units: DU-003
