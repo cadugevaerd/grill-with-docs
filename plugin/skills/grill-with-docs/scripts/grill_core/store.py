@@ -139,6 +139,9 @@ KEBAB_ALIASES = {
 
 WORK_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,100}$")
 SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+# FASE-003 (ADR-0015, FR-007): a remediation worker's id is its node's own
+# `id` plus this reserved suffix -- never a caller-chosen name.
+WORKER_REMEDIATION_SUFFIX_RE = re.compile(r"^(.+)-r[0-9]+$")
 HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
 HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
 PROJECT_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -185,8 +188,11 @@ BACKLOG_LINK_STATES = frozenset(
 GAUNTLET_SCHEMA = "grill-gauntlet-runs/v1"
 RUN_STATES = frozenset({"ADMITTED", "RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "BLOCKED", "COMPLETE"})
 WORKER_STATES = frozenset({"DECLARED", "PREPARING", "PREPARED", "CLEANING", "CLEANED", "ORPHANED", "RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "FAILED", "STALLED", "BLOCKED", "CONFLICT", "TERMINAL"})
+# FASE-003 (ADR-0012): the worker-cap check (_validate_gauntlet_block) counts
+# only these -- a worker in any other WORKER_STATES member has freed its slot.
+NON_TERMINAL_WORKER_STATES = frozenset({"DECLARED", "PREPARING", "PREPARED", "RECOVERY_ELIGIBLE", "RECOVERY_RECORDED"})
 LEASE_STATES = frozenset({"ACTIVE", "EXPIRED", "RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "RELEASED"})
-WAVE_STATES = frozenset({"DECLARED"})
+WAVE_STATES = frozenset({"DECLARED", "ACTIVE", "COMPLETE"})
 GRANT_CAPABILITIES = frozenset({"git-local", "workspace-read-write"})
 PENDING_TRANSITION_NAME = "pending-transition.json"
 
@@ -743,9 +749,23 @@ def _safe_relative_path(path: Any, label: str) -> None:
 
 
 def _validate_gauntlet_worker(worker: Any, run: dict[str, Any], worker_id: str) -> None:
-    worker = _closed_object(worker, {"state", "lease", "grant", "workspace"}, f"worker {worker_id}")
+    worker = _closed_object(worker, {"state", "lease", "grant", "workspace", "node_id", "remediates"}, f"worker {worker_id}")
     if not isinstance(worker["state"], str) or worker["state"] not in WORKER_STATES:
         _invalid(f"invalid worker state: {worker_id}")
+    # FASE-003 (FR-007): node lineage is recoverable from worker_id alone --
+    # node_id is worker_id with any reserved remediation suffix stripped.
+    suffix = WORKER_REMEDIATION_SUFFIX_RE.match(worker_id)
+    expected_node_id = suffix.group(1) if suffix else worker_id
+    node_id = worker["node_id"]
+    if not isinstance(node_id, str) or not SAFE_NAME_RE.match(node_id) or node_id != expected_node_id:
+        _invalid(f"invalid worker node_id: {worker_id}")
+    remediates = worker["remediates"]
+    if remediates is not None:
+        if not isinstance(remediates, str):
+            _invalid(f"invalid worker remediates: {worker_id}")
+        sibling = run.get("workers", {}).get(remediates)
+        if not isinstance(sibling, dict) or sibling.get("node_id") != node_id:
+            _invalid(f"invalid worker remediates: {worker_id}")
     lease = worker["lease"]
     if lease is not None:
         lease = _closed_object(lease, {"lease_id", "fencing_token", "acquired_at", "expires_at", "state", "recovery_count"}, f"worker lease {worker_id}")
@@ -754,6 +774,12 @@ def _validate_gauntlet_worker(worker: Any, run: dict[str, Any], worker_id: str) 
         if not isinstance(lease["state"], str) or lease["state"] not in LEASE_STATES or type(lease["recovery_count"]) is not int or lease["recovery_count"] not in (0, 1): _invalid(f"invalid worker lease state: {worker_id}")
         for field in ("acquired_at", "expires_at"):
             if not isinstance(lease[field], str) or not RFC3339_RE.match(lease[field]): _invalid(f"invalid worker lease {field}: {worker_id}")
+        # FASE-003 (FR-007/FR-008(e)): a fresh (unspent) budget is recovery_count
+        # 0 and requires remediates is None; a remediation lease is minted
+        # already-spent (recovery_count 1) and requires remediates is set --
+        # the Store rejects a transaction where these two facts disagree.
+        if (remediates is None) != (lease["recovery_count"] == 0):
+            _invalid(f"invalid worker remediation budget: {worker_id}")
     grant = worker["grant"]
     if grant is not None:
         grant = _closed_object(grant, {"scope_paths", "capabilities"}, f"worker grant {worker_id}")
@@ -781,10 +807,19 @@ def _validate_gauntlet_block(value: Any, work_id: str) -> None:
         if not isinstance(run["state"], str) or run["state"] not in RUN_STATES or type(run["recovery_count"]) is not int or run["recovery_count"] not in (0, 1): _invalid(f"invalid gauntlet run state: {run_id}")
         if not isinstance(run["waves"], dict) or not isinstance(run["workers"], dict): _invalid(f"invalid gauntlet maps: {run_id}")
         for wave_id, wave in run["waves"].items():
-            if not isinstance(wave_id, str) or not SAFE_NAME_RE.match(wave_id) or not isinstance(wave, dict) or set(wave) != {"state"} or not isinstance(wave["state"], str) or wave["state"] not in WAVE_STATES: _invalid(f"invalid gauntlet wave: {run_id}")
+            if not isinstance(wave_id, str) or not SAFE_NAME_RE.match(wave_id) or not isinstance(wave, dict) or set(wave) != {"state", "node_ids"} or not isinstance(wave["state"], str) or wave["state"] not in WAVE_STATES: _invalid(f"invalid gauntlet wave: {run_id}")
+            # FASE-003 (B5 fix, reverting the journal-scan substitution): a
+            # wave's own member node ids are a real, required Store field --
+            # not journal-derived -- so a member with no worker declared yet
+            # is still a known, visible member (see _wave_would_complete).
+            node_ids = wave["node_ids"]
+            if (not isinstance(node_ids, list) or not node_ids
+                    or any(not isinstance(n, str) or not SAFE_NAME_RE.match(n) for n in node_ids)
+                    or len(set(node_ids)) != len(node_ids)):
+                _invalid(f"invalid gauntlet wave node_ids: {run_id}")
         transition = _closed_object(run["last_transition"], {"event_sequence", "receipt_sha256"}, f"gauntlet last_transition {run_id}")
         if type(transition["event_sequence"]) is not int or transition["event_sequence"] < 1 or not isinstance(transition["receipt_sha256"], str) or not HEX64_RE.match(transition["receipt_sha256"]): _invalid(f"invalid gauntlet last_transition: {run_id}")
-        if len(run["workers"]) > 5: _invalid(f"too many gauntlet workers: {run_id}")
+        if sum(1 for w in run["workers"].values() if isinstance(w, dict) and w.get("state") in NON_TERMINAL_WORKER_STATES) > 5: _invalid(f"too many gauntlet workers: {run_id}")
         for worker_id, worker in run["workers"].items():
             if not isinstance(worker_id, str) or not SAFE_NAME_RE.match(worker_id): _invalid(f"invalid gauntlet worker id: {run_id}")
             _validate_gauntlet_worker(worker, run, worker_id)
@@ -887,6 +922,21 @@ def _validate_document(document: Any, path: Path) -> dict[str, Any]:
     return document
 
 
+# FASE-003 (F4 fix): mirrors gauntlet_runs._allocate_wave_id's own
+# "wave-<4+ digit>" numbering convention, duplicated rather than imported --
+# gauntlet_runs already imports this module (see its own header comment), so
+# the reverse import would cycle.  Returns None for an unparseable id so the
+# caller fails closed instead of crashing.
+_WAVE_ID_SEQUENCE_RE = re.compile(r"^wave-(\d{4,})$")
+
+
+def _next_wave_id(current: str) -> str | None:
+    match = _WAVE_ID_SEQUENCE_RE.fullmatch(current)
+    if match is None:
+        return None
+    return f"wave-{int(match.group(1)) + 1:04d}"
+
+
 def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: dict[str, Any], *, allow_existing_gauntlet_changes: bool = False) -> None:
     """Guard the durable state graph even when callers use generic Store CAS.
     The Store is the authority for legal persisted edges, not the future CLI."""
@@ -904,6 +954,13 @@ def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: di
         "CLEANED": {"CLEANED"}, "ORPHANED": {"ORPHANED"}, "FAILED": {"FAILED"}, "STALLED": {"STALLED"}, "BLOCKED": {"BLOCKED"}, "CONFLICT": {"CONFLICT"},
         "RECOVERY_ELIGIBLE": {"RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "BLOCKED"}, "RECOVERY_RECORDED": {"RECOVERY_RECORDED", "BLOCKED"},
     }
+    # FASE-003 (ADR-0013): a wave_id already present in both snapshots must be
+    # byte-identical, or advance one edge -- and only if it is the newest
+    # wave_id (highest key) the *old* snapshot declared.  "Superseded" means
+    # "not the run's newest wave," not "not COMPLETE": a wave other than the
+    # newest stays immutable even mid-lifecycle, defensively, regardless of
+    # whether declare_wave's own COMPLETE-gate already prevents that in practice.
+    wave_edges = {"DECLARED": {"DECLARED", "ACTIVE"}, "ACTIVE": {"ACTIVE", "COMPLETE"}, "COMPLETE": {"COMPLETE"}}
     old_items, new_items = previous.get("work_items", {}), candidate.get("work_items", {})
     for work_id, old_item in old_items.items():
         if not isinstance(old_item, dict) or "gauntlet" not in old_item:
@@ -924,14 +981,116 @@ def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: di
             new_run = new_runs[run_id]
             if jcs(new_run["admission"]) != jcs(old_run["admission"]):
                 _fail(STATE_DIVERGENCE, f"gauntlet admission is immutable: {run_id}")
-            if jcs(new_run["waves"]) != jcs(old_run["waves"]):
-                _fail(STATE_DIVERGENCE, f"gauntlet wave identity is immutable: {run_id}")
+            old_waves = old_run["waves"]
+            newest_wave_id = max(old_waves) if old_waves else None
+            for wave_id, old_wave in old_waves.items():
+                if wave_id not in new_run["waves"]:
+                    _fail(STATE_DIVERGENCE, f"gauntlet wave cannot be removed: {run_id}")
+                new_wave = new_run["waves"][wave_id]
+                if jcs(new_wave) == jcs(old_wave):
+                    continue
+                # node_ids is set once, at real wave declaration, and
+                # immutable for that wave's lifetime from that point on --
+                # only "state" may legitimately differ between two recorded
+                # snapshots of the same wave_id.  The sole exception is the
+                # "DECLARED" state itself: a coordinator-minted placeholder
+                # with no real membership yet (every store.transact_with_
+                # event call, including admission's own, must name an
+                # existing wave_id to correlate its event to -- see
+                # gauntlet_runs.WAVE_PENDING_NODE_IDS) -- so a DECLARED
+                # record's node_ids is allowed to change once, on its own
+                # DECLARED -> * transition, when it becomes real.
+                if (wave_id != newest_wave_id
+                        or new_wave.get("state") not in wave_edges.get(old_wave.get("state"), set())
+                        or (old_wave.get("state") != "DECLARED" and new_wave.get("node_ids") != old_wave.get("node_ids"))):
+                    _fail(STATE_DIVERGENCE, f"invalid gauntlet wave transition: {run_id}")
+
+            # FASE-003 (F4 fix): a wave_id present only in the candidate --
+            # never named in old_waves -- got no equivalent of "new gauntlet
+            # run must start ADMITTED" / "new gauntlet worker must start
+            # DECLARED" below.  Left unchecked, a maliciously or accidentally
+            # injected wave whose id sorts higher than any real wave (e.g.
+            # "wave-0009" while the real sequence is only at "wave-0001")
+            # permanently corrupts every ``max(waves)``-style "newest wave"
+            # computation -- this function's own ``newest_wave_id`` above,
+            # and every coordinator caller's equivalent (declare_wave) --
+            # wedging the real sequence's ability to ever advance again.
+            # Every legitimate new wave_id is minted by exactly one of two
+            # coordinator paths: admission's own wave-0001 DECLARED
+            # placeholder (never seen by this loop -- that mint happens in
+            # the same transaction as the run's own creation, handled by the
+            # "new gauntlet run" branch below, not here), or declare_wave's
+            # direct wave-000N+1 ACTIVE mint once the prior wave is COMPLETE
+            # (see declare_wave's own docstring).  Both are one hop from the
+            # wave lifecycle's DECLARED root (DECLARED itself, or DECLARED ->
+            # ACTIVE) -- never COMPLETE, which no wave may reach without
+            # first existing -- and the id must be exactly the run's current
+            # newest wave's immediate successor: no gap, no out-of-order
+            # insertion, and never more than one genuinely new wave per
+            # transaction (a second one could only match a stale successor).
+            new_wave_ids = set(new_run["waves"]) - set(old_waves)
+            for wave_id in new_wave_ids:
+                new_wave = new_run["waves"][wave_id]
+                if new_wave.get("state") not in {"DECLARED", "ACTIVE"}:
+                    _fail(STATE_DIVERGENCE, f"new gauntlet wave must start DECLARED or ACTIVE: {run_id}")
+                expected_wave_id = _next_wave_id(newest_wave_id) if newest_wave_id is not None else None
+                if expected_wave_id is None or wave_id != expected_wave_id:
+                    _fail(STATE_DIVERGENCE, f"gauntlet wave id is not the run's next sequential wave: {run_id}")
+
+        # FASE-003 (B6, FR-008(e)): a worker record's lease MUST NOT be
+        # minted with a fresh (unspent) remediation budget when this node_id
+        # already has a worker record -- and no worker may be minted at all
+        # once this node_id already has a worker whose budget is already
+        # spent (closing chained remediation, e.g. a bypassed "T1-r2
+        # remediates T1-r1" mint, not just a bypassed fresh-budget mint) --
+        # the Store's own guarantee, independent of what `remediates` claims
+        # or of remediate_node's own application-level scan.  Scoped against
+        # ``candidate_workers_map`` -- the full proposed workers map for this
+        # run, which already contains both already-committed siblings AND
+        # any other worker records newly introduced in this SAME transaction
+        # -- not just ``old_workers``: two remediation-shaped records for one
+        # node minted together in a single ``transact_with_event`` call
+        # (e.g. "T1-r1 remediates T1" plus "T1-r2 remediates T1-r1", both
+        # new) would otherwise each see only the pre-transaction state and
+        # never each other, double-spending the node's one shared budget
+        # within one commit (F3 fix).
+        def _check_budget_lineage(worker_id: str, worker: dict[str, Any], candidate_workers_map: dict[str, Any]) -> None:
+            # A worker whose own worker_id carries no remediation suffix is
+            # structurally the node's canonical "original" position --
+            # ``_validate_gauntlet_worker`` already forces node_id ==
+            # worker_id for exactly this shape, so no other no-suffix
+            # worker_id can ever collide with it on node_id (worker_ids are
+            # unique dict keys).  This rule governs remediation *budget
+            # spending*; it does not apply to that original position, so it
+            # never flags a from-scratch test fixture -- or a real
+            # admission -- that legitimately constructs an original-plus-
+            # replacement pair together in one single transaction: only the
+            # replacement (a suffixed worker_id) is ever checked here.
+            if not WORKER_REMEDIATION_SUFFIX_RE.fullmatch(worker_id):
+                return
+            node_id = worker.get("node_id")
+            siblings = [
+                other for other_id, other in candidate_workers_map.items()
+                if other_id != worker_id and isinstance(other, dict) and other.get("node_id") == node_id
+            ]
+            if not siblings:
+                return
+            sibling_already_spent = any(
+                isinstance(sibling.get("lease"), dict) and sibling["lease"].get("recovery_count") == 1
+                for sibling in siblings
+            )
+            lease = worker.get("lease")
+            recovery_count = lease.get("recovery_count") if isinstance(lease, dict) else None
+            if sibling_already_spent or recovery_count != 1:
+                _fail(STATE_DIVERGENCE, f"gauntlet worker budget must be spent for an already-seen node: {worker_id}")
+
         for run_id, new_run in new_runs.items():
             old_run = old_runs.get(run_id)
             if old_run is None:
                 if new_run["state"] != "ADMITTED": _fail(STATE_DIVERGENCE, f"new gauntlet run must start ADMITTED: {run_id}")
                 for worker_id, worker in new_run["workers"].items():
                     if worker["state"] != "DECLARED": _fail(STATE_DIVERGENCE, f"new gauntlet worker must start DECLARED: {worker_id}")
+                    _check_budget_lineage(worker_id, worker, new_run["workers"])
                 continue
             if new_run["state"] not in run_edges.get(old_run["state"], set()): _fail(STATE_DIVERGENCE, f"invalid gauntlet run transition: {run_id}")
             old_workers = old_run.get("workers", {})
@@ -942,6 +1101,7 @@ def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: di
                 old_worker = old_workers.get(worker_id)
                 if old_worker is None:
                     if worker["state"] != "DECLARED": _fail(STATE_DIVERGENCE, f"new gauntlet worker must start DECLARED: {worker_id}")
+                    _check_budget_lineage(worker_id, worker, new_run["workers"])
                 elif worker["state"] not in worker_edges.get(old_worker["state"], set()): _fail(STATE_DIVERGENCE, f"invalid gauntlet worker transition: {worker_id}")
 
 

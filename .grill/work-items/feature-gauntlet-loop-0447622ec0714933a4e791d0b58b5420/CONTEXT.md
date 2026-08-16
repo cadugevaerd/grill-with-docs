@@ -19,5 +19,6 @@
 | Independent Review | Revisão somente leitura por subagente que não planejou nem executou a mudança. | autoaprovação, review pelo executor | ADR-0008 |
 | Integration Conflict | Bloqueio quando mudanças de workers não convergem limpas. | auto-merge, conflito silencioso | ADR-0009 |
 | Review Block | Bloqueio emitido quando a revisão independente reprova a mudança. | reparo automático fora do workflow, ship sem aprovação | ADR-0011 |
+| Execution Wave | Conjunto delimitado de workers concorrentes despachados a nós independentes do Execution DAG dentro de `agent-execute`, com identidade distinta de qualquer wave anterior da mesma run. | paralelismo entre macroetapas, wave sem identidade | ADR-0013 |
 
 > Somente linguagem ubíqua; decisões e tarefas vivem em ADR/BL/ROADMAP.

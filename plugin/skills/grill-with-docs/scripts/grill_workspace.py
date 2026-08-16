@@ -2187,7 +2187,7 @@ def gauntlet_status_command(args: argparse.Namespace) -> tuple[dict[str, Any], i
     return payload, EXIT_OK
 
 
-def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[str, str]]:
+def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[str, str], dict[str, Any]]:
     """Build a durable admission only from a newly verified FASE-001 proof.
 
     The activation-state projection is intentionally repeated here instead of
@@ -2195,6 +2195,13 @@ def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[st
     current activation for itself.  The resulting hashes use the exact config
     record and bytes observed by this proof boundary; no formatted or prefixed
     digest enters the Store.
+
+    Also returns the exact activation ``record`` this proof read (config
+    ``limits``/``tier_policy`` included).  FASE-003 commands need explicit
+    live values (e.g. the activation-configured worker cap) that ``gauntlet_
+    runs`` -- a hash-only coordinator boundary -- never reads for itself; the
+    CLI resolves them once, here, from the same proof every other field
+    already comes from, and threads them down explicitly.
     """
     root = project_root(args.root)
     resolve_gauntlet_subject(root, args.work_id)
@@ -2252,7 +2259,7 @@ def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[st
             )
         except gauntlet_runs.GauntletRunError as error:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra={"work_id": args.work_id}) from error
-        return root, gauntlet_runs, admission
+        return root, gauntlet_runs, admission, record
     finally:
         if item_fd is not None:
             os.close(item_fd)
@@ -2261,7 +2268,7 @@ def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[st
 
 
 def gauntlet_run_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    root, gauntlet_runs, admission = gauntlet_run_admission(args)
+    root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
     try:
         return gauntlet_runs.admit_or_reuse_run(root, args.work_id, admission), EXIT_OK
     except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
@@ -2277,7 +2284,7 @@ def gauntlet_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any], i
         if state != "ACTIVATED":
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-REQUIRED", "a current Gauntlet activation is required", extra={"work_id": args.work_id})
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "durable recovery requires --run-id", extra={"work_id": args.work_id})
-    root, gauntlet_runs, admission = gauntlet_run_admission(args)
+    root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
     try:
         return gauntlet_runs.record_resume_decision(root, args.work_id, args.run_id, admission), EXIT_OK
     except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
@@ -2295,7 +2302,7 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "cleanup is unavailable before durable scheduling", extra={"work_id": args.work_id})
     if args.run_id is None or args.worker_id is None:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--run-id and --worker-id must be supplied together", extra={"work_id": args.work_id})
-    root, gauntlet_runs, admission = gauntlet_run_admission(args)
+    root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
     try:
         result = gauntlet_runs.cleanup_worker(root, args.work_id, args.run_id, args.worker_id, admission)
     except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
@@ -2310,7 +2317,7 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
 
 def gauntlet_prepare_worker_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Prepare one passive, scoped worker workspace from a fresh admission."""
-    root, gauntlet_runs, admission = gauntlet_run_admission(args)
+    root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
     try:
         return gauntlet_runs.prepare_worker(
             root, args.work_id, args.run_id, args.worker_id, args.scope, admission
@@ -2319,6 +2326,108 @@ def gauntlet_prepare_worker_command(args: argparse.Namespace) -> tuple[dict[str,
         # Store's public vocabulary predates this adapter and uses a small
         # alias table.  Every core/store failure crosses this one JSON
         # boundary as a kebab-cased BLOCKED response.
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
+
+
+def _tier_floors(record: dict[str, Any]) -> tuple[str, str]:
+    """FR-002 SSOT: resolve both tier floors from the caller's own current
+    activation-pinned tier policy -- never a literal duplicated in
+    ``grill_core``, so a future policy change can't silently desync from
+    this enforcement point."""
+    tier_policy = record["tier_policy"]
+    return tier_policy["minimum_by_step"]["agent-execute"], tier_policy["supplemental"]["markdown-maintenance"]
+
+
+def gauntlet_dag_validate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """FASE-003 (FR-003/FR-004/FR-006): fail-closed Execution DAG validation."""
+    root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
+    agent_execute_floor, markdown_floor = _tier_floors(record)
+    try:
+        return gauntlet_runs.validate_execution_dag(
+            root, args.work_id, args.run_id, args.dag, admission,
+            agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
+        ), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
+
+
+def gauntlet_wave_declare_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """FASE-003 (FR-004/FR-005, ADR-0013): declare the run's next Execution Wave."""
+    root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
+    agent_execute_floor, markdown_floor = _tier_floors(record)
+    try:
+        return gauntlet_runs.declare_wave(
+            root, args.work_id, args.run_id, args.dag, args.node_id, admission,
+            activation_max_workers=record["limits"]["max_workers"],
+            agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
+        ), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
+
+
+def gauntlet_worker_declare_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """FASE-003 (FR-007): mint one first-dispatch worker, ``worker_id = node_id``."""
+    root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
+    agent_execute_floor, markdown_floor = _tier_floors(record)
+    try:
+        return gauntlet_runs.declare_worker(
+            root, args.work_id, args.run_id, args.node_id, args.wave_id, args.tier, args.files, args.dag, admission,
+            agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
+        ), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
+
+
+def gauntlet_progress_record_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """FASE-003 (FR-008(d)): renew one worker's lease past its original window."""
+    root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
+    try:
+        return gauntlet_runs.record_progress(root, args.work_id, args.run_id, args.worker_id, admission), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
+
+
+def gauntlet_worker_terminal_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """FASE-003 (FR-009/FR-010): terminate one worker, success or failure."""
+    root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
+    try:
+        return gauntlet_runs.terminate_worker(
+            root, args.work_id, args.run_id, args.worker_id, args.outcome, args.failure_class, admission,
+        ), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
+
+
+def gauntlet_remediate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """FASE-003 (FR-007/FR-009/FR-010, ADR-0015): remediate one node's
+    current worker.
+
+    Both accepted ``--reason`` values -- ``stall`` (User Story 3) and
+    ``transient-failure`` (User Story 4) -- flow through unchanged to
+    ``remediate_node``, which enforces each reason's own eligibility
+    precondition and shares the same per-node remediation budget across
+    both (a node cannot chain remediation by alternating reasons).
+    """
+    root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
+    try:
+        return gauntlet_runs.remediate_node(
+            root, args.work_id, args.run_id, args.worker_id, args.reason, admission,
+            stall_minutes=record["limits"]["stall_minutes"],
+            activation_max_workers=record["limits"]["max_workers"],
+        ), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
         code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
                 if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
@@ -2750,6 +2859,44 @@ def build_parser() -> JsonParser:
     prepare_worker_parser.add_argument("--run-id", required=True)
     prepare_worker_parser.add_argument("--worker-id", required=True)
     prepare_worker_parser.add_argument("--scope", action="append", required=True)
+    dag_validate_parser = subparsers.add_parser("gauntlet-dag-validate")
+    dag_validate_parser.add_argument("root")
+    dag_validate_parser.add_argument("--work-id", required=True)
+    dag_validate_parser.add_argument("--run-id", required=True)
+    dag_validate_parser.add_argument("--dag", required=True)
+    wave_declare_parser = subparsers.add_parser("gauntlet-wave-declare")
+    wave_declare_parser.add_argument("root")
+    wave_declare_parser.add_argument("--work-id", required=True)
+    wave_declare_parser.add_argument("--run-id", required=True)
+    wave_declare_parser.add_argument("--dag", required=True)
+    wave_declare_parser.add_argument("--node-id", action="append", required=True)
+    worker_declare_parser = subparsers.add_parser("gauntlet-worker-declare")
+    worker_declare_parser.add_argument("root")
+    worker_declare_parser.add_argument("--work-id", required=True)
+    worker_declare_parser.add_argument("--run-id", required=True)
+    worker_declare_parser.add_argument("--wave-id", required=True)
+    worker_declare_parser.add_argument("--node-id", required=True)
+    worker_declare_parser.add_argument("--tier", required=True)
+    worker_declare_parser.add_argument("--files", action="append", required=True)
+    worker_declare_parser.add_argument("--dag", required=True)
+    progress_record_parser = subparsers.add_parser("gauntlet-progress-record")
+    progress_record_parser.add_argument("root")
+    progress_record_parser.add_argument("--work-id", required=True)
+    progress_record_parser.add_argument("--run-id", required=True)
+    progress_record_parser.add_argument("--worker-id", required=True)
+    worker_terminal_parser = subparsers.add_parser("gauntlet-worker-terminal")
+    worker_terminal_parser.add_argument("root")
+    worker_terminal_parser.add_argument("--work-id", required=True)
+    worker_terminal_parser.add_argument("--run-id", required=True)
+    worker_terminal_parser.add_argument("--worker-id", required=True)
+    worker_terminal_parser.add_argument("--outcome", choices=("completed", "failed"), required=True)
+    worker_terminal_parser.add_argument("--failure-class", choices=("process-timeout", "transport-failure"))
+    remediate_parser = subparsers.add_parser("gauntlet-remediate")
+    remediate_parser.add_argument("root")
+    remediate_parser.add_argument("--work-id", required=True)
+    remediate_parser.add_argument("--run-id", required=True)
+    remediate_parser.add_argument("--worker-id", required=True)
+    remediate_parser.add_argument("--reason", choices=("stall", "transient-failure"), required=True)
     gauntlet_resume_parser = subparsers.add_parser("gauntlet-resume")
     gauntlet_resume_parser.add_argument("root")
     gauntlet_resume_parser.add_argument("--work-id", required=True)
@@ -2799,6 +2946,12 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-resume": gauntlet_resume_command,
             "gauntlet-prepare-worker": gauntlet_prepare_worker_command,
             "gauntlet-cleanup": gauntlet_cleanup_command,
+            "gauntlet-dag-validate": gauntlet_dag_validate_command,
+            "gauntlet-wave-declare": gauntlet_wave_declare_command,
+            "gauntlet-worker-declare": gauntlet_worker_declare_command,
+            "gauntlet-progress-record": gauntlet_progress_record_command,
+            "gauntlet-worker-terminal": gauntlet_worker_terminal_command,
+            "gauntlet-remediate": gauntlet_remediate_command,
             "hotfix": hotfix_command,
             "hotfix-go": hotfix_go_command,
             "checkpoint": checkpoint_command,
