@@ -1,0 +1,514 @@
+{
+  "schema_version": "1.2.0",
+  "project": {
+    "id": "project-001",
+    "name": "FASE-003 Scheduler Waves",
+    "root": "specs/013-scheduler-waves"
+  },
+  "modules": [
+    {
+      "id": "MOD-001",
+      "name": "Sinal de progresso do worker durante execução ativa",
+      "required": true,
+      "status": "missing",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py:724 gauntlet.worker.declared",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py:759 gauntlet.worker.preparing",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py:791 gauntlet.worker.prepared (último evento antes de qualquer execução real)",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py:830 gauntlet.worker.cleaning (próximo evento só no fim)",
+        "specs/013-scheduler-waves/spec.md FR-009"
+      ],
+      "confidence": "verified",
+      "notes": "Entre 'prepared' e 'cleaning' não existe nenhuma transição gravável hoje: todo worker com mais de 15min é stall por definição (BL-0001a). Precisa de evento novo, coordinator-owned (nunca auto-reportado pelo worker, per ADR-0006/ADR-0010), gravado periodicamente durante o dispatch ativo."
+    },
+    {
+      "id": "MOD-002",
+      "name": "Sinal de macroetapa terminal (gate de despacho FR-001)",
+      "required": true,
+      "status": "existing",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:2445 def checkpoint_command",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:2564 current_step recalculado como next(step onde steps!='complete')",
+        "state.json deste work item já usa development.steps[step] em {pending,in-progress,complete,blocked} nas 11 macroetapas há 3 fases (011/012/013)"
+      ],
+      "confidence": "verified",
+      "notes": "'Terminal' pras 11 macroetapas já existe como primitivo executável (checkpoint --step X --state complete|blocked). BL-0001(c) supôs que faltava definição; o que falta é decidir quem chama checkpoint para o líder despachado nesta fase (ver MOD-003/MOD-010)."
+    },
+    {
+      "id": "MOD-003",
+      "name": "Fronteira do adapter de despacho (quem invoca de fato um subagente Claude)",
+      "required": true,
+      "status": "not-verifiable",
+      "evidence": [
+        "grill_workspace.py é CLI stdlib-only, nenhum uso de Task/Agent tool no core",
+        ".grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/docs/adr/ADR-0007.md cita 'adapter Claude Code' só como gate de ativação, não como mecanismo de invocação",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet.py:376 TIER_POLICY/ADAPTER são configuração declarada, não código de despacho"
+      ],
+      "confidence": "inferred",
+      "notes": "O core determinístico não pode invocar um subagente Claude; despacho real só pode acontecer na sessão orquestradora (Agent/Task tool), lendo lease/grant/tier que o core produz. plan.md da FASE-003 precisa nomear essa fronteira explicitamente antes do HOW."
+    },
+    {
+      "id": "MOD-004",
+      "name": "Orçamento de recovery separado: run (resume manual) vs lease (stall automático)",
+      "required": true,
+      "status": "existing",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/store.py:754 lease.recovery_count validado em {0,1}, nunca escrito em gauntlet_runs.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py:462 só run.recovery_count é setado, em record_resume_decision"
+      ],
+      "confidence": "verified",
+      "notes": "Schema já reserva dois contadores independentes. BL-0001(d) temia colisão 'zero ou dois'; a recovery automática da FASE-003 pode ter orçamento próprio em lease.recovery_count sem tocar run.recovery_count. Falta a função de gravação (coordinator-only, mesmo padrão de record_resume_decision)."
+    },
+    {
+      "id": "MOD-005",
+      "name": "Entrada de stall na recovery, independente do TTL da lease",
+      "required": true,
+      "status": "missing",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py:668-680 _require_active_lease só checa state==ACTIVE e expires_at (TTL fixo de 1h, linha 663), não olha recência de transição",
+        "specs/013-scheduler-waves/spec.md FR-009 (janela de stall 15min) e Assumptions (janela vem da ativação FASE-001)"
+      ],
+      "confidence": "verified",
+      "notes": "Stall (15min sem transição) e expiração de lease (1h fixo) são sinais independentes. BL-0001(e) não é colisão de valor, é caminho de entrada faltando: precisa de checador novo baseado em recência do journal (MOD-001) que dispara recovery mesmo com lease ainda ACTIVE."
+    },
+    {
+      "id": "MOD-006",
+      "name": "Contagem de cap por workers não-terminais (ADR-0012)",
+      "required": true,
+      "status": "necessary",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/store.py:787 _validate_gauntlet_block conta len(run['workers']) total",
+        ".grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/docs/adr/ADR-0012.md"
+      ],
+      "confidence": "verified",
+      "notes": "Decisão já fechada (ADR-0012); implementação ainda não existe. Sem isso, qualquer DAG com mais de 5 nós trava a run pra sempre."
+    },
+    {
+      "id": "MOD-007",
+      "name": "Ciclo de vida de múltiplas waves no Store (ADR-0013)",
+      "required": true,
+      "status": "necessary",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/store.py:189 WAVE_STATES={'DECLARED'}",
+        "plugin/skills/grill-with-docs/scripts/grill_core/store.py:928 mapa waves imutável inteiro",
+        ".grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/docs/adr/ADR-0013.md"
+      ],
+      "confidence": "verified",
+      "notes": "Decisão já fechada (ADR-0013); Store shipado pela FASE-002 permite só 1 wave congelada por run."
+    },
+    {
+      "id": "MOD-008",
+      "name": "Campos do Execution DAG (tier/parallel/files/max_workers/depends_on)",
+      "required": true,
+      "status": "existing",
+      "evidence": [
+        "specs/011-gauntlet-loop/execution-dag.json (todos os campos presentes em cada nó)",
+        ".grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/docs/adr/ADR-0014.md"
+      ],
+      "confidence": "verified",
+      "notes": "Formato já produzido manualmente pela macroetapa tasks em 011 e 012; FASE-003 consome, não gera (ADR-0014)."
+    },
+    {
+      "id": "MOD-009",
+      "name": "Classificação de falha transitória para retry único de worker",
+      "required": true,
+      "status": "missing",
+      "evidence": [
+        "único 'retry' existente é _TRANSIENT_STORE_CODES / _retry_budget=2 em gauntlet_runs.py:304-318, uso interno de colisão CAS do Store, não relacionado a falha de dispatch de worker",
+        "specs/013-scheduler-waves/spec.md FR-010/FR-011"
+      ],
+      "confidence": "verified",
+      "notes": "Nenhum código hoje classifica falha de worker como timeout de processo vs. falha de transporte vs. rejeição de validador/gate. Classificação é fechada (2 categorias), simples de testar isoladamente."
+    },
+    {
+      "id": "MOD-010",
+      "name": "Cadeia de atestação de checkpoint (receipt verificado pelo coordenador)",
+      "required": false,
+      "status": "existing",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py:750 judge_checkpoint_attestation",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:2546 checkpoint_command chama verify_checkpoint_attestation (def em :2403), que chama judge_checkpoint_attestation em :2428"
+      ],
+      "confidence": "verified",
+      "notes": "Já existe verificação de receipt encadeado (campaign de 7 campos, predecessor_output) pra aceitar um checkpoint sem confiar no autor. Reduz risco de MOD-002/MOD-003: o líder de macroetapa pode submeter receipt pro mesmo judge_checkpoint_attestation já existente."
+    },
+    {
+      "id": "MOD-011",
+      "name": "Rejeição fail-closed de nó do DAG que aponta pra evidência de verify/review/ship",
+      "required": true,
+      "status": "missing",
+      "evidence": [
+        "specs/012-durable-run-state/tasks.md:53 T019 escreve .specify/reports/verify-review-ship/verify.md",
+        "specs/012-durable-run-state/tasks.md:54 T020 (nao marcado) e o proprio trabalho de review",
+        "execution-dag.json (011 e 012): schema tem só id/depends_on/tier/parallel/files, nenhum campo de macroetapa",
+        "specs/011-gauntlet-loop/execution-dag.json T019 files inclui .grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/ROUND-LOG.jsonl — não vive na raiz do repo; capturado pela regra de segmento de path `.grill` (não basename nem igualdade de path completo)",
+        "grill_workspace.py:42-52 ROOT_FILES tem 10 arquivos (nao so os 3 originais); state.json (attestation_campaign/attested_outputs, grill_workspace.py:2421/2433/2561-2562) nao estava na lista fechada original — achado da rodada 8"
+      ],
+      "confidence": "verified",
+      "notes": "Achado do round 4 de crítica independente, corrigindo a primeira resolução (que citou ADR-0014 incorretamente como se garantisse todo nó em agent-execute). Sem essa rejeição, FR-004 despacharia um nó assim como worker, violando FR-012/SC-007. Round 6 corrigiu a semântica de matching (segmento de path, não igualdade de path completo). Round 8 corrigiu a regra (ii) de lista fechada de 3 basenames para segmento de path `.grill` (a lista original deixava `state.json` de fora — o arquivo mais sensível, onde vive a cadeia de atestação). Resolvido por ADR-0018."
+    },
+    {
+      "id": "MOD-012",
+      "name": "Enforcement determinístico do orçamento de remediação por nó (Store-level)",
+      "required": true,
+      "status": "missing",
+      "evidence": [
+        "store.py:754 valida lease.recovery_count em {0,1} — bounds check, não guarda de transição; qualquer valor é aceito na criação",
+        "gauntlet_runs.py:658-665 _new_coordinator_lease hardcoda recovery_count=0, sem parâmetro",
+        "gauntlet_runs.py:445/460 mostram o padrão equivalente já enforçado pro orçamento de run (record_resume_decision, CAS-guarded dentro da transação) — não existe análogo pro orçamento de nó",
+        "store.py:746 worker record é objeto fechado sem campo de identidade de nó do DAG; grant.scope_paths é sinal de correlação inviável — rodada 9 testou contra execution-dag.json de 011 e 012 e encontrou 15/20 e 16/20 nós compartilhando files idêntico com outro nó; worker_id derivado do id do próprio nó (SAFE_NAME_RE, store.py:141, já admite o formato) é a correlação correta, sem campo novo"
+      ],
+      "confidence": "verified",
+      "notes": "Achado da rodada 8: FR-007 exige que uma lease de remediação nasça já gasta, mas nada no Store verifica isso. Correlação por grant.scope_paths (proposta na rodada 8) foi refutada empiricamente na rodada 9 — colide na maioria dos nós dos dois DAGs reais. Resolvido por FR-008(e): Store rejeita mint de lease com recovery_count=0 pra um worker_id cuja linhagem de nó (derivada do id do nó, FR-007) já tem um irmão com orçamento gasto no run."
+    }
+  ],
+  "recommendations": {
+    "mvp": [
+      "MOD-002",
+      "MOD-003",
+      "MOD-006",
+      "MOD-007",
+      "MOD-008",
+      "MOD-010",
+      "MOD-011"
+    ],
+    "go_live": [
+      "MOD-001",
+      "MOD-004",
+      "MOD-005",
+      "MOD-009",
+      "MOD-012"
+    ],
+    "future": [],
+    "decision_status": "approved"
+  },
+  "open_questions": [
+    {
+      "id": "OQ-002",
+      "question": "Mecanismo concreto do sinal periódico de progresso (o quê exatamente a sessão orquestradora observa, com que cadência) — a autoridade já foi decidida (ADR-0017: sessão, nunca o worker, via primitiva coordinator-only nova), então isto NÃO bloqueia specify; é explicitamente um detalhe HOW de plan.md.",
+      "owner": "FASE-003 plan"
+    }
+  ],
+  "change_log": [
+    {
+      "id": "CHG-B07C120B6E86",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "remove",
+      "path": "/modules/0"
+    },
+    {
+      "id": "CHG-C03E296DC36A",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-CFE93EEFA7BA",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-B1D32A265B07",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-F1ABF1896085",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-9C4C0453DB02",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-1684F0BE8783",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-951DCC04CAC4",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-45534CB08AAB",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-2733F6FD190C",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-F6D42F189417",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-3C9335B8A6D6",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "replace",
+      "path": "/recommendations"
+    },
+    {
+      "id": "CHG-8EE26914A04B",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/open_questions/-"
+    },
+    {
+      "id": "CHG-7DF3057D8435",
+      "at": "2026-08-15T18:28:18.283920+00:00",
+      "operation": "add",
+      "path": "/open_questions/-"
+    },
+    {
+      "id": "CHG-64F7FCC38B70",
+      "at": "2026-08-15T18:39:03.894902+00:00",
+      "operation": "replace",
+      "path": "/schema_version"
+    },
+    {
+      "id": "CHG-A6E279918EF3",
+      "at": "2026-08-15T18:39:03.894902+00:00",
+      "operation": "add",
+      "path": "/decomposition"
+    },
+    {
+      "id": "CHG-3BB0E27CD293",
+      "at": "2026-08-15T18:41:21.554008+00:00",
+      "operation": "replace",
+      "path": "/decomposition/decision_status"
+    },
+    {
+      "id": "CHG-904D5F6CCA9D",
+      "at": "2026-08-15T18:41:21.554008+00:00",
+      "operation": "replace",
+      "path": "/recommendations/decision_status"
+    },
+    {
+      "id": "CHG-814C056E2625",
+      "at": "2026-08-15T19:04:12.673912+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-BDD25425A2B1",
+      "at": "2026-08-15T19:04:12.673912+00:00",
+      "operation": "replace",
+      "path": "/decomposition/boundaries"
+    },
+    {
+      "id": "CHG-3464C4372907",
+      "at": "2026-08-15T19:04:12.673912+00:00",
+      "operation": "replace",
+      "path": "/decomposition/rationale"
+    },
+    {
+      "id": "CHG-74C12751C99B",
+      "at": "2026-08-15T19:04:12.673912+00:00",
+      "operation": "remove",
+      "path": "/decomposition/review_triggers/2"
+    },
+    {
+      "id": "CHG-6DB0A39DA298",
+      "at": "2026-08-15T19:04:12.673912+00:00",
+      "operation": "add",
+      "path": "/decomposition/review_triggers/-"
+    },
+    {
+      "id": "CHG-7188515BE3D7",
+      "at": "2026-08-15T19:04:12.673912+00:00",
+      "operation": "replace",
+      "path": "/decomposition/decision_status"
+    },
+    {
+      "id": "CHG-7D7D1680EBDF",
+      "at": "2026-08-15T19:04:12.673912+00:00",
+      "operation": "replace",
+      "path": "/recommendations/mvp"
+    },
+    {
+      "id": "CHG-79BC90AEA5CC",
+      "at": "2026-08-15T19:04:12.673912+00:00",
+      "operation": "replace",
+      "path": "/recommendations/decision_status"
+    },
+    {
+      "id": "CHG-8521075AF478",
+      "at": "2026-08-15T19:04:12.673912+00:00",
+      "operation": "remove",
+      "path": "/open_questions/0"
+    },
+    {
+      "id": "CHG-E0DD20B9E900",
+      "at": "2026-08-15T19:04:12.673912+00:00",
+      "operation": "replace",
+      "path": "/open_questions/0"
+    },
+    {
+      "id": "CHG-A1FEA0473945",
+      "at": "2026-08-15T19:14:58.921808+00:00",
+      "operation": "test",
+      "path": "/modules/1/id"
+    },
+    {
+      "id": "CHG-05B7A869CEA9",
+      "at": "2026-08-15T19:14:58.921808+00:00",
+      "operation": "replace",
+      "path": "/modules/1/evidence/0"
+    },
+    {
+      "id": "CHG-FE53FF390317",
+      "at": "2026-08-15T19:14:58.921808+00:00",
+      "operation": "test",
+      "path": "/modules/9/id"
+    },
+    {
+      "id": "CHG-D1B4DC3BC751",
+      "at": "2026-08-15T19:14:58.921808+00:00",
+      "operation": "replace",
+      "path": "/modules/9/evidence/1"
+    },
+    {
+      "id": "CHG-2DAA97DABC82",
+      "at": "2026-08-15T19:29:54.116927+00:00",
+      "operation": "test",
+      "path": "/modules/10/id"
+    },
+    {
+      "id": "CHG-5D4BE8DAFCAE",
+      "at": "2026-08-15T19:29:54.116927+00:00",
+      "operation": "add",
+      "path": "/modules/10/evidence/-"
+    },
+    {
+      "id": "CHG-9BCED3A6CFE8",
+      "at": "2026-08-15T19:29:54.116927+00:00",
+      "operation": "replace",
+      "path": "/modules/10/notes"
+    },
+    {
+      "id": "CHG-F3B451CE607E",
+      "at": "2026-08-15T19:29:54.116927+00:00",
+      "operation": "replace",
+      "path": "/decomposition/review_triggers/3"
+    },
+    {
+      "id": "CHG-E353B921431F",
+      "at": "2026-08-15T20:02:45.993839+00:00",
+      "operation": "test",
+      "path": "/modules/10/id"
+    },
+    {
+      "id": "CHG-42BB61737252",
+      "at": "2026-08-15T20:02:45.993839+00:00",
+      "operation": "add",
+      "path": "/modules/10/evidence/-"
+    },
+    {
+      "id": "CHG-D3322D9D9E0D",
+      "at": "2026-08-15T20:02:45.993839+00:00",
+      "operation": "replace",
+      "path": "/modules/10/notes"
+    },
+    {
+      "id": "CHG-DA41BB22EF6C",
+      "at": "2026-08-15T20:02:45.993839+00:00",
+      "operation": "add",
+      "path": "/modules/-"
+    },
+    {
+      "id": "CHG-004843EF5CCC",
+      "at": "2026-08-15T20:02:45.993839+00:00",
+      "operation": "replace",
+      "path": "/decomposition/boundaries"
+    },
+    {
+      "id": "CHG-C9FE37B30EBC",
+      "at": "2026-08-15T20:02:46.031631+00:00",
+      "operation": "replace",
+      "path": "/recommendations/go_live"
+    },
+    {
+      "id": "CHG-60E4CB367BDB",
+      "at": "2026-08-15T20:13:34.831447+00:00",
+      "operation": "test",
+      "path": "/modules/10/id"
+    },
+    {
+      "id": "CHG-3DF19570CB85",
+      "at": "2026-08-15T20:13:34.831447+00:00",
+      "operation": "replace",
+      "path": "/modules/10/evidence/3"
+    },
+    {
+      "id": "CHG-615CB49A24D6",
+      "at": "2026-08-15T20:13:34.831447+00:00",
+      "operation": "test",
+      "path": "/modules/11/id"
+    },
+    {
+      "id": "CHG-343FA6A1628F",
+      "at": "2026-08-15T20:13:34.831447+00:00",
+      "operation": "replace",
+      "path": "/modules/11/evidence/3"
+    },
+    {
+      "id": "CHG-422A97427214",
+      "at": "2026-08-15T20:13:34.831447+00:00",
+      "operation": "replace",
+      "path": "/modules/11/notes"
+    },
+    {
+      "id": "CHG-C5BBCB531032",
+      "at": "2026-08-15T20:13:34.831447+00:00",
+      "operation": "replace",
+      "path": "/decomposition/review_triggers/3"
+    },
+    {
+      "id": "CHG-AAA3A129E601",
+      "at": "2026-08-15T20:15:37.350926+00:00",
+      "operation": "replace",
+      "path": "/decomposition/decision_status"
+    },
+    {
+      "id": "CHG-3C146D6DF346",
+      "at": "2026-08-15T20:15:37.350926+00:00",
+      "operation": "replace",
+      "path": "/recommendations/decision_status"
+    }
+  ],
+  "decomposition": {
+    "mode": "modular",
+    "rationale": "Cada primitivo faltante ou decidido-não-construído (MOD-001 sinal de progresso, MOD-005 entrada de stall, MOD-006 cap concorrente, MOD-007 ciclo de vida de wave, MOD-009 classificação de retry, MOD-011 rejeição fail-closed de nó fora do escopo de agent-execute) é uma extensão isolada e testável do Store/gauntlet_runs.py existente, revisável independentemente e sem depender de despacho real de subagente Claude (MOD-003) ainda estar resolvido.",
+    "boundaries": [
+      "MOD-001",
+      "MOD-005",
+      "MOD-006",
+      "MOD-007",
+      "MOD-009",
+      "MOD-011",
+      "MOD-012"
+    ],
+    "review_triggers": [
+      "mudança em run.recovery_count ou lease.recovery_count exige reler MOD-004 inteiro (orçamentos hoje independentes por design)",
+      "qualquer edição em _require_active_lease exige reler MOD-005 (entrada de stall não pode voltar a depender do TTL de 1h)",
+      "decisão de OQ-002 (mecanismo concreto do sinal de progresso) muda a implementação de MOD-001 e pode mudar MOD-005",
+      "qualquer novo tipo de artefato de governança do grill fora do segmento de path .grill (MOD-011/ADR-0018), ou qualquer mudança na convenção worker_id-por-nó (MOD-012/ADR-0015) que quebre a correlação de linhagem, exige reabrir a respectiva ADR"
+    ],
+    "decision_status": "approved"
+  }
+}

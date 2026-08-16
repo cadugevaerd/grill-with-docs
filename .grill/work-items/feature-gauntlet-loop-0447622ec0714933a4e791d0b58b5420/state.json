@@ -15,7 +15,7 @@
     "audit": [
       {
         "evidence": [],
-        "reason": "Especifica\u00e7\u00e3o FASE-001 executada localmente no Codex; cr\u00edtica independente pendente de registro.",
+        "reason": "Especificação FASE-001 executada localmente no Codex; crítica independente pendente de registro.",
         "state": "in-progress",
         "step": "specify"
       },
@@ -34,13 +34,13 @@
             "sha256": "078f508750cd6b90837f478bed7073ffa8b0fd239ac81c9a0dfd0cf3f219360d"
           }
         ],
-        "reason": "Especifica\u00e7\u00e3o e checklist validados por cr\u00edtica independente: PASS.",
+        "reason": "Especificação e checklist validados por crítica independente: PASS.",
         "state": "complete",
         "step": "specify"
       },
       {
         "evidence": [],
-        "reason": "Plano t\u00e9cnico FASE-001 em elabora\u00e7\u00e3o e cr\u00edtica independente iniciada.",
+        "reason": "Plano técnico FASE-001 em elaboração e crítica independente iniciada.",
         "state": "in-progress",
         "step": "plan"
       },
@@ -67,13 +67,13 @@
             "sha256": "d61c0125173b257f5cd9401cc03a1ef069fb44e3ee41cbb7c9c51e7674d823a9"
           }
         ],
-        "reason": "Plano, pesquisa, modelo, contrato e quickstart passaram em cr\u00edtica independente.",
+        "reason": "Plano, pesquisa, modelo, contrato e quickstart passaram em crítica independente.",
         "state": "complete",
         "step": "plan"
       },
       {
         "evidence": [],
-        "reason": "Checklist de requisitos FASE-001 em valida\u00e7\u00e3o independente.",
+        "reason": "Checklist de requisitos FASE-001 em validação independente.",
         "state": "in-progress",
         "step": "checklist"
       },
@@ -84,7 +84,7 @@
             "sha256": "798191b3784a6fea6aecd5ac75dbf3c501d8de74256d2881f23f85d5997b9adc"
           }
         ],
-        "reason": "Checklist de requisitos fechado ap\u00f3s cr\u00edtica independente.",
+        "reason": "Checklist de requisitos fechado após crítica independente.",
         "state": "complete",
         "step": "checklist"
       },
@@ -269,7 +269,7 @@
             "sha256": "665f3c38685079d98bd92fad9e835e2c93ac60d6718b30ef0b17a02bc073f139"
           }
         ],
-        "reason": "Revis\u00e3o FASE-001 iniciada ap\u00f3s Verify PASS com fingerprint can\u00f4nico.",
+        "reason": "Revisão FASE-001 iniciada após Verify PASS com fingerprint canônico.",
         "state": "in-progress",
         "step": "review"
       },
@@ -280,7 +280,7 @@
             "sha256": "55705dd91a5e9196fb93d2ac69fc21539cd374c0574404f1a791825d66225534"
           }
         ],
-        "reason": "Review APPROVE: revis\u00e3o independente sem findings Critical ou Important.",
+        "reason": "Review APPROVE: revisão independente sem findings Critical ou Important.",
         "state": "complete",
         "step": "review"
       },
@@ -291,7 +291,7 @@
             "sha256": "55705dd91a5e9196fb93d2ac69fc21539cd374c0574404f1a791825d66225534"
           }
         ],
-        "reason": "Dry-run de ship ap\u00f3s Review APPROVE; nenhum commit, merge ou push ser\u00e1 executado.",
+        "reason": "Dry-run de ship após Review APPROVE; nenhum commit, merge ou push será executado.",
         "state": "in-progress",
         "step": "ship"
       },
@@ -302,7 +302,7 @@
             "sha256": "55705dd91a5e9196fb93d2ac69fc21539cd374c0574404f1a791825d66225534"
           }
         ],
-        "reason": "DRY-RUN BLOCKED: status LIVE-VS-RECORDED (item registra branch main, worktree usa 011-gauntlet-loop); SemVer/publica\u00e7\u00e3o s\u00e3o agregados na FASE-004.",
+        "reason": "DRY-RUN BLOCKED: status LIVE-VS-RECORDED (item registra branch main, worktree usa 011-gauntlet-loop); SemVer/publicação são agregados na FASE-004.",
         "state": "blocked",
         "step": "ship"
       },
@@ -314,7 +314,7 @@
           }
         ],
         "execution_branch": "011-gauntlet-loop",
-        "reason": "Retomada auditada: a branch operacional 011-gauntlet-loop substitui a provenance imut\u00e1vel de init para este ciclo legado.",
+        "reason": "Retomada auditada: a branch operacional 011-gauntlet-loop substitui a provenance imutável de init para este ciclo legado.",
         "state": "in-progress",
         "step": "ship"
       },
@@ -330,14 +330,14 @@
           }
         ],
         "execution_branch": "011-gauntlet-loop",
-        "reason": "FASE-001 verificada, revisada e aprovada; ship local conclu\u00eddo sem commit, merge, push ou publica\u00e7\u00e3o.",
+        "reason": "FASE-001 verificada, revisada e aprovada; ship local concluído sem commit, merge, push ou publicação.",
         "state": "complete",
         "step": "ship"
       },
       {
         "evidence": [],
         "previous_execution_branch": "011-gauntlet-loop",
-        "reason": "FASE-001 integrada em origin/main no merge a0f071c; abrindo FASE-002 para estado dur\u00e1vel, evid\u00eancia e isolamento.",
+        "reason": "FASE-001 integrada em origin/main no merge a0f071c; abrindo FASE-002 para estado durável, evidência e isolamento.",
         "state": "turned",
         "step": "phase-turn"
       },
@@ -349,7 +349,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "FASE-002 especificada diretamente pelo Codex a partir do handoff imut\u00e1vel.",
+        "reason": "FASE-002 especificada diretamente pelo Codex a partir do handoff imutável.",
         "state": "in-progress",
         "step": "specify"
       },
@@ -365,7 +365,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "FASE-002 especificada e aprovada por cr\u00edtica independente.",
+        "reason": "FASE-002 especificada e aprovada por crítica independente.",
         "state": "complete",
         "step": "specify"
       },
@@ -377,7 +377,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "Planejamento t\u00e9cnico FASE-002 em revis\u00e3o independente.",
+        "reason": "Planejamento técnico FASE-002 em revisão independente.",
         "state": "in-progress",
         "step": "plan"
       },
@@ -405,7 +405,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "Plano FASE-002 aprovado por cr\u00edtica independente.",
+        "reason": "Plano FASE-002 aprovado por crítica independente.",
         "state": "complete",
         "step": "plan"
       },
@@ -417,7 +417,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "Checklist de requisitos FASE-002 em revis\u00e3o independente.",
+        "reason": "Checklist de requisitos FASE-002 em revisão independente.",
         "state": "in-progress",
         "step": "checklist"
       },
@@ -429,7 +429,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "Checklist FASE-002 aprovado por cr\u00edtica independente.",
+        "reason": "Checklist FASE-002 aprovado por crítica independente.",
         "state": "complete",
         "step": "checklist"
       },
@@ -441,7 +441,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "DAG FASE-002 em revis\u00e3o independente.",
+        "reason": "DAG FASE-002 em revisão independente.",
         "state": "in-progress",
         "step": "tasks"
       },
@@ -457,7 +457,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "DAG FASE-002 aprovado por cr\u00edtica independente.",
+        "reason": "DAG FASE-002 aprovado por crítica independente.",
         "state": "complete",
         "step": "tasks"
       },
@@ -469,7 +469,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "An\u00e1lise cruzada FASE-002 em revis\u00e3o independente.",
+        "reason": "Análise cruzada FASE-002 em revisão independente.",
         "state": "in-progress",
         "step": "analyze"
       },
@@ -489,7 +489,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "An\u00e1lise cruzada FASE-002 aprovada por cr\u00edtica independente.",
+        "reason": "Análise cruzada FASE-002 aprovada por crítica independente.",
         "state": "complete",
         "step": "analyze"
       },
@@ -537,7 +537,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "T001-T018 conclu\u00eddas; converg\u00eancia manual n\u00e3o encontrou tarefas adicionais.",
+        "reason": "T001-T018 concluídas; convergência manual não encontrou tarefas adicionais.",
         "state": "complete",
         "step": "agent-execute"
       },
@@ -549,7 +549,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "Iniciando gate de converg\u00eancia.",
+        "reason": "Iniciando gate de convergência.",
         "state": "in-progress",
         "step": "converge"
       },
@@ -561,7 +561,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "Converged: implementa\u00e7\u00e3o satisfaz spec, plan e tarefas T001-T018.",
+        "reason": "Converged: implementação satisfaz spec, plan e tarefas T001-T018.",
         "state": "complete",
         "step": "converge"
       },
@@ -609,14 +609,14 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "Pausado por solicita\u00e7\u00e3o do operador antes da revis\u00e3o independente e do ship.",
+        "reason": "Pausado por solicitação do operador antes da revisão independente e do ship.",
         "state": "blocked",
         "step": "review"
       },
       {
         "evidence": [],
         "execution_branch": "012-durable-run-state",
-        "reason": "Retomando review FASE-002 por instru\u00e7\u00e3o direta do operador (/goal); cr\u00edtico independente fresco ser\u00e1 executado sobre o commit atual.",
+        "reason": "Retomando review FASE-002 por instrução direta do operador (/goal); crítico independente fresco será executado sobre o commit atual.",
         "state": "in-progress",
         "step": "review"
       },
@@ -628,7 +628,7 @@
           }
         ],
         "execution_branch": "012-durable-run-state",
-        "reason": "Review APPROVE em tree f816e317b0e0dc2b2d72b069b0a28652777b952d: 0 Critical, 12 Important n\u00e3o-bloqueantes. Rodada 1 achou MISSING-BUMP (Critical); reparo bumpou 2.6.0 nas oito superf\u00edcies e removeu bloco morto em store.py; rodada 2 (cr\u00edtico independente fresco) reproduziu todos os gates (803 testes, bump-gate PASS) e aprovou.",
+        "reason": "Review APPROVE em tree f816e317b0e0dc2b2d72b069b0a28652777b952d: 0 Critical, 12 Important não-bloqueantes. Rodada 1 achou MISSING-BUMP (Critical); reparo bumpou 2.6.0 nas oito superfícies e removeu bloco morto em store.py; rodada 2 (crítico independente fresco) reproduziu todos os gates (803 testes, bump-gate PASS) e aprovou.",
         "state": "complete",
         "step": "review"
       },
@@ -689,10 +689,17 @@
         "reason": "FASE-003 specify pausado apos 3 rodadas de critica independente (opus): round 1 achou 5 blockers/4 majors, round 2 achou 3 blockers novos + confirmou parte do round 1, round 3 achou 3 blockers novos (particao no->macroetapa indefinida, sinal de progresso/heartbeat inexistente no codigo shipado, 'terminal' indefinido pra 10/11 macroetapas) + 6 majors. DQ-0007/0008/0009 resolvidas via entrevista com o operador (ADR-0012/0013/0014), mas gaps remanescentes sao de engenharia real, nao wording. Operador escolheu pausar em vez de forcar 4a rodada as cegas.",
         "state": "blocked",
         "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "013-scheduler-waves",
+        "reason": "spec.md, ADR-0015-0019 e precode-foundation.json (aprovado) prontos apos 9 rodadas de critica independente; checkpoint --state complete requer bundle de attestation real (dispatch_intent/invocation_started/invocation_terminal/step_output) que esta sessao nao tem ferramenta pra gerar legitimamente -- speckit-specify generico nao produz esse formato. Aguardando ferramenta de attestation real (Codex ou equivalente) pra fechar o passo.",
+        "state": "in-progress",
+        "step": "specify"
       }
     ],
     "current_step": "specify",
-    "execution_branch": null,
+    "execution_branch": "013-scheduler-waves",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -716,7 +723,7 @@
       "plan": "complete",
       "review": "complete",
       "ship": "complete",
-      "specify": "blocked",
+      "specify": "in-progress",
       "tasks": "complete",
       "verify": "complete"
     }

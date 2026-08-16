@@ -1236,6 +1236,17 @@ class Hygiene(Base):
             "gauntlet-resume": "gauntlet_resume_command",
             "gauntlet-prepare-worker": "gauntlet_prepare_worker_command",
             "gauntlet-cleanup": "gauntlet_cleanup_command",
+            # FASE-003 (T014): DAG validation and wave/worker declaration are
+            # the same closed coordinator-only Gauntlet control surface,
+            # proven by the same current-activation admission boundary.
+            "gauntlet-dag-validate": "gauntlet_dag_validate_command",
+            "gauntlet-wave-declare": "gauntlet_wave_declare_command",
+            "gauntlet-worker-declare": "gauntlet_worker_declare_command",
+            # FASE-003 (T020): progress recording, worker termination, and
+            # stall remediation are the same closed coordinator-only surface.
+            "gauntlet-progress-record": "gauntlet_progress_record_command",
+            "gauntlet-worker-terminal": "gauntlet_worker_terminal_command",
+            "gauntlet-remediate": "gauntlet_remediate_command",
         }
 
         parser_commands = {

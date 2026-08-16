@@ -17,32 +17,45 @@ LINUX=sys.platform.startswith('linux')
 CLOCK=lambda: '2026-01-01T00:00:00Z'
 def WORK_ITEM(lifecycle='ACTIVE',slug='auth',type_='feature',worktree=None,monitoring=None):
  return {'type':type_,'slug':slug,'lifecycle':lifecycle,'worktree':worktree,'monitoring':monitoring}
-def GAUNTLET_RECEIPT(input_sha256='1'*64,name='gauntlet-run-alpha-1',base_commit='e'*40):
+def GAUNTLET_RECEIPT(input_sha256='1'*64,name='gauntlet-run-alpha-1',base_commit='e'*40,wave_id='wave-0001'):
  return {
   'category':'runtime','name':name,
-  'work_id':'gauntlet-work','run_id':'run-alpha-1','wave_id':'wave-0001',
+  'work_id':'gauntlet-work','run_id':'run-alpha-1','wave_id':wave_id,
   'base_commit':base_commit,'input_sha256':input_sha256,'output_sha256':None,
  }
 def GAUNTLET_EVENT(receipt=None):
  receipt=GAUNTLET_RECEIPT() if receipt is None else receipt
  return {
   'event':'gauntlet.run.admitted','work_id':'gauntlet-work','run_id':'run-alpha-1',
-  'wave_id':'wave-0001','base_commit':receipt['base_commit'],'input_sha256':receipt['input_sha256'],
+  'wave_id':receipt['wave_id'],'base_commit':receipt['base_commit'],'input_sha256':receipt['input_sha256'],
   'output_sha256':None,'receipt_sha256':store.jcs_sha256(receipt),
  }
-def GAUNTLET_RUN(state='ADMITTED',recovery_count=0,workers=None):
+# FASE-003 (B5): wave-0001's default node_ids -- a real, required Store
+# field as of the B5 fix (reverting the journal-scan substitution).  Kept as
+# a fixed constant so every call to GAUNTLET_RUN(waves=None) across this
+# file produces byte-identical wave-0001 records, satisfying the Store's
+# node_ids-is-immutable-once-set rule across successive transitions.
+DEFAULT_WAVE_NODE_IDS = ['n1']
+def GAUNTLET_RUN(state='ADMITTED',recovery_count=0,workers=None,waves=None):
  return {
   'admission':{
    'activation_sha256':'a'*64,'work_item_sha256':'b'*64,
    'workflow_sha256':'c'*64,'config_sha256':'d'*64,'base_commit':'e'*40,
   },
   'state':state,'recovery_count':recovery_count,
-  'waves':{'wave-0001':{'state':'DECLARED'}},
+  'waves':{'wave-0001':{'state':'DECLARED','node_ids':list(DEFAULT_WAVE_NODE_IDS)}} if waves is None else waves,
   'workers':{} if workers is None else workers,
   'last_transition':{'event_sequence':1,'receipt_sha256':GAUNTLET_EVENT()['receipt_sha256']},
  }
 def GAUNTLET_BLOCK(runs=None):
  return {'schema':'grill-gauntlet-runs/v1','runs':{'run-alpha-1':GAUNTLET_RUN()} if runs is None else runs}
+# FASE-003 (T001): worker records now require node_id/remediates too -- these
+# two helpers build the six-key worker shape and its lease without repeating
+# the boilerplate at every call site.
+def GAUNTLET_WORKER(worker_id='worker-a',state='DECLARED',lease=None,grant=None,workspace=None,node_id=None,remediates=None):
+ return {'state':state,'lease':lease,'grant':grant,'workspace':workspace,'node_id':worker_id if node_id is None else node_id,'remediates':remediates}
+def GAUNTLET_LEASE(lease_id='lease-a',fencing_token=1,state='ACTIVE',recovery_count=0):
+ return {'lease_id':lease_id,'fencing_token':fencing_token,'acquired_at':CLOCK(),'expires_at':CLOCK(),'state':state,'recovery_count':recovery_count}
 def _mp_append_events(root,count,tag):
  sys.path.insert(0,str(SCRIPTS))
  from grill_core import store as _store
@@ -608,13 +621,10 @@ class StoreContract(unittest.TestCase):
    {**good,'recovery_count':True},
    {**good,'admission':{**good['admission'],'activation_sha256':'not-a-hash'}},
    {**good,'admission':{**good['admission'],'base_commit':'f'*39}},
-   {**good,'waves':{'wave-0001':{'state':'SCHEDULED'}}},
-   {**good,'workers':{'worker-a':{'state':'EXECUTING','lease':None,'grant':None,'workspace':None}}},
-   {**good,'workers':{'../worker':{'state':'DECLARED','lease':None,'grant':None,'workspace':None}}},
-   {**good,'workers':{'worker-a':{
-    'state':'DECLARED','lease':None,
-    'grant':{'scope_paths':['../escape'],'capabilities':['store-write']},'workspace':None,
-   }}},
+   {**good,'waves':{'wave-0001':{'state':'SCHEDULED','node_ids':DEFAULT_WAVE_NODE_IDS}}},
+   {**good,'workers':{'worker-a':GAUNTLET_WORKER('worker-a',state='EXECUTING')}},
+   {**good,'workers':{'../worker':GAUNTLET_WORKER('../worker')}},
+   {**good,'workers':{'worker-a':GAUNTLET_WORKER('worker-a',grant={'scope_paths':['../escape'],'capabilities':['store-write']})}},
   )
   for run in bad_runs:
    with self.subTest(run=run):
@@ -628,9 +638,9 @@ class StoreContract(unittest.TestCase):
   lease={'lease_id':'lease-a','fencing_token':1,'acquired_at':CLOCK(),'expires_at':CLOCK(),'state':{},'recovery_count':0}
   malformed=(
    {**valid,'state':[]},
-   {**valid,'waves':{'wave-0001':{'state':[]}}},
-   {**valid,'workers':{'worker-a':{'state':'DECLARED','lease':lease,'grant':None,'workspace':None}}},
-   {**valid,'workers':{'worker-a':{'state':'DECLARED','lease':None,'grant':{'scope_paths':['plugin'],'capabilities':[[]]},'workspace':None}}},
+   {**valid,'waves':{'wave-0001':{'state':[],'node_ids':DEFAULT_WAVE_NODE_IDS}}},
+   {**valid,'workers':{'worker-a':GAUNTLET_WORKER('worker-a',lease=lease)}},
+   {**valid,'workers':{'worker-a':GAUNTLET_WORKER('worker-a',grant={'scope_paths':['plugin'],'capabilities':[[]]})}},
   )
   for run in malformed:
    with self.subTest(run=run):
@@ -641,13 +651,12 @@ class StoreContract(unittest.TestCase):
 
  def test_gauntlet_worker_count_scopes_and_workspace_branch_fail_closed_without_write(self):
   self.register(); before=self.paths().orchestrator.read_bytes(); valid=GAUNTLET_RUN()
-  declared={'state':'DECLARED','lease':None,'grant':None,'workspace':None}
-  six_workers={f'worker-{n}':dict(declared) for n in range(6)}
+  six_workers={f'worker-{n}':GAUNTLET_WORKER(f'worker-{n}') for n in range(6)}
   bad_runs=(
    {**valid,'workers':six_workers},
-   {**valid,'workers':{'worker-a':{'state':'DECLARED','lease':None,'grant':{'scope_paths':['safe\x00path'],'capabilities':['git-local']},'workspace':None}}},
-   {**valid,'workers':{'worker-a':{'state':'DECLARED','lease':None,'grant':{'scope_paths':['safe\x1fpath'],'capabilities':['git-local']},'workspace':None}}},
-   *({**valid,'workers':{'worker-a':{'state':'DECLARED','lease':None,'grant':None,'workspace':{'worktree_key':'wt-a','branch':branch,'base_commit':'e'*40,'clean':False,'converged':False,'cleanup_eligible':False}}}} for branch in ('bad\x00branch','bad\x1fbranch','/host/path','../escape','nested/path')),
+   {**valid,'workers':{'worker-a':GAUNTLET_WORKER('worker-a',grant={'scope_paths':['safe\x00path'],'capabilities':['git-local']})}},
+   {**valid,'workers':{'worker-a':GAUNTLET_WORKER('worker-a',grant={'scope_paths':['safe\x1fpath'],'capabilities':['git-local']})}},
+   *({**valid,'workers':{'worker-a':GAUNTLET_WORKER('worker-a',workspace={'worktree_key':'wt-a','branch':branch,'base_commit':'e'*40,'clean':False,'converged':False,'cleanup_eligible':False})}} for branch in ('bad\x00branch','bad\x1fbranch','/host/path','../escape','nested/path')),
   )
   for run in bad_runs:
    with self.subTest(run=run):
@@ -662,7 +671,7 @@ class StoreContract(unittest.TestCase):
   with self.assertRaises(store.StoreError) as ctx:
    store.transact(self.r,lambda d: {**d,'work_items':{'gauntlet-work':{**WORK_ITEM(slug='gauntlet'),'gauntlet':GAUNTLET_BLOCK({'run-alpha-1':absent_complete})}}},now=CLOCK)
   self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
-  admitted=GAUNTLET_RUN(workers={'worker-a':{'state':'DECLARED','lease':None,'grant':None,'workspace':None}})
+  admitted=GAUNTLET_RUN(workers={'worker-a':GAUNTLET_WORKER('worker-a')})
   self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':admitted}))
   before=self.paths().orchestrator.read_bytes()
   def jump_run(d):
@@ -675,7 +684,7 @@ class StoreContract(unittest.TestCase):
   self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
 
  def test_generic_transact_cannot_drop_or_rename_existing_gauntlet_entities(self):
-  self.register(); workers={'worker-a':{'state':'DECLARED','lease':None,'grant':None,'workspace':None}}
+  self.register(); workers={'worker-a':GAUNTLET_WORKER('worker-a')}
   self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=workers)}))
   before=self.paths().orchestrator.read_bytes()
   def drop_block(d): d['work_items']['gauntlet-work'].pop('gauntlet'); return d
@@ -710,6 +719,12 @@ class StoreContract(unittest.TestCase):
    add_block,
    event=event,receipt=receipt,now=CLOCK,fault=fault,
   )
+
+ # FASE-003 (T001): advance run-alpha-1's worker map by one legal transition,
+ # under a fresh receipt name so the call is free to actually commit.
+ def _advance_workers(self,workers,name,waves=None):
+  run=GAUNTLET_RUN(workers=workers,waves=waves)
+  return self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name=name),block=GAUNTLET_BLOCK({'run-alpha-1':run}))
 
  def test_transact_with_event_commits_one_correlated_receipt_event_anchor_and_snapshot(self):
   self.register(); snapshot=self._gauntlet_transition()
@@ -878,5 +893,303 @@ class StoreContract(unittest.TestCase):
     # Recovery is idempotent and cannot manufacture another transition.
     again=store.recover_pending_transition(self.r,now=CLOCK)
     self.assertEqual((again.revision,store.read_snapshot(self.r).revision),(snapshot.revision,snapshot.revision))
+
+ # --- FASE-003 Phase 1 (T001): per-wave lifecycle -------------------------
+ def test_wave_lifecycle_declared_active_complete_is_accepted(self):
+  self.register(); self._gauntlet_transition()
+  active=GAUNTLET_RUN(waves={'wave-0001':{'state':'ACTIVE','node_ids':DEFAULT_WAVE_NODE_IDS}})
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-2'),block=GAUNTLET_BLOCK({'run-alpha-1':active}))
+  complete=GAUNTLET_RUN(waves={'wave-0001':{'state':'COMPLETE','node_ids':DEFAULT_WAVE_NODE_IDS}})
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-3'),block=GAUNTLET_BLOCK({'run-alpha-1':complete}))
+  self.assertEqual(written.document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['waves']['wave-0001']['state'],'COMPLETE')
+
+ def test_wave_skip_or_backward_transition_is_rejected(self):
+  self.register(); self._gauntlet_transition(); before=self.paths().orchestrator.read_bytes()
+  skip=GAUNTLET_RUN(waves={'wave-0001':{'state':'COMPLETE','node_ids':DEFAULT_WAVE_NODE_IDS}})
+  with self.assertRaises(store.StoreError) as ctx:
+   self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-skip'),block=GAUNTLET_BLOCK({'run-alpha-1':skip}))
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+  active=GAUNTLET_RUN(waves={'wave-0001':{'state':'ACTIVE','node_ids':DEFAULT_WAVE_NODE_IDS}})
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-active'),block=GAUNTLET_BLOCK({'run-alpha-1':active}))
+  complete=GAUNTLET_RUN(waves={'wave-0001':{'state':'COMPLETE','node_ids':DEFAULT_WAVE_NODE_IDS}})
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-complete'),block=GAUNTLET_BLOCK({'run-alpha-1':complete}))
+  before2=self.paths().orchestrator.read_bytes()
+  backward=GAUNTLET_RUN(waves={'wave-0001':{'state':'ACTIVE','node_ids':DEFAULT_WAVE_NODE_IDS}})
+  with self.assertRaises(store.StoreError) as ctx:
+   self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-backward'),block=GAUNTLET_BLOCK({'run-alpha-1':backward}))
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before2)
+
+ def test_wave_map_growth_adds_a_new_wave_id(self):
+  self.register(); self._gauntlet_transition()
+  grown=GAUNTLET_RUN(waves={'wave-0001':{'state':'DECLARED','node_ids':DEFAULT_WAVE_NODE_IDS},'wave-0002':{'state':'DECLARED','node_ids':['n2']}})
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-grow'),block=GAUNTLET_BLOCK({'run-alpha-1':grown}))
+  self.assertEqual(sorted(written.document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['waves']),['wave-0001','wave-0002'])
+
+ def test_removing_an_existing_wave_id_is_rejected(self):
+  self.register(); self._gauntlet_transition()
+  grown=GAUNTLET_RUN(waves={'wave-0001':{'state':'DECLARED','node_ids':DEFAULT_WAVE_NODE_IDS},'wave-0002':{'state':'DECLARED','node_ids':['n2']}})
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-grow'),block=GAUNTLET_BLOCK({'run-alpha-1':grown}))
+  before=self.paths().orchestrator.read_bytes()
+  shrunk=GAUNTLET_RUN(waves={'wave-0002':{'state':'DECLARED','node_ids':['n2']}})
+  with self.assertRaises(store.StoreError) as ctx:
+   self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-shrink',wave_id='wave-0002'),block=GAUNTLET_BLOCK({'run-alpha-1':shrunk}))
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_wave_other_than_newest_is_immutable_even_if_not_complete(self):
+  # "Superseded" means "not the run's current/newest wave," not "not
+  # COMPLETE": wave-0001 stays immutable the moment wave-0002 exists, even
+  # though wave-0001 -> COMPLETE is, on its own, a perfectly legal edge.
+  self.register(); self._gauntlet_transition()
+  active=GAUNTLET_RUN(waves={'wave-0001':{'state':'ACTIVE','node_ids':DEFAULT_WAVE_NODE_IDS}})
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-active'),block=GAUNTLET_BLOCK({'run-alpha-1':active}))
+  grown=GAUNTLET_RUN(waves={'wave-0001':{'state':'ACTIVE','node_ids':DEFAULT_WAVE_NODE_IDS},'wave-0002':{'state':'DECLARED','node_ids':['n2']}})
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-grow'),block=GAUNTLET_BLOCK({'run-alpha-1':grown}))
+  before=self.paths().orchestrator.read_bytes()
+  superseded_touch=GAUNTLET_RUN(waves={'wave-0001':{'state':'COMPLETE','node_ids':DEFAULT_WAVE_NODE_IDS},'wave-0002':{'state':'DECLARED','node_ids':['n2']}})
+  with self.assertRaises(store.StoreError) as ctx:
+   self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-superseded'),block=GAUNTLET_BLOCK({'run-alpha-1':superseded_touch}))
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+  newest_advances=GAUNTLET_RUN(waves={'wave-0001':{'state':'ACTIVE','node_ids':DEFAULT_WAVE_NODE_IDS},'wave-0002':{'state':'ACTIVE','node_ids':['n2']}})
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-newest-advance'),block=GAUNTLET_BLOCK({'run-alpha-1':newest_advances}))
+  self.assertEqual(written.document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['waves']['wave-0002']['state'],'ACTIVE')
+
+ # --- FASE-003 (B5 fix): wave node_ids is a real, required, immutable -----
+ # field -- reverting the journal-scan substitution that made a wave member
+ # with no worker declared yet invisible to wave-completion detection.
+ def test_wave_node_ids_is_required(self):
+  self.register(); before=self.paths().orchestrator.read_bytes()
+  missing=GAUNTLET_RUN(waves={'wave-0001':{'state':'DECLARED'}})
+  with self.assertRaises(store.StoreError) as ctx:
+   self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':missing}))
+  self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_wave_node_ids_must_be_non_empty_unique_and_safe(self):
+  self.register(); before=self.paths().orchestrator.read_bytes()
+  bad=(
+   {'wave-0001':{'state':'DECLARED','node_ids':[]}},
+   {'wave-0001':{'state':'DECLARED','node_ids':['n1','n1']}},
+   {'wave-0001':{'state':'DECLARED','node_ids':['../escape']}},
+   {'wave-0001':{'state':'DECLARED','node_ids':[1]}},
+   {'wave-0001':{'state':'DECLARED','node_ids':'n1'}},
+  )
+  for waves in bad:
+   with self.subTest(waves=waves):
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=waves)}))
+    self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_wave_declared_placeholder_node_ids_may_change_once_on_its_own_activation(self):
+  # The coordinator mints wave-0001 as a DECLARED placeholder with no real
+  # membership at admission (every store.transact_with_event call, this
+  # one included, must name an existing wave_id to correlate to); the one
+  # legitimate node_ids change is exactly this DECLARED -> * transition,
+  # when a wave's real membership becomes known for the first time.
+  self.register(); self._gauntlet_transition()
+  activated=GAUNTLET_RUN(waves={'wave-0001':{'state':'ACTIVE','node_ids':['real-member']}})
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-activate'),block=GAUNTLET_BLOCK({'run-alpha-1':activated}))
+  self.assertEqual(written.document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['waves']['wave-0001']['node_ids'],['real-member'])
+
+ def test_wave_node_ids_is_immutable_once_activated(self):
+  self.register(); self._gauntlet_transition()
+  activated=GAUNTLET_RUN(waves={'wave-0001':{'state':'ACTIVE','node_ids':['real-member']}})
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-activate'),block=GAUNTLET_BLOCK({'run-alpha-1':activated}))
+  before=self.paths().orchestrator.read_bytes()
+  # A legal state edge (ACTIVE -> COMPLETE) paired with a changed node_ids
+  # list must still be rejected: node_ids is immutable once a wave has left
+  # the DECLARED placeholder state.
+  changed=GAUNTLET_RUN(waves={'wave-0001':{'state':'COMPLETE','node_ids':['different']}})
+  with self.assertRaises(store.StoreError) as ctx:
+   self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-node-ids-changed'),block=GAUNTLET_BLOCK({'run-alpha-1':changed}))
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ # --- FASE-003 Phase 1 (T001): non-terminal worker-cap counting -----------
+ def test_worker_cap_counts_only_non_terminal_workers(self):
+  self.register()
+  five={f'worker-{i}':GAUNTLET_WORKER(f'worker-{i}') for i in range(5)}
+  self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=five)}))
+  preparing={**five,'worker-3':GAUNTLET_WORKER('worker-3',state='PREPARING'),'worker-4':GAUNTLET_WORKER('worker-4',state='PREPARING')}
+  self._advance_workers(preparing,'gauntlet-run-alpha-2')
+  prepared={**preparing,'worker-3':GAUNTLET_WORKER('worker-3',state='PREPARED'),'worker-4':GAUNTLET_WORKER('worker-4',state='PREPARED')}
+  self._advance_workers(prepared,'gauntlet-run-alpha-3')
+  terminal={**prepared,'worker-3':GAUNTLET_WORKER('worker-3',state='TERMINAL'),'worker-4':GAUNTLET_WORKER('worker-4',state='FAILED')}
+  self._advance_workers(terminal,'gauntlet-run-alpha-4')
+  # worker-0,1,2 DECLARED (non-terminal); worker-3 TERMINAL, worker-4 FAILED
+  # (terminal) -- 3 of 5 are non-terminal, so a 6th non-terminal worker still
+  # fits under the cap even though the total worker count becomes 6.
+  grown={**terminal,'worker-5':GAUNTLET_WORKER('worker-5')}
+  written=self._advance_workers(grown,'gauntlet-run-alpha-5')
+  self.assertEqual(len(written.document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['workers']),6)
+
+ def test_worker_cap_rejects_a_sixth_when_five_are_non_terminal(self):
+  self.register()
+  five={f'worker-{i}':GAUNTLET_WORKER(f'worker-{i}') for i in range(5)}
+  self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=five)}))
+  before=self.paths().orchestrator.read_bytes()
+  six={**five,'worker-5':GAUNTLET_WORKER('worker-5')}
+  with self.assertRaises(store.StoreError) as ctx:
+   self._advance_workers(six,'gauntlet-run-alpha-2')
+  self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ # --- FASE-003 Phase 1 (T001): node_id/remediates schema and budget -------
+ def test_worker_record_requires_node_id_and_remediates_keys(self):
+  self.register(); before=self.paths().orchestrator.read_bytes()
+  missing_both={'worker-a':{'state':'DECLARED','lease':None,'grant':None,'workspace':None}}
+  missing_remediates={'worker-a':{'state':'DECLARED','lease':None,'grant':None,'workspace':None,'node_id':'worker-a'}}
+  missing_node_id={'worker-a':{'state':'DECLARED','lease':None,'grant':None,'workspace':None,'remediates':None}}
+  for workers in (missing_both,missing_remediates,missing_node_id):
+   with self.subTest(workers=workers):
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=workers)}))
+    self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_node_id_must_match_worker_id_with_remediation_suffix_stripped(self):
+  self.register(); before=self.paths().orchestrator.read_bytes()
+  bad=(
+   {'worker-a':GAUNTLET_WORKER('worker-a',node_id='worker-b')},
+   {'worker-a-r1':GAUNTLET_WORKER('worker-a-r1',node_id='worker-a-r1')},
+   {'worker-a-r1':GAUNTLET_WORKER('worker-a-r1',node_id='worker-b')},
+  )
+  for workers in bad:
+   with self.subTest(workers=workers):
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=workers)}))
+    self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+  ok={'worker-a-r1':GAUNTLET_WORKER('worker-a-r1',node_id='worker-a')}
+  written=self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=ok)}))
+  self.assertEqual(written.document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['workers']['worker-a-r1']['node_id'],'worker-a')
+
+ def test_remediates_must_name_an_existing_sibling(self):
+  self.register(); before=self.paths().orchestrator.read_bytes()
+  workers={'worker-a-r1':GAUNTLET_WORKER('worker-a-r1',node_id='worker-a',lease=GAUNTLET_LEASE(recovery_count=1),remediates='worker-a')}
+  with self.assertRaises(store.StoreError) as ctx:
+   self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=workers)}))
+  self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_remediates_sibling_node_id_must_match(self):
+  self.register(); before=self.paths().orchestrator.read_bytes()
+  workers={
+   'worker-a':GAUNTLET_WORKER('worker-a'),
+   'worker-b-r1':GAUNTLET_WORKER('worker-b-r1',node_id='worker-b',lease=GAUNTLET_LEASE(lease_id='lease-b',recovery_count=1),remediates='worker-a'),
+  }
+  with self.assertRaises(store.StoreError) as ctx:
+   self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=workers)}))
+  self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_remediates_and_recovery_count_must_agree(self):
+  self.register(); before=self.paths().orchestrator.read_bytes()
+  null_remediates_spent_lease={'worker-a':GAUNTLET_WORKER('worker-a',lease=GAUNTLET_LEASE(recovery_count=1),remediates=None)}
+  set_remediates_fresh_lease={
+   'worker-a':GAUNTLET_WORKER('worker-a'),
+   'worker-a-r1':GAUNTLET_WORKER('worker-a-r1',node_id='worker-a',lease=GAUNTLET_LEASE(lease_id='lease-b',recovery_count=0),remediates='worker-a'),
+  }
+  for workers in (null_remediates_spent_lease,set_remediates_fresh_lease):
+   with self.subTest(workers=workers):
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=workers)}))
+    self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_remediates_and_recovery_count_valid_pairs_are_accepted(self):
+  self.register()
+  fresh={'worker-a':GAUNTLET_WORKER('worker-a',lease=GAUNTLET_LEASE(recovery_count=0),remediates=None)}
+  written=self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=fresh)}))
+  self.assertIsNone(written.document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['workers']['worker-a']['remediates'])
+  remediated={
+   'worker-a':GAUNTLET_WORKER('worker-a',lease=GAUNTLET_LEASE(recovery_count=0),remediates=None),
+   'worker-a-r1':GAUNTLET_WORKER('worker-a-r1',node_id='worker-a',lease=GAUNTLET_LEASE(lease_id='lease-b',recovery_count=1),remediates='worker-a'),
+  }
+  written2=self._advance_workers(remediated,'gauntlet-run-alpha-2')
+  self.assertEqual(written2.document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['workers']['worker-a-r1']['remediates'],'worker-a')
+  self.assertEqual(written2.document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['workers']['worker-a-r1']['lease']['recovery_count'],1)
+
+ # --- FASE-003 (B6 fix, FR-008(e)): Store-level defense-in-depth for the
+ # shared per-node remediation budget -- independent of remediate_node's own
+ # application-level scan, and independent of what a caller's `remediates`
+ # value claims.  Both cases go through raw store.transact_with_event calls,
+ # exactly the "bypassing remediate_node entirely" reproduction the review
+ # used, never through gauntlet_runs.remediate_node itself.
+ def test_store_rejects_fresh_budget_mint_for_an_already_seen_node_id(self):
+  self.register()
+  original={'worker-a':GAUNTLET_WORKER('worker-a',lease=GAUNTLET_LEASE(recovery_count=0),remediates=None)}
+  self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=original)}))
+  before=self.paths().orchestrator.read_bytes()
+  # worker-a-r1 satisfies every PER-RECORD check in isolation (remediates
+  # names a real sibling with a matching node_id) but is minted with a
+  # FRESH budget (recovery_count=0) for a node_id ("worker-a") that already
+  # has a worker record -- exactly the Store-level gap B6 closes.
+  fresh_mint={
+   **original,
+   'worker-a-r1':GAUNTLET_WORKER('worker-a-r1',node_id='worker-a',lease=GAUNTLET_LEASE(lease_id='lease-fresh',recovery_count=0),remediates=None),
+  }
+  with self.assertRaises(store.StoreError) as ctx:
+   self._advance_workers(fresh_mint,'gauntlet-run-alpha-fresh-mint')
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_store_rejects_chained_second_remediation_for_an_already_spent_node_id(self):
+  self.register()
+  spent={
+   'worker-a':GAUNTLET_WORKER('worker-a',lease=GAUNTLET_LEASE(recovery_count=0),remediates=None),
+   'worker-a-r1':GAUNTLET_WORKER('worker-a-r1',node_id='worker-a',lease=GAUNTLET_LEASE(lease_id='lease-b',recovery_count=1),remediates='worker-a'),
+  }
+  self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=spent)}))
+  before=self.paths().orchestrator.read_bytes()
+  # worker-a-r2 remediates worker-a-r1 (a real sibling with a matching
+  # node_id) and is itself minted already-spent (recovery_count=1) -- every
+  # PER-RECORD check passes.  The node's one shared budget (FR-007/ADR-0015)
+  # was already spent by worker-a-r1; a chained second remediation must
+  # still be refused by the Store itself, regardless of what remediates
+  # claims and regardless of remediate_node's own application-level scan
+  # (bypassed here entirely via a raw transact_with_event call).
+  chained={
+   **spent,
+   'worker-a-r2':GAUNTLET_WORKER('worker-a-r2',node_id='worker-a',lease=GAUNTLET_LEASE(lease_id='lease-c',recovery_count=1),remediates='worker-a-r1'),
+  }
+  with self.assertRaises(store.StoreError) as ctx:
+   self._advance_workers(chained,'gauntlet-run-alpha-chained')
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ # --- F3 fix: the B6 budget-lineage scan must also see NEW worker records
+ # added together in the SAME transaction, not only already-committed
+ # (old_workers) siblings -- otherwise two remediation-shaped records for
+ # one node minted in a single transact_with_event call each see only the
+ # pre-transaction state and never each other, double-spending the node's
+ # one shared budget within one commit.
+ def test_store_rejects_two_new_remediation_records_for_the_same_node_in_one_transaction(self):
+  self.register()
+  original={'worker-a':GAUNTLET_WORKER('worker-a',lease=GAUNTLET_LEASE(recovery_count=0),remediates=None)}
+  self._gauntlet_transition(block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(workers=original)}))
+  before=self.paths().orchestrator.read_bytes()
+  # worker-a-r1 (remediates worker-a) and worker-a-r2 (remediates
+  # worker-a-r1) are BOTH introduced together in this one transaction.
+  # Each is individually valid against the pre-transaction (old_workers)
+  # state alone -- neither is already committed -- so a scan scoped to
+  # old_workers only would miss that the two new siblings jointly spend
+  # the node's one shared budget twice.
+  double_spend={
+   **original,
+   'worker-a-r1':GAUNTLET_WORKER('worker-a-r1',node_id='worker-a',lease=GAUNTLET_LEASE(lease_id='lease-b',recovery_count=1),remediates='worker-a'),
+   'worker-a-r2':GAUNTLET_WORKER('worker-a-r2',node_id='worker-a',lease=GAUNTLET_LEASE(lease_id='lease-c',recovery_count=1),remediates='worker-a-r1'),
+  }
+  with self.assertRaises(store.StoreError) as ctx:
+   self._advance_workers(double_spend,'gauntlet-run-alpha-double-spend')
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ # --- F4 fix: a wave_id present only in the candidate (never in
+ # old_waves) must be rejected unless it is exactly the run's current
+ # newest wave's immediate sequential successor -- otherwise an injected
+ # wave whose id sorts higher than any real wave corrupts every
+ # max(waves)-style "newest wave" computation, wedging the real sequence.
+ def test_wave_out_of_order_id_injection_is_rejected(self):
+  self.register(); self._gauntlet_transition()
+  before=self.paths().orchestrator.read_bytes()
+  # Only wave-0001 exists; wave-0003 skips ahead of the real next id
+  # (wave-0002), exactly the gap/out-of-order injection this closes.
+  injected=GAUNTLET_RUN(waves={'wave-0001':{'state':'DECLARED','node_ids':DEFAULT_WAVE_NODE_IDS},'wave-0003':{'state':'DECLARED','node_ids':['n2']}})
+  with self.assertRaises(store.StoreError) as ctx:
+   self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-injected'),block=GAUNTLET_BLOCK({'run-alpha-1':injected}))
+  self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
 
 if __name__=='__main__': unittest.main()

@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import importlib.util
+import json
 import re
 import subprocess
 import sys
@@ -41,6 +42,21 @@ except ImportError:
 
 RUN_ID_RE = re.compile(r"^run-[A-Za-z0-9][A-Za-z0-9._-]*$")
 WAVE_ID = "wave-0001"
+# Every store.transact_with_event call, including admission's own, must name
+# an ``event.wave_id`` that already exists in the candidate's ``waves`` map
+# (store._candidate_transition) -- so admission still needs a placeholder
+# wave-0001 record to correlate its own event to, even though no real
+# membership is known yet.  This sentinel is never a real node id: it is
+# overwritten wholesale, never merged, the moment declare_wave's first call
+# activates wave-0001 with real node_ids (store.py's per-wave immutability
+# check exempts a DECLARED-state record from the node_ids-cannot-change rule
+# for exactly this reason -- see its own comment).
+WAVE_PENDING_NODE_IDS = ["pending-declaration"]
+# FASE-003 (FR-008(d)/FR-009): the single fixed lease grant/renewal duration.
+# ``_new_coordinator_lease`` (first dispatch and remediation mints) and
+# ``record_progress`` (every renewal) both anchor to this one constant, never
+# a second one -- see their docstrings.
+LEASE_DURATION = timedelta(hours=1)
 
 
 class GauntletRunError(Exception):
@@ -116,10 +132,10 @@ def _input_hash(admission: Mapping[str, str]) -> str:
 
 
 def _receipt_and_event(*, name: str, event_name: str, work_id: str, run_id: str,
-                       admission: Mapping[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
+                       admission: Mapping[str, str], wave_id: str = WAVE_ID) -> tuple[dict[str, Any], dict[str, Any]]:
     receipt = {
         "category": "runtime", "name": name, "work_id": work_id,
-        "run_id": run_id, "wave_id": WAVE_ID,
+        "run_id": run_id, "wave_id": wave_id,
         "base_commit": admission["base_commit"],
         "input_sha256": _input_hash(admission), "output_sha256": None,
     }
@@ -129,7 +145,7 @@ def _receipt_and_event(*, name: str, event_name: str, work_id: str, run_id: str,
     }}
     event = {
         "event": event_name, "work_id": work_id, "run_id": run_id,
-        "wave_id": WAVE_ID, "base_commit": admission["base_commit"],
+        "wave_id": wave_id, "base_commit": admission["base_commit"],
         "input_sha256": receipt["input_sha256"], "output_sha256": None,
         "receipt_sha256": store.jcs_sha256(payload),
     }
@@ -360,7 +376,10 @@ def _admit_or_reuse_run_once(root: str | Path, work_id: str, admission: Mapping[
             _fail("ADMISSION-CONFLICT", "compatible run appeared during admission")
         block["runs"][run_id] = {
             "admission": copy.deepcopy(identity), "state": "ADMITTED", "recovery_count": 0,
-            "waves": {WAVE_ID: {"state": "DECLARED"}}, "workers": {},
+            # A DECLARED placeholder, never real membership -- see
+            # WAVE_PENDING_NODE_IDS.  declare_wave's first call overwrites
+            # this wholesale with the actual requested node_ids.
+            "waves": {WAVE_ID: {"state": "DECLARED", "node_ids": list(WAVE_PENDING_NODE_IDS)}}, "workers": {},
             "last_transition": {"event_sequence": 1, "receipt_sha256": "0" * 64},
         }
         return document
@@ -417,6 +436,11 @@ def run_projection(root: str | Path, work_id: str, run_id: str | None = None) ->
             # worker-provided capability claim.  It is safe to diagnose but
             # never supplies a Store or receipt reference.
             "grant": copy.deepcopy(worker.get("grant")),
+            # FASE-003 (FR-010, T016/T018): the sole read-back path for a
+            # FAILED worker's classification -- recovered from the immutable
+            # receipt this module itself minted at the transition, never a
+            # Store field (see ``terminate_worker``'s docstring).
+            "failure_class": _read_worker_failure_class(root, work_id, run_id, run, worker_id, worker),
         })
     return {
         "run_id": run_id, "state": run.get("state"), "recovery_count": run.get("recovery_count"),
@@ -476,6 +500,383 @@ def record_resume_decision(root: str | Path, work_id: str, run_id: str,
             raise
         return {"verdict": "RESUME-REUSED", "work_id": work_id, "run_id": run_id, "recovery_count": 1}
     return {"verdict": "RESUME-RECORDED", "work_id": work_id, "run_id": run_id, "recovery_count": 1}
+
+
+# FASE-003 (FR-003, FR-004, FR-006, ADR-0018): Execution DAG validation.
+#
+# ``gauntlet-dag-validate`` is the fail-closed gate every ``agent-execute``
+# dispatch must clear before any wave/worker/lease/grant state exists.  It
+# never generates or repairs a DAG (ADR-0014) -- ``tasks`` owns that -- and it
+# never touches the Store beyond the caller's own activation proof: it is
+# pure/stateless, re-run as needed, and persists nothing.  ``declare_wave``
+# below re-runs this exact structural/scope/tier logic inline rather than
+# trusting a prior ``gauntlet-dag-validate`` call's result (plan.md Complexity
+# Tracking: a stateless validator has nowhere durable to leave a "this DAG was
+# already validated" fact, and re-running a side-effect-free check is cheap).
+DAG_SCHEMA = "grill-gauntlet-execution-dag/v1"
+_DAG_NODE_KEYS = frozenset({"id", "depends_on", "tier", "parallel", "files"})
+TIER_ORDER = {"small": 0, "medium": 1, "large": 2}
+# FR-002 SSOT: the tier order itself (small < medium < large) is intrinsic
+# structure, not policy -- it stays a module constant.  The *floors* applied
+# at each point (the ``agent-execute`` floor and its Markdown supplemental
+# floor) are policy, pinned at FASE-001 activation in ``gauntlet.TIER_POLICY``
+# / ``supplemental``; this module never duplicates those literals, and never
+# imports the activation/config module either -- every caller resolves them
+# once from its own current activation proof and threads them down
+# explicitly, the same way ``declare_wave`` already threads
+# ``activation_max_workers`` rather than reading config content itself.
+# A node's own worker (Phase 3 scope: first dispatch only, no remediation
+# machinery yet) is "ready to be depended on" once it reaches any state
+# outside the non-terminal set -- success or failure alike, matching FR-005's
+# "a worker that reaches a terminal state frees its slot" vocabulary exactly.
+TERMINAL_WORKER_STATES = store.WORKER_STATES - store.NON_TERMINAL_WORKER_STATES
+_WAVE_ID_RE = re.compile(r"^wave-(\d{4,})$")
+
+
+def _is_safe_relative_path(value: Any) -> bool:
+    """The shared repo-relative-path character/segment rule.
+
+    Factored out of :func:`_strict_scopes` so the Execution DAG's ``files``
+    entries and the DAG file location itself (``_repo_relative_path``) apply
+    exactly the same escape-proof rule a worker grant scope already does,
+    without duplicating the character class.
+    """
+    if (not isinstance(value, str) or not value or value.startswith("/")
+            or "\\" in value or any(ord(ch) < 32 or ord(ch) == 127 for ch in value)):
+        return False
+    pieces = value.split("/")
+    return not (any(piece in {"", ".", ".."} for piece in pieces) or pieces[0] == ".git")
+
+
+def _repo_relative_path(root: str | Path, value: Any, label: str) -> Path:
+    if not _is_safe_relative_path(value):
+        _fail("INVALID-IDENTIFIER", f"{label} is invalid")
+    return Path(root) / value
+
+
+def _load_execution_dag(root: str | Path, dag_path: Any) -> dict[str, Any]:
+    path = _repo_relative_path(root, dag_path, "dag path")
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        _fail("DAG-MALFORMED", "Execution DAG file is unavailable")
+    try:
+        document = json.loads(raw)
+    except ValueError:
+        _fail("DAG-MALFORMED", "Execution DAG is not valid JSON")
+    return document
+
+
+def _require_acyclic(nodes_by_id: Mapping[str, dict[str, Any]]) -> None:
+    """Kahn's algorithm.  Any node left unresolved sits on a cycle -- this
+    also catches a self-dependency, a one-node cycle, with no special case."""
+    indegree = {node_id: len(node["depends_on"]) for node_id, node in nodes_by_id.items()}
+    dependents: dict[str, list[str]] = {node_id: [] for node_id in nodes_by_id}
+    for node_id, node in nodes_by_id.items():
+        for dep in node["depends_on"]:
+            dependents[dep].append(node_id)
+    ready = sorted(node_id for node_id, degree in indegree.items() if degree == 0)
+    resolved = 0
+    while ready:
+        current = ready.pop()
+        resolved += 1
+        for dependent in sorted(dependents[current]):
+            indegree[dependent] -= 1
+            if indegree[dependent] == 0:
+                ready.append(dependent)
+    if resolved != len(nodes_by_id):
+        _fail("DAG-CYCLIC", "Execution DAG contains a cycle")
+
+
+def _validate_dag_structure(document: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(document, dict) or set(document) != {"schema", "feature", "max_workers", "nodes"}:
+        _fail("DAG-MALFORMED", "Execution DAG document is invalid")
+    if document["schema"] != DAG_SCHEMA:
+        _fail("DAG-MALFORMED", "Execution DAG schema is unrecognized")
+    if not isinstance(document["feature"], str) or not document["feature"]:
+        _fail("DAG-MALFORMED", "Execution DAG feature is invalid")
+    max_workers = document["max_workers"]
+    if type(max_workers) is not int or max_workers < 1:
+        _fail("DAG-MALFORMED", "Execution DAG max_workers is invalid")
+    nodes = document["nodes"]
+    if not isinstance(nodes, list) or not nodes:
+        _fail("DAG-MALFORMED", "Execution DAG nodes are invalid")
+    nodes_by_id: dict[str, dict[str, Any]] = {}
+    for node in nodes:
+        if not isinstance(node, dict) or set(node) != _DAG_NODE_KEYS:
+            _fail("DAG-MALFORMED", "Execution DAG node is invalid")
+        node_id = node["id"]
+        if not isinstance(node_id, str) or not store.SAFE_NAME_RE.fullmatch(node_id):
+            _fail("DAG-MALFORMED", "Execution DAG node id is invalid")
+        if store.WORKER_REMEDIATION_SUFFIX_RE.fullmatch(node_id):
+            _fail("DAG-MALFORMED", "Execution DAG node id uses the reserved remediation suffix")
+        if node_id in nodes_by_id:
+            _fail("DAG-MALFORMED", "Execution DAG node id is duplicated")
+        depends_on = node["depends_on"]
+        if (not isinstance(depends_on, list) or any(not isinstance(dep, str) for dep in depends_on)
+                or len(set(depends_on)) != len(depends_on)):
+            _fail("DAG-MALFORMED", "Execution DAG node depends_on is invalid")
+        if node["parallel"] is not True and node["parallel"] is not False:
+            _fail("DAG-MALFORMED", "Execution DAG node parallel flag is invalid")
+        if node["tier"] not in TIER_ORDER:
+            _fail("DAG-MALFORMED", "Execution DAG node tier is invalid")
+        files = node["files"]
+        if (not isinstance(files, list) or not files or len(set(files)) != len(files)
+                or any(not _is_safe_relative_path(f) for f in files)):
+            _fail("DAG-MALFORMED", "Execution DAG node files are invalid")
+        nodes_by_id[node_id] = node
+    for node in nodes_by_id.values():
+        for dep in node["depends_on"]:
+            if dep not in nodes_by_id:
+                _fail("DAG-MALFORMED", "Execution DAG node depends_on references an unknown node")
+    _require_acyclic(nodes_by_id)
+    return nodes_by_id
+
+
+def _dag_scope_violation(path: str) -> bool:
+    """FR-004/ADR-0018's two closed rejection rules, evaluated on the full
+    path at any depth -- never anchored to the repo root.
+
+    Purely path-syntactic: it takes only a path string, never a DAG document,
+    so it is the one shared helper every scope-rejection call site uses --
+    ``_validate_dag_scope`` (a DAG node's declared ``files``), ``declare_
+    worker`` (a caller's ``--files`` grant, checked against this same rule
+    regardless of what the DAG node itself declares), and ``prepare_worker``
+    (F1 fix: the same rule applied unconditionally to every ``--scope``,
+    with no DAG document in scope at all -- see its docstring). Do not
+    duplicate this path-matching logic at a new call site; call this."""
+    pieces = path.split("/")
+    if ".grill" in pieces:
+        return True
+    return any(pieces[i] == ".specify" and pieces[i + 1] == "reports" for i in range(len(pieces) - 1))
+
+
+def _validate_dag_scope(nodes_by_id: Mapping[str, dict[str, Any]]) -> None:
+    for node_id, node in nodes_by_id.items():
+        if any(_dag_scope_violation(path) for path in node["files"]):
+            _fail("DAG-NODE-OUT-OF-SCOPE", f"Execution DAG node targets out-of-scope evidence: {node_id}")
+
+
+def _is_markdown_only(files: list[str]) -> bool:
+    return all(path.endswith(".md") for path in files)
+
+
+def _validate_dag_tiers(nodes_by_id: Mapping[str, dict[str, Any]], *,
+                        agent_execute_floor: str, markdown_floor: str) -> None:
+    for node_id, node in nodes_by_id.items():
+        floor = markdown_floor if _is_markdown_only(node["files"]) else agent_execute_floor
+        if TIER_ORDER[node["tier"]] < TIER_ORDER[floor]:
+            _fail("DAG-NODE-TIER-UNRESOLVED", f"Execution DAG node tier does not satisfy its floor: {node_id}")
+
+
+def _load_and_validate_dag(root: str | Path, dag_path: Any, *,
+                           agent_execute_floor: str, markdown_floor: str) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    """The one place all three DAG validation stages run, in FR-004's order:
+    (1) structural validity, (2) FR-004's two scope rules, (3) FR-006's tier
+    floor.  Shared by ``validate_execution_dag`` and ``declare_wave`` so the
+    latter never trusts a separate call's earlier result.  The two floors are
+    the caller's own current activation-pinned tier policy (FR-002 SSOT) --
+    never a literal duplicated in this module."""
+    document = _load_execution_dag(root, dag_path)
+    nodes_by_id = _validate_dag_structure(document)
+    _validate_dag_scope(nodes_by_id)
+    _validate_dag_tiers(nodes_by_id, agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor)
+    return document, nodes_by_id
+
+
+def validate_execution_dag(root: str | Path, work_id: str, run_id: str, dag_path: Any,
+                           admission: Mapping[str, str], *,
+                           agent_execute_floor: str, markdown_floor: str) -> dict[str, Any]:
+    """Fail-closed structural + FR-004/FR-006 validation of one Execution DAG.
+
+    Pure/stateless beyond the caller's current activation proof: this proves
+    identity (shape + a real Git base commit) exactly like every other public
+    primitive, but it never reads the Store's run/worker state and never
+    mutates anything.  ``run_id`` is accepted and echoed for the caller's own
+    correlation, matching every other command's output shape -- validating a
+    DAG's structure does not depend on any run-scoped Store fact.  The two
+    tier floors are the caller's current activation-pinned tier policy
+    (FR-002 SSOT), resolved once by the CLI adapter and threaded down here.
+    """
+    identity = _validate_admission(admission)
+    _require_base_commit(root, identity)
+    document, nodes_by_id = _load_and_validate_dag(
+        root, dag_path, agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
+    )
+    return {
+        "verdict": "DAG-VALID", "work_id": work_id, "run_id": run_id,
+        "max_workers": document["max_workers"],
+        "nodes": [
+            {
+                "id": node_id, "depends_on": list(node["depends_on"]),
+                "parallel": node["parallel"], "tier": node["tier"],
+            }
+            for node_id, node in nodes_by_id.items()
+        ],
+    }
+
+
+def _node_lineage_head(run: Mapping[str, Any], node_id: str) -> Mapping[str, Any] | None:
+    """The node's current lineage-head worker record, or ``None`` if the node
+    has no worker at all yet.
+
+    A remediated node has more than one worker record sharing the same
+    ``node_id``; only the one worker no sibling names via its own
+    ``remediates`` field is the lineage head -- an earlier, superseded
+    attempt is never authoritative for the node's own readiness/terminality
+    (corrects the prior "at most one worker record exists per node id"
+    assumption, which remediation always breaks).
+    """
+    workers = run.get("workers", {})
+    remediated_by = {
+        worker.get("remediates") for worker in workers.values()
+        if isinstance(worker, dict) and worker.get("remediates") is not None
+    }
+    heads = [
+        worker for worker_id, worker in workers.items()
+        if isinstance(worker, dict) and worker.get("node_id") == node_id and worker_id not in remediated_by
+    ]
+    return heads[0] if len(heads) == 1 else None
+
+
+def _node_ready(run: Mapping[str, Any], node_id: str) -> bool:
+    """Whether ``node_id`` satisfies a dependent's readiness check: its
+    current lineage-head worker exists and reached ``TERMINAL`` -- the
+    success outcome -- specifically, never merely any terminal-class state.
+    A ``FAILED``/``BLOCKED``/``CONFLICT``/``ORPHANED`` (never remediated to a
+    success) lineage head must never satisfy a dependent's readiness check."""
+    head = _node_lineage_head(run, node_id)
+    return head is not None and head.get("state") == "TERMINAL"
+
+
+def _allocate_wave_id(newest_wave_id: str) -> str:
+    match = _WAVE_ID_RE.fullmatch(newest_wave_id)
+    if match is None:
+        _fail("ORCHESTRATOR-INVALID", "durable wave identity is invalid")
+    # NOTE: past wave-9999 this emits wave-10000, a 5-digit id that breaks
+    # lexicographic max()-based "newest wave" ordering against 4-digit ids.
+    # Not reachable in practice -- it would require 10000 waves in one run.
+    return f"wave-{int(match.group(1)) + 1:04d}"
+
+
+def _validate_wave_node_ids(node_ids: Any) -> list[str]:
+    if not isinstance(node_ids, (list, tuple)) or not node_ids:
+        _fail("WAVE-NODES-REQUIRED", "at least one node id is required")
+    result: list[str] = []
+    for node_id in node_ids:
+        if not isinstance(node_id, str) or not store.SAFE_NAME_RE.fullmatch(node_id):
+            _fail("INVALID-IDENTIFIER", "wave node id is invalid")
+        if node_id in result:
+            _fail("WAVE-NODES-REQUIRED", "wave node ids must be unique")
+        result.append(node_id)
+    return result
+
+
+def declare_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, node_ids: Any,
+                 admission: Mapping[str, str], *, activation_max_workers: int,
+                 agent_execute_floor: str, markdown_floor: str) -> dict[str, Any]:
+    """Declare the run's next Execution Wave (FR-004, FR-005, ADR-0013).
+
+    Re-validates the whole DAG inline (never trusts a prior ``gauntlet-dag-
+    validate`` call), re-checks the named nodes' readiness (terminal
+    dependencies) and ``parallel`` sharing rule against the run's current
+    Store state, enforces the effective concurrent cap (the lesser of
+    ``activation_max_workers`` -- resolved by the caller from the pinned
+    activation record, this module never reads config content itself -- and
+    the DAG's own declared ``max_workers``), and requires the run's current
+    wave, if any, to already be ``COMPLETE`` before allocating a new one.
+
+    The wave's Store record carries the actual, requested ``node_ids`` list,
+    set once at wave creation and immutable for that wave's lifetime from
+    that point on (B5 -- reverting an earlier substitution that recovered
+    membership by scanning the journal for ``gauntlet.worker.declared``
+    events instead; that scan made a wave member with no worker declared yet
+    invisible to ``_wave_would_complete``, letting a wave complete while
+    stranding a never-dispatched member).  Admission mints ``wave-0001`` as a
+    ``DECLARED`` placeholder with no real membership (``store.transact_with_
+    event`` requires every event's ``wave_id`` to already exist in the
+    candidate, so admission's own event needs *something* to correlate to);
+    this function's first call for a run overwrites that placeholder
+    wholesale with real ``node_ids`` in the same ``DECLARED -> ACTIVE`` edge
+    -- the one edge exempt from the node_ids-immutability rule, since nothing
+    is really "declared" yet at that point (see ``store.py``'s own comment).
+    ``WAVE-REUSED`` fires only from an actual concurrent-transaction race on
+    the *same* target wave id (the same pattern :func:`admit_or_reuse_run`
+    already uses) -- never as a guess about caller intent from wave state
+    alone.
+    """
+    identity = _validate_admission(admission)
+    _require_base_commit(root, identity)
+    if type(activation_max_workers) is not int or activation_max_workers < 1:
+        _fail("INVALID-ARGUMENTS", "activation worker cap is invalid")
+    requested = _validate_wave_node_ids(node_ids)
+    document, nodes_by_id = _load_and_validate_dag(
+        root, dag_path, agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
+    )
+    unknown = [node_id for node_id in requested if node_id not in nodes_by_id]
+    if unknown:
+        _fail("WAVE-NODE-UNKNOWN", f"wave names an unknown DAG node: {unknown[0]}")
+    if len(requested) > 1 and any(not nodes_by_id[node_id]["parallel"] for node_id in requested):
+        _fail("WAVE-NODE-NOT-PARALLEL", "a parallel:false node must dispatch alone")
+    store.recover_pending_transition(root)
+    run = _run_for_worker(root, work_id, run_id, identity)
+    for node_id in requested:
+        for dep in nodes_by_id[node_id]["depends_on"]:
+            if not _node_ready(run, dep):
+                _fail("WAVE-NODE-NOT-READY", f"node dependency is not terminal: {node_id} depends on {dep}")
+
+    waves = run.get("waves", {})
+    newest_wave_id = max(waves)
+    newest_state = waves[newest_wave_id].get("state")
+    if newest_state == "ACTIVE":
+        _fail("WAVE-PREREQUISITE-INCOMPLETE", "the run's current wave is not complete")
+    if newest_state == "COMPLETE":
+        target_wave_id, expect_placeholder = _allocate_wave_id(newest_wave_id), False
+    elif newest_state == "DECLARED":
+        # The one legitimate overwrite: admission's placeholder record (or a
+        # prior interrupted-and-retried declaration of it) has no real
+        # membership yet -- this call replaces it wholesale, in place.
+        target_wave_id, expect_placeholder = newest_wave_id, True
+    else:
+        _fail("ORCHESTRATOR-INVALID", "durable wave state is invalid")
+
+    non_terminal = sum(
+        1 for worker in run.get("workers", {}).values()
+        if isinstance(worker, dict) and worker.get("state") in store.NON_TERMINAL_WORKER_STATES
+    )
+    effective_cap = min(activation_max_workers, document["max_workers"])
+    if non_terminal + len(requested) > effective_cap:
+        _fail("WAVE-CAP-EXCEEDED", "wave would exceed the run's effective concurrent worker cap")
+
+    receipt, event = _receipt_and_event(
+        name=f"gauntlet-wave-declared-{run_id}-{target_wave_id}", event_name="gauntlet.wave.declared",
+        work_id=work_id, run_id=run_id, admission=identity, wave_id=target_wave_id,
+    )
+
+    def activate(document_: dict[str, Any]) -> dict[str, Any]:
+        candidate_waves = document_["work_items"][work_id]["gauntlet"]["runs"][run_id]["waves"]
+        if expect_placeholder:
+            if candidate_waves.get(target_wave_id, {}).get("state") != "DECLARED":
+                _fail("WAVE-CONFLICT", "wave changed before declaration")
+        elif target_wave_id in candidate_waves:
+            _fail("WAVE-CONFLICT", "wave appeared during declaration")
+        candidate_waves[target_wave_id] = {"state": "ACTIVE", "node_ids": list(requested)}
+        return document_
+
+    try:
+        store.transact_with_event(root, activate, event=event, receipt=receipt)
+    except GauntletRunError as exc:
+        if exc.code != "WAVE-CONFLICT":
+            raise
+        concurrent = _read_runs(root, work_id).get(run_id, {}).get("waves", {}).get(target_wave_id)
+        # node_ids is now real, stored data (B5): a race is only a genuine
+        # reuse of *this* request if the concurrently-committed wave named
+        # the same members -- never a guess from state alone.
+        if (isinstance(concurrent, dict) and concurrent.get("state") == "ACTIVE"
+                and concurrent.get("node_ids") == requested):
+            return {"verdict": "WAVE-REUSED", "work_id": work_id, "run_id": run_id, "wave_id": target_wave_id}
+        raise
+    return {"verdict": "WAVE-DECLARED", "work_id": work_id, "run_id": run_id, "wave_id": target_wave_id}
 
 
 # Worktree preparation deliberately lives below the public adapter.  These
@@ -603,10 +1004,10 @@ def _exact_worktree_is_clean(root: str | Path, target: Path) -> bool:
 
 def _worker_receipt_event(name: str, event_name: str, work_id: str, run_id: str,
                           admission: Mapping[str, str], worker_id: str,
-                          lease: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+                          lease: Mapping[str, Any], wave_id: str = WAVE_ID) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build worker-scoped evidence bound to the coordinator lease fence."""
     receipt, event = _receipt_and_event(name=name, event_name=event_name, work_id=work_id,
-                                        run_id=run_id, admission=admission)
+                                        run_id=run_id, admission=admission, wave_id=wave_id)
     lease_id, fencing_token = lease.get("lease_id"), lease.get("fencing_token")
     if (not isinstance(lease_id, str) or not store.SAFE_NAME_RE.fullmatch(lease_id)
             or type(fencing_token) is not int or fencing_token <= 0):
@@ -636,8 +1037,8 @@ def _run_for_worker(root: str | Path, work_id: str, run_id: str,
 
 def _transition_worker(root: str | Path, work_id: str, run_id: str, admission: Mapping[str, str],
                        *, name: str, event_name: str, worker_id: str,
-                       lease: Mapping[str, Any], mutate: Any) -> None:
-    receipt, event = _worker_receipt_event(name, event_name, work_id, run_id, admission, worker_id, lease)
+                       lease: Mapping[str, Any], mutate: Any, wave_id: str = WAVE_ID) -> None:
+    receipt, event = _worker_receipt_event(name, event_name, work_id, run_id, admission, worker_id, lease, wave_id=wave_id)
     store.transact_with_event(root, mutate, event=event, receipt=receipt)
 
 
@@ -660,9 +1061,34 @@ def _new_coordinator_lease(run_id: str, worker_id: str) -> dict[str, Any]:
     return {
         "lease_id": f"lease-{run_id}-{worker_id}", "fencing_token": 1,
         "acquired_at": started.isoformat().replace("+00:00", "Z"),
-        "expires_at": (started + timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+        "expires_at": (started + LEASE_DURATION).isoformat().replace("+00:00", "Z"),
         "state": "ACTIVE", "recovery_count": 0,
     }
+
+
+def _parse_rfc3339(value: Any, code: str = "LEASE-INVALID") -> datetime:
+    if not isinstance(value, str):
+        _fail(code, "timestamp is invalid")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        _fail(code, "timestamp is invalid")
+    if parsed.tzinfo is None:
+        _fail(code, "timestamp is invalid")
+    return parsed
+
+
+def _last_activity_at(lease: Mapping[str, Any]) -> datetime:
+    """The timestamp of a worker's dispatch, or its most recent recorded
+    progress transition, whichever is later -- derived, not stored.
+
+    Both ``_new_coordinator_lease`` (dispatch) and ``record_progress`` (every
+    renewal) set ``lease.expires_at`` to ``<event time> + LEASE_DURATION``.
+    Subtracting the same fixed duration back out therefore always recovers
+    the exact timestamp of the *last* of those two kinds of event, with no
+    separate ``last_progress_at`` Store field needed.
+    """
+    return _parse_rfc3339(lease.get("expires_at")) - LEASE_DURATION
 
 
 def _require_active_lease(lease: Mapping[str, Any]) -> None:
@@ -681,16 +1107,49 @@ def _require_active_lease(lease: Mapping[str, Any]) -> None:
 
 
 def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
-                   scope_paths: Any, admission: Mapping[str, str]) -> dict[str, Any]:
+                   scope_paths: Any, admission: Mapping[str, str], *,
+                   node_id: str | None = None, remediates: str | None = None,
+                   wave_id: str | None = None) -> dict[str, Any]:
     """Persist a worktree intent, make exactly that Git worktree, then finalize.
 
     This deliberately contains no dispatch or process launch.  An interrupted
     intent is reconciled only when all three Git identities (path, branch,
     base) are exact; anything partial is retained as ORPHANED.
+
+    FASE-003 (FR-007) threads the node lineage a worker's record must now
+    carry: ``node_id`` defaults to ``worker_id`` itself (a node's first
+    dispatch sets ``worker_id = node_id`` verbatim) and ``remediates``
+    defaults to ``None`` (first dispatch, never a remediation replacement).
+    ``wave_id`` defaults to the FASE-002 module constant so the existing
+    ``gauntlet-prepare-worker`` CLI -- which never passes any of these three
+    keyword arguments -- keeps its exact prior behaviour and output.
+
+    F1 fix (operator-approved, see plan.md's note on this and DECISION-
+    BACKLOG.md BL-0002): every ``scope_paths``/``--scope`` entry is rejected,
+    unconditionally, against ``_dag_scope_violation``'s two FR-004/ADR-0018
+    rules -- no DAG document is needed or consulted, since the rule is
+    purely path-syntactic (see that helper's docstring). This closes the
+    self-attestation gap the existing ``gauntlet-prepare-worker`` command
+    left open since FASE-002: nothing previously stopped a caller from
+    minting a worker with write-scope grant over ``.grill/`` (where this
+    very attestation chain lives) or ``.specify/reports/``, even though
+    ``declare_worker`` -- the FASE-003 sibling command over this exact same
+    Store -- has always rejected precisely that. This is a deliberate
+    behavior change to the FASE-002 command surface, not a bug fix disguised
+    as one: a ``--scope`` that previously succeeded silently now blocks with
+    ``GRANT-OUT-OF-SCOPE``, a code distinct from ``declare_worker``'s
+    ``DAG-NODE-OUT-OF-SCOPE`` because this call site has no DAG node to
+    blame for the rejection.
     """
     identity = _validate_admission(admission)
     worker_id = _safe_name(worker_id, "worker")
+    resolved_node_id = _safe_name(node_id, "node") if node_id is not None else worker_id
+    if remediates is not None and not isinstance(remediates, str):
+        _fail("INVALID-IDENTIFIER", "remediates is invalid")
+    resolved_wave_id = wave_id if wave_id is not None else WAVE_ID
     scopes = _strict_scopes(scope_paths)
+    if any(_dag_scope_violation(path) for path in scopes):
+        _fail("GRANT-OUT-OF-SCOPE", "worker grant targets out-of-scope evidence")
     store.recover_pending_transition(root)
     run = _run_for_worker(root, work_id, run_id, identity)
     target, expected_workspace = _workspace_identity(root, work_id, run_id, worker_id, identity)
@@ -698,6 +1157,8 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
     if existing is not None and not isinstance(existing, dict):
         _fail("WORKER-INVALID", "worker record is invalid")
     if isinstance(existing, dict):
+        if existing.get("node_id") != resolved_node_id or existing.get("remediates") != remediates:
+            _fail("WORKER-CONFLICT", "worker declaration differs from requested node lineage")
         if existing.get("state") == "PREPARED":
             if existing.get("workspace") != expected_workspace or existing.get("grant") != {"scope_paths": scopes, "capabilities": _GRANT_CAPABILITIES}:
                 _fail("WORKER-CONFLICT", "worker declaration differs from requested grant")
@@ -715,13 +1176,21 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
             _fail("WORKER-CONFLICT", "worker declaration differs from requested grant")
     else:
         lease = _new_coordinator_lease(run_id, worker_id)
+        if remediates is not None:
+            # FR-007/FR-008(e): a remediation worker's budget is minted
+            # already spent -- the Store rejects any mint where this fact
+            # disagrees with `remediates`' presence.
+            lease["recovery_count"] = 1
         def declare(document: dict[str, Any]) -> dict[str, Any]:
             candidate = document["work_items"][work_id]["gauntlet"]["runs"][run_id]
             if worker_id in candidate["workers"]:
                 _fail("WORKER-CONFLICT", "worker appeared during declaration")
-            candidate["workers"][worker_id] = {"state": "DECLARED", "lease": copy.deepcopy(lease), "grant": None, "workspace": None}
+            candidate["workers"][worker_id] = {
+                "state": "DECLARED", "lease": copy.deepcopy(lease), "grant": None, "workspace": None,
+                "node_id": resolved_node_id, "remediates": remediates,
+            }
             return document
-        _transition_worker(root, work_id, run_id, identity, name=f"gauntlet-worker-declared-{run_id}-{worker_id}", event_name="gauntlet.worker.declared", worker_id=worker_id, lease=lease, mutate=declare)
+        _transition_worker(root, work_id, run_id, identity, name=f"gauntlet-worker-declared-{run_id}-{worker_id}", event_name="gauntlet.worker.declared", worker_id=worker_id, lease=lease, mutate=declare, wave_id=resolved_wave_id)
 
     # Declare the intent separately so no Store snapshot can claim a Git
     # effect before it exists.
@@ -732,6 +1201,8 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
         # the coordinator lease it lacked.  The repair itself is worker-scoped
         # evidence, so every subsequent Git effect has a durable fence.
         repaired_lease = _new_coordinator_lease(run_id, worker_id)
+        if remediates is not None:
+            repaired_lease["recovery_count"] = 1
         expected_state = current.get("state")
         if expected_state not in {"DECLARED", "PREPARING"}:
             _fail("LEASE-INVALID", "worker has no coordinator lease")
@@ -744,7 +1215,7 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
         _transition_worker(root, work_id, run_id, identity,
                            name=f"gauntlet-worker-lease-established-{run_id}-{worker_id}",
                            event_name="gauntlet.worker.lease-established", worker_id=worker_id,
-                           lease=repaired_lease, mutate=establish_lease)
+                           lease=repaired_lease, mutate=establish_lease, wave_id=resolved_wave_id)
         current = _run_for_worker(root, work_id, run_id, identity)["workers"][worker_id]
         current_lease = current.get("lease")
     if not isinstance(current_lease, Mapping):
@@ -756,7 +1227,7 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
             if worker.get("state") != "DECLARED": _fail("WORKER-CONFLICT", "worker changed before preparation")
             worker.update({"state": "PREPARING", "grant": {"scope_paths": scopes, "capabilities": _GRANT_CAPABILITIES}, "workspace": copy.deepcopy(expected_workspace)})
             return document
-        _transition_worker(root, work_id, run_id, identity, name=f"gauntlet-worker-preparing-{run_id}-{worker_id}", event_name="gauntlet.worker.preparing", worker_id=worker_id, lease=current_lease, mutate=preparing)
+        _transition_worker(root, work_id, run_id, identity, name=f"gauntlet-worker-preparing-{run_id}-{worker_id}", event_name="gauntlet.worker.preparing", worker_id=worker_id, lease=current_lease, mutate=preparing, wave_id=resolved_wave_id)
     elif current["state"] != "PREPARING":
         _fail("WORKER-CONFLICT", "worker is not preparable")
 
@@ -766,7 +1237,7 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
             worker = document["work_items"][work_id]["gauntlet"]["runs"][run_id]["workers"][worker_id]
             if worker.get("state") != "PREPARING": _fail("WORKER-CONFLICT", "worker changed during reconciliation")
             worker["state"] = "ORPHANED"; return document
-        _transition_worker(root, work_id, run_id, identity, name=f"gauntlet-worker-orphaned-{run_id}-{worker_id}", event_name="gauntlet.worker.orphaned", worker_id=worker_id, lease=current_lease, mutate=orphan)
+        _transition_worker(root, work_id, run_id, identity, name=f"gauntlet-worker-orphaned-{run_id}-{worker_id}", event_name="gauntlet.worker.orphaned", worker_id=worker_id, lease=current_lease, mutate=orphan, wave_id=resolved_wave_id)
         _fail("WORKSPACE-PRESERVED", "partial worker worktree is preserved")
     if state == "ABSENT":
         # Re-check after the durable PREPARING intent: it must never act as
@@ -788,8 +1259,486 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
         # record convergence and eligibility.
         worker["workspace"]["clean"] = True
         return document
-    _transition_worker(root, work_id, run_id, identity, name=f"gauntlet-worker-prepared-{run_id}-{worker_id}", event_name="gauntlet.worker.prepared", worker_id=worker_id, lease=current_lease, mutate=prepared)
+    _transition_worker(root, work_id, run_id, identity, name=f"gauntlet-worker-prepared-{run_id}-{worker_id}", event_name="gauntlet.worker.prepared", worker_id=worker_id, lease=current_lease, mutate=prepared, wave_id=resolved_wave_id)
     return _prepared_response(work_id, run_id, worker_id, expected_workspace)
+
+
+def declare_worker(root: str | Path, work_id: str, run_id: str, node_id: str, wave_id: str,
+                   tier: str, scope_paths: Any, dag_path: Any, admission: Mapping[str, str], *,
+                   agent_execute_floor: str, markdown_floor: str) -> dict[str, Any]:
+    """FASE-003 first dispatch: ``worker_id = node_id`` verbatim, never a
+    remediation (FR-007) -- remediation dispatch is ``gauntlet-remediate``,
+    a later phase, and takes no ``--remediates``-shaped input here at all.
+
+    A thin, named entry over :func:`prepare_worker`'s existing FASE-002
+    intent protocol (``DECLARED -> PREPARING -> git worktree add ->
+    PREPARED``) -- see its docstring for the full sequence; this function
+    does not duplicate it.  It additionally: (1) rejects a ``node_id`` using
+    the reserved remediation suffix, which no first dispatch may ever use;
+    (2) re-checks FR-006's tier floor against the caller-declared
+    ``tier``/``scope_paths`` pair; (3) rejects a grant (``scope_paths``)
+    matching either of FR-004's two DAG-scope rejection rules (B3 fix) --
+    ``declare_wave`` already enforces this against a DAG node's own declared
+    ``files``, but nothing previously applied it to the grant a caller hands
+    directly to this command, letting a caller mint a worker scoped to
+    ``.grill/`` or ``.specify/reports/`` regardless of what the DAG says;
+    (4) loads and validates the named DAG (B4 fix) and requires ``node_id``
+    to actually be a member of the named wave's ``node_ids`` (a real,
+    required Store field as of the B5 fix) rather than trusting a bare
+    ``--node-id`` the caller could point at any not-ready or non-member node;
+    (5) requires the named ``wave_id`` to name a wave of this run that is
+    currently ``ACTIVE`` -- i.e. one ``declare_wave`` actually declared --
+    rather than a pristine, never-declared, or already-``COMPLETE`` wave; and
+    (6) requires every one of that node's DAG-declared ``depends_on`` to have
+    a terminal (specifically ``TERMINAL``, the success outcome) lineage-head
+    worker in the run, exactly like ``declare_wave`` already requires for a
+    wave's own named nodes -- closing the gap where a direct
+    ``gauntlet-worker-declare`` call could dispatch a not-ready node
+    ``gauntlet-wave-declare`` would have refused to admit into a wave.
+    """
+    node_id = _safe_name(node_id, "node")
+    if store.WORKER_REMEDIATION_SUFFIX_RE.fullmatch(node_id):
+        _fail("INVALID-IDENTIFIER", "node id uses the reserved remediation suffix")
+    wave_id = _safe_name(wave_id, "wave")
+    scopes = _strict_scopes(scope_paths)
+    if any(_dag_scope_violation(path) for path in scopes):
+        _fail("DAG-NODE-OUT-OF-SCOPE", "worker grant targets out-of-scope evidence")
+    if tier not in TIER_ORDER:
+        _fail("DAG-NODE-TIER-UNRESOLVED", "worker tier is invalid")
+    floor = markdown_floor if _is_markdown_only(scopes) else agent_execute_floor
+    if TIER_ORDER[tier] < TIER_ORDER[floor]:
+        _fail("DAG-NODE-TIER-UNRESOLVED", "worker tier does not satisfy its floor")
+    identity = _validate_admission(admission)
+    _require_base_commit(root, identity)
+    store.recover_pending_transition(root)
+    run = _run_for_worker(root, work_id, run_id, identity)
+    wave = run.get("waves", {}).get(wave_id)
+    if not isinstance(wave, dict) or wave.get("state") != "ACTIVE":
+        _fail("WAVE-NOT-FOUND", "named wave is not an active wave of this run")
+    _, nodes_by_id = _load_and_validate_dag(
+        root, dag_path, agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
+    )
+    if node_id not in nodes_by_id:
+        _fail("WAVE-NODE-UNKNOWN", f"node is not part of the Execution DAG: {node_id}")
+    if node_id not in wave.get("node_ids", []):
+        _fail("WAVE-NODE-NOT-MEMBER", f"node is not a member of the named wave: {node_id}")
+    for dep in nodes_by_id[node_id]["depends_on"]:
+        if not _node_ready(run, dep):
+            _fail("WAVE-NODE-NOT-READY", f"node dependency is not terminal: {node_id} depends on {dep}")
+    return prepare_worker(
+        root, work_id, run_id, node_id, scopes, admission,
+        node_id=node_id, remediates=None, wave_id=wave_id,
+    )
+
+
+# FASE-003 (FR-008(d), FR-009, FR-010, ADR-0012, ADR-0015; T017-T019): progress
+# recording, worker termination (with wave-completion detection), and stall
+# remediation.  All three require the target worker in ``PREPARED`` -- the
+# only non-terminal state a first-dispatch or remediation worker settles into
+# once its worktree exists -- and resolve their own ``wave_id`` rather than
+# accepting one from the caller (none of the three CLI commands take a
+# ``--wave-id``): see ``_worker_wave_id``.
+FAILURE_CLASSES = frozenset({"process-timeout", "transport-failure"})
+
+
+def _failed_receipt_name(run_id: str, worker_id: str, failure_class: str) -> str:
+    return f"gauntlet-worker-failed-{run_id}-{worker_id}-{failure_class}"
+
+
+def _read_worker_failure_class(root: str | Path, work_id: str, run_id: str,
+                               run: Mapping[str, Any], worker_id: str, worker: Mapping[str, Any]) -> str | None:
+    """Recover FR-010's classification from the coordinator's own immutable
+    evidence, for ``gauntlet-status`` (T016) -- see ``terminate_worker``'s
+    docstring for why it lives in the receipt name rather than a Store field.
+    A caller-asserted value is never trusted: the receipt bytes on disk must
+    exactly match this worker's own recorded FAILED transition.
+    """
+    if worker.get("state") != "FAILED":
+        return None
+    lease = worker.get("lease")
+    admission = run.get("admission")
+    if not isinstance(lease, Mapping) or not isinstance(admission, Mapping):
+        return None
+    for failure_class in sorted(FAILURE_CLASSES):
+        name = _failed_receipt_name(run_id, worker_id, failure_class)
+        path = store.receipt_path(root, "runtime", name)
+        try:
+            store._validate_regular(path)
+            raw = store._read_regular(path)
+            receipt = store.loads(store._decode(raw, path))
+        except (OSError, store.StoreError, ValueError):
+            continue
+        if not isinstance(receipt, dict):
+            continue
+        wave_id = receipt.get("wave_id")
+        expected = {
+            "category": "runtime", "name": name, "work_id": work_id, "run_id": run_id,
+            "wave_id": wave_id, "base_commit": admission.get("base_commit"),
+            "input_sha256": _input_hash(admission), "output_sha256": None,
+            "worker_id": worker_id, "lease_id": lease.get("lease_id"),
+            "fencing_token": lease.get("fencing_token"),
+        }
+        if receipt != expected or wave_id not in run.get("waves", {}):
+            continue
+        if raw != store.jcs(receipt) + b"\n":
+            continue
+        return failure_class
+    return None
+
+
+def _worker_wave_id(root: str | Path, work_id: str, run_id: str, worker_id: str) -> str:
+    """Recover one worker's own declaration ``wave_id`` from the journal.
+
+    FASE-003 (T023, B1 fix): a worker's own wave may already be ``COMPLETE``
+    by the time this worker needs to record progress, terminate, or be
+    remediated -- e.g. terminating a wave's last non-terminal node can
+    complete the wave in the very same transaction as a sibling failure now
+    being remediated, and a remediation replacement worker (``T1-r1``) can
+    easily be minted after its wave already went ``COMPLETE`` (the rest of
+    the wave finished while the original worker was being remediated).  The
+    run's "newest wave is ACTIVE" is therefore never a safe assumption for
+    *any* worker's own wave identity -- this is the one lineage-aware
+    resolution every non-dispatch call site (``record_progress``,
+    ``terminate_worker``, ``remediate_node``) uses uniformly.
+    """
+    for event in store.read_events(root):
+        if (event.get("event") == "gauntlet.worker.declared" and event.get("work_id") == work_id
+                and event.get("run_id") == run_id and event.get("worker_id") == worker_id):
+            wave_id = event.get("wave_id")
+            if isinstance(wave_id, str) and wave_id:
+                return wave_id
+    _fail("ORCHESTRATOR-INVALID", "worker has no recorded declaration wave")
+
+
+def _wave_would_complete(run: Mapping[str, Any], wave_id: str) -> bool:
+    """Whether every one of ``wave_id``'s member nodes -- ``node_ids``, a
+    real, required Store field set at wave declaration (B5 fix) -- now has a
+    terminal lineage-head worker record.
+
+    A member node with no worker record at all yet (never dispatched) is
+    obviously not complete -- this alone is what closes B5's stranding bug,
+    where a wave could reach ``COMPLETE`` while a declared-but-never-
+    dispatched member could then never be declared into it.  A remediated
+    node has two worker records; only its lineage HEAD -- the one no sibling
+    worker of the same ``node_id`` names via ``remediates`` -- decides the
+    node's own terminal state, never an earlier, superseded attempt.  ``run``
+    must be the transaction's own in-flight candidate (already carrying this
+    call's own worker's new state), so this stays race-free with the
+    transition it decides alongside.
+    """
+    node_ids = run.get("waves", {}).get(wave_id, {}).get("node_ids")
+    if not isinstance(node_ids, list) or not node_ids:
+        return False
+    for node_id in node_ids:
+        head = _node_lineage_head(run, node_id)
+        if head is None or head.get("state") not in TERMINAL_WORKER_STATES:
+            return False
+    return True
+
+
+def record_progress(root: str | Path, work_id: str, run_id: str, worker_id: str,
+                    admission: Mapping[str, str]) -> dict[str, Any]:
+    """FASE-003 (FR-008(d), T017): record one progress transition correlated
+    to a worker's active lease, renewing ``lease.expires_at`` to
+    ``<record time> + LEASE_DURATION`` -- from now, not from the old expiry --
+    so a worker producing genuine progress past its original lease window is
+    never treated as expired solely because that window elapsed (FR-009,
+    SC-010).  Requires the worker in ``PREPARED``; any other state has
+    nothing live to renew.
+    """
+    identity = _validate_admission(admission)
+    worker_id = _safe_name(worker_id, "worker")
+    store.recover_pending_transition(root)
+    run = _run_for_worker(root, work_id, run_id, identity)
+    worker = run.get("workers", {}).get(worker_id)
+    if not isinstance(worker, dict):
+        _fail("WORKER-NOT-FOUND", "worker does not exist")
+    if worker.get("state") != "PREPARED":
+        _fail("WORKER-NOT-PREPARED", "worker is not in a progress-eligible state")
+    lease = worker.get("lease")
+    if not isinstance(lease, Mapping):
+        _fail("LEASE-INVALID", "worker has no coordinator lease")
+    wave_id = _worker_wave_id(root, work_id, run_id, worker_id)
+    lease_id, fencing_token = lease.get("lease_id"), lease.get("fencing_token")
+    recorded_at = datetime.now(timezone.utc).replace(microsecond=0)
+    new_expires_at = (recorded_at + LEASE_DURATION).isoformat().replace("+00:00", "Z")
+
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        candidate = document["work_items"][work_id]["gauntlet"]["runs"][run_id]["workers"][worker_id]
+        if candidate.get("state") != "PREPARED":
+            _fail("WORKER-NOT-PREPARED", "worker changed before progress could be recorded")
+        candidate_lease = candidate.get("lease")
+        if (not isinstance(candidate_lease, dict) or candidate_lease.get("lease_id") != lease_id
+                or candidate_lease.get("fencing_token") != fencing_token):
+            _fail("LEASE-INVALID", "worker lease changed before progress could be recorded")
+        candidate_lease["expires_at"] = new_expires_at
+        return document
+
+    _transition_worker(
+        root, work_id, run_id, identity, name=f"gauntlet-worker-progress-{run_id}-{worker_id}",
+        event_name="gauntlet.worker.progress-recorded", worker_id=worker_id, lease=lease,
+        mutate=mutate, wave_id=wave_id,
+    )
+    return {
+        "verdict": "PROGRESS-RECORDED", "work_id": work_id, "run_id": run_id,
+        "worker_id": worker_id, "expires_at": new_expires_at,
+    }
+
+
+def terminate_worker(root: str | Path, work_id: str, run_id: str, worker_id: str, outcome: str,
+                     failure_class: str | None, admission: Mapping[str, str]) -> dict[str, Any]:
+    """FASE-003 (FR-009/FR-010, ADR-0012, T018): terminate one ``PREPARED``
+    worker.
+
+    ``completed`` transitions ``PREPARED -> TERMINAL``; ``failed`` transitions
+    ``PREPARED -> FAILED`` and requires ``failure_class`` from FR-010's closed
+    set -- both edges already legal in ``store._validate_gauntlet_state_
+    transitions``'s ``worker_edges`` table, just never driven by any command
+    until now.  The classification is recorded as evidence on the transition
+    itself: Store's event and receipt objects both have closed key sets with
+    no spare slot for it, so it is encoded in the one free-form field that
+    schema does leave open -- the immutable receipt's own ``name`` -- the
+    same way every other transition in this file already bakes
+    ``run_id``/``worker_id`` into its receipt name; ``run_projection``
+    recovers it from there for ``gauntlet-status`` rather than trusting a
+    caller-asserted flag on a later remediation call (FR-010).  Frees the
+    worker's concurrent-cap slot (ADR-0012) regardless of outcome, since
+    neither ``TERMINAL`` nor ``FAILED`` is in
+    ``store.NON_TERMINAL_WORKER_STATES``.
+
+    In the same transaction, if this is the last of the current wave's
+    member nodes to reach a terminal state, the wave itself also transitions
+    to ``COMPLETE`` -- see ``_wave_would_complete`` for the lineage-aware
+    correctness rule this depends on.
+    """
+    if outcome == "completed":
+        if failure_class is not None:
+            _fail("INVALID-ARGUMENTS", "failure_class is only valid for a failed outcome")
+        new_state = "TERMINAL"
+    elif outcome == "failed":
+        if failure_class not in FAILURE_CLASSES:
+            _fail("FAILURE-CLASS-REQUIRED", "a failed outcome requires a valid --failure-class")
+        new_state = "FAILED"
+    else:
+        _fail("INVALID-ARGUMENTS", "outcome must be completed or failed")
+
+    identity = _validate_admission(admission)
+    worker_id = _safe_name(worker_id, "worker")
+    store.recover_pending_transition(root)
+    run = _run_for_worker(root, work_id, run_id, identity)
+    worker = run.get("workers", {}).get(worker_id)
+    if not isinstance(worker, dict):
+        _fail("WORKER-NOT-FOUND", "worker does not exist")
+    if worker.get("state") != "PREPARED":
+        _fail("WORKER-NOT-PREPARED", "worker is not in a terminable state")
+    lease = worker.get("lease")
+    if not isinstance(lease, Mapping):
+        _fail("LEASE-INVALID", "worker has no coordinator lease")
+    wave_id = _worker_wave_id(root, work_id, run_id, worker_id)
+    receipt_name = (
+        _failed_receipt_name(run_id, worker_id, failure_class) if new_state == "FAILED"
+        else f"gauntlet-worker-terminal-{run_id}-{worker_id}"
+    )
+
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        candidate_run = document["work_items"][work_id]["gauntlet"]["runs"][run_id]
+        candidate_worker = candidate_run["workers"][worker_id]
+        if candidate_worker.get("state") != "PREPARED":
+            _fail("WORKER-NOT-PREPARED", "worker changed before it could be terminated")
+        candidate_worker["state"] = new_state
+        if _wave_would_complete(candidate_run, wave_id):
+            candidate_run["waves"][wave_id]["state"] = "COMPLETE"
+        return document
+
+    _transition_worker(
+        root, work_id, run_id, identity, name=receipt_name, event_name="gauntlet.worker.terminal",
+        worker_id=worker_id, lease=lease, mutate=mutate, wave_id=wave_id,
+    )
+    result = {"verdict": "WORKER-TERMINAL", "work_id": work_id, "run_id": run_id, "worker_id": worker_id, "state": new_state}
+    if new_state == "FAILED":
+        result["failure_class"] = failure_class
+    return result
+
+
+def _mint_remediation_worker(root: str | Path, work_id: str, run_id: str, admission: Mapping[str, str],
+                             run: Mapping[str, Any], worker_id: str, node_id: str,
+                             grant: Mapping[str, Any], wave_id: str, activation_max_workers: int) -> dict[str, Any]:
+    """The shared budget-lineage scan and atomic mint (FR-007/FR-008(e),
+    ADR-0015), reused verbatim by both remediation reasons.
+
+    One Store transaction performs the shared per-node budget scan and the
+    replacement worker's ``DECLARED`` mint together -- closing the TOCTOU gap
+    a split lookup/mint design would leave open (plan.md Complexity
+    Tracking).  The scan matches on ``node_id`` alone, never on which reason
+    funded the sibling with a spent budget, so a node cannot chain
+    remediation by alternating ``stall`` and ``transient-failure`` (FR-007:
+    "not one budget per mechanism").  The subsequent
+    ``PREPARING -> git worktree add -> PREPARED`` sequence is driven
+    afterwards by ``prepare_worker``'s own existing intent protocol, exactly
+    like first dispatch (``declare_worker``) already reuses it.
+
+    FASE-003 (F2 fix, FR-005): "a stall-triggered replacement worker and a
+    transient-failure retry each count against this same concurrent cap" --
+    ``declare_wave`` is not the only mint path, so the cap check cannot live
+    there alone.  ``activation_max_workers`` is the caller's own current
+    activation-pinned cap (``gauntlet_remediate_command`` threads it down
+    exactly the way ``gauntlet_wave_declare_command`` already threads it into
+    ``declare_wave``); this function has no Execution DAG in hand (remediation
+    never takes a ``--dag`` argument), so unlike ``declare_wave`` it cannot
+    additionally intersect the DAG's own ``max_workers`` -- the activation cap
+    is the only cap value available at a remediation mint, and enforcing it is
+    what closes the reported gap (zero enforcement previously).  The check
+    runs inside the same transaction as the budget-lineage scan and the STALL
+    transition below, so it is race-free the same way they are.
+    """
+    sibling_count = sum(
+        1 for candidate_worker_id, candidate_worker in run.get("workers", {}).items()
+        if isinstance(candidate_worker, dict) and candidate_worker.get("node_id") == node_id
+        and store.WORKER_REMEDIATION_SUFFIX_RE.fullmatch(candidate_worker_id)
+    )
+    new_worker_id = f"{node_id}-r{sibling_count + 1}"
+    scopes = list(grant["scope_paths"])
+    new_lease = _new_coordinator_lease(run_id, new_worker_id)
+    new_lease["recovery_count"] = 1
+
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        candidate_workers = document["work_items"][work_id]["gauntlet"]["runs"][run_id]["workers"]
+        if any(
+            isinstance(candidate, dict) and candidate.get("node_id") == node_id
+            and isinstance(candidate.get("lease"), dict) and candidate["lease"].get("recovery_count") == 1
+            for candidate in candidate_workers.values()
+        ):
+            _fail("REMEDIATION-BUDGET-SPENT", "node's remediation budget is already spent")
+        if new_worker_id in candidate_workers:
+            _fail("WORKER-CONFLICT", "remediation worker appeared during declaration")
+        # FASE-003 (B2 fix): in the SAME transaction, transition the original
+        # being replaced out of PREPARED -- a still-PREPARED original (the
+        # stall path) would otherwise strand forever in PREPARED, permanently
+        # occupying a non-terminal-cap slot (ADR-0012/FR-005) and permanently
+        # blocking any dependent's readiness check (_node_lineage_head would
+        # keep finding it as an ambiguous second "head" alongside the
+        # replacement).  PREPARED -> STALLED is already a legal Store edge.
+        # A FAILED original (the transient-failure path) is already terminal
+        # and needs no further transition here.
+        original = candidate_workers.get(worker_id)
+        if isinstance(original, dict) and original.get("state") == "PREPARED":
+            original["state"] = "STALLED"
+        # FASE-003 (F2 fix, FR-005/ADR-0012): computed AFTER the original's
+        # own STALLED transition above, so a freed slot is never
+        # double-counted against the replacement about to be minted; the "+1"
+        # accounts for that replacement itself, mirroring declare_wave's own
+        # "non_terminal + len(requested) > effective_cap" shape.
+        non_terminal = sum(
+            1 for candidate in candidate_workers.values()
+            if isinstance(candidate, dict) and candidate.get("state") in store.NON_TERMINAL_WORKER_STATES
+        )
+        if non_terminal + 1 > activation_max_workers:
+            _fail("REMEDIATION-CAP-EXCEEDED", "remediation replacement would exceed the run's effective concurrent worker cap")
+        candidate_workers[new_worker_id] = {
+            "state": "DECLARED", "lease": copy.deepcopy(new_lease), "grant": None, "workspace": None,
+            "node_id": node_id, "remediates": worker_id,
+        }
+        return document
+
+    _transition_worker(
+        root, work_id, run_id, admission, name=f"gauntlet-worker-declared-{run_id}-{new_worker_id}",
+        event_name="gauntlet.worker.declared", worker_id=new_worker_id, lease=new_lease,
+        mutate=mutate, wave_id=wave_id,
+    )
+    prepared = prepare_worker(
+        root, work_id, run_id, new_worker_id, scopes, admission,
+        node_id=node_id, remediates=worker_id, wave_id=wave_id,
+    )
+    return {
+        "verdict": "REMEDIATION-RECORDED", "work_id": work_id, "run_id": run_id,
+        "worker_id": new_worker_id, "remediates": worker_id, "recovery_count": 1,
+        "worktree_key": prepared.get("worktree_key"), "base_commit": prepared.get("base_commit"),
+    }
+
+
+def remediate_node(root: str | Path, work_id: str, run_id: str, worker_id: str, reason: str,
+                   admission: Mapping[str, str], *, stall_minutes: int, activation_max_workers: int) -> dict[str, Any]:
+    """FASE-003 (FR-007/FR-009/FR-010, ADR-0015, T019/T023): remediate one
+    node's current worker.
+
+    Both remediation reasons -- ``"stall"`` (User Story 3, T019) and
+    ``"transient-failure"`` (User Story 4, T023) -- share the exact same
+    budget-lineage scan and atomic mint (:func:`_mint_remediation_worker`);
+    only each reason's own eligibility precondition differs:
+
+    * ``"stall"`` requires the worker still ``PREPARED``, and is verified
+      from the worker's own recorded lease-activity timestamp against the
+      configured stall window -- never caller-asserted.
+    * ``"transient-failure"`` requires the worker already ``FAILED`` (via
+      ``gauntlet-worker-terminal``) with a classification recorded in
+      FR-010's closed transient set, read back from the coordinator's own
+      immutable evidence (``_read_worker_failure_class``) rather than a bare
+      flag on this call -- the core function does not trust a caller-passed
+      classification any more than it trusts a caller-asserted stall.
+
+    ``stall_minutes`` is the activation-pinned ``limits.stall_minutes`` value
+    (FASE-001), threaded in by the caller exactly like ``declare_wave``'s
+    ``activation_max_workers``.  ``activation_max_workers`` (F2 fix, FR-005)
+    is that same value -- ``gauntlet_remediate_command`` threads it down
+    exactly the way ``gauntlet_wave_declare_command`` already threads it into
+    ``declare_wave``: "a stall-triggered replacement worker and a transient-
+    failure retry each count against this same concurrent cap" (FR-005).
+    This module never reads config content itself; both values are required
+    and validated even for a ``transient-failure`` call so the CLI adapter's
+    calling convention stays uniform across both reasons.
+    """
+    if reason not in {"stall", "transient-failure"}:
+        _fail("REMEDIATION-REASON-UNSUPPORTED", f"remediation reason is not recognized: {reason}")
+    if type(stall_minutes) is not int or stall_minutes < 1:
+        _fail("INVALID-ARGUMENTS", "stall window is invalid")
+    if type(activation_max_workers) is not int or activation_max_workers < 1:
+        _fail("INVALID-ARGUMENTS", "activation worker cap is invalid")
+
+    identity = _validate_admission(admission)
+    worker_id = _safe_name(worker_id, "worker")
+    store.recover_pending_transition(root)
+    run = _run_for_worker(root, work_id, run_id, identity)
+    worker = run.get("workers", {}).get(worker_id)
+    if not isinstance(worker, dict):
+        _fail("WORKER-NOT-FOUND", "worker does not exist")
+
+    if reason == "stall":
+        if worker.get("state") != "PREPARED":
+            _fail("WORKER-NOT-PREPARED", "worker is not in a remediation-eligible state")
+        lease = worker.get("lease")
+        if not isinstance(lease, Mapping):
+            _fail("LEASE-INVALID", "worker has no coordinator lease")
+        if datetime.now(timezone.utc) - _last_activity_at(lease) < timedelta(minutes=stall_minutes):
+            _fail("STALL-NOT-ELIGIBLE", "worker has recorded progress within the configured stall window")
+    else:
+        if worker.get("state") != "FAILED":
+            _fail("WORKER-NOT-FAILED", "worker is not in a transient-failure-eligible state")
+        # Defensive, not merely a re-check of what ``gauntlet-worker-terminal``
+        # already enforced (FR-010): the core function does not trust its
+        # caller, so it re-derives the classification from the coordinator's
+        # own immutable evidence and re-validates it against the exact same
+        # closed set, rather than trusting "state == FAILED" alone.
+        failure_class = _read_worker_failure_class(root, work_id, run_id, run, worker_id, worker)
+        if failure_class not in FAILURE_CLASSES:
+            _fail("FAILURE-CLASS-NOT-TRANSIENT", "worker failure is not classified as transient")
+
+    node_id = worker.get("node_id")
+    grant = worker.get("grant")
+    if not isinstance(grant, Mapping):
+        _fail("LEASE-INVALID", "worker has no coordinator grant")
+    # Resolved by the worker's own journal-recorded declaration, never by
+    # assuming "the run's newest wave is ACTIVE" (B1 fix -- that assumption
+    # is false the moment a worker's own wave has already gone COMPLETE):
+    # a FAILED worker's own wave may already be COMPLETE (terminating a
+    # wave's last non-terminal node can complete the wave in the very same
+    # transaction as the failure now being remediated), and a still-PREPARED
+    # worker's own wave is provably still this same value either way -- see
+    # ``_worker_wave_id``'s docstring.
+    wave_id = _worker_wave_id(root, work_id, run_id, worker_id)
+
+    return _mint_remediation_worker(
+        root, work_id, run_id, identity, run, worker_id, node_id, grant, wave_id, activation_max_workers,
+    )
 
 
 def cleanup_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,

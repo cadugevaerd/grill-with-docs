@@ -257,7 +257,12 @@ def seed_worker_diagnosis(root: Path, work_id: str, run_id: str, worker_id: str,
 
     def declared(document: dict[str, Any]) -> dict[str, Any]:
         document["work_items"][work_id]["gauntlet"]["runs"][run_id]["workers"][worker_id] = {
+            # FASE-003 (T005): node_id/remediates are now required worker keys;
+            # this fixture is a plain first-dispatch worker, so node_id mirrors
+            # worker_id verbatim and remediates stays null, matching what the
+            # real `gauntlet-prepare-worker` CLI's own defaults now produce.
             "state": "DECLARED", "lease": None, "grant": None, "workspace": None,
+            "node_id": worker_id, "remediates": None,
         }
         return document
 
@@ -444,7 +449,10 @@ class GauntletRunContractHarness(unittest.TestCase):
 
         def declared(document: dict[str, Any]) -> dict[str, Any]:
             document["work_items"][WORK_ID]["gauntlet"]["runs"][run_id]["workers"][worker_id] = {
+                # FASE-003 (T005): see the sibling fixture in seed_worker_diagnosis
+                # for why node_id/remediates are populated the same way here.
                 "state": "DECLARED", "lease": None, "grant": None, "workspace": None,
+                "node_id": worker_id, "remediates": None,
             }
             return document
 
