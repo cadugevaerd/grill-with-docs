@@ -1247,6 +1247,14 @@ class Hygiene(Base):
             "gauntlet-progress-record": "gauntlet_progress_record_command",
             "gauntlet-worker-terminal": "gauntlet_worker_terminal_command",
             "gauntlet-remediate": "gauntlet_remediate_command",
+            # FASE-004 (T015): wave convergence is the same closed
+            # coordinator-only surface, proven by the same admission boundary.
+            "gauntlet-converge": "gauntlet_converge_command",
+            # FASE-004 (T022, FR-014/ADR-0020): run abandonment is the one
+            # control that deliberately proves the *target run's* recorded
+            # admission instead of the current activation -- it still belongs
+            # to the same closed coordinator-only surface.
+            "gauntlet-run-abandon": "gauntlet_run_abandon_command",
         }
 
         parser_commands = {

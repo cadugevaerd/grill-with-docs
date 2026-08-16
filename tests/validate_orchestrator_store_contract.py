@@ -56,6 +56,17 @@ def GAUNTLET_WORKER(worker_id='worker-a',state='DECLARED',lease=None,grant=None,
  return {'state':state,'lease':lease,'grant':grant,'workspace':workspace,'node_id':worker_id if node_id is None else node_id,'remediates':remediates}
 def GAUNTLET_LEASE(lease_id='lease-a',fencing_token=1,state='ACTIVE',recovery_count=0):
  return {'lease_id':lease_id,'fencing_token':fencing_token,'acquired_at':CLOCK(),'expires_at':CLOCK(),'state':state,'recovery_count':recovery_count}
+# FASE-004 (T001): the run's two new optional write-once fields and the wave's
+# own optional conflict record.  The bundle is stored verbatim by the Store;
+# its own six-key validation lives in attestation.py, at the CLI boundary.
+def HUMAN_AUTHORIZATION(scope='run-alpha-1',decision='APPROVED',authorized_by='operator@example.invalid'):
+ return {'schema':'human-authorization/v1','scope':scope,'decision':decision,'authorized_by':authorized_by,'receipt_ref':'receipts/abandon.json','content_sha256':'f'*64}
+def LAST_CONFLICT(node_ids=None,reason='content-conflict',execution_branch_head='1'*40,worker_heads=None):
+ return {
+  'node_ids':['n1'] if node_ids is None else node_ids,'reason':reason,
+  'execution_branch_head':execution_branch_head,
+  'worker_heads':{'n1':'2'*40} if worker_heads is None else worker_heads,
+ }
 def _mp_append_events(root,count,tag):
  sys.path.insert(0,str(SCRIPTS))
  from grill_core import store as _store
@@ -720,6 +731,10 @@ class StoreContract(unittest.TestCase):
    event=event,receipt=receipt,now=CLOCK,fault=fault,
   )
 
+ def _run(self,snapshot=None):
+  document=(store.read_snapshot(self.r) if snapshot is None else snapshot).document
+  return document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']
+
  # FASE-003 (T001): advance run-alpha-1's worker map by one legal transition,
  # under a fresh receipt name so the call is free to actually commit.
  def _advance_workers(self,workers,name,waves=None):
@@ -742,9 +757,14 @@ class StoreContract(unittest.TestCase):
   for field,value in event.items(): self.assertEqual(semantic[0][field],value)
   self.assertEqual(store.read_snapshot(self.r).document['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['last_transition']['event_sequence'],semantic[0]['sequence'])
 
- def test_transact_with_event_rejects_admitted_to_complete_jump_without_write(self):
+ # FASE-004 (T006) opened ADMITTED -> COMPLETE and RECOVERY_ELIGIBLE ->
+ # COMPLETE, so the illegal edge this case pins is now the one out of the
+ # absorbing BLOCKED state -- the property under test (an illegal run-state
+ # jump through transact_with_event blocks and writes nothing) is unchanged.
+ def test_transact_with_event_rejects_blocked_to_complete_jump_without_write(self):
   self.register()
   self._gauntlet_transition()
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-blocked'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(state='BLOCKED')}))
   before=tree(self.paths().root)
   def jump(d):
    d['work_items']['gauntlet-work']['gauntlet']['runs']['run-alpha-1']['state']='COMPLETE'; return d
@@ -1191,5 +1211,159 @@ class StoreContract(unittest.TestCase):
   with self.assertRaises(store.StoreError) as ctx:
    self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-alpha-injected'),block=GAUNTLET_BLOCK({'run-alpha-1':injected}))
   self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE'); self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ # --- FASE-004 Phase 1 (T001): the run's terminal lifecycle, its two new
+ # optional write-once fields, and the wave's conflict/convergence records --
+ def test_run_admitted_to_complete_is_accepted(self):
+  self.register(); self._gauntlet_transition()
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-admitted-complete'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(state='COMPLETE')}))
+  self.assertEqual(self._run(written)['state'],'COMPLETE')
+
+ def test_run_recovery_eligible_to_complete_is_accepted(self):
+  self.register(); self._gauntlet_transition()
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-eligible'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(state='RECOVERY_ELIGIBLE')}))
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-run-eligible-complete'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(state='COMPLETE')}))
+  self.assertEqual(self._run(written)['state'],'COMPLETE')
+
+ def test_run_dag_content_sha256_is_optional_and_hex64(self):
+  self.register(); self._gauntlet_transition(); before=self.paths().orchestrator.read_bytes()
+  # Bare 64-hex, the same shape every other *_sha256 field of this block
+  # already carries -- never the "sha256:" prefixed form project_id uses.
+  for index,pin in enumerate(('not-a-hash','sha256:'+'a'*64,'A'*64,'a'*63,123,None)):
+   with self.subTest(pin=pin):
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name=f'gauntlet-pin-bad-{index}'),block=GAUNTLET_BLOCK({'run-alpha-1':{**GAUNTLET_RUN(),'dag_content_sha256':pin}}))
+    self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-pin'),block=GAUNTLET_BLOCK({'run-alpha-1':{**GAUNTLET_RUN(),'dag_content_sha256':'a'*64}}))
+  self.assertEqual(self._run(written)['dag_content_sha256'],'a'*64)
+
+ def test_run_dag_content_sha256_is_write_once(self):
+  self.register(); self._gauntlet_transition()
+  pinned={**GAUNTLET_RUN(),'dag_content_sha256':'a'*64}
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-pin'),block=GAUNTLET_BLOCK({'run-alpha-1':pinned}))
+  carried=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-pin-carried'),block=GAUNTLET_BLOCK({'run-alpha-1':pinned}))
+  self.assertEqual(self._run(carried)['dag_content_sha256'],'a'*64)
+  before=self.paths().orchestrator.read_bytes()
+  for index,run in enumerate(({**GAUNTLET_RUN(),'dag_content_sha256':'b'*64},GAUNTLET_RUN())):
+   with self.subTest(run=run):
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name=f'gauntlet-pin-rewrite-{index}'),block=GAUNTLET_BLOCK({'run-alpha-1':run}))
+    self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_run_abandon_authorization_is_optional_and_write_once(self):
+  self.register(); self._gauntlet_transition(); before=self.paths().orchestrator.read_bytes()
+  for index,bad in enumerate(('not-an-object',[],None)):
+   with self.subTest(bad=bad):
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name=f'gauntlet-abandon-bad-{index}'),block=GAUNTLET_BLOCK({'run-alpha-1':{**GAUNTLET_RUN(),'abandon_authorization':bad}}))
+    self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+  bundle=HUMAN_AUTHORIZATION()
+  abandoned={**GAUNTLET_RUN(state='BLOCKED'),'abandon_authorization':bundle}
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-abandon'),block=GAUNTLET_BLOCK({'run-alpha-1':abandoned}))
+  self.assertEqual(self._run(written)['abandon_authorization'],bundle)
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-abandon-carried'),block=GAUNTLET_BLOCK({'run-alpha-1':abandoned}))
+  before=self.paths().orchestrator.read_bytes()
+  divergent={**GAUNTLET_RUN(state='BLOCKED'),'abandon_authorization':HUMAN_AUTHORIZATION(authorized_by='someone-else@example.invalid')}
+  for index,run in enumerate((divergent,GAUNTLET_RUN(state='BLOCKED'))):
+   with self.subTest(run=run):
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name=f'gauntlet-abandon-rewrite-{index}'),block=GAUNTLET_BLOCK({'run-alpha-1':run}))
+    self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_wave_last_conflict_is_optional_and_round_trips(self):
+  self.register(); self._gauntlet_transition()
+  for index,reason in enumerate(('scope-overlap','content-conflict')):
+   conflict=LAST_CONFLICT(reason=reason)
+   waves={'wave-0001':{'state':'DECLARED','node_ids':DEFAULT_WAVE_NODE_IDS,'last_conflict':conflict}}
+   written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name=f'gauntlet-conflict-{index}'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=waves)}))
+   self.assertEqual(self._run(written)['waves']['wave-0001']['last_conflict'],conflict)
+  # Absence is the "resolved" signal (FR-011), so the field must be removable.
+  cleared=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-conflict-cleared'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN()}))
+  self.assertNotIn('last_conflict',self._run(cleared)['waves']['wave-0001'])
+
+ def test_wave_last_conflict_shape_is_validated(self):
+  self.register(); self._gauntlet_transition(); before=self.paths().orchestrator.read_bytes()
+  bad=(
+   'not-an-object',
+   {key:value for key,value in LAST_CONFLICT().items() if key!='reason'},
+   {**LAST_CONFLICT(),'unknown':True},
+   LAST_CONFLICT(node_ids=[]),
+   LAST_CONFLICT(node_ids=['../escape']),
+   LAST_CONFLICT(node_ids=['n1','n1']),
+   LAST_CONFLICT(node_ids='n1'),
+   LAST_CONFLICT(reason='merge-conflict'),
+   LAST_CONFLICT(execution_branch_head='1'*39),
+   LAST_CONFLICT(execution_branch_head=None),
+   LAST_CONFLICT(worker_heads={'n1':'2'*39}),
+   LAST_CONFLICT(worker_heads=['n1']),
+  )
+  for index,conflict in enumerate(bad):
+   with self.subTest(conflict=conflict):
+    waves={'wave-0001':{'state':'DECLARED','node_ids':DEFAULT_WAVE_NODE_IDS,'last_conflict':conflict}}
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name=f'gauntlet-conflict-bad-{index}'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=waves)}))
+    self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_wave_converged_is_a_strict_boolean(self):
+  self.register(); self._gauntlet_transition(); before=self.paths().orchestrator.read_bytes()
+  for index,value in enumerate((1,0,'true',None,[])):
+   with self.subTest(value=value):
+    waves={'wave-0001':{'state':'DECLARED','node_ids':DEFAULT_WAVE_NODE_IDS,'converged':value}}
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name=f'gauntlet-converged-bad-{index}'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=waves)}))
+    self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+  waves={'wave-0001':{'state':'DECLARED','node_ids':DEFAULT_WAVE_NODE_IDS,'converged':True}}
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-converged'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=waves)}))
+  self.assertIs(self._run(written)['waves']['wave-0001']['converged'],True)
+
+ def test_wave_converged_is_write_once(self):
+  self.register(); self._gauntlet_transition()
+  converged={'wave-0001':{'state':'DECLARED','node_ids':DEFAULT_WAVE_NODE_IDS,'converged':True}}
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-converged'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=converged)}))
+  carried=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-converged-carried'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=converged)}))
+  self.assertIs(self._run(carried)['waves']['wave-0001']['converged'],True)
+  before=self.paths().orchestrator.read_bytes()
+  rewrites=(
+   {'wave-0001':{'state':'DECLARED','node_ids':DEFAULT_WAVE_NODE_IDS,'converged':False}},
+   {'wave-0001':{'state':'DECLARED','node_ids':DEFAULT_WAVE_NODE_IDS}},
+  )
+  for index,waves in enumerate(rewrites):
+   with self.subTest(waves=waves):
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name=f'gauntlet-converged-rewrite-{index}'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=waves)}))
+    self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
+
+ def test_superseded_wave_permits_only_last_conflict_and_converged_to_differ(self):
+  # ADR-0022: wave N+1 may legitimately be declared while wave N's conflict
+  # is still open, so those two fields -- and only those two -- stay mutable
+  # on a wave the run has already superseded.
+  self.register(); self._gauntlet_transition()
+  def waves(first,second={'state':'ACTIVE','node_ids':['n2']}): return {'wave-0001':first,'wave-0002':second}
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-superseded-activate'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves={'wave-0001':{'state':'ACTIVE','node_ids':['n1']}})}))
+  self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-superseded-grow'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=waves({'state':'ACTIVE','node_ids':['n1']}))}))
+  conflict=LAST_CONFLICT()
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-superseded-conflict'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=waves({'state':'ACTIVE','node_ids':['n1'],'last_conflict':conflict}))}))
+  self.assertEqual(self._run(written)['waves']['wave-0001']['last_conflict'],conflict)
+  written=self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name='gauntlet-superseded-resolved'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=waves({'state':'ACTIVE','node_ids':['n1'],'converged':True}))}))
+  superseded=self._run(written)['waves']['wave-0001']
+  self.assertNotIn('last_conflict',superseded); self.assertIs(superseded['converged'],True)
+  before=self.paths().orchestrator.read_bytes()
+  rejected=(
+   waves({'state':'COMPLETE','node_ids':['n1'],'converged':True}),
+   waves({'state':'ACTIVE','node_ids':['different'],'converged':True}),
+  )
+  for index,candidate in enumerate(rejected):
+   with self.subTest(candidate=candidate):
+    with self.assertRaises(store.StoreError) as ctx:
+     self._gauntlet_transition(receipt=GAUNTLET_RECEIPT(name=f'gauntlet-superseded-bad-{index}'),block=GAUNTLET_BLOCK({'run-alpha-1':GAUNTLET_RUN(waves=candidate)}))
+    self.assertEqual(ctx.exception.code,'STATE_DIVERGENCE')
+   self.assertEqual(self.paths().orchestrator.read_bytes(),before)
 
 if __name__=='__main__': unittest.main()

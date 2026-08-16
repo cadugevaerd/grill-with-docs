@@ -52,6 +52,14 @@ class CheckpointContract(unittest.TestCase):
  def test_ship_gate(self):
   for s in STEPS[:-1]: self.call(s,'in-progress'); self.call(s,'complete',evidence=['e'])
   self.assertEqual(json.loads(self.call('ship','complete',evidence=['e']).stdout)['code'],'INVALID-TRANSITION')
+ def test_review_blocked_makes_ship_unreachable(self):
+  # FASE-004 User Story 2 / plan.md T017: review is dispatched exactly like
+  # any other of the eleven macro-steps -- a `blocked` review checkpoint
+  # already halts `ship` via this unmodified step-sequence gate, no new
+  # mechanism.
+  for s in STEPS[:-2]: self.call(s,'in-progress'); self.call(s,'complete',evidence=['e'])
+  self.call('review','in-progress'); self.call('review','blocked',reason='reprovado')
+  self.assertEqual(json.loads(self.call('ship','in-progress').stdout)['code'],'INVALID-TRANSITION')
  def test_invalid_step_json(self): p=run('checkpoint',self.r,'--work-id','wx','--step','bad','--state','in-progress'); self.assertEqual(len(p.stdout.splitlines()),1); self.assertEqual(p.stderr,'')
  def test_legacy_requires_explicit_initialization(self): (self.r/'.grill/work-items/wx/state.json').write_text('{}'); p=self.call('specify','in-progress'); self.assertEqual(json.loads(p.stdout)['code'],'LEGACY-UNTRACKED')
  def test_legacy_initialization_requires_from_step(self): (self.r/'.grill/work-items/wx/state.json').write_text('{}'); p=run('checkpoint',self.r,'--work-id','wx','--step','specify','--state','in-progress','--initialize-legacy','--evidence','e','--reason','decide'); self.assertEqual(json.loads(p.stdout)['code'],'LEGACY-INITIALIZATION-REQUIRES-DECISION-EVIDENCE')

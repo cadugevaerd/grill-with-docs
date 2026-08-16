@@ -2371,6 +2371,71 @@ def gauntlet_wave_declare_command(args: argparse.Namespace) -> tuple[dict[str, A
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+def gauntlet_converge_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """FASE-004 (FR-001-FR-005): integrate one wave into the execution branch.
+
+    The work item's recorded ``execution_branch`` is resolved here, from the
+    same ``development`` block ``checkpoint``/``phase-turn`` already read, and
+    threaded down explicitly -- ``gauntlet_runs`` is a hash-only coordinator
+    boundary that never reads work-item state for itself.
+    """
+    root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
+    item = resolve_gauntlet_subject(root, args.work_id)
+    _, state = read_development_state(root, item, args.work_id)
+    development = state.get("development")
+    execution_branch = development.get("execution_branch") if isinstance(development, dict) else None
+    agent_execute_floor, markdown_floor = _tier_floors(record)
+    try:
+        return gauntlet_runs.converge_wave(
+            root, args.work_id, args.run_id, args.dag, args.wave_id, admission,
+            execution_branch=execution_branch,
+            agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
+        ), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
+
+
+def gauntlet_run_abandon_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """FASE-004 (FR-014, ADR-0020): mark one irrecoverable run BLOCKED.
+
+    The only Gauntlet control that deliberately skips the current-activation
+    half of the admission boundary: the identity that boundary would compare
+    is exactly the one this command reads off the target run instead, and a
+    run stale enough to need abandoning is by definition one whose identity
+    no longer matches. Path resolution is unchanged -- root and work-item
+    existence are not identity.
+
+    The ``human-authorization/v1`` bundle is loaded by the same reader
+    ``checkpoint`` already uses and validated standalone, without
+    ``judge_checkpoint_attestation``'s resolution/dispatch/invocation chain,
+    which this command has none of. Every way the bundle can fail to be a
+    valid authorization -- absent, unreadable, malformed, out of scope, not
+    approved -- is one public code: they all mean the same thing.
+    """
+    root = project_root(args.root)
+    resolve_gauntlet_subject(root, args.work_id)
+    gauntlet_runs = grill_core_module("gauntlet_runs")
+    attestation = grill_core_module("attestation")
+    try:
+        bundle = load_checkpoint_attestation(root, args.attestation)
+    except CliFailure as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ABANDON-AUTHORIZATION-INVALID", error.message,
+                         extra={"work_id": args.work_id}) from error
+    try:
+        attestation._validate_human_authorization(bundle, args.run_id)
+    except attestation.AttestationError as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ABANDON-AUTHORIZATION-INVALID", error.reason,
+                         extra={"work_id": args.work_id}) from error
+    try:
+        return gauntlet_runs.abandon_run(root, args.work_id, args.run_id, bundle), EXIT_OK
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
+
+
 def gauntlet_worker_declare_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-007): mint one first-dispatch worker, ``worker_id = node_id``."""
     root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
@@ -2507,6 +2572,37 @@ def load_checkpoint_attestation(root: Path, value: str) -> dict[str, Any]:
     if not isinstance(document, dict):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ATTESTATION", value)
     return document
+
+
+def require_converged_runs(root: Path, work_id: str) -> None:
+    """FASE-004 (FR-007/FR-008): ``ship`` never closes over a run still
+    holding unconverged work.
+
+    The predicate is the run's ``state`` alone (ADR-0020): ``COMPLETE`` is
+    only ever reached once every ``node_id`` of the pinned Execution DAG has
+    a converged lineage head, and ``BLOCKED`` only through an explicitly
+    authorized abandonment. A worker/wave scan of this module's own would be
+    vacuously satisfied by a run whose DAG is only half dispatched -- it has
+    no pending worker to find, and is nowhere near ready.
+
+    Read-only, and outside FR-012's admission boundary on purpose: this
+    inspects Store state for the work item, it mutates nothing that boundary
+    protects, and it must stay a no-op for a V2 or never-admitted item.
+    """
+    gauntlet_runs = grill_core_module("gauntlet_runs")
+    try:
+        states = gauntlet_runs.list_run_states(root, work_id)
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
+        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
+                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": work_id}) from error
+    pending = sorted(entry["run_id"] for entry in states if entry["state"] not in {"COMPLETE", "BLOCKED"})
+    if pending:
+        raise CliFailure(
+            EXIT_BLOCKED, "BLOCKED", "CONVERGENCE-INCOMPLETE",
+            f"gauntlet runs are not converged: {', '.join(pending)}",
+            extra={"work_id": work_id, "pending_runs": pending},
+        )
 
 
 def verify_checkpoint_attestation(
@@ -2652,6 +2748,8 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-TRANSITION", args.step)
             if args.step == "ship" and not (steps.get("verify") == steps.get("review") == "complete"):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SHIP-GATE", args.step)
+            if args.step == "ship":
+                require_converged_runs(root, args.work_id)
             if v3_checkpoint_attestation_required(root):
                 attestation_result = verify_checkpoint_attestation(
                     root,
@@ -2870,6 +2968,17 @@ def build_parser() -> JsonParser:
     wave_declare_parser.add_argument("--run-id", required=True)
     wave_declare_parser.add_argument("--dag", required=True)
     wave_declare_parser.add_argument("--node-id", action="append", required=True)
+    converge_parser = subparsers.add_parser("gauntlet-converge")
+    converge_parser.add_argument("root")
+    converge_parser.add_argument("--work-id", required=True)
+    converge_parser.add_argument("--run-id", required=True)
+    converge_parser.add_argument("--dag", required=True)
+    converge_parser.add_argument("--wave-id", required=True)
+    run_abandon_parser = subparsers.add_parser("gauntlet-run-abandon")
+    run_abandon_parser.add_argument("root")
+    run_abandon_parser.add_argument("--work-id", required=True)
+    run_abandon_parser.add_argument("--run-id", required=True)
+    run_abandon_parser.add_argument("--attestation", required=True)
     worker_declare_parser = subparsers.add_parser("gauntlet-worker-declare")
     worker_declare_parser.add_argument("root")
     worker_declare_parser.add_argument("--work-id", required=True)
@@ -2948,6 +3057,8 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-cleanup": gauntlet_cleanup_command,
             "gauntlet-dag-validate": gauntlet_dag_validate_command,
             "gauntlet-wave-declare": gauntlet_wave_declare_command,
+            "gauntlet-converge": gauntlet_converge_command,
+            "gauntlet-run-abandon": gauntlet_run_abandon_command,
             "gauntlet-worker-declare": gauntlet_worker_declare_command,
             "gauntlet-progress-record": gauntlet_progress_record_command,
             "gauntlet-worker-terminal": gauntlet_worker_terminal_command,

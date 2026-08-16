@@ -103,6 +103,9 @@ def admission_from_proof(
     return result
 
 
+_ADMISSION_IDENTITY_KEYS = ("activation_sha256", "work_item_sha256", "workflow_sha256", "config_sha256")
+
+
 def _validate_admission(admission: Any) -> dict[str, str]:
     required = {"activation_sha256", "work_item_sha256", "workflow_sha256", "config_sha256", "base_commit"}
     if not isinstance(admission, Mapping) or set(admission) != required:
@@ -442,11 +445,35 @@ def run_projection(root: str | Path, work_id: str, run_id: str | None = None) ->
             # Store field (see ``terminate_worker``'s docstring).
             "failure_class": _read_worker_failure_class(root, work_id, run_id, run, worker_id, worker),
         })
-    return {
+    # FASE-004 (FR-011): wave membership and the open convergence block, read
+    # straight off this same snapshot -- never the journal, never a receipt
+    # probe, and never any worker diff content.
+    records = run.get("waves", {})
+    wave_ids = [wave_id for wave_id in sorted(records) if not _is_placeholder_wave(records[wave_id])]
+    waves = []
+    for wave_id in wave_ids:
+        node_ids = records[wave_id].get("node_ids") or []
+        waves.append({
+            "wave_id": wave_id, "state": records[wave_id].get("state"),
+            "converged_count": sum(1 for node_id in node_ids if _converged_lineage_head(run, node_id)),
+            "member_count": len(node_ids),
+        })
+    # The newest wave is not the one to ask: wave N+1 is legitimately declared
+    # while wave N's block is still open (ADR-0022), so this walks declaration
+    # order backwards and stops at the first wave that still carries one.
+    conflict = next(
+        (records[wave_id]["last_conflict"] for wave_id in reversed(wave_ids)
+         if isinstance(records[wave_id].get("last_conflict"), Mapping)),
+        None,
+    )
+    projection = {
         "run_id": run_id, "state": run.get("state"), "recovery_count": run.get("recovery_count"),
-        "base_commit": run.get("admission", {}).get("base_commit"), "workers": workers,
+        "base_commit": run.get("admission", {}).get("base_commit"), "workers": workers, "waves": waves,
         "last_transition": _project_last_transition(root, work_id, run_id, run),
     }
+    if conflict is not None:
+        projection["last_conflict"] = {"node_ids": list(conflict["node_ids"]), "reason": conflict["reason"]}
+    return projection
 
 
 def record_resume_decision(root: str | Path, work_id: str, run_id: str,
@@ -670,18 +697,24 @@ def _validate_dag_tiers(nodes_by_id: Mapping[str, dict[str, Any]], *,
 
 
 def _load_and_validate_dag(root: str | Path, dag_path: Any, *,
-                           agent_execute_floor: str, markdown_floor: str) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+                           agent_execute_floor: str, markdown_floor: str) -> tuple[dict[str, Any], dict[str, dict[str, Any]], str]:
     """The one place all three DAG validation stages run, in FR-004's order:
     (1) structural validity, (2) FR-004's two scope rules, (3) FR-006's tier
     floor.  Shared by ``validate_execution_dag`` and ``declare_wave`` so the
     latter never trusts a separate call's earlier result.  The two floors are
     the caller's own current activation-pinned tier policy (FR-002 SSOT) --
-    never a literal duplicated in this module."""
+    never a literal duplicated in this module.
+
+    FASE-004 (FR-004c): also returns the DAG's own content digest, computed
+    from the parsed document with the same JCS primitive every admission,
+    receipt and event digest in this module already uses -- so a run's pin
+    is independent of the file's byte presentation, not of its meaning.
+    """
     document = _load_execution_dag(root, dag_path)
     nodes_by_id = _validate_dag_structure(document)
     _validate_dag_scope(nodes_by_id)
     _validate_dag_tiers(nodes_by_id, agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor)
-    return document, nodes_by_id
+    return document, nodes_by_id, store.jcs_sha256(document)
 
 
 def validate_execution_dag(root: str | Path, work_id: str, run_id: str, dag_path: Any,
@@ -700,12 +733,12 @@ def validate_execution_dag(root: str | Path, work_id: str, run_id: str, dag_path
     """
     identity = _validate_admission(admission)
     _require_base_commit(root, identity)
-    document, nodes_by_id = _load_and_validate_dag(
+    document, nodes_by_id, dag_content_sha256 = _load_and_validate_dag(
         root, dag_path, agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
     )
     return {
         "verdict": "DAG-VALID", "work_id": work_id, "run_id": run_id,
-        "max_workers": document["max_workers"],
+        "max_workers": document["max_workers"], "dag_content_sha256": dag_content_sha256,
         "nodes": [
             {
                 "id": node_id, "depends_on": list(node["depends_on"]),
@@ -716,9 +749,9 @@ def validate_execution_dag(root: str | Path, work_id: str, run_id: str, dag_path
     }
 
 
-def _node_lineage_head(run: Mapping[str, Any], node_id: str) -> Mapping[str, Any] | None:
-    """The node's current lineage-head worker record, or ``None`` if the node
-    has no worker at all yet.
+def _node_lineage_head_entry(run: Mapping[str, Any], node_id: str) -> tuple[str, Mapping[str, Any]] | None:
+    """The node's current lineage-head ``(worker_id, worker)``, or ``None``
+    if the node has no worker at all yet.
 
     A remediated node has more than one worker record sharing the same
     ``node_id``; only the one worker no sibling names via its own
@@ -733,10 +766,15 @@ def _node_lineage_head(run: Mapping[str, Any], node_id: str) -> Mapping[str, Any
         if isinstance(worker, dict) and worker.get("remediates") is not None
     }
     heads = [
-        worker for worker_id, worker in workers.items()
+        (worker_id, worker) for worker_id, worker in workers.items()
         if isinstance(worker, dict) and worker.get("node_id") == node_id and worker_id not in remediated_by
     ]
     return heads[0] if len(heads) == 1 else None
+
+
+def _node_lineage_head(run: Mapping[str, Any], node_id: str) -> Mapping[str, Any] | None:
+    entry = _node_lineage_head_entry(run, node_id)
+    return entry[1] if entry is not None else None
 
 
 def _node_ready(run: Mapping[str, Any], node_id: str) -> bool:
@@ -770,6 +808,61 @@ def _validate_wave_node_ids(node_ids: Any) -> list[str]:
             _fail("WAVE-NODES-REQUIRED", "wave node ids must be unique")
         result.append(node_id)
     return result
+
+
+def _overlapping_scope(nodes_by_id: Mapping[str, dict[str, Any]], node_ids: list[str]) -> list[str]:
+    """FASE-004 (FR-002/FR-004b, ADR-0021): every node of ``node_ids`` that
+    shares a declared DAG ``files`` entry with another one.
+
+    The Execution DAG's own ``files`` is the source, never
+    ``grant.scope_paths``: nothing compares a worker's ``--files`` grant
+    against its DAG node's declaration, and FASE-003's own contract suite
+    already exercises a deliberate divergence between the two.
+    """
+    overlapping: set[str] = set()
+    for index, first in enumerate(node_ids):
+        for second in node_ids[index + 1:]:
+            if set(nodes_by_id[first]["files"]) & set(nodes_by_id[second]["files"]):
+                overlapping.update((first, second))
+    return sorted(overlapping)
+
+
+def _is_placeholder_wave(wave: Any) -> bool:
+    """Whether one wave record is admission's bootstrap sentinel rather than a
+    wave anything was ever declared into.
+
+    Both halves are load-bearing (FR-004c/FR-011): a wave record injected
+    directly into the Store with ``state: DECLARED`` and real members is not
+    the placeholder, and treating it as one would pin a DAG the run's existing
+    waves never came from.  Through the public CLI only ``wave-0001`` in its
+    admission-minted state ever satisfies this -- every later wave is born
+    ``ACTIVE`` -- so this is equally the "is this entry real?" test
+    :func:`run_projection` applies per wave and the "is the pin about to be
+    written?" test :func:`declare_wave` applies to the newest one.
+    """
+    return (isinstance(wave, Mapping) and wave.get("state") == "DECLARED"
+            and wave.get("node_ids") == list(WAVE_PENDING_NODE_IDS))
+
+
+def _require_dag_pin(run: Mapping[str, Any], dag_content_sha256: str, *, expect_placeholder: bool = False) -> None:
+    """FASE-004 (FR-001/FR-004c): the run's pinned DAG is the only DAG any
+    later call may reason about.
+
+    ``expect_placeholder`` is true on exactly one call per run -- the one
+    replacing admission's bootstrap wave -- where the pin is about to be
+    written rather than checked.  Every other call, including a run admitted
+    before this field existed, must already carry it: adopting a later
+    ``--dag`` retroactively would let FR-001's closing predicate run over a
+    node set the run's earlier waves never came from, and ``COMPLETE`` is
+    absorbing.
+    """
+    pinned = run.get("dag_content_sha256")
+    if pinned is None:
+        if not expect_placeholder:
+            _fail("DAG-PIN-MISSING", "run has no pinned Execution DAG")
+        return
+    if pinned != dag_content_sha256:
+        _fail("DAG-CONTENT-MISMATCH", "Execution DAG differs from the one pinned to this run")
 
 
 def declare_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, node_ids: Any,
@@ -810,7 +903,7 @@ def declare_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, nod
     if type(activation_max_workers) is not int or activation_max_workers < 1:
         _fail("INVALID-ARGUMENTS", "activation worker cap is invalid")
     requested = _validate_wave_node_ids(node_ids)
-    document, nodes_by_id = _load_and_validate_dag(
+    document, nodes_by_id, dag_content_sha256 = _load_and_validate_dag(
         root, dag_path, agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
     )
     unknown = [node_id for node_id in requested if node_id not in nodes_by_id]
@@ -818,8 +911,16 @@ def declare_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, nod
         _fail("WAVE-NODE-UNKNOWN", f"wave names an unknown DAG node: {unknown[0]}")
     if len(requested) > 1 and any(not nodes_by_id[node_id]["parallel"] for node_id in requested):
         _fail("WAVE-NODE-NOT-PARALLEL", "a parallel:false node must dispatch alone")
+    overlapping = _overlapping_scope(nodes_by_id, requested)
+    if overlapping:
+        _fail("WAVE-SCOPE-OVERLAP", f"wave members declare overlapping files: {', '.join(overlapping)}")
     store.recover_pending_transition(root)
     run = _run_for_worker(root, work_id, run_id, identity)
+    # ADR-0023: every receipt/event this call mints from here on must anchor
+    # to the run's own recorded admission, never the freshly re-derived live
+    # one -- gauntlet-converge advances HEAD on purpose, so live base_commit
+    # legitimately diverges from the run's admission after any convergence.
+    identity = run["admission"]
     for node_id in requested:
         for dep in nodes_by_id[node_id]["depends_on"]:
             if not _node_ready(run, dep):
@@ -828,15 +929,20 @@ def declare_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, nod
     waves = run.get("waves", {})
     newest_wave_id = max(waves)
     newest_state = waves[newest_wave_id].get("state")
+    # The one legitimate overwrite: admission's placeholder record (or a
+    # prior interrupted-and-retried declaration of it) has no real
+    # membership yet -- this call replaces it wholesale, in place.  Both
+    # halves are load-bearing (FR-004c): a Store-injected DECLARED record
+    # carrying real members is not the bootstrap placeholder, and treating
+    # it as one would pin a DAG the run's existing waves never came from.
+    expect_placeholder = _is_placeholder_wave(waves[newest_wave_id])
+    _require_dag_pin(run, dag_content_sha256, expect_placeholder=expect_placeholder)
     if newest_state == "ACTIVE":
         _fail("WAVE-PREREQUISITE-INCOMPLETE", "the run's current wave is not complete")
     if newest_state == "COMPLETE":
-        target_wave_id, expect_placeholder = _allocate_wave_id(newest_wave_id), False
+        target_wave_id = _allocate_wave_id(newest_wave_id)
     elif newest_state == "DECLARED":
-        # The one legitimate overwrite: admission's placeholder record (or a
-        # prior interrupted-and-retried declaration of it) has no real
-        # membership yet -- this call replaces it wholesale, in place.
-        target_wave_id, expect_placeholder = newest_wave_id, True
+        target_wave_id = newest_wave_id
     else:
         _fail("ORCHESTRATOR-INVALID", "durable wave state is invalid")
 
@@ -854,13 +960,16 @@ def declare_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, nod
     )
 
     def activate(document_: dict[str, Any]) -> dict[str, Any]:
-        candidate_waves = document_["work_items"][work_id]["gauntlet"]["runs"][run_id]["waves"]
+        candidate_run = document_["work_items"][work_id]["gauntlet"]["runs"][run_id]
+        candidate_waves = candidate_run["waves"]
         if expect_placeholder:
             if candidate_waves.get(target_wave_id, {}).get("state") != "DECLARED":
                 _fail("WAVE-CONFLICT", "wave changed before declaration")
         elif target_wave_id in candidate_waves:
             _fail("WAVE-CONFLICT", "wave appeared during declaration")
         candidate_waves[target_wave_id] = {"state": "ACTIVE", "node_ids": list(requested)}
+        if expect_placeholder and "dag_content_sha256" not in candidate_run:
+            candidate_run["dag_content_sha256"] = dag_content_sha256
         return document_
 
     try:
@@ -994,12 +1103,39 @@ def _workspace_target_absent(root: str | Path, target: Path, workspace: Mapping[
     return True
 
 
-def _exact_worktree_is_clean(root: str | Path, target: Path) -> bool:
-    """Prove the registered linked worktree has no tracked or untracked dirt."""
-    status = _git(target, "status", "--porcelain")
+def _porcelain_entries(target: str | Path) -> list[str] | None:
+    """One ``--untracked-files=all`` status read, or ``None`` if Git refused.
+
+    ``-uall`` rather than the tool's ``-unormal`` default: the default
+    collapses a wholly untracked directory into a single ``?? pkg/`` entry,
+    which can never be matched against the file paths a worker's own diff
+    names -- see :func:`converge_wave`'s untracked-collision pre-check.
+    """
+    status = _git(target, "status", "--porcelain", "--untracked-files=all")
     if status.returncode != 0:
+        return None
+    return [line for line in status.stdout.splitlines() if line.strip()]
+
+
+def _untracked_paths(entries: list[str]) -> set[str]:
+    return {entry[3:] for entry in entries if entry.startswith("?? ")}
+
+
+def _exact_worktree_is_clean(root: str | Path, target: Path, *, include_untracked: bool = True) -> bool:
+    """Prove the registered linked worktree has no tracked or untracked dirt.
+
+    ``include_untracked=False`` narrows this to tracked content alone, for
+    the one caller (:func:`converge_wave`) whose target is the coordinator's
+    own control checkout: that checkout routinely carries untracked scratch
+    and spec files which must never block convergence by themselves.  The
+    default preserves ``cleanup_worker``'s strict, destructive-intent gate.
+    """
+    entries = _porcelain_entries(target)
+    if entries is None:
         return False
-    return not status.stdout.strip()
+    if include_untracked:
+        return not entries
+    return not [entry for entry in entries if not entry.startswith("?? ")]
 
 
 def _worker_receipt_event(name: str, event_name: str, work_id: str, run_id: str,
@@ -1028,7 +1164,9 @@ def _run_for_worker(root: str | Path, work_id: str, run_id: str,
     run = _read_runs(root, work_id).get(run_id)
     if not isinstance(run, dict):
         _fail("RUN-NOT-FOUND", "requested durable run does not exist")
-    if run.get("admission") != identity:
+    run_admission = run.get("admission")
+    if (not isinstance(run_admission, Mapping)
+            or any(run_admission.get(key) != identity[key] for key in _ADMISSION_IDENTITY_KEYS)):
         _fail("IDENTITY-STALE", "current activation differs from run admission")
     if run.get("state") in {"BLOCKED", "COMPLETE"}:
         _fail("RUN-NOT-ELIGIBLE", "run is not eligible for worker preparation")
@@ -1152,6 +1290,11 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
         _fail("GRANT-OUT-OF-SCOPE", "worker grant targets out-of-scope evidence")
     store.recover_pending_transition(root)
     run = _run_for_worker(root, work_id, run_id, identity)
+    # ADR-0023: every receipt/event this call mints from here on must anchor
+    # to the run's own recorded admission, never the freshly re-derived live
+    # one -- gauntlet-converge advances HEAD on purpose, so live base_commit
+    # legitimately diverges from the run's admission after any convergence.
+    identity = run["admission"]
     target, expected_workspace = _workspace_identity(root, work_id, run_id, worker_id, identity)
     existing = run.get("workers", {}).get(worker_id)
     if existing is not None and not isinstance(existing, dict):
@@ -1312,10 +1455,15 @@ def declare_worker(root: str | Path, work_id: str, run_id: str, node_id: str, wa
     _require_base_commit(root, identity)
     store.recover_pending_transition(root)
     run = _run_for_worker(root, work_id, run_id, identity)
+    # ADR-0023: every receipt/event this call mints from here on must anchor
+    # to the run's own recorded admission, never the freshly re-derived live
+    # one -- gauntlet-converge advances HEAD on purpose, so live base_commit
+    # legitimately diverges from the run's admission after any convergence.
+    identity = run["admission"]
     wave = run.get("waves", {}).get(wave_id)
     if not isinstance(wave, dict) or wave.get("state") != "ACTIVE":
         _fail("WAVE-NOT-FOUND", "named wave is not an active wave of this run")
-    _, nodes_by_id = _load_and_validate_dag(
+    _, nodes_by_id, _ = _load_and_validate_dag(
         root, dag_path, agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
     )
     if node_id not in nodes_by_id:
@@ -1450,6 +1598,11 @@ def record_progress(root: str | Path, work_id: str, run_id: str, worker_id: str,
     worker_id = _safe_name(worker_id, "worker")
     store.recover_pending_transition(root)
     run = _run_for_worker(root, work_id, run_id, identity)
+    # ADR-0023: every receipt/event this call mints from here on must anchor
+    # to the run's own recorded admission, never the freshly re-derived live
+    # one -- gauntlet-converge advances HEAD on purpose, so live base_commit
+    # legitimately diverges from the run's admission after any convergence.
+    identity = run["admission"]
     worker = run.get("workers", {}).get(worker_id)
     if not isinstance(worker, dict):
         _fail("WORKER-NOT-FOUND", "worker does not exist")
@@ -1526,6 +1679,11 @@ def terminate_worker(root: str | Path, work_id: str, run_id: str, worker_id: str
     worker_id = _safe_name(worker_id, "worker")
     store.recover_pending_transition(root)
     run = _run_for_worker(root, work_id, run_id, identity)
+    # ADR-0023: every receipt/event this call mints from here on must anchor
+    # to the run's own recorded admission, never the freshly re-derived live
+    # one -- gauntlet-converge advances HEAD on purpose, so live base_commit
+    # legitimately diverges from the run's admission after any convergence.
+    identity = run["admission"]
     worker = run.get("workers", {}).get(worker_id)
     if not isinstance(worker, dict):
         _fail("WORKER-NOT-FOUND", "worker does not exist")
@@ -1698,6 +1856,11 @@ def remediate_node(root: str | Path, work_id: str, run_id: str, worker_id: str, 
     worker_id = _safe_name(worker_id, "worker")
     store.recover_pending_transition(root)
     run = _run_for_worker(root, work_id, run_id, identity)
+    # ADR-0023: every receipt/event this call mints from here on must anchor
+    # to the run's own recorded admission, never the freshly re-derived live
+    # one -- gauntlet-converge advances HEAD on purpose, so live base_commit
+    # legitimately diverges from the run's admission after any convergence.
+    identity = run["admission"]
     worker = run.get("workers", {}).get(worker_id)
     if not isinstance(worker, dict):
         _fail("WORKER-NOT-FOUND", "worker does not exist")
@@ -1747,6 +1910,11 @@ def cleanup_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
     identity = _validate_admission(admission); worker_id = _safe_name(worker_id, "worker")
     store.recover_pending_transition(root)
     run = _run_for_worker(root, work_id, run_id, identity)
+    # ADR-0023: every receipt/event this call mints from here on must anchor
+    # to the run's own recorded admission, never the freshly re-derived live
+    # one -- gauntlet-converge advances HEAD on purpose, so live base_commit
+    # legitimately diverges from the run's admission after any convergence.
+    identity = run["admission"]
     worker = run.get("workers", {}).get(worker_id)
     if not isinstance(worker, dict): _fail("WORKER-NOT-FOUND", "worker does not exist")
     workspace = worker.get("workspace")
@@ -1793,6 +1961,412 @@ def cleanup_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
     if not isinstance(lease, Mapping): _fail("LEASE-INVALID", "worker has no coordinator lease")
     _transition_worker(root, work_id, run_id, identity, name=f"gauntlet-worker-cleaned-{run_id}-{worker_id}", event_name="gauntlet.worker.cleaned", worker_id=worker_id, lease=lease, mutate=cleaned)
     return {"verdict": "CLEANED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
+
+
+# FASE-004 (FR-001-FR-005, FR-010, ADR-0020/0021/0022): serial convergence of
+# one wave's successful workers into the work item's execution branch.  Every
+# merge is its own Store transaction, so a later conflict never unwinds an
+# earlier sibling's integration; no conflict is ever resolved automatically
+# and nothing here ever touches a Git remote.
+
+
+def _head_commit(root: str | Path) -> str:
+    process = _git(root, "rev-parse", "HEAD")
+    head = process.stdout.strip()
+    if process.returncode != 0 or not _hex40(head):
+        _fail("BASE-COMMIT-UNAVAILABLE", "execution branch head is unavailable")
+    return head
+
+
+def _branch_head(root: str | Path, branch: str) -> str:
+    process = _git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")
+    head = process.stdout.strip()
+    if process.returncode != 0 or not _hex40(head):
+        _fail("WORKSPACE-PRESERVED", f"declared worker branch is unavailable: {branch}")
+    return head
+
+
+def _branch_changed_paths(root: str | Path, branch: str) -> set[str]:
+    """Every repo-relative path this branch changes since it diverged."""
+    base = _git(root, "merge-base", "HEAD", branch)
+    if base.returncode != 0 or not _hex40(base.stdout.strip()):
+        _fail("WORKSPACE-PRESERVED", f"declared worker branch has no merge base: {branch}")
+    changed = _git(root, "diff", "--name-only", f"{base.stdout.strip()}..{branch}")
+    if changed.returncode != 0:
+        _fail("WORKSPACE-PRESERVED", f"declared worker branch is unreadable: {branch}")
+    return {line for line in changed.stdout.splitlines() if line}
+
+
+def _converged_lineage_head(run: Mapping[str, Any], node_id: str) -> bool:
+    """Whether ``node_id``'s lineage head is the success outcome *and* is
+    already integrated.  ``FAILED``/``STALLED``/``ORPHANED``/``CONFLICT`` are
+    terminal but never merged, so they never satisfy this."""
+    entry = _node_lineage_head_entry(run, node_id)
+    if entry is None or entry[1].get("state") != "TERMINAL":
+        return False
+    workspace = entry[1].get("workspace")
+    return isinstance(workspace, Mapping) and workspace.get("converged") is True
+
+
+def _all_converged(run: Mapping[str, Any], node_ids: Any) -> bool:
+    if not isinstance(node_ids, list) or not node_ids:
+        return False
+    return all(_converged_lineage_head(run, node_id) for node_id in node_ids)
+
+
+def _conflict_record(reason: str, node_ids: list[str], execution_branch_head: str,
+                     worker_heads: Mapping[str, str]) -> dict[str, Any]:
+    """FR-002/FR-003's single four-key shape, always fully populated -- never
+    a subset conditioned on the reason."""
+    return {
+        "node_ids": sorted(node_ids), "reason": reason,
+        "execution_branch_head": execution_branch_head, "worker_heads": dict(worker_heads),
+    }
+
+
+def _record_conflict(root: str | Path, work_id: str, run_id: str, admission: Mapping[str, str],
+                     wave_id: str, wave: Mapping[str, Any], conflict: Mapping[str, Any]) -> None:
+    """Persist the wave's open block, unless the identical one already is.
+
+    Re-blocking on unchanged fingerprints is a pure read: minting the same
+    semantic event twice is what ``_recover_pending_transition_locked``
+    already rejects as divergence.
+    """
+    if wave.get("last_conflict") == conflict:
+        return
+    receipt, event = _receipt_and_event(
+        name=f"gauntlet-converge-conflict-{run_id}-{wave_id}", event_name="gauntlet.converge.conflict",
+        work_id=work_id, run_id=run_id, admission=admission, wave_id=wave_id,
+    )
+
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        candidate = document["work_items"][work_id]["gauntlet"]["runs"][run_id]["waves"][wave_id]
+        candidate["last_conflict"] = copy.deepcopy(dict(conflict))
+        return document
+
+    store.transact_with_event(root, mutate, event=event, receipt=receipt)
+
+
+def _merge_worker_branch(root: str | Path, branch: str, head: str) -> bool:
+    """Integrate one worker branch, or leave the tree exactly as it was.
+
+    A branch with no commits beyond what the execution branch already
+    contains is a trivial success, not an error and not a conflict.
+    """
+    before = _head_commit(root)
+    if _git(root, "merge-base", "--is-ancestor", head, before).returncode == 0:
+        return True
+    merged = _git(root, "merge", "--no-ff", "--no-edit", "-m", f"gauntlet: integrate {branch}", branch)
+    if merged.returncode == 0:
+        return True
+    _git(root, "merge", "--abort")
+    if _head_commit(root) != before:
+        _git(root, "reset", "--hard", before)
+    if _head_commit(root) != before:
+        _fail("WORKSPACE-PRESERVED", "failed integration attempt could not be reverted")
+    return False
+
+
+def _mint_worker_converged(root: str | Path, work_id: str, run_id: str, admission: Mapping[str, str],
+                           wave_id: str, worker_id: str, worker: Mapping[str, Any]) -> None:
+    lease = worker.get("lease")
+    if not isinstance(lease, Mapping):
+        _fail("LEASE-INVALID", "worker has no coordinator lease")
+
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        candidate_run = document["work_items"][work_id]["gauntlet"]["runs"][run_id]
+        candidate_worker = candidate_run["workers"][worker_id]
+        if candidate_worker.get("state") != "TERMINAL":
+            _fail("WORKER-CONFLICT", "worker changed before convergence could be recorded")
+        candidate_worker["workspace"]["converged"] = True
+        # Absence is the "resolved" signal (FR-011): a member that merges
+        # after a block clears it in the very transaction that proves it.
+        candidate_run["waves"][wave_id].pop("last_conflict", None)
+        return document
+
+    _transition_worker(
+        root, work_id, run_id, admission, name=f"gauntlet-worker-converged-{run_id}-{worker_id}",
+        event_name="gauntlet.converge.worker-converged", worker_id=worker_id, lease=lease,
+        mutate=mutate, wave_id=wave_id,
+    )
+
+
+def _mint_wave_converged(root: str | Path, work_id: str, run_id: str,
+                         admission: Mapping[str, str], wave_id: str) -> dict[str, Any]:
+    receipt, event = _receipt_and_event(
+        name=f"gauntlet-wave-converged-{run_id}-{wave_id}", event_name="gauntlet.converge.wave-converged",
+        work_id=work_id, run_id=run_id, admission=admission, wave_id=wave_id,
+    )
+
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        candidate = document["work_items"][work_id]["gauntlet"]["runs"][run_id]["waves"][wave_id]
+        candidate["converged"] = True
+        candidate.pop("last_conflict", None)
+        return document
+
+    store.transact_with_event(root, mutate, event=event, receipt=receipt)
+    return _read_runs(root, work_id)[run_id]
+
+
+def _mint_run_completed(root: str | Path, work_id: str, run_id: str,
+                        admission: Mapping[str, str], run: Mapping[str, Any]) -> dict[str, Any]:
+    receipt, event = _receipt_and_event(
+        name=f"gauntlet-run-completed-{run_id}", event_name="gauntlet.run.completed",
+        work_id=work_id, run_id=run_id, admission=admission, wave_id=max(run["waves"]),
+    )
+
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        candidate = document["work_items"][work_id]["gauntlet"]["runs"][run_id]
+        if candidate.get("state") in {"BLOCKED", "COMPLETE"}:
+            _fail("RUN-NOT-ELIGIBLE", "run became terminal before completion could be recorded")
+        candidate["state"] = "COMPLETE"
+        return document
+
+    store.transact_with_event(root, mutate, event=event, receipt=receipt)
+    return _read_runs(root, work_id)[run_id]
+
+
+def _close_convergence_chain(root: str | Path, work_id: str, run_id: str, admission: Mapping[str, str],
+                             run: dict[str, Any], wave_id: str,
+                             nodes_by_id: Mapping[str, dict[str, Any]]) -> dict[str, Any]:
+    """Mint whichever of the two closing transitions the current state earns.
+
+    ``transact_with_event`` mints exactly one event per transaction, so the
+    wave's last ``worker-converged``, the wave's own flag, and the run's
+    ``COMPLETE`` are up to three sequential transactions -- an interruption
+    between any two of them is real, and this same function closes the gap
+    on the next call because convergence runs it unconditionally.  The run's
+    predicate is the *pinned DAG's* whole node set, never a wave count: a
+    run almost always needs further waves after the first one converges.
+    """
+    wave = run.get("waves", {}).get(wave_id)
+    if isinstance(wave, dict) and wave.get("converged") is not True and _all_converged(run, wave.get("node_ids")):
+        run = _mint_wave_converged(root, work_id, run_id, admission, wave_id)
+    if run.get("state") not in {"BLOCKED", "COMPLETE"} and _all_converged(run, sorted(nodes_by_id)):
+        run = _mint_run_completed(root, work_id, run_id, admission, run)
+    return run
+
+
+def converge_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, wave_id: str,
+                  admission: Mapping[str, str], *, execution_branch: Any,
+                  agent_execute_floor: str, markdown_floor: str) -> dict[str, Any]:
+    """Integrate one wave's successful workers into ``execution_branch``.
+
+    The checks run in a fixed order that is itself part of the contract:
+    admission identity, the run's DAG pin, the terminal-run shortcut and its
+    reconciliation, execution-branch/worktree state, wave order, and only
+    then the scope pre-pass and the merges themselves.  The pin is
+    revalidated before the terminal-run check on purpose -- FR-004c admits no
+    exception for a replay, and a ``COMPLETE`` run always has a pin by
+    construction, so a stale ``--dag`` can never report success against the
+    wrong DAG.
+
+    ``execution_branch`` is the work item's recorded binding, resolved by the
+    CLI adapter from the same ``development`` block ``checkpoint``/
+    ``phase-turn`` already read -- the same way ``activation_max_workers``
+    crosses this boundary.  The live checkout is compared against it here so
+    the fixed order above holds for both halves of that pairing.
+    """
+    identity = _validate_admission(admission)
+    _require_base_commit(root, identity)
+    if not isinstance(run_id, str) or not RUN_ID_RE.fullmatch(run_id):
+        _fail("RUN-NOT-FOUND", "run identifier is invalid")
+    wave_id = _safe_name(wave_id, "wave")
+    _, nodes_by_id, dag_content_sha256 = _load_and_validate_dag(
+        root, dag_path, agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
+    )
+    store.recover_pending_transition(root)
+    run = _read_runs(root, work_id).get(run_id)
+    if not isinstance(run, dict):
+        _fail("RUN-NOT-FOUND", "requested durable run does not exist")
+    # Convergence is the one primitive whose own successful merges advance
+    # the coordinator's HEAD, so the run's recorded ``base_commit`` stops
+    # equalling the live one from its first integration onward.  Comparing it
+    # would make a wave's second member unconvergeable by construction, and
+    # the Store forbids the alternative anyway: ``_candidate_transition``
+    # requires every event's ``base_commit`` to be the run's *recorded* one.
+    # The four identity digests FR-012 actually protects are still compared
+    # in full, and the current activation was proved by the CLI boundary.
+    recorded = run.get("admission")
+    if not isinstance(recorded, Mapping) or any(recorded.get(key) != identity[key] for key in _ADMISSION_IDENTITY_KEYS):
+        _fail("IDENTITY-STALE", "current activation differs from run admission")
+    identity = _validate_admission(recorded)
+    _require_dag_pin(run, dag_content_sha256)
+
+    if run.get("state") == "BLOCKED":
+        _fail("RUN-NOT-ELIGIBLE", "run was abandoned and accepts no further transition")
+    if run.get("state") == "COMPLETE":
+        if wave_id != max(run["waves"]):
+            _fail("RUN-NOT-ELIGIBLE", "a complete run replays only the wave that closed it")
+        return _wave_converged_reuse(work_id, run_id, wave_id)
+    run = _close_convergence_chain(root, work_id, run_id, identity, run, max(run["waves"]), nodes_by_id)
+
+    if not isinstance(execution_branch, str) or not execution_branch:
+        _fail("EXECUTION-BRANCH-UNSET", "work item has no bound execution branch")
+    live = _git(root, "branch", "--show-current")
+    if live.returncode != 0:
+        _fail("GIT-UNAVAILABLE", "could not read the current execution branch")
+    if live.stdout.strip() != execution_branch:
+        _fail("EXECUTION-BRANCH-MISMATCH", f"work item is bound to {execution_branch}")
+    entries = _porcelain_entries(root)
+    if entries is None:
+        _fail("EXECUTION-TREE-DIRTY", "coordinator worktree status is unavailable")
+    untracked = _untracked_paths(entries)
+    if not _exact_worktree_is_clean(root, Path(root), include_untracked=False):
+        _fail("EXECUTION-TREE-DIRTY", "coordinator worktree carries uncommitted tracked changes")
+
+    waves = run.get("waves", {})
+    wave = waves.get(wave_id)
+    if not isinstance(wave, dict):
+        _fail("WAVE-NOT-FOUND", "requested wave does not exist in this run")
+    if wave.get("converged") is True:
+        return _wave_converged_reuse(work_id, run_id, wave_id)
+    pending = next((candidate for candidate in sorted(waves) if waves[candidate].get("converged") is not True), None)
+    if wave_id != pending:
+        _fail("WAVE-CONVERGENCE-OUT-OF-ORDER", "an earlier wave is not fully converged")
+    if wave.get("state") != "COMPLETE":
+        _fail("WAVE-CONVERGENCE-OUT-OF-ORDER", "wave still has a member that has not reached a terminal state")
+
+    members = wave.get("node_ids") or []
+    unknown = [node_id for node_id in members if node_id not in nodes_by_id]
+    if unknown:
+        _fail("WAVE-NODE-UNKNOWN", f"wave names a node the pinned Execution DAG does not declare: {unknown[0]}")
+    mergeable: list[tuple[str, str, Mapping[str, Any]]] = []
+    for node_id in sorted(members):
+        entry = _node_lineage_head_entry(run, node_id)
+        if entry is None or entry[1].get("state") != "TERMINAL" or not isinstance(entry[1].get("workspace"), Mapping):
+            continue
+        mergeable.append((node_id, entry[0], entry[1]))
+    branch_heads = {
+        node_id: _branch_head(root, worker["workspace"]["branch"]) for node_id, _, worker in mergeable
+    }
+
+    overlapping = _overlapping_scope(nodes_by_id, [node_id for node_id, _, _ in mergeable])
+    if overlapping:
+        _record_conflict(
+            root, work_id, run_id, identity, wave_id, wave,
+            _conflict_record("scope-overlap", overlapping, _head_commit(root),
+                             {node_id: branch_heads[node_id] for node_id in overlapping}),
+        )
+        _fail("INTEGRATION_CONFLICT", f"wave members declare overlapping files: {', '.join(overlapping)}")
+
+    collisions: set[str] = set()
+    for node_id, _, worker in mergeable:
+        collisions |= _branch_changed_paths(root, worker["workspace"]["branch"]) & untracked
+    if collisions:
+        _fail("EXECUTION-TREE-DIRTY", f"untracked paths would be overwritten: {', '.join(sorted(collisions))}")
+
+    converged: list[str] = []
+    for node_id, worker_id, worker in mergeable:
+        if worker["workspace"].get("converged") is True:
+            continue
+        candidate = _conflict_record(
+            "content-conflict", [node_id], _head_commit(root), {node_id: branch_heads[node_id]},
+        )
+        if wave.get("last_conflict") == candidate:
+            _fail("INTEGRATION_CONFLICT", f"integration is still blocked on {node_id}")
+        if not _merge_worker_branch(root, worker["workspace"]["branch"], branch_heads[node_id]):
+            _record_conflict(root, work_id, run_id, identity, wave_id, wave, candidate)
+            _fail("INTEGRATION_CONFLICT", f"worker branch does not merge cleanly: {node_id}")
+        _mint_worker_converged(root, work_id, run_id, identity, wave_id, worker_id, worker)
+        converged.append(node_id)
+        run = _read_runs(root, work_id)[run_id]
+        wave = run["waves"][wave_id]
+
+    run = _close_convergence_chain(root, work_id, run_id, identity, run, wave_id, nodes_by_id)
+    return {
+        "verdict": "WAVE-CONVERGED", "work_id": work_id, "run_id": run_id, "wave_id": wave_id,
+        "converged": converged, "wave_converged": run["waves"][wave_id].get("converged") is True,
+        "run_state": run.get("state"),
+    }
+
+
+def _wave_converged_reuse(work_id: str, run_id: str, wave_id: str) -> dict[str, Any]:
+    return {"verdict": "WAVE-CONVERGED-REUSED", "work_id": work_id, "run_id": run_id, "wave_id": wave_id}
+
+
+# FASE-004 (FR-007, FR-008, FR-014, ADR-0020): the run's terminal lifecycle
+# seen from the outside -- the exhaustive enumeration ``checkpoint --step
+# ship`` scans, and the single human act that makes an irrecoverable run
+# terminal.  Neither ever touches a Git remote (FR-009).
+
+
+def list_run_states(root: str | Path, work_id: str) -> list[dict[str, Any]]:
+    """Every admitted run's identifier and state, for the ship gate (FR-007).
+
+    Deliberately not :func:`run_projection`, which returns exactly one run --
+    "the run most recent by ``run_id``" is a lexicographic max over an
+    admission hash, not a chronological choice, so a stale-but-incomplete run
+    would be silently skipped: fail-open, the opposite of this gate's purpose.
+
+    Two layers, the same pair :func:`run_projection` already needs:
+    ``store_exists`` first, because ``_read_runs``' own ``absent_ok`` covers
+    only a work item missing from an *existing* snapshot, never a Store that
+    was never initialised -- the very case FR-008's no-op (a V2 or
+    never-admitted work item) must not trip on.  ``store_exists`` is
+    lstat-based, so a dangling symlink is not read as a plain absence.
+    """
+    if not store.store_exists(root):
+        return []
+    runs = _read_runs(root, work_id, absent_ok=True)
+    return [{"run_id": run_id, "state": runs[run_id].get("state")} for run_id in sorted(runs)]
+
+
+def abandon_run(root: str | Path, work_id: str, run_id: str,
+                authorization: Mapping[str, Any]) -> dict[str, Any]:
+    """Mark one irrecoverable run ``BLOCKED`` on explicit human authorization.
+
+    This is the only mutating primitive in this module that does **not** prove
+    the current activation, and the deviation is the whole reason it exists
+    (FR-014, ADR-0020): it derives ``base_commit`` and identity from the
+    target run's own recorded ``admission``, never from the live one, and
+    never runs ``_require_base_commit`` over that derived value.  A run stale
+    enough to need abandoning belongs, by definition, to an older generation
+    than the one currently active, and its original commit may already be
+    unreachable in Git -- requiring current identity would make this command
+    useless in exactly the case FR-007's deadlock needs it for.
+
+    The bundle's own ``human-authorization/v1`` form is validated at the CLI
+    boundary by ``attestation._validate_human_authorization``; this module
+    imports only ``store`` and records the bundle verbatim, so ``authorized_
+    by``/``receipt_ref`` stay recoverable -- a bare digest would prove only
+    that some bundle once existed.  ``BLOCKED`` is absorbing, so the Store's
+    write-once guard on ``abandon_authorization`` is structural here rather
+    than a policy choice: a resubmission either replays the identical bundle
+    or is refused.
+    """
+    if not isinstance(run_id, str) or not RUN_ID_RE.fullmatch(run_id):
+        _fail("RUN-NOT-FOUND", "run identifier is invalid")
+    if not isinstance(authorization, Mapping) or not authorization:
+        _fail("ABANDON-AUTHORIZATION-INVALID", "run abandonment requires a human authorization bundle")
+    bundle = copy.deepcopy(dict(authorization))
+    store.recover_pending_transition(root)
+    run = _read_runs(root, work_id).get(run_id)
+    if not isinstance(run, dict):
+        _fail("RUN-NOT-FOUND", "requested durable run does not exist")
+    identity = _validate_admission(run.get("admission"))
+    if run.get("state") == "BLOCKED":
+        if run.get("abandon_authorization") != bundle:
+            _fail("RUN-NOT-ELIGIBLE", "run was already abandoned under a different authorization")
+        return {"verdict": "RUN-ABANDON-REUSED", "work_id": work_id, "run_id": run_id, "state": "BLOCKED"}
+    if run.get("state") == "COMPLETE":
+        _fail("RUN-NOT-ELIGIBLE", "a complete run has no work left to abandon")
+
+    receipt, event = _receipt_and_event(
+        name=f"gauntlet-run-abandoned-{run_id}", event_name="gauntlet.run.abandoned",
+        work_id=work_id, run_id=run_id, admission=identity, wave_id=max(run["waves"]),
+    )
+
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        candidate = document["work_items"][work_id]["gauntlet"]["runs"][run_id]
+        if candidate.get("state") in {"BLOCKED", "COMPLETE"}:
+            _fail("RUN-NOT-ELIGIBLE", "run became terminal before abandonment could be recorded")
+        candidate["state"] = "BLOCKED"
+        candidate["abandon_authorization"] = copy.deepcopy(bundle)
+        return document
+
+    store.transact_with_event(root, mutate, event=event, receipt=receipt)
+    return {"verdict": "RUN-ABANDONED", "work_id": work_id, "run_id": run_id, "state": "BLOCKED"}
 
 
 # The public adapter keeps the shorter names.  Retain the explicit internal

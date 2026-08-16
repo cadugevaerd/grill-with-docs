@@ -40,16 +40,17 @@
 - nota: deliverable substantivo (spec, plan, tasks, implementação, testes, 3 rounds de review independente) já commitado, mergeado e publicado em `origin/main` (`4ac6746`), por confirmação explícita do operador. `state: blocked` reflete só o ledger formal V3 — `phase-turn` recusa `PHASE-INCOMPLETE: specify` até existir checkpoint genuíno (BL-0003). BL-0001 resolvido.
 
 ## FASE-004 — Convergência, revisão e entrega verificável
-- state: planned
+- state: blocked
 - objetivo: resultados paralelos convergem de modo fail-closed e chegam ao gate humano de ship somente após revisão independente
-- scope-in: converge serial; bloqueio de conflito; verify e review independentes; Run Status Events; testes de contrato e atualização de distribuição com bump SemVer próprio (2.6.0 já consumido pela FASE-002)
+- scope-in: converge serial; bloqueio de conflito; verify e review independentes; Run Status Events; testes de contrato e atualização de distribuição com bump SemVer próprio (2.8.0 — 2.6.0 já consumido pela FASE-002, 2.7.0 já consumido pela FASE-003)
 - scope-out: resolução automática de conflito, ciclo automático de reparo após review reprovado e push/release direto
 - context-refs: Integration Conflict, Independent Review, Review Block, Autonomous Run, Canonical Skill
-- ADRs: ADR-0002, ADR-0008, ADR-0009, ADR-0011
-- BLs: none
+- ADRs: ADR-0002, ADR-0008, ADR-0009, ADR-0011, ADR-0020, ADR-0021, ADR-0022, ADR-0023
+- BLs: BL-0004
 - depends-on: FASE-003
 - specify-handoff: handoffs/FASE-004-SPECIFY-HANDOFF.md
 - delivery-units: DU-004
+- nota: deliverable substantivo (spec, plan, tasks, implementação — T001-T032 —, testes, 1 round de review independente com verdito APPROVE) pronto nesta sessão. `state: blocked` reflete só o ledger formal V3, mesma lacuna de BL-0003 na FASE-003: `checkpoint --step specify --state complete` exige bundle genuíno que esta sessão não fabrica (BL-0004).
 
 > Estados: `planned | ready-for-specify | blocked | complete | superseded`. `complete` e `superseded` são terminais. `execution-order` é explícita, topológica e independente dos números de fase. Cada fase tem um handoff exclusivo; somente a primeira incompleta pode ficar `ready-for-specify`. Se todas forem terminais e não houver BL/DQ material aberto, grave `milestone_status=completed`, `state.status=complete`, `active_phase=null` e `audit_verdict=GO`; a auditoria retorna `MILESTONE-COMPLETE`.
 

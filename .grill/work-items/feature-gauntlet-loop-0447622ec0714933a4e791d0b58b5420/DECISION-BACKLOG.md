@@ -26,4 +26,13 @@
 - evidence: `.grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/state.json` (`development.steps.specify == "in-progress"`, motivo explícito no último `audit` entry do passo `specify`); `.specify/reports/verify-review-ship/verify.md` §Failures/Blockers; `.specify/reports/verify-review-ship/review.md` último parágrafo ("não é, por si, autorização de ship").
 - next-action: o deliverable substantivo (spec, plan, tasks, implementação, testes, 3 rounds de review independente) já está commitado, mergeado e publicado em `origin/main` (commit `4ac6746`) por confirmação explícita do operador — isso não depende deste BL. O que fica pendente é só o fechamento formal do ledger V3: rodar `phase-turn` (bloqueia hoje com `PHASE-INCOMPLETE: specify`, verificado, sem mutação de estado) exige primeiro `checkpoint --step specify --state complete` genuíno. Sem isso, FASE-004 não pode abrir formalmente via `phase-turn`, mesmo com FASE-003 já em produção.
 
+## BL-0004 — Checkpoint formal `specify` de FASE-004 inatingível: sem ferramenta de attestation V3 genuína disponível nesta sessão
+
+- phase: FASE-004
+- state: open
+- owner: quem retomar com ferramenta de attestation real (mesma lacuna de BL-0003)
+- evidence-needed: `checkpoint --step specify --state complete` exige bundle V3 (`dispatch_intent`/`invocation_started`/`invocation_terminal`/`step_output`) de uma invocação genuína da skill canônica `speckit-specify`. A mesma lacuna registrada em BL-0003 pra FASE-003 se repete aqui: a skill `speckit-specify` disponível nesta sessão é a genérica upstream do Spec Kit, não reaproveita `specs/014-converge-review-ship/spec.md` já escrito e revisado, e não produz o formato de bundle que o gate exige. Não invocada, pra não destruir 10 rodadas de crítica independente em spec.md e 7 em plan.md.
+- evidence: `.grill/work-items/feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/state.json` (`development.steps.specify` não avança via checkpoint genuíno pra FASE-004); `.specify/reports/verify-review-ship/verify.md` §Failures/Blockers; `.specify/reports/verify-review-ship/review.md` último parágrafo ("não é, por si, autorização de ship").
+- next-action: o deliverable substantivo (spec, plan, tasks, implementação, testes, 1 round de review independente com verdito APPROVE) fica pronto pra commit/merge local nesta sessão, sob o mesmo padrão de honestidade de BL-0003 — sem checkpoint V3 fabricado. Push permanece gate explícito e separado, nunca assumido de `/goal`.
+
 > Estados: `open | resolved | superseded`; `resolved` e `superseded` são terminais. Todo BL pertence a exatamente uma fase e deve ser referenciado no ROADMAP, handoff e PLAN-CONTEXT. Não fabrique um BL apenas para preencher o template.

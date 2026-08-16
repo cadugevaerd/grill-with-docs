@@ -40,14 +40,16 @@ A invocação real de qualquer subagente é sempre ação de quem detém a autor
 
 ## FASE-004 — Convergência, revisão e entrega verificável
 - phase: FASE-004
-- ADRs: ADR-0002, ADR-0008, ADR-0009, ADR-0011
-- BLs: none
+- ADRs: ADR-0002, ADR-0008, ADR-0009, ADR-0011, ADR-0020, ADR-0021, ADR-0022, ADR-0023
+- BLs: BL-0004
 - delivery-units: DU-004
 - development-type: platform-devops
 
 ### HOW
 `converge` integra em série apenas alterações limpas e validadas. Sobreposição de escopo ou conflito Git produz `INTEGRATION_CONFLICT`, identifica os nós envolvidos e não recebe auto-merge nem reescrita do DAG. Status compactos de macroetapa, wave, bloqueio e recovery são entregues ao chat principal; logs contínuos e raciocínio de workers não são expostos.
 
-`review` roda em subagente grande, novo e somente leitura, distinto de quem planejou ou executou, e confronta especificação, plano, DAG, diffs e receipts. Reprovação produz `REVIEW_BLOCKED`; não há ciclo automático de reparo nesta versão. Depois de review aprovado, ship aguarda autorização humana explícita para despachar a Canonical Skill, nunca para executar push ou release diretamente. Os contratos novos devem incluir regressões de isolamento, DAG, lease, stall, receipt, convergência, compatibilidade V2 e adapter não comprovado; a distribuição sobe para 2.6.0 conforme a regra constitucional.
+`review` roda em subagente grande, novo e somente leitura, distinto de quem planejou ou executou, e confronta especificação, plano, DAG, diffs e receipts. Reprovação produz `REVIEW_BLOCKED`; não há ciclo automático de reparo nesta versão. Depois de review aprovado, ship aguarda autorização humana explícita para despachar a Canonical Skill, nunca para executar push ou release diretamente. Os contratos novos devem incluir regressões de isolamento, DAG, lease, stall, receipt, convergência, compatibilidade V2 e adapter não comprovado; a distribuição sobe para 2.8.0 (2.6.0 já consumido pela FASE-002, 2.7.0 já consumido pela FASE-003) conforme a regra constitucional.
+
+`_run_for_worker` (guarda de identidade compartilhada por todo comando gauntlet mutante) compara só as quatro hashes de identidade de planejamento contra a admissão gravada do run — nunca `base_commit` (ADR-0023). `gauntlet-converge` avança `HEAD` de propósito ao integrar; `base_commit` é recomputado ao vivo do `HEAD` em toda chamada, então a suposição pré-FASE-004 de que nada avança `HEAD` durante um run deixou de valer. `base_commit` continua a âncora fixa do run pra criação de worktree — a correção só remove ele da comparação de staleness, restaurando o fluxo natural declare → executa → converge → declara-a-próxima-wave.
 
 > Mantenha um bloco por fase e referências ADR/BL exatamente equivalentes ao ROADMAP e ao handoff. Nunca registre `selected-handoff` aqui.

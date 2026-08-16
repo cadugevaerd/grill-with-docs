@@ -193,6 +193,19 @@ WORKER_STATES = frozenset({"DECLARED", "PREPARING", "PREPARED", "CLEANING", "CLE
 NON_TERMINAL_WORKER_STATES = frozenset({"DECLARED", "PREPARING", "PREPARED", "RECOVERY_ELIGIBLE", "RECOVERY_RECORDED"})
 LEASE_STATES = frozenset({"ACTIVE", "EXPIRED", "RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "RELEASED"})
 WAVE_STATES = frozenset({"DECLARED", "ACTIVE", "COMPLETE"})
+# FASE-004 (FR-004c, FR-014): a run's two optional fields are absent until
+# their single writer runs -- ``admission`` is closed and identity-bearing, so
+# neither could live inside it.  Both are immutable once written.
+GAUNTLET_RUN_REQUIRED_KEYS = frozenset({"admission", "state", "recovery_count", "waves", "workers", "last_transition"})
+GAUNTLET_RUN_WRITE_ONCE_KEYS = ("dag_content_sha256", "abandon_authorization")
+# FASE-004 (FR-002/FR-003/FR-011, ADR-0022): a wave's conflict identity is
+# JSON content on the wave record, not a receipt name or an event field --
+# its absence is the "resolved" signal.  ``converged`` is a wave-scoped
+# bookkeeping flag distinct from ``state``, which reaches COMPLETE on any
+# terminal member outcome, converged or not.
+GAUNTLET_WAVE_REQUIRED_KEYS = frozenset({"state", "node_ids"})
+GAUNTLET_WAVE_OPTIONAL_KEYS = frozenset({"last_conflict", "converged"})
+WAVE_CONFLICT_REASONS = frozenset({"scope-overlap", "content-conflict"})
 GRANT_CAPABILITIES = frozenset({"git-local", "workspace-read-write"})
 PENDING_TRANSITION_NAME = "pending-transition.json"
 
@@ -740,6 +753,14 @@ def _closed_object(value: Any, keys: set[str] | frozenset[str], label: str) -> d
     return value
 
 
+def _required_optional_object(value: Any, required: frozenset[str], optional: frozenset[str], label: str) -> dict[str, Any]:
+    """``_closed_object`` with a declared optional half, the same way
+    :func:`_transition_fields` already admits the worker-authority triple."""
+    if not isinstance(value, dict) or set(value) - required - optional or not required.issubset(value):
+        _invalid(f"invalid {label} keys")
+    return value
+
+
 def _safe_relative_path(path: Any, label: str) -> None:
     if not isinstance(path, str) or not path or path.startswith("/") or "\\" in path or any(ord(char) < 32 or ord(char) == 127 for char in path):
         _invalid(f"invalid {label}")
@@ -796,18 +817,37 @@ def _validate_gauntlet_worker(worker: Any, run: dict[str, Any], worker_id: str) 
         if any(type(workspace[key]) is not bool for key in ("clean", "converged", "cleanup_eligible")): _invalid(f"invalid workspace flags: {worker_id}")
 
 
+def _validate_gauntlet_wave_conflict(conflict: Any, run_id: str) -> None:
+    conflict = _closed_object(conflict, {"node_ids", "reason", "execution_branch_head", "worker_heads"}, f"gauntlet wave last_conflict {run_id}")
+    node_ids = conflict["node_ids"]
+    if (not isinstance(node_ids, list) or not node_ids
+            or any(not isinstance(n, str) or not SAFE_NAME_RE.match(n) for n in node_ids)
+            or len(set(node_ids)) != len(node_ids)):
+        _invalid(f"invalid gauntlet wave last_conflict node_ids: {run_id}")
+    if not isinstance(conflict["reason"], str) or conflict["reason"] not in WAVE_CONFLICT_REASONS: _invalid(f"invalid gauntlet wave last_conflict reason: {run_id}")
+    if not isinstance(conflict["worker_heads"], dict): _invalid(f"invalid gauntlet wave last_conflict worker_heads: {run_id}")
+    for head in (conflict["execution_branch_head"], *conflict["worker_heads"].values()):
+        if not isinstance(head, str) or not HEX40_RE.match(head): _invalid(f"invalid gauntlet wave last_conflict head: {run_id}")
+
+
 def _validate_gauntlet_block(value: Any, work_id: str) -> None:
     block = _closed_object(value, {"schema", "runs"}, f"gauntlet block: {work_id}")
     if block["schema"] != GAUNTLET_SCHEMA or not isinstance(block["runs"], dict): _invalid(f"invalid gauntlet block: {work_id}")
     for run_id, run in block["runs"].items():
         if not isinstance(run_id, str) or not SAFE_NAME_RE.match(run_id): _invalid(f"invalid gauntlet run id: {work_id}")
-        run = _closed_object(run, {"admission", "state", "recovery_count", "waves", "workers", "last_transition"}, f"gauntlet run {run_id}")
+        run = _required_optional_object(run, GAUNTLET_RUN_REQUIRED_KEYS, frozenset(GAUNTLET_RUN_WRITE_ONCE_KEYS), f"gauntlet run {run_id}")
         admission = _closed_object(run["admission"], {"activation_sha256", "work_item_sha256", "workflow_sha256", "config_sha256", "base_commit"}, f"gauntlet admission {run_id}")
         if any(not isinstance(admission[key], str) or not HEX64_RE.match(admission[key]) for key in ("activation_sha256", "work_item_sha256", "workflow_sha256", "config_sha256")) or not isinstance(admission["base_commit"], str) or not HEX40_RE.match(admission["base_commit"]): _invalid(f"invalid gauntlet admission: {run_id}")
         if not isinstance(run["state"], str) or run["state"] not in RUN_STATES or type(run["recovery_count"]) is not int or run["recovery_count"] not in (0, 1): _invalid(f"invalid gauntlet run state: {run_id}")
+        if "dag_content_sha256" in run and (not isinstance(run["dag_content_sha256"], str) or not HEX64_RE.match(run["dag_content_sha256"])): _invalid(f"invalid gauntlet dag_content_sha256: {run_id}")
+        # The bundle is copied verbatim; its own six-key form is validated at
+        # the CLI boundary by attestation._validate_human_authorization.
+        if "abandon_authorization" in run and not isinstance(run["abandon_authorization"], dict): _invalid(f"invalid gauntlet abandon_authorization: {run_id}")
         if not isinstance(run["waves"], dict) or not isinstance(run["workers"], dict): _invalid(f"invalid gauntlet maps: {run_id}")
         for wave_id, wave in run["waves"].items():
-            if not isinstance(wave_id, str) or not SAFE_NAME_RE.match(wave_id) or not isinstance(wave, dict) or set(wave) != {"state", "node_ids"} or not isinstance(wave["state"], str) or wave["state"] not in WAVE_STATES: _invalid(f"invalid gauntlet wave: {run_id}")
+            if not isinstance(wave_id, str) or not SAFE_NAME_RE.match(wave_id): _invalid(f"invalid gauntlet wave: {run_id}")
+            wave = _required_optional_object(wave, GAUNTLET_WAVE_REQUIRED_KEYS, GAUNTLET_WAVE_OPTIONAL_KEYS, f"gauntlet wave {run_id}")
+            if not isinstance(wave["state"], str) or wave["state"] not in WAVE_STATES: _invalid(f"invalid gauntlet wave: {run_id}")
             # FASE-003 (B5 fix, reverting the journal-scan substitution): a
             # wave's own member node ids are a real, required Store field --
             # not journal-derived -- so a member with no worker declared yet
@@ -817,6 +857,8 @@ def _validate_gauntlet_block(value: Any, work_id: str) -> None:
                     or any(not isinstance(n, str) or not SAFE_NAME_RE.match(n) for n in node_ids)
                     or len(set(node_ids)) != len(node_ids)):
                 _invalid(f"invalid gauntlet wave node_ids: {run_id}")
+            if "converged" in wave and type(wave["converged"]) is not bool: _invalid(f"invalid gauntlet wave converged: {run_id}")
+            if "last_conflict" in wave: _validate_gauntlet_wave_conflict(wave["last_conflict"], run_id)
         transition = _closed_object(run["last_transition"], {"event_sequence", "receipt_sha256"}, f"gauntlet last_transition {run_id}")
         if type(transition["event_sequence"]) is not int or transition["event_sequence"] < 1 or not isinstance(transition["receipt_sha256"], str) or not HEX64_RE.match(transition["receipt_sha256"]): _invalid(f"invalid gauntlet last_transition: {run_id}")
         if sum(1 for w in run["workers"].values() if isinstance(w, dict) and w.get("state") in NON_TERMINAL_WORKER_STATES) > 5: _invalid(f"too many gauntlet workers: {run_id}")
@@ -940,9 +982,12 @@ def _next_wave_id(current: str) -> str | None:
 def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: dict[str, Any], *, allow_existing_gauntlet_changes: bool = False) -> None:
     """Guard the durable state graph even when callers use generic Store CAS.
     The Store is the authority for legal persisted edges, not the future CLI."""
+    # FASE-004 (FR-001, ADR-0020): convergence closes a run from whichever
+    # non-terminal state it is in, so COMPLETE is reachable from ADMITTED and
+    # RECOVERY_ELIGIBLE too, not only from RECOVERY_RECORDED.
     run_edges = {
-        "ADMITTED": {"ADMITTED", "RECOVERY_ELIGIBLE", "BLOCKED"},
-        "RECOVERY_ELIGIBLE": {"RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "BLOCKED"},
+        "ADMITTED": {"ADMITTED", "RECOVERY_ELIGIBLE", "BLOCKED", "COMPLETE"},
+        "RECOVERY_ELIGIBLE": {"RECOVERY_ELIGIBLE", "RECOVERY_RECORDED", "BLOCKED", "COMPLETE"},
         "RECOVERY_RECORDED": {"RECOVERY_RECORDED", "BLOCKED", "COMPLETE"},
         "BLOCKED": {"BLOCKED"}, "COMPLETE": {"COMPLETE"},
     }
@@ -981,6 +1026,12 @@ def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: di
             new_run = new_runs[run_id]
             if jcs(new_run["admission"]) != jcs(old_run["admission"]):
                 _fail(STATE_DIVERGENCE, f"gauntlet admission is immutable: {run_id}")
+            # FASE-004 (FR-004c/FR-014): absent -> present exactly once.  A
+            # re-pin over a different DAG, or a second abandonment bundle,
+            # would rewrite a decision COMPLETE/BLOCKED already absorbed.
+            for key in GAUNTLET_RUN_WRITE_ONCE_KEYS:
+                if key in old_run and (key not in new_run or jcs(new_run[key]) != jcs(old_run[key])):
+                    _fail(STATE_DIVERGENCE, f"gauntlet {key} is write-once: {run_id}")
             old_waves = old_run["waves"]
             newest_wave_id = max(old_waves) if old_waves else None
             for wave_id, old_wave in old_waves.items():
@@ -1000,10 +1051,18 @@ def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: di
                 # gauntlet_runs.WAVE_PENDING_NODE_IDS) -- so a DECLARED
                 # record's node_ids is allowed to change once, on its own
                 # DECLARED -> * transition, when it becomes real.
-                if (wave_id != newest_wave_id
-                        or new_wave.get("state") not in wave_edges.get(old_wave.get("state"), set())
+                # FASE-004 (ADR-0022): wave N+1 is legitimately declared while
+                # wave N's INTEGRATION_CONFLICT is still open, so a superseded
+                # wave stays byte-immutable in "state"/"node_ids" while its
+                # two FASE-004 fields remain writable/removable.
+                if wave_id != newest_wave_id:
+                    if new_wave.get("state") != old_wave.get("state") or new_wave.get("node_ids") != old_wave.get("node_ids"):
+                        _fail(STATE_DIVERGENCE, f"invalid gauntlet wave transition: {run_id}")
+                elif (new_wave.get("state") not in wave_edges.get(old_wave.get("state"), set())
                         or (old_wave.get("state") != "DECLARED" and new_wave.get("node_ids") != old_wave.get("node_ids"))):
                     _fail(STATE_DIVERGENCE, f"invalid gauntlet wave transition: {run_id}")
+                if "converged" in old_wave and old_wave["converged"] != new_wave.get("converged"):
+                    _fail(STATE_DIVERGENCE, f"gauntlet wave converged is write-once: {run_id}")
 
             # FASE-003 (F4 fix): a wave_id present only in the candidate --
             # never named in old_waves -- got no equivalent of "new gauntlet
