@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v2.9.0
+# Grill with Docs v2.10.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -49,7 +49,9 @@ Por padrão o `init` só detecta e reporta em `dependencies`, sem bloquear. `--a
 
 ```text
 python3 .../grill_workspace.py preflight ROOT [--allow-install] [--skip-backlog]
-python3 .../grill_workspace.py backlog-sync ROOT --work-id ID [--apply] [--db PATH]
+python3 .../grill_workspace.py backlog-sync    ROOT --work-id ID [--apply] [--db PATH]
+python3 .../grill_workspace.py backlog-project ROOT --work-id ID [--apply] [--db PATH]
+python3 .../grill_workspace.py backlog-verify  ROOT --work-id ID [--db PATH]
 ```
 
 O código do backlog raramente coincide com o nome do diretório, então `backlog_bridge.py ROOT --code CODE [--apply]` vincula um backlog existente explicitamente. Repositório já vinculado a outro código, ou código já vinculado a outro caminho, falha fechado em vez de revincular em silêncio.
@@ -59,6 +61,12 @@ O código do backlog raramente coincide com o nome do diretório, então `backlo
 O item nasce em `in_progress`; `resolved` vira `done` e `superseded` vira `cancelled`. `open → done` é ilegal na FSM do backlog, e é por isso que o item não nasce em `open`. Consequência prática: uma decisão adiada em aberto aparece como `in_progress` no `backlog list`, não como `open`.
 
 A deduplicação é por `(work_id, BL-NNNN)`, lida dos marcadores da descrição do item, porque o armazenamento aceita duplicata sem erro. Reexecutar é seguro: o desfecho por decisão é `PROPOSED`, `APPLIED`, `REUSED`, `TRANSITIONED` ou `TRANSITION-REFUSED`. Este último aparece quando o estado desejado é inalcançável a partir do atual — a ponte relata e não toca o item, nunca recorrendo a `item reconcile-status`. O comando valida a identidade imutável do work item, não o hash dos artefatos: ler `DECISION-BACKLOG.md` escrito é o propósito dele.
+
+`backlog-project` gera `DECISION-BACKLOG.md` a partir do backlog: o arquivo deixa de ser autoral e vira projeção versionada, ordenada por identificador e byte-idêntica em reexecução, que devolve `REUSED` quando nada mudou. O estado da decisão vem do `status` do item, pelo mapa inverso. Aplicar declara `decision_backlog_mode: projected` no `state.json`.
+
+O registro carrega uma marca de origem que cobre **apenas** a fatia deste work item — mudança em decisão de outro work item, ou de outro repositório que compartilhe o mesmo backlog, não a altera. O campo `revision` do backlog não serve para isso, porque avança a cada mexida em qualquer item.
+
+`backlog-verify` compara registro e autoridade e devolve `FRESH` ou `DIVERGED`, nomeando cada decisão divergente. Sem o backlog disponível ele recusa, em vez de afirmar frescor. A auditoria **não** faz essa comparação: ela é offline por decisão, para que o veredito seja reproduzível em qualquer clone, e só exige a marca quando o bundle já se declarou projetado.
 
 `WORK-ITEM.json` registra metadata imutável e hash canônico: `work_id`, tipo, slug, branch, HEAD, base ref/commit, Constituição e workflow. Escopo, dependências e conflitos ADR permanecem declarados em campos próprios para reconciliação.
 

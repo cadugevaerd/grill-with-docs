@@ -435,9 +435,85 @@
         "reason": "",
         "state": "complete",
         "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "2f00934e51555d08f9ec01e9810c22265d448773b1a0498f4c10f1d4db406bd5"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "2f00934e51555d08f9ec01e9810c22265d448773b1a0498f4c10f1d4db406bd5"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/agent-assignments.yml",
+            "sha256": "a878165dcde93908592f70fba555ba9b0d41962730f3035d86cccacaf71b277c"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/agent-assignments.yml",
+            "sha256": "a878165dcde93908592f70fba555ba9b0d41962730f3035d86cccacaf71b277c"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "f974821ff7029fc9c7234fcc457c106f5032f23cbb12bf2950752fb99df14d2d"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "f974821ff7029fc9c7234fcc457c106f5032f23cbb12bf2950752fb99df14d2d"
+          },
+          {
+            "path": "tests/validate_backlog_contract.py",
+            "sha256": "b1b7d25c6ee0d33cf472d720fa550c86e9cb2fe3179f6473938062fe168ad905"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-execute"
       }
     ],
-    "current_step": "analyze",
+    "current_step": "converge",
     "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
@@ -454,9 +530,9 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "pending",
-      "agent-execute": "pending",
-      "analyze": "pending",
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
       "plan": "complete",
