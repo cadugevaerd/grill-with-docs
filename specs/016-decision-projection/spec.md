@@ -87,6 +87,9 @@ Um operador quer saber se o registro versionado ainda corresponde ao que a autor
 - **FR-013**: A escrita do registro MUST ser atômica, de modo que interrupção não deixe arquivo parcial.
 - **FR-014**: A geração MUST ser a única forma suportada de alterar o registro; edição manual passa a ser detectável, não suportada.
 - **FR-015**: A cobertura automatizada MUST exercitar todos os caminhos acima sem exigir a autoridade real instalada.
+- **FR-016**: Quando um item carregar estado que a ponte nunca produz, o sistema MUST relatar divergência nomeada, sem traduzir por aproximação e sem interromper o restante da geração.
+- **FR-017**: Edição manual do registro MUST ser detectável pela verificação. O arquivo permanece versionado e portanto editável; "não suportada" significa que a edição é apontada, não impedida.
+- **FR-018**: O registro MUST declarar a versão do formato em que foi gerado, de modo que um registro produzido por versão anterior seja reconhecível em vez de tratado como divergente.
 
 ### Key Entities
 
@@ -107,6 +110,7 @@ Um operador quer saber se o registro versionado ainda corresponde ao que a autor
 - **SC-006**: Toda divergência introduzida deliberadamente é apontada pela verificação, com a decisão nomeada.
 - **SC-007**: Nenhuma interrupção durante a escrita deixa o registro em estado inválido.
 - **SC-008**: A suíte automatizada completa passa sem a autoridade instalada.
+- **SC-009**: Uma edição manual de um único caractere no registro é apontada pela verificação em 100% dos casos.
 
 ## Assumptions
 

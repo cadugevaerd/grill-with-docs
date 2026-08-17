@@ -379,9 +379,65 @@
         "reason": "",
         "state": "complete",
         "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "07485f2d02c78f9b36964f4d0b7807e7c4bf20a6d2426e9a971e1d937a303252"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "07485f2d02c78f9b36964f4d0b7807e7c4bf20a6d2426e9a971e1d937a303252"
+          },
+          {
+            "path": "specs/016-decision-projection/checklists/projection.md",
+            "sha256": "051d304f15cfc2717e688e96bc713f9000516cbcaf840d0800518c207801158d"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "07485f2d02c78f9b36964f4d0b7807e7c4bf20a6d2426e9a971e1d937a303252"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "07485f2d02c78f9b36964f4d0b7807e7c4bf20a6d2426e9a971e1d937a303252"
+          },
+          {
+            "path": "specs/016-decision-projection/checklists/projection.md",
+            "sha256": "051d304f15cfc2717e688e96bc713f9000516cbcaf840d0800518c207801158d"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
       }
     ],
-    "current_step": "checklist",
+    "current_step": "analyze",
     "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
@@ -401,13 +457,13 @@
       "agent-assign": "pending",
       "agent-execute": "pending",
       "analyze": "pending",
-      "checklist": "pending",
+      "checklist": "complete",
       "converge": "pending",
       "plan": "complete",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
-      "tasks": "pending",
+      "tasks": "complete",
       "verify": "pending"
     }
   },
