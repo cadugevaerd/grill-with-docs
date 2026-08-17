@@ -428,6 +428,75 @@ def compare_projection(path: Path, decisions: list[tuple[str, str, dict[str, Any
     return divergences
 
 
+def bundle_mode(work_item: Path) -> str:
+    """Authored or projected, decided by the record itself.
+
+    The absence of an origin mark is the signal. The audit gate was already
+    built conditional on it in the projection phase, so nothing extra has to be
+    switched on here.
+    """
+    fmt, mark = read_mark(work_item / "DECISION-BACKLOG.md")
+    return "projected" if mark else "authored"
+
+
+def migrate(root: Path, work_item: Path, work_id: str, *, apply: bool = False,
+            db: str | None = None, tools: Any = None) -> dict[str, Any]:
+    """Move one authored bundle into the projected model.
+
+    Cannot run offline: it has to create counterparts in the authority. That is
+    what separates it from the audit, which is deliberately offline.
+    """
+    store = store_path(db)
+    if bundle_mode(work_item) == "projected":
+        return {"schema": PROJECTION_FORMAT, "db": store, "work_id": work_id,
+                "verdict": "REUSED", "code": "ALREADY-PROJECTED", "changed": False, "decisions": []}
+    cli, tools = resolve_cli(tools)
+    resolution = resolve_backlog(root, cli, tools, store)
+    if resolution["status"] != "BOUND":
+        return {"schema": PROJECTION_FORMAT, "db": store, "work_id": work_id, "verdict": "BLOCKED",
+                "code": "BACKLOG-NOT-BOUND", "backlog": resolution, "changed": False}
+    entries = parse_deferred(work_item / "DECISION-BACKLOG.md")
+    invalid = [entry["id"] for entry in entries if (entry.get("state") or DEFAULT_STATE) not in STATE_TARGET]
+    if invalid:
+        # Refuse the whole bundle rather than migrate part of it: a partial
+        # migration would leave the record half authored and half projected,
+        # with no way to tell which decisions had already moved.
+        return {"schema": PROJECTION_FORMAT, "db": store, "work_id": work_id, "verdict": "BLOCKED",
+                "code": "STATE-UNKNOWN", "invalid": sorted(invalid), "changed": False}
+    known = index_existing(call(cli, tools, store, ["item", "list", "--code", resolution["code"]]).get("data") or [])
+    planned: list[dict[str, Any]] = []
+    for entry in entries:
+        state = entry.get("state") or DEFAULT_STATE
+        target = STATE_TARGET[state]
+        if (work_id, entry["id"]) in known:
+            planned.append({"id": entry["id"], "state": state, "target": target, "status": "REUSED"})
+            continue
+        criticality = entry.get("criticality", DEFAULT_CRITICALITY)
+        planned.append({"id": entry["id"], "state": state, "target": target,
+                        "status": "APPLIED" if apply else "PROPOSED",
+                        "argv": ["item", "add", "--code", resolution["code"],
+                                 "--title", f"{entry['id']} — {entry['title']}" if entry["title"] else entry["id"],
+                                 "--description", describe(entry, work_id, root),
+                                 "--category", CATEGORY,
+                                 "--criticality", criticality if criticality in CRITICALITY else DEFAULT_CRITICALITY,
+                                 "--status", target]})
+    changed = False
+    if apply:
+        for item in planned:
+            if item["status"] != "APPLIED":
+                continue
+            # --status on add is an initial snapshot, not a transition, which is
+            # what lets a historical state be seeded directly.
+            item["item"] = call(cli, tools, store, item["argv"]).get("data")
+            changed = True
+        projection = project(root, work_item, work_id, apply=True, db=db, tools=tools)
+        changed = changed or projection.get("changed", False)
+        return {"schema": PROJECTION_FORMAT, "db": store, "work_id": work_id, "verdict": "APPLIED",
+                "changed": changed, "decisions": planned, "projection": projection}
+    return {"schema": PROJECTION_FORMAT, "db": store, "work_id": work_id, "verdict": "PREVIEW",
+            "changed": False, "decisions": planned}
+
+
 def project(root: Path, work_item: Path, work_id: str, *, apply: bool = False,
             db: str | None = None, tools: Any = None) -> dict[str, Any]:
     store = store_path(db)

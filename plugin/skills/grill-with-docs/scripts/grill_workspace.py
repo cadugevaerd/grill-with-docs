@@ -1227,7 +1227,17 @@ def _projection_command(args: argparse.Namespace, operation: str) -> tuple[dict[
     bridge = sibling("backlog_bridge")
     try:
         if operation == "project":
+            if bridge.bundle_mode(item) == "authored":
+                # Mutating the projection of an authored bundle would silently
+                # discard the hand-written record. Migration is the supported
+                # path, and it needs explicit authorisation.
+                return {"schema": bridge.PROJECTION_FORMAT, "db": bridge.store_path(args.db),
+                        "work_id": args.work_id, "verdict": "BLOCKED",
+                        "code": "BACKLOG-MIGRATION-REQUIRED",
+                        "detail": "rode backlog-migrate --apply antes de projetar"}, EXIT_BLOCKED
             payload = bridge.project(root, item, args.work_id, apply=args.apply, db=args.db)
+        elif operation == "migrate":
+            payload = bridge.migrate(root, item, args.work_id, apply=args.apply, db=args.db)
         else:
             payload = bridge.verify(root, item, args.work_id, db=args.db)
     except bridge.BacklogUnavailable as error:
@@ -1244,6 +1254,10 @@ def backlog_project_command(args: argparse.Namespace) -> tuple[dict[str, Any], i
 
 def backlog_verify_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     return _projection_command(args, "verify")
+
+
+def backlog_migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    return _projection_command(args, "migrate")
 
 
 def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -3024,6 +3038,11 @@ def build_parser() -> JsonParser:
     project_parser.add_argument("--work-id", required=True)
     project_parser.add_argument("--apply", action="store_true")
     project_parser.add_argument("--db")
+    migrate_backlog_parser = subparsers.add_parser("backlog-migrate")
+    migrate_backlog_parser.add_argument("root")
+    migrate_backlog_parser.add_argument("--work-id", required=True)
+    migrate_backlog_parser.add_argument("--apply", action="store_true")
+    migrate_backlog_parser.add_argument("--db")
     verify_parser = subparsers.add_parser("backlog-verify")
     verify_parser.add_argument("root")
     verify_parser.add_argument("--work-id", required=True)
@@ -3205,6 +3224,7 @@ def main(argv: list[str] | None = None) -> int:
             "backlog-adopt": backlog_adopt_command,
             "backlog-project": backlog_project_command,
             "backlog-verify": backlog_verify_command,
+            "backlog-migrate": backlog_migrate_command,
         }
         payload, exit_code = handlers[args.command](args)
     except CliFailure as failure:

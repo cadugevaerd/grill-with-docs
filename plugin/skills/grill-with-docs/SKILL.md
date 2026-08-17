@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v3.1.0
+# Grill with Docs v3.2.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -53,6 +53,7 @@ python3 .../grill_workspace.py backlog-sync    ROOT --work-id ID [--apply] [--db
 python3 .../grill_workspace.py backlog-project ROOT --work-id ID [--apply] [--db PATH]
 python3 .../grill_workspace.py backlog-verify  ROOT --work-id ID [--db PATH]
 python3 .../grill_workspace.py backlog-adopt   ROOT --work-id ID [--apply]
+python3 .../grill_workspace.py backlog-migrate ROOT --work-id ID [--apply] [--db PATH]
 ```
 
 O código do backlog raramente coincide com o nome do diretório, então `backlog_bridge.py ROOT --code CODE [--apply]` vincula um backlog existente explicitamente. Repositório já vinculado a outro código, ou código já vinculado a outro caminho, falha fechado em vez de revincular em silêncio.
@@ -70,6 +71,8 @@ O registro carrega uma marca de origem que cobre **apenas** a fatia deste work i
 `backlog-verify` compara registro e autoridade e devolve `FRESH` ou `DIVERGED`, nomeando cada decisão divergente. Sem o backlog disponível ele recusa, em vez de afirmar frescor. A auditoria **não** faz essa comparação: ela é offline por decisão, para que o veredito seja reproduzível em qualquer clone, e só exige a marca quando o bundle já se declarou projetado.
 
 O preflight também detecta **skill sombreada**: um nome publicado por este plugin que exista como skill pessoal ou de projeto. O relato nomeia o caminho e, quando é atalho, o destino resolvido; atalho quebrado conta como sombra, porque continua ocupando o nome. Por padrão só reporta; `--allow-install` autoriza a remoção, que tira apenas o atalho e preserva o destino. O alcance é restrito aos nomes deste plugin — ele não opina sobre nomes de terceiros.
+
+Bundle criado antes da projeção tem registro **autoral**, detectado pela ausência da marca de origem. `backlog-migrate` move um desses para o modelo projetado: cria na autoridade a contraparte de cada decisão, semeando o estado histórico direto por `--status`, e regenera o registro como projeção marcada. É prévia por padrão, idempotente, e recusa o bundle inteiro se algum estado for inválido — migrar pela metade deixaria o registro meio autoral e meio projetado, sem como saber o que já moveu. `backlog-project` recusa com `BACKLOG-MIGRATION-REQUIRED` sobre bundle autoral, para não descartar em silêncio o registro escrito à mão.
 
 `WORK-ITEM.json` registra metadata imutável e hash canônico: `work_id`, tipo, slug, branch, HEAD, base ref/commit, Constituição e workflow. Escopo, dependências e conflitos ADR permanecem declarados em campos próprios para reconciliação.
 
