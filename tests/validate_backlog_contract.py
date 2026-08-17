@@ -961,6 +961,105 @@ class SyncGate(unittest.TestCase):
         self.assertNotIn("validate_bundle_integrity", source.split("def backlog_sync_command")[1].split("\ndef ")[0])
 
 
+class LegacyMigration(unittest.TestCase):
+    """FASE-004 — authored bundles move into the projected model, once."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.item = self.root / "item"
+        self.item.mkdir()
+        self.original = MODULE.resolve_cli
+
+    def tearDown(self) -> None:
+        MODULE.resolve_cli = self.original
+        self.temporary.cleanup()
+
+    def authored(self, body: str) -> None:
+        (self.item / "DECISION-BACKLOG.md").write_text(body, encoding="utf-8")
+        (self.item / "state.json").write_text(json.dumps({"status": "in-progress"}), encoding="utf-8")
+
+    def bound(self, items):
+        tools = StubToolchain({
+            ("backlog", "list"): (0, envelope([{"code": "AAA", "name": "n", "bound_path": str(self.root)}])),
+            ("item", "list"): (0, envelope(items)),
+        })
+        MODULE.resolve_cli = lambda given=None: (CLI, tools)
+        return tools
+
+    def linked(self, work_id, bl_id):
+        return {"id": "AAA-1", "status": "done",
+                "title": f"{bl_id} — t",
+                "description": f"- phase: FASE-001\n\n---\n{MODULE.WORK_ID_MARKER}: {work_id}\n{MODULE.BL_MARKER}: {bl_id}\n"}
+
+    def test_an_authored_bundle_is_recognised(self) -> None:
+        self.authored("## BL-0001 — x\n- state: open\n")
+        self.assertEqual(MODULE.bundle_mode(self.item), "authored")
+
+    def test_preview_creates_nothing(self) -> None:
+        self.authored("## BL-0001 — x\n- state: resolved\n- phase: FASE-001\n")
+        tools = self.bound([])
+        payload = MODULE.migrate(self.root, self.item, "w", apply=False, db=DB)
+        self.assertEqual(payload["verdict"], "PREVIEW")
+        self.assertEqual(tools.mutations(), [])
+
+    def test_historical_state_is_seeded_directly(self) -> None:
+        self.authored("## BL-0001 — a\n- state: resolved\n- phase: FASE-001\n\n"
+                      "## BL-0002 — b\n- state: superseded\n- phase: FASE-001\n")
+        tools = self.bound([])
+        MODULE.migrate(self.root, self.item, "w", apply=True, db=DB)
+        seeded = {c[c.index("--title") + 1].split(" ")[0]: c[c.index("--status") + 1]
+                  for c in tools.calls if c[2:4] == ["item", "add"]}
+        self.assertEqual(seeded, {"BL-0001": "done", "BL-0002": "cancelled"})
+
+    def test_migration_turns_the_record_into_a_marked_projection(self) -> None:
+        self.authored("## BL-0001 — a\n- state: resolved\n- phase: FASE-001\n")
+        self.bound([])
+        MODULE.migrate(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual(MODULE.bundle_mode(self.item), "projected")
+
+    def test_a_decision_that_already_has_a_counterpart_is_reused(self) -> None:
+        self.authored("## BL-0001 — a\n- state: resolved\n- phase: FASE-001\n")
+        tools = self.bound([self.linked("w", "BL-0001")])
+        payload = MODULE.migrate(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual([d["status"] for d in payload["decisions"]], ["REUSED"])
+        self.assertEqual([c for c in tools.calls if c[2:4] == ["item", "add"]], [])
+
+    def test_an_already_projected_bundle_reports_nothing_to_do(self) -> None:
+        self.authored("## BL-0001 — a\n- state: resolved\n- phase: FASE-001\n")
+        self.bound([])
+        MODULE.migrate(self.root, self.item, "w", apply=True, db=DB)
+        payload = MODULE.migrate(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual(payload["code"], "ALREADY-PROJECTED")
+        self.assertFalse(payload["changed"])
+
+    def test_an_invalid_state_refuses_the_whole_bundle(self) -> None:
+        # Partial migration would leave the record half authored and half
+        # projected, with no way to tell which decisions had moved.
+        self.authored("## BL-0001 — ok\n- state: resolved\n- phase: FASE-001\n\n"
+                      "## BL-0002 — bad\n- state: resolvd\n- phase: FASE-001\n")
+        tools = self.bound([])
+        payload = MODULE.migrate(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual(payload["code"], "STATE-UNKNOWN")
+        self.assertEqual(payload["invalid"], ["BL-0002"])
+        self.assertEqual(tools.mutations(), [])
+
+    def test_an_empty_authored_bundle_migrates_to_an_empty_projection(self) -> None:
+        self.authored("# DECISION-BACKLOG\n\nSem decisoes.\n")
+        self.bound([])
+        payload = MODULE.migrate(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual(payload["verdict"], "APPLIED")
+        self.assertEqual(MODULE.bundle_mode(self.item), "projected")
+
+    def test_an_unbound_repository_refuses(self) -> None:
+        self.authored("## BL-0001 — a\n- state: resolved\n- phase: FASE-001\n")
+        tools = StubToolchain({("backlog", "list"): (0, envelope([]))})
+        MODULE.resolve_cli = lambda given=None: (CLI, tools)
+        payload = MODULE.migrate(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual(payload["code"], "BACKLOG-NOT-BOUND")
+        self.assertEqual(tools.mutations(), [])
+
+
 class FailClosedPrerequisite(unittest.TestCase):
     """T003, T004, T006, T007, T008 — the prerequisite becomes enforceable."""
 

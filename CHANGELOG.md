@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.2.0
+
+Fecha o ciclo da inversão de autoridade: bundles criados antes da projeção ganham caminho de migração.
+
+- `backlog-migrate` move um bundle autoral para o modelo projetado. Cria na autoridade a contraparte de cada decisão ainda sem uma, semeando o estado histórico direto — `--status` no `add` é snapshot inicial e não transição, o que permite nascer já encerrado — e regenera o registro como projeção marcada.
+- O modo é detectado pela ausência da marca de origem. A gate de auditoria já fora construída condicional a esse sinal na 2.10.0, então nada precisou ser ligado aqui.
+- Prévia por padrão e idempotente. Migração automática está descartada por contrato do componente que governa o backlog, que exige confirmação explícita para qualquer mutação.
+- Estado inválido recusa o bundle **inteiro**, sem migração parcial: migrar pela metade deixaria o registro meio autoral e meio projetado, sem como distinguir o que já moveu.
+- `backlog-project` passa a recusar com `BACKLOG-MIGRATION-REQUIRED` sobre bundle autoral, para não descartar em silêncio o registro escrito à mão.
+
 ## 3.1.0
 
 - O preflight passa a detectar skill sombreada: um nome publicado pelo plugin que também exista como skill pessoal ou de projeto. Motivado por defeito observado em uso — um atalho em `~/.claude/skills` apontando para `~/.agents/skills` venceu a skill homônima do plugin, e o comando de sessão alcançou uma versão sem os subcomandos do protocolo. Nada avisava.

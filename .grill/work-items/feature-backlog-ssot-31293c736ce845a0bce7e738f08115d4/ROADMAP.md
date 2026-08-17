@@ -39,7 +39,7 @@
 - delivery-units: DU-003
 
 ## FASE-004 — Migração de bundles legados
-- state: ready-for-specify
+- state: complete
 - objetivo: Bundle autoral migra uma única vez para o modelo de projeção, sem mutação implícita do backlog operacional
 - scope-in: Marcador de modo, comando de migração preview-first idempotente, estados históricos, recusa de mutação em bundle não migrado
 - scope-out: Backfill manual, alteração de itens preexistentes
@@ -63,7 +63,7 @@
 - delivery-units: DU-006
 
 ## FASE-005 — Verificação e publicação 3.0.0
-- state: planned
+- state: ready-for-specify
 - objetivo: Os quatro defeitos ganham regressão e a versão incompatível é publicada de forma consistente
 - scope-in: Regressões, backlogctl falso pelo seam resolve_cli, bump nos oito lugares
 - scope-out: Registro de required status check na proteção de branch, que é ato humano
