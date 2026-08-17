@@ -1,6 +1,6 @@
 # ROADMAP
 
-- execution-order: FASE-001, FASE-002, FASE-003, FASE-004, FASE-005
+- execution-order: FASE-001, FASE-002, FASE-003, FASE-006, FASE-004, FASE-005
 
 ## FASE-001 — Destravar a ponte com o backlog operacional
 - state: ready-for-specify
@@ -50,6 +50,18 @@
 - specify-handoff: handoffs/FASE-004-SPECIFY-HANDOFF.md
 - delivery-units: DU-004
 
+## FASE-006 — Detecção de skill sombreada no preflight
+- state: planned
+- objetivo: O preflight avisa quando um nome de skill publicado pelo plugin está sombreado no ambiente, e sabe removê-lo sob autorização explícita
+- scope-in: Detecção das skills do próprio plugin sombreadas por skill pessoal ou de projeto, relato no preflight e no init, remoção sob flag explícita
+- scope-out: Colisão entre skills de terceiros, opinião sobre nomes de outros plugins, remoção automática
+- context-refs: Backlog operacional
+- ADRs: none
+- BLs: none
+- depends-on: FASE-003
+- specify-handoff: handoffs/FASE-006-SPECIFY-HANDOFF.md
+- delivery-units: DU-006
+
 ## FASE-005 — Verificação e publicação 3.0.0
 - state: planned
 - objetivo: Os quatro defeitos ganham regressão e a versão incompatível é publicada de forma consistente
@@ -58,7 +70,7 @@
 - context-refs: Projeção, Backlog operacional
 - ADRs: none
 - BLs: none
-- depends-on: FASE-001, FASE-002, FASE-003, FASE-004
+- depends-on: FASE-001, FASE-002, FASE-003, FASE-004, FASE-006
 - specify-handoff: handoffs/FASE-005-SPECIFY-HANDOFF.md
 - delivery-units: DU-005
 

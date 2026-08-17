@@ -60,4 +60,14 @@
 - depends-on: DQ-0001, DQ-0005
 - final-ref: read-only reporta como finding bloqueante; mutação recusa
 
+## DQ-0007 — O plugin deve detectar e remover skill que sombreia seus próprios nomes?
+- phase: FASE-006
+- fingerprint: deteccao-skill-sombreada
+- impact: medium
+- state: resolved
+- context-refs: Backlog operacional
+- artifacts: ROADMAP.md, PLAN-CONTEXT.md, DELIVERY-MAP.md, handoffs/FASE-006-SPECIFY-HANDOFF.md
+- depends-on: none
+- final-ref: alcance restrito aos nomes do plugin; reporta por padrão, remove só sob flag explícita
+
 > Estados: open | resolved | deferred | split | blocked | out-of-scope. Não duplique fingerprints abertos.

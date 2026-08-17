@@ -70,6 +70,26 @@ Toda decisão adiada histórica vira item, inclusive as já encerradas, usando `
 
 Idempotência é por construção própria, pelos mesmos marcadores da FASE-001, porque o armazenamento não recusa duplicata.
 
+## FASE-006 — Detecção de skill sombreada no preflight
+- phase: FASE-006
+- ADRs: none
+- BLs: none
+- delivery-units: DU-006
+- development-type: platform-devops
+
+### HOW
+Defeito observado nesta própria sessão: uma skill pessoal chamada `grill-with-docs`, instalada como symlink em `~/.claude/skills/` apontando para `~/.agents/skills/`, sombreou a skill homônima do plugin. O comando de sessão resolveu para a pessoal, que não tem os subcomandos do protocolo, e o operador só descobriu porque o argumento não fez sentido. Silencioso e reproduzível em qualquer ambiente novo.
+
+O preflight já é o lugar onde o ambiente é inspecionado e reportado, então a detecção entra ali e aparece também no init, junto com o relato de dependências.
+
+Alcance fechado nos nomes que o próprio plugin publica. O grill tem autoridade legítima sobre os próprios nomes e nenhuma sobre nomes de terceiros; varrer todo o ambiente atrás de duplicata qualquer produziria falso positivo e obrigaria a mapear o layout de skill de cada agente hospedeiro.
+
+Ordem de precedência a considerar na detecção: skill de projeto, skill pessoal e skill de plugin podem coexistir sob o mesmo nome, e a sombra é o caso em que a de projeto ou a pessoal vence a do plugin. Symlink conta como presença, e foi exatamente a forma que causou o defeito — resolver o alvo importa para o relato, mas a presença do link já basta para sombrear.
+
+Por padrão detecta e reporta, sem bloquear, seguindo o comportamento atual do preflight para dependências. Remoção exige flag explícita, pelo mesmo motivo de `--allow-install`: apagar arquivo fora do repositório é mutação no ambiente do operador e não pode acontecer por efeito colateral de um comando de diagnóstico. Remoção automática está descartada porque destruiria uma skill pessoal que o operador talvez quisesse manter, bastando renomear.
+
+Restrição de teste: a matriz roda em três sistemas, incluindo Windows, então a detecção precisa lidar com layout de caminho e com symlink de forma portátil, e os testes precisam montar diretórios de skill sintéticos em vez de tocar o ambiente real.
+
 ## FASE-005 — Verificação e publicação 3.0.0
 - phase: FASE-005
 - ADRs: none
