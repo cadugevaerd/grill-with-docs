@@ -49,7 +49,7 @@ Por padrão o `init` só detecta e reporta em `dependencies`, sem bloquear. `--a
 
 ```text
 python3 .../grill_workspace.py preflight ROOT [--allow-install] [--skip-backlog]
-python3 .../grill_workspace.py backlog-sync ROOT --work-id ID [--apply]
+python3 .../grill_workspace.py backlog-sync ROOT --work-id ID [--apply] [--db PATH]
 ```
 
 O código do backlog raramente coincide com o nome do diretório, então `backlog_bridge.py ROOT --code CODE [--apply]` vincula um backlog existente explicitamente. Repositório já vinculado a outro código, ou código já vinculado a outro caminho, falha fechado em vez de revincular em silêncio.
