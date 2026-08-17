@@ -464,6 +464,20 @@ class Reconciliation(unittest.TestCase):
         self.assertEqual(len(added), 1)
         self.assertTrue(added[0][added[0].index("--title") + 1].startswith("BL-0002 — "))
 
+    def test_preexisting_duplicates_are_surfaced_not_hidden(self) -> None:
+        # The old mirror could create duplicates and the store never refused
+        # them; reconciling only the first would quietly hide the rest.
+        self.backlog("## BL-0001 — O\n- state: open\n")
+        first = self.linked("work-a", "BL-0001", status="in_progress")
+        second = dict(self.linked("work-a", "BL-0001", status="in_progress"), id="AAA-2")
+        payload = self.sync(self.bound([first, second]), apply=False)
+        self.assertEqual(payload["items"][0].get("duplicates"), ["AAA-2"])
+
+    def test_a_single_item_reports_no_duplicates(self) -> None:
+        self.backlog("## BL-0001 — O\n- state: open\n")
+        payload = self.sync(self.bound([self.linked("work-a", "BL-0001", status="in_progress")]), apply=False)
+        self.assertNotIn("duplicates", payload["items"][0])
+
     def test_every_entry_reports_source_state_and_target(self) -> None:
         self.backlog("## BL-0001 — S\n- state: superseded\n")
         payload = self.sync(self.bound([]), apply=False)
@@ -587,6 +601,15 @@ class SyncGate(unittest.TestCase):
         with self.assertRaises(module.CliFailure) as raised:
             module.validate_bundle_integrity(bundle)
         self.assertEqual(raised.exception.code, "BUNDLE-INTEGRITY")
+
+    def test_the_subcommand_accepts_an_alternate_store(self) -> None:
+        # Without --db the command always reaches the operator's real backlog,
+        # so this coverage would consult a different store on CI than on a
+        # developer machine and pass for different reasons in each.
+        self.write_decision()
+        store = self.root / "throwaway.db"
+        _, payload = workspace("backlog-sync", self.root, "--work-id", "work-a", "--db", store)
+        self.assertEqual(payload.get("db"), str(store))
 
     def test_the_gate_is_still_wired_into_the_commands_that_need_it(self) -> None:
         source = WORKSPACE.read_text(encoding="utf-8")

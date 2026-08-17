@@ -1151,7 +1151,7 @@ def backlog_sync_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]
     validate_metadata(bundle.metadata, args.work_id)
     bridge = sibling("backlog_bridge")
     try:
-        payload = bridge.sync_items(root, item, args.work_id, apply=args.apply)
+        payload = bridge.sync_items(root, item, args.work_id, apply=args.apply, db=args.db)
     except bridge.BacklogUnavailable as error:
         return {"schema": bridge.SCHEMA, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}, EXIT_BLOCKED
     return payload, EXIT_OK if payload.get("verdict") in {"PREVIEW", "APPLIED"} else EXIT_BLOCKED
@@ -2900,6 +2900,7 @@ def build_parser() -> JsonParser:
     backlog_parser.add_argument("root")
     backlog_parser.add_argument("--work-id", required=True)
     backlog_parser.add_argument("--apply", action="store_true")
+    backlog_parser.add_argument("--db")
     audit_parser = subparsers.add_parser("audit")
     audit_parser.add_argument("root")
     audit_parser.add_argument("--work-id")

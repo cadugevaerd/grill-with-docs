@@ -139,3 +139,10 @@ Nota: o CLAUDE.md registra 877 como baseline histórica; o número real hoje é 
 - Delta: +26 testes, exatamente a cobertura acrescentada por esta fase.
 - `tests/validate_backlog_contract.py` saiu de 22 para 48 testes.
 - Execucao inline, sem despachar subagentes: 13 das 26 tarefas editam o mesmo arquivo de teste, conflito que a propria secao Parallel Opportunities sinaliza.
+
+## Phase 7: Convergence
+
+- [x] T027 Expor `--db PATH` no subcomando `backlog-sync` e repassá-lo a `sync_items`, e apontar os testes `SyncGate` para um banco descartável, de modo que a cobertura não consulte o backlog real do operador nem dependa de o binário existir, per FR-012 (partial)
+- [x] T028 Relatar quando a mesma chave `(work_id, BL-NNNN)` aparecer em mais de um item do backlog, em vez de reconciliar silenciosamente apenas o primeiro, per FR-006 (partial)
+
+Ambas as tarefas de convergencia foram implementadas na mesma passagem. Suite do validador da ponte: 48 -> 51 testes.

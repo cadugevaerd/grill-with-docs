@@ -179,8 +179,16 @@ def index_existing(existing: list[dict[str, Any]]) -> dict[tuple[str, str], dict
     for item in existing:
         markers = dict(re.findall(rf"(?m)^({WORK_ID_MARKER}|{BL_MARKER}):\s*(.+)$", item.get("description") or ""))
         work_id, bl_id = markers.get(WORK_ID_MARKER), markers.get(BL_MARKER)
-        if work_id and bl_id:
-            index.setdefault((work_id.strip(), bl_id.strip()), item)
+        if not (work_id and bl_id):
+            continue
+        key = (work_id.strip(), bl_id.strip())
+        if key in index:
+            # Duplicates predate this deduplication and the store never refused
+            # them. Reconciling the first silently would hide the rest, so the
+            # extra identities travel with the entry and surface in the report.
+            index[key].setdefault("duplicates", []).append(item.get("id"))
+            continue
+        index[key] = dict(item)
     return index
 
 
@@ -224,6 +232,9 @@ def sync_items(root: Path, work_item: Path, work_id: str, *, apply: bool = False
                          "--status", target],
             })
             continue
+        duplicates = found.get("duplicates")
+        if duplicates:
+            shared["duplicates"] = list(duplicates)
         current = found.get("status") or ""
         # An item whose status the store did not report gives nothing to
         # reconcile against; unknown is not evidence of divergence, so the
