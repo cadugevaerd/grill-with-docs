@@ -236,9 +236,33 @@
         "reason": "",
         "state": "complete",
         "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/verify.md",
+            "sha256": "1921002f661778519c355fb08ea00067b12326932934a44d4886a998a0753012"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/verify.md",
+            "sha256": "1921002f661778519c355fb08ea00067b12326932934a44d4886a998a0753012"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
       }
     ],
-    "current_step": "verify",
+    "current_step": "review",
     "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
@@ -265,7 +289,7 @@
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "complete"
     }
   },
   "limits": {
