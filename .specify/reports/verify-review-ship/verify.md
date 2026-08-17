@@ -1,7 +1,7 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree 7044396efb54fae2818353cffc74a50048d03d7760dd40f6141f1ede12801005 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan ac49cbc2c8496efb1077406d34bb3fae1f195f05f27c0d28360967c402f16c68   (gate reports excluded)
+Source fingerprint: tree c85b04c9eda75dae2ca672b3e9a8990222d15155de7d29da8021ed56a76681cd / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan ac49cbc2c8496efb1077406d34bb3fae1f195f05f27c0d28360967c402f16c68   (gate reports excluded)
 Converge: CONVERGED
 
 Handoff: três passagens de `/speckit.converge`. A primeira retornou `tasks_appended` com T027 e T028; a segunda, `converged`; a terceira, disparada por mudanças de código feitas durante a revisão, retornou `tasks_appended` com T029 e agora fecha em `converged`. Uma quarta passagem, após as correções de revisão, fecha em `converged`. Este relatório se apoia na quarta. As duas versões anteriores deste relatório ficaram stale por mudança de fonte, conforme o próprio contrato exige.
@@ -43,3 +43,5 @@ Ressalva registrada, não bloqueante: SC-005 depende da matriz de CI e permanece
 ### Next Action
 
 - PASS: run `/speckit.verify-review-ship.review`
+
+> Revalidação: o fingerprint de árvore avançou de `7044396efb54` para `c85b04c9eda7` por uma mudança **exclusivamente de configuração** — o bloco `ship` acrescentado a `verify-review-ship-config.yml`, sem o qual o gate de ship é `BLOCKED` por invariante. Nenhum arquivo de produção ou de teste mudou. Os gates foram reexecutados sobre a árvore nova, com o mesmo resultado: 972 testes, exit 0. Veredito reafirmado.

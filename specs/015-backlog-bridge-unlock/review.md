@@ -1,7 +1,7 @@
 ## Review Report
 
 Verdict: APPROVE
-Source fingerprint: tree 7044396efb54fae2818353cffc74a50048d03d7760dd40f6141f1ede12801005 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan ac49cbc2c8496efb1077406d34bb3fae1f195f05f27c0d28360967c402f16c68
+Source fingerprint: tree c85b04c9eda75dae2ca672b3e9a8990222d15155de7d29da8021ed56a76681cd / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan ac49cbc2c8496efb1077406d34bb3fae1f195f05f27c0d28360967c402f16c68
                     (matches Converge e Verify; computado por `.specify/extensions/verify-review-ship/scripts/source-fingerprint.sh`)
 
 ### Limitação de independência
@@ -80,3 +80,5 @@ Ressalvas que acompanham a aprovação, ambas não bloqueantes e ambas declarada
 
 1. A independência do revisor não foi obtida. Se houver apetite, vale um segundo par de olhos antes do merge.
 2. SC-005 exige os três sistemas operacionais e só a matriz de CI verifica; permanece não verificado até a branch ser empurrada.
+
+> Revalidação: o fingerprint de árvore avançou de `7044396efb54` para `c85b04c9eda7` por uma mudança **exclusivamente de configuração** — o bloco `ship` acrescentado a `verify-review-ship-config.yml`, sem o qual o gate de ship é `BLOCKED` por invariante. Nenhum arquivo de produção ou de teste mudou. Os gates foram reexecutados sobre a árvore nova, com o mesmo resultado: 972 testes, exit 0. Veredito reafirmado.
