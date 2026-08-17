@@ -270,5 +270,98 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(process.returncode, 1)
 
 
+class ShadowedSkills(unittest.TestCase):
+    """FASE-006 — a shadowed plugin name stops being silent."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name) / "repo"
+        self.home = Path(self.temporary.name) / "home"
+        (self.root / ".claude" / "skills").mkdir(parents=True)
+        (self.home / ".claude" / "skills").mkdir(parents=True)
+        self.environ = {"HOME": str(self.home)}
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def detect(self):
+        return MODULE.detect_shadowed_skills(self.root, self.environ)
+
+    def personal(self) -> Path:
+        return self.home / ".claude" / "skills" / "grill-with-docs"
+
+    def test_a_clean_environment_raises_no_alarm(self) -> None:
+        self.assertEqual(self.detect(), [])
+
+    def test_a_personal_directory_with_a_published_name_is_a_shadow(self) -> None:
+        self.personal().mkdir()
+        found = self.detect()
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["skill"], "grill-with-docs")
+        self.assertEqual(found[0]["kind"], "directory")
+
+    def test_a_project_skill_with_a_published_name_is_a_shadow(self) -> None:
+        (self.root / ".claude" / "skills" / "grill-with-docs").mkdir()
+        self.assertEqual(len(self.detect()), 1)
+
+    def test_a_third_party_name_is_never_reported(self) -> None:
+        (self.home / ".claude" / "skills" / "something-else").mkdir()
+        self.assertEqual(self.detect(), [])
+
+    def test_a_symlink_shadow_reports_its_target(self) -> None:
+        target = self.home / ".agents" / "skills" / "grill-with-docs"
+        target.mkdir(parents=True)
+        try:
+            self.personal().symlink_to(target, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("symlinks unavailable on this platform")
+        found = [entry for entry in self.detect() if entry["kind"] == "symlink"]
+        self.assertEqual(len(found), 1)
+        self.assertEqual(Path(found[0]["target"]).name, "grill-with-docs")
+        self.assertFalse(found[0]["broken"])
+
+    def test_a_broken_symlink_still_occupies_the_name(self) -> None:
+        try:
+            self.personal().symlink_to(self.home / "gone", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("symlinks unavailable on this platform")
+        found = self.detect()
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0]["broken"])
+
+    def test_every_shadow_is_reported_not_only_the_first(self) -> None:
+        self.personal().mkdir()
+        (self.root / ".claude" / "skills" / "grill-with-docs").mkdir()
+        self.assertEqual(len(self.detect()), 2)
+
+    def test_a_missing_skills_directory_is_not_an_error(self) -> None:
+        MODULE.detect_shadowed_skills(Path(self.temporary.name) / "absent", {"HOME": str(self.home / "absent")})
+
+    def test_removal_takes_the_symlink_and_leaves_the_target(self) -> None:
+        target = self.home / ".agents" / "skills" / "grill-with-docs"
+        target.mkdir(parents=True)
+        (target / "SKILL.md").write_text("x", encoding="utf-8")
+        try:
+            self.personal().symlink_to(target, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("symlinks unavailable on this platform")
+        entry = next(e for e in self.detect() if e["kind"] == "symlink")
+        self.assertTrue(MODULE.remove_shadowed_skill(entry)["removed"])
+        self.assertFalse(self.personal().is_symlink())
+        self.assertTrue((target / "SKILL.md").is_file())
+
+    def test_removal_of_a_directory_shadow(self) -> None:
+        self.personal().mkdir()
+        (self.personal() / "SKILL.md").write_text("x", encoding="utf-8")
+        self.assertTrue(MODULE.remove_shadowed_skill(self.detect()[0])["removed"])
+        self.assertEqual(self.detect(), [])
+
+    def test_a_failed_removal_is_named_and_does_not_raise(self) -> None:
+        result = MODULE.remove_shadowed_skill({"skill": "grill-with-docs",
+                                               "path": str(self.home / "does-not-exist"), "kind": "directory"})
+        self.assertFalse(result["removed"])
+        self.assertIn("error", result)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1, argv=[sys.argv[0], *sys.argv[1:]])

@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.0
+
+- O preflight passa a detectar skill sombreada: um nome publicado pelo plugin que também exista como skill pessoal ou de projeto. Motivado por defeito observado em uso — um atalho em `~/.claude/skills` apontando para `~/.agents/skills` venceu a skill homônima do plugin, e o comando de sessão alcançou uma versão sem os subcomandos do protocolo. Nada avisava.
+- O relato nomeia cada sombra e seu caminho, e inclui o destino resolvido quando é atalho. Atalho quebrado conta como sombra, porque continua ocupando o nome; `exists()` é falso para ele e o esconderia.
+- Alcance restrito aos nomes que o próprio plugin publica. Varrer o ambiente atrás de duplicata qualquer produziria falso positivo e obrigaria a acompanhar o layout de skill de cada agente hospedeiro.
+- Por padrão apenas reporta, sem remover e sem bloquear. Recusar o preflight inteiro por causa de uma sombra esconderia o relatório de dependências que o operador foi buscar.
+- `--allow-install` autoriza a remoção, que remove **apenas** o atalho e preserva o destino: seguir o link destruiria uma skill que o operador talvez quisesse só renomear. Falha ao remover é reportada e não interrompe a inspeção.
+
 ## 3.0.0
 
 **Incompatível.** A criação de um work item passa a recusar onde antes prosseguia.

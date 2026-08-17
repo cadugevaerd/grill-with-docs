@@ -906,6 +906,317 @@
         "reason": "",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/review.md",
+            "sha256": "30f4e64a8a1bc6904546bf14f62e67809f4f475819281f425b6c36b9c8901caa"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/review.md",
+            "sha256": "30f4e64a8a1bc6904546bf14f62e67809f4f475819281f425b6c36b9c8901caa"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "previous_execution_branch": "feat/backlog-ssot",
+        "reason": "FASE-003 complete e mergeada em main; publicacao segue concentrada na FASE-005. Abrindo FASE-006, deteccao de skill sombreada.",
+        "state": "turned",
+        "step": "phase-turn"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          },
+          {
+            "path": "specs/018-shadowed-skill-detection/verify.md",
+            "sha256": "72814ab91610b82316f2456e472afbe98c1f5bd8f9189ae85fb2aa4af0e7fed6"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          },
+          {
+            "path": "specs/018-shadowed-skill-detection/verify.md",
+            "sha256": "72814ab91610b82316f2456e472afbe98c1f5bd8f9189ae85fb2aa4af0e7fed6"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          },
+          {
+            "path": "specs/018-shadowed-skill-detection/verify.md",
+            "sha256": "72814ab91610b82316f2456e472afbe98c1f5bd8f9189ae85fb2aa4af0e7fed6"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          },
+          {
+            "path": "specs/018-shadowed-skill-detection/verify.md",
+            "sha256": "72814ab91610b82316f2456e472afbe98c1f5bd8f9189ae85fb2aa4af0e7fed6"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          },
+          {
+            "path": "specs/018-shadowed-skill-detection/verify.md",
+            "sha256": "72814ab91610b82316f2456e472afbe98c1f5bd8f9189ae85fb2aa4af0e7fed6"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          },
+          {
+            "path": "specs/018-shadowed-skill-detection/verify.md",
+            "sha256": "72814ab91610b82316f2456e472afbe98c1f5bd8f9189ae85fb2aa4af0e7fed6"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          },
+          {
+            "path": "specs/018-shadowed-skill-detection/verify.md",
+            "sha256": "72814ab91610b82316f2456e472afbe98c1f5bd8f9189ae85fb2aa4af0e7fed6"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          },
+          {
+            "path": "specs/018-shadowed-skill-detection/verify.md",
+            "sha256": "72814ab91610b82316f2456e472afbe98c1f5bd8f9189ae85fb2aa4af0e7fed6"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          },
+          {
+            "path": "specs/018-shadowed-skill-detection/verify.md",
+            "sha256": "72814ab91610b82316f2456e472afbe98c1f5bd8f9189ae85fb2aa4af0e7fed6"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/018-shadowed-skill-detection/spec.md",
+            "sha256": "375a594e4076902d58906dd95fe354e57b55e029ee8ad87d455ad156444686d0"
+          },
+          {
+            "path": "specs/018-shadowed-skill-detection/verify.md",
+            "sha256": "72814ab91610b82316f2456e472afbe98c1f5bd8f9189ae85fb2aa4af0e7fed6"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "review"
       }
     ],
     "current_step": "ship",
