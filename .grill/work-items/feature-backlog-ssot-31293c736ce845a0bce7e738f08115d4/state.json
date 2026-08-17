@@ -319,10 +319,38 @@
         "reason": "FASE-001 complete e mergeada em main como 68adb0d; publicacao adiada para a FASE-005 por decisao do operador. Abrindo FASE-002, projecao versionada e deterministica.",
         "state": "turned",
         "step": "phase-turn"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/spec.md",
+            "sha256": "8747277679a9aa77b72b20cd9431b57cbe346300d6f199bb36eae002e5bef922"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/spec.md",
+            "sha256": "8747277679a9aa77b72b20cd9431b57cbe346300d6f199bb36eae002e5bef922"
+          },
+          {
+            "path": "specs/016-decision-projection/checklists/requirements.md",
+            "sha256": "eaa7d2f0e36aa9b2959ea29b59d2f07f215920a6c863f5e9bc15204f7d14d8dd"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
       }
     ],
-    "current_step": "specify",
-    "execution_branch": null,
+    "current_step": "plan",
+    "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -346,7 +374,7 @@
       "plan": "pending",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
+      "specify": "complete",
       "tasks": "pending",
       "verify": "pending"
     }
