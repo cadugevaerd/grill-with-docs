@@ -484,6 +484,29 @@ class Reconciliation(unittest.TestCase):
         entry = payload["items"][0]
         self.assertEqual((entry["state"], entry["target"]), ("superseded", "cancelled"))
 
+    def test_a_failure_mid_apply_keeps_the_record_of_what_landed(self) -> None:
+        # No transaction spans successive calls. A bare refusal would assert
+        # nothing happened while earlier items had already been created.
+        self.backlog("## BL-0001 — A\n- state: open\n\n## BL-0002 — B\n- state: open\n")
+        tools = self.bound([])
+        seen: list[int] = []
+        original = tools.run
+
+        def fail_on_second(argv, **kwargs):
+            if argv[2:4] == [CLI, "x"]:
+                return original(argv, **kwargs)
+            if argv[2:4] == ["item", "add"]:
+                seen.append(1)
+                if len(seen) == 2:
+                    return 1, json.dumps({"result": "error", "error": "store went away"})
+            return original(argv, **kwargs)
+
+        tools.run = fail_on_second
+        payload = self.sync(tools, apply=True)
+        self.assertEqual(payload["verdict"], "BLOCKED")
+        self.assertTrue(payload["changed"])
+        self.assertEqual([entry["status"] for entry in payload["items"]], ["APPLIED", "FAILED"])
+
     def test_the_description_never_freezes_a_state_the_item_owns(self) -> None:
         # The item's status is the authority. Copying state into free text
         # would leave the description asserting open on an item already done,

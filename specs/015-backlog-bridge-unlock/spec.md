@@ -86,6 +86,7 @@ Um operador roda o espelho duas vezes, por engano ou porque um passo anterior fa
 - **FR-012**: A cobertura automatizada MUST exercitar todos os caminhos acima sem exigir o backlog real instalado.
 - **FR-013**: Quando o estado desejado não for alcançável a partir do estado atual do item, o sistema MUST relatar a decisão como reconciliação recusada, sem tentar a transição e sem alterar o item.
 - **FR-014**: O sistema MUST calcular o conjunto completo de propostas antes de emitir qualquer mutação, de modo que toda recusa de pré-condição ocorra com o backlog intacto.
+- **FR-016**: Quando uma mutação falhar no meio da aplicação, o sistema MUST parar de escrever e MUST devolver, junto da recusa, o registro do que já foi aplicado e do que ficou por aplicar. Uma recusa sem esse registro afirmaria que nada aconteceu.
 - **FR-015**: Quando o estado declarado de uma decisão não pertencer ao vocabulário conhecido, o sistema MUST recusar de forma nomeada, sem criar nem transicionar item, e MUST nomear o valor ofensor. Presumir um estado padrão relataria decisão resolvida como em curso.
 
 ### Key Entities

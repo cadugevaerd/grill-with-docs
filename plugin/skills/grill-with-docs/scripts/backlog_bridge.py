@@ -280,12 +280,30 @@ def sync_items(root: Path, work_item: Path, work_id: str, *, apply: bool = False
             proposals.append({**shared, "action": "none", "status": "TRANSITION-REFUSED",
                               "item_id": found.get("id"), "current": current})
     changed = False
+    failure: str | None = None
     if apply:
         for proposal in proposals:
             if proposal.get("action") not in {"create", "transition"}:
                 continue
-            proposal["item"] = call(cli, tools, store, proposal["argv"]).get("data")
-            changed = True
+            if failure is not None:
+                # Something already broke. Stop writing, but keep the entry in
+                # the report so the operator sees what was left undone.
+                proposal["status"] = "SKIPPED"
+                continue
+            try:
+                proposal["item"] = call(cli, tools, store, proposal["argv"]).get("data")
+                changed = True
+            except BacklogUnavailable as error:
+                # There is no transaction across successive calls. Reporting a
+                # bare failure would assert that nothing happened while earlier
+                # items had already landed, so the partial record travels with
+                # the refusal.
+                proposal["status"] = "FAILED"
+                proposal["detail"] = str(error)
+                failure = str(error)
+    if failure is not None:
+        return {"schema": SCHEMA, "db": store, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE",
+                "detail": failure, "backlog": resolution, "changed": changed, "items": proposals}
     return {"schema": SCHEMA, "db": store, "verdict": "APPLIED" if changed else "PREVIEW",
             "backlog": resolution, "changed": changed, "items": proposals}
 
