@@ -9,6 +9,7 @@ requires.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import re
@@ -28,6 +29,9 @@ DEFAULT_STATE = "open"
 # ``open -> done`` is not a legal transition, so an item created ``open`` could
 # never reach ``done`` in one step and would force a fabricated intermediate.
 STATE_TARGET = {"open": "in_progress", "resolved": "done", "superseded": "cancelled"}
+# Inverse of STATE_TARGET, for rebuilding the decision record from the items.
+ITEM_STATE_TO_DECISION = {value: key for key, value in STATE_TARGET.items()}
+PROJECTION_FORMAT = "grill-projection/v1"
 # Measured exhaustively against backlogctl 2.4.0; the bridge never emits a
 # destination outside this table.
 LEGAL_TRANSITIONS = {
@@ -37,7 +41,6 @@ LEGAL_TRANSITIONS = {
     "cancelled": {"open", "cancelled"},
     "merged": {"merged"},
 }
-BLOCK = re.compile(r"(?m)^##\s+(BL-\d{4})\s+—\s+(.+?)\s*$")
 WORK_ID_MARKER = "grill-work-id"
 BL_MARKER = "grill-bl"
 
@@ -168,13 +171,15 @@ def parse_deferred(path: Path) -> list[dict[str, str]]:
     if not path.is_file():
         return []
     audit = sibling("audit_decisions")
-    text = path.read_text(encoding="utf-8")
-    matches = list(BLOCK.finditer(text))
     entries: list[dict[str, str]] = []
-    for index, match in enumerate(matches):
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        values = audit.fields(text[match.end():end])
-        entries.append({"id": match.group(1), "title": match.group(2), **values})
+    # One parser, not two. A private regex here used to demand four digits, an
+    # em dash and a title, while the auditor accepted three digits, any
+    # separator and no title at all. A decision written with a plain hyphen was
+    # therefore audited — and could block the phase — while being invisible to
+    # the mirror. Reusing split_blocks makes that divergence unrepresentable.
+    for bl_id, block in audit.split_blocks(path.read_text(encoding="utf-8"), "BL"):
+        head, _, rest = block.partition("\n")
+        entries.append({"id": bl_id, "title": head.strip(" \t—–-:"), **audit.fields(rest)})
     return entries
 
 
@@ -306,6 +311,187 @@ def sync_items(root: Path, work_item: Path, work_id: str, *, apply: bool = False
                 "detail": failure, "backlog": resolution, "changed": changed, "items": proposals}
     return {"schema": SCHEMA, "db": store, "verdict": "APPLIED" if changed else "PREVIEW",
             "backlog": resolution, "changed": changed, "items": proposals}
+
+
+PROJECTION_HEADER = "<!-- grill-projection:{format} mark={mark} -->"
+PROJECTION_MARK = re.compile(r"(?m)^<!--\s*grill-projection:(\S+)\s+mark=([0-9a-f]{64})\s*-->\s*$")
+AUDIT_FIELDS = ("state", "phase", "owner", "evidence-needed", "next-action")
+
+
+def decision_from_item(item: dict[str, Any]) -> dict[str, Any]:
+    """Rebuild one decision record from the item that owns it.
+
+    ``state`` comes from the item status, never from the description: the
+    description deliberately stopped carrying it, because the status is the
+    authority and a copy in free text could only drift.
+    """
+    description = item.get("description") or ""
+    body, _, _ = description.partition("\n---\n")
+    audit = sibling("audit_decisions")
+    values = {key: value for key, value in audit.fields(body).items() if key != "state"}
+    status = item.get("status") or ""
+    return {"state": ITEM_STATE_TO_DECISION.get(status), "item_status": status, **values}
+
+
+def render_projection(work_id: str, decisions: list[tuple[str, str, dict[str, Any]]], mark: str) -> str:
+    """Render the record deterministically.
+
+    Ordered by decision id and never by the order the authority answered, and
+    free of clock, absolute path or dictionary order, because the record is
+    versioned and reconcile requires the second run to be a byte-identical
+    no-op.
+    """
+    lines = [PROJECTION_HEADER.format(format=PROJECTION_FORMAT, mark=mark), "# DECISION-BACKLOG", ""]
+    lines.append(f"<!-- Gerado a partir do backlog operacional para {work_id}. Nao edite a mao. -->")
+    lines.append("")
+    for bl_id, title, values in sorted(decisions, key=lambda entry: entry[0]):
+        lines.append(f"## {bl_id} — {title}" if title else f"## {bl_id}")
+        for key in AUDIT_FIELDS:
+            if values.get(key):
+                lines.append(f"- {key}: {values[key]}")
+        for key in sorted(values):
+            if key not in AUDIT_FIELDS and key not in {"item_status"} and values[key]:
+                lines.append(f"- {key}: {values[key]}")
+        lines.append("")
+    lines.append("> Estados: `open | resolved | superseded`. Este arquivo e projecao do backlog"
+                 " operacional; para altera-lo, mude a decisao la e regenere.")
+    return "\n".join(lines) + "\n"
+
+
+def authority_slice(root: Path, work_id: str, cli: str, tools: Any, store: str,
+                    code: str) -> list[tuple[str, str, dict[str, Any]]]:
+    """Collect only the decisions of this work item, from the authority."""
+    existing = call(cli, tools, store, ["item", "list", "--code", code]).get("data") or []
+    slice_: list[tuple[str, str, dict[str, Any]]] = []
+    for key, item in index_existing(existing).items():
+        if key[0] != work_id:
+            continue
+        title = str(item.get("title") or "")
+        _, _, tail = title.partition("—")
+        slice_.append((key[1], tail.strip() or title.strip(), decision_from_item(item)))
+    return slice_
+
+
+def authority_mark(decisions: list[tuple[str, str, dict[str, Any]]]) -> str:
+    """Fingerprint the slice, and nothing outside it.
+
+    The backlog's own ``revision`` counter is unusable here: it advances on any
+    change to any item of a store shared by several repositories, so a mark
+    derived from it would report drift for work that never moved.
+    """
+    canonical = json.dumps(sorted(
+        [bl_id, title, {key: value for key, value in values.items() if key != "item_status"}]
+        for bl_id, title, values in decisions
+    ), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_mark(path: Path) -> tuple[str | None, str | None]:
+    if not path.is_file():
+        return None, None
+    match = PROJECTION_MARK.search(path.read_text(encoding="utf-8"))
+    return (match.group(1), match.group(2)) if match else (None, None)
+
+
+def compare_projection(path: Path, decisions: list[tuple[str, str, dict[str, Any]]],
+                       mark: str, rendered: str) -> list[dict[str, str]]:
+    """Name every divergence; never repair one."""
+    divergences: list[dict[str, str]] = []
+    fmt, recorded = read_mark(path)
+    if recorded is None:
+        divergences.append({"id": "-", "type": "MARK-ABSENT", "detail": "registro sem marca de origem"})
+    elif fmt != PROJECTION_FORMAT:
+        divergences.append({"id": "-", "type": "FORMAT-OLDER", "detail": f"gerado no formato {fmt}"})
+    elif recorded != mark:
+        divergences.append({"id": "-", "type": "MARK-DIVERGED", "detail": "marca nao corresponde a fatia atual"})
+    for bl_id, _, values in decisions:
+        if values.get("state") is None:
+            divergences.append({"id": bl_id, "type": "STATE-UNMAPPED",
+                                "detail": f"item em {values.get('item_status') or 'sem estado'}"})
+    current = parse_deferred(path)
+    on_disk = {entry["id"] for entry in current}
+    in_authority = {bl_id for bl_id, _, _ in decisions}
+    for bl_id in sorted(in_authority - on_disk):
+        divergences.append({"id": bl_id, "type": "MISSING-IN-PROJECTION", "detail": "presente na autoridade"})
+    for bl_id in sorted(on_disk - in_authority):
+        divergences.append({"id": bl_id, "type": "MISSING-IN-AUTHORITY", "detail": "presente no registro"})
+    by_id = {entry["id"]: entry for entry in current}
+    for bl_id, _, values in decisions:
+        found = by_id.get(bl_id)
+        if found is not None and values.get("state") and found.get("state") != values["state"]:
+            divergences.append({"id": bl_id, "type": "STATE-DIVERGED",
+                                "detail": f"registro {found.get('state')}, autoridade {values['state']}"})
+    if not divergences and path.is_file() and path.read_text(encoding="utf-8") != rendered:
+        # Same decisions, same states, same mark, different bytes: the file was
+        # edited by hand. A single character is enough to land here.
+        divergences.append({"id": "-", "type": "CONTENT-DIVERGED", "detail": "conteudo difere do gerado"})
+    return divergences
+
+
+def project(root: Path, work_item: Path, work_id: str, *, apply: bool = False,
+            db: str | None = None, tools: Any = None) -> dict[str, Any]:
+    store = store_path(db)
+    cli, tools = resolve_cli(tools)
+    resolution = resolve_backlog(root, cli, tools, store)
+    if resolution["status"] != "BOUND":
+        return {"schema": PROJECTION_FORMAT, "db": store, "work_id": work_id, "verdict": "BLOCKED",
+                "code": "BACKLOG-NOT-BOUND", "backlog": resolution, "changed": False}
+    decisions = authority_slice(root, work_id, cli, tools, store, resolution["code"])
+    mark = authority_mark(decisions)
+    rendered = render_projection(work_id, decisions, mark)
+    path = work_item / "DECISION-BACKLOG.md"
+    identical = path.is_file() and path.read_text(encoding="utf-8") == rendered
+    payload = {"schema": PROJECTION_FORMAT, "db": store, "work_id": work_id, "mark": mark,
+               "entries": len(decisions), "changed": False,
+               "verdict": "REUSED" if (apply and identical) else "PREVIEW"}
+    if apply and not identical:
+        atomic_projection_write(path, rendered)
+        declare_projected(work_item)
+        payload["changed"] = True
+        payload["verdict"] = "APPLIED"
+    return payload
+
+
+def declare_projected(work_item: Path) -> None:
+    """Record that this bundle's record is generated, not authored.
+
+    The audit demands the origin mark only for bundles that declare this.
+    Requiring it unconditionally would fail every bundle written before the
+    migration exists, which is a later phase.
+    """
+    path = work_item / "state.json"
+    if not path.is_file():
+        return
+    state = json.loads(path.read_text(encoding="utf-8"))
+    if state.get("decision_backlog_mode") == "projected":
+        return
+    state["decision_backlog_mode"] = "projected"
+    staging = path.with_name(f".{path.name}.staging")
+    staging.write_text(json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    staging.replace(path)
+
+
+def atomic_projection_write(path: Path, content: str) -> None:
+    """Staging plus rename, so an interruption never leaves a partial record."""
+    staging = path.with_name(f".{path.name}.staging")
+    staging.write_text(content, encoding="utf-8")
+    staging.replace(path)
+
+
+def verify(root: Path, work_item: Path, work_id: str, *, db: str | None = None,
+           tools: Any = None) -> dict[str, Any]:
+    store = store_path(db)
+    cli, tools = resolve_cli(tools)
+    resolution = resolve_backlog(root, cli, tools, store)
+    if resolution["status"] != "BOUND":
+        return {"schema": PROJECTION_FORMAT, "db": store, "work_id": work_id, "verdict": "BLOCKED",
+                "code": "BACKLOG-NOT-BOUND", "backlog": resolution}
+    decisions = authority_slice(root, work_id, cli, tools, store, resolution["code"])
+    mark = authority_mark(decisions)
+    rendered = render_projection(work_id, decisions, mark)
+    divergences = compare_projection(work_item / "DECISION-BACKLOG.md", decisions, mark, rendered)
+    return {"schema": PROJECTION_FORMAT, "db": store, "work_id": work_id,
+            "verdict": "DIVERGED" if divergences else "FRESH", "divergences": divergences}
 
 
 def main(argv: list[str] | None = None) -> int:

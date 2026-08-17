@@ -288,6 +288,313 @@
         "reason": "",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/review.md",
+            "sha256": "f831761bed921a5cacd75628d15f8bca5db76a7e29bb59230d894f655c7973e0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/ship.md",
+            "sha256": "80ff86cb558f573e137ec78c745e6ea7b6b62720aa9252b8d63c6d01488077a9"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "previous_execution_branch": "feat/backlog-ssot",
+        "reason": "FASE-001 complete e mergeada em main como 68adb0d; publicacao adiada para a FASE-005 por decisao do operador. Abrindo FASE-002, projecao versionada e deterministica.",
+        "state": "turned",
+        "step": "phase-turn"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/spec.md",
+            "sha256": "8747277679a9aa77b72b20cd9431b57cbe346300d6f199bb36eae002e5bef922"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/spec.md",
+            "sha256": "8747277679a9aa77b72b20cd9431b57cbe346300d6f199bb36eae002e5bef922"
+          },
+          {
+            "path": "specs/016-decision-projection/checklists/requirements.md",
+            "sha256": "eaa7d2f0e36aa9b2959ea29b59d2f07f215920a6c863f5e9bc15204f7d14d8dd"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/plan.md",
+            "sha256": "914f20ee430d9cbda32e97f55e8d6296c56dd2fc80c5e3cfa981dd3ede335d80"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/plan.md",
+            "sha256": "914f20ee430d9cbda32e97f55e8d6296c56dd2fc80c5e3cfa981dd3ede335d80"
+          },
+          {
+            "path": "specs/016-decision-projection/research.md",
+            "sha256": "d1869e73b553c82940e3126eac8732625cd802bd0c9e6056c076d1c2b1597ecc"
+          },
+          {
+            "path": "specs/016-decision-projection/data-model.md",
+            "sha256": "d0548d0c05c5805fcaa82bc5f8306cf6080a661020aaae3a88715709682f8683"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "07485f2d02c78f9b36964f4d0b7807e7c4bf20a6d2426e9a971e1d937a303252"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "07485f2d02c78f9b36964f4d0b7807e7c4bf20a6d2426e9a971e1d937a303252"
+          },
+          {
+            "path": "specs/016-decision-projection/checklists/projection.md",
+            "sha256": "051d304f15cfc2717e688e96bc713f9000516cbcaf840d0800518c207801158d"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "07485f2d02c78f9b36964f4d0b7807e7c4bf20a6d2426e9a971e1d937a303252"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "07485f2d02c78f9b36964f4d0b7807e7c4bf20a6d2426e9a971e1d937a303252"
+          },
+          {
+            "path": "specs/016-decision-projection/checklists/projection.md",
+            "sha256": "051d304f15cfc2717e688e96bc713f9000516cbcaf840d0800518c207801158d"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "2f00934e51555d08f9ec01e9810c22265d448773b1a0498f4c10f1d4db406bd5"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "2f00934e51555d08f9ec01e9810c22265d448773b1a0498f4c10f1d4db406bd5"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/agent-assignments.yml",
+            "sha256": "a878165dcde93908592f70fba555ba9b0d41962730f3035d86cccacaf71b277c"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/agent-assignments.yml",
+            "sha256": "a878165dcde93908592f70fba555ba9b0d41962730f3035d86cccacaf71b277c"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "f974821ff7029fc9c7234fcc457c106f5032f23cbb12bf2950752fb99df14d2d"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/tasks.md",
+            "sha256": "f974821ff7029fc9c7234fcc457c106f5032f23cbb12bf2950752fb99df14d2d"
+          },
+          {
+            "path": "tests/validate_backlog_contract.py",
+            "sha256": "b1b7d25c6ee0d33cf472d720fa550c86e9cb2fe3179f6473938062fe168ad905"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          },
+          {
+            "path": "specs/016-decision-projection/review.md",
+            "sha256": "e6e05cd958615971a2f52de606e4bec7eda4e86be1ff16846035ef31e9f06ee7"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          },
+          {
+            "path": "specs/016-decision-projection/review.md",
+            "sha256": "e6e05cd958615971a2f52de606e4bec7eda4e86be1ff16846035ef31e9f06ee7"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          },
+          {
+            "path": "specs/016-decision-projection/review.md",
+            "sha256": "e6e05cd958615971a2f52de606e4bec7eda4e86be1ff16846035ef31e9f06ee7"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "review"
       }
     ],
     "current_step": "ship",

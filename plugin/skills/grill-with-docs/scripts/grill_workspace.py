@@ -1158,6 +1158,34 @@ def backlog_sync_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]
     return payload, EXIT_OK if payload.get("verdict") in {"PREVIEW", "APPLIED"} else EXIT_BLOCKED
 
 
+def _projection_command(args: argparse.Namespace, operation: str) -> tuple[dict[str, Any], int]:
+    """Shared entry for project and verify: same gates, different verb."""
+    root = project_root(args.root)
+    item = root / ".grill" / "work-items" / args.work_id
+    bundle = read_local_bundle(root, item)
+    validate_metadata(bundle.metadata, args.work_id)
+    bridge = sibling("backlog_bridge")
+    try:
+        if operation == "project":
+            payload = bridge.project(root, item, args.work_id, apply=args.apply, db=args.db)
+        else:
+            payload = bridge.verify(root, item, args.work_id, db=args.db)
+    except bridge.BacklogUnavailable as error:
+        return {"schema": bridge.PROJECTION_FORMAT, "db": bridge.store_path(args.db),
+                "work_id": args.work_id, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE",
+                "detail": str(error)}, EXIT_BLOCKED
+    ok = payload.get("verdict") in {"PREVIEW", "APPLIED", "REUSED", "FRESH"}
+    return payload, EXIT_OK if ok else EXIT_NO_GO if payload.get("verdict") == "DIVERGED" else EXIT_BLOCKED
+
+
+def backlog_project_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    return _projection_command(args, "project")
+
+
+def backlog_verify_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    return _projection_command(args, "verify")
+
+
 def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     if args.type not in KINDS or not SLUG_RE.fullmatch(args.slug):
@@ -2902,6 +2930,15 @@ def build_parser() -> JsonParser:
     backlog_parser.add_argument("--work-id", required=True)
     backlog_parser.add_argument("--apply", action="store_true")
     backlog_parser.add_argument("--db")
+    project_parser = subparsers.add_parser("backlog-project")
+    project_parser.add_argument("root")
+    project_parser.add_argument("--work-id", required=True)
+    project_parser.add_argument("--apply", action="store_true")
+    project_parser.add_argument("--db")
+    verify_parser = subparsers.add_parser("backlog-verify")
+    verify_parser.add_argument("root")
+    verify_parser.add_argument("--work-id", required=True)
+    verify_parser.add_argument("--db")
     audit_parser = subparsers.add_parser("audit")
     audit_parser.add_argument("root")
     audit_parser.add_argument("--work-id")
@@ -3076,6 +3113,8 @@ def main(argv: list[str] | None = None) -> int:
             "status": status_command,
             "preflight": preflight_command,
             "backlog-sync": backlog_sync_command,
+            "backlog-project": backlog_project_command,
+            "backlog-verify": backlog_verify_command,
         }
         payload, exit_code = handlers[args.command](args)
     except CliFailure as failure:

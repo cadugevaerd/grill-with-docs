@@ -3,7 +3,7 @@
 - execution-order: FASE-001, FASE-002, FASE-003, FASE-006, FASE-004, FASE-005
 
 ## FASE-001 — Destravar a ponte com o backlog operacional
-- state: ready-for-specify
+- state: complete
 - objetivo: A ponte opera sobre um bundle real, espelha decisão em qualquer estado e nunca duplica item ao reexecutar
 - scope-in: Gate de integridade do sync, remoção do filtro open-only, mapa de estados conforme a FSM medida, deduplicação por (work_id, BL)
 - scope-out: Geração da projeção, pré-requisito fail-closed, migração
@@ -15,7 +15,7 @@
 - delivery-units: DU-001
 
 ## FASE-002 — Projeção versionada e determinística
-- state: planned
+- state: complete
 - objetivo: DECISION-BACKLOG.md passa a ser gerado, byte-idêntico em reexecução, e a auditoria o valida sem processo externo
 - scope-in: Geração canônica, fingerprint da autoridade, comando explícito de verificação de frescor, auditoria offline
 - scope-out: Consulta à autoridade dentro do gate de auditoria
@@ -27,7 +27,7 @@
 - delivery-units: DU-002
 
 ## FASE-003 — Pré-requisito fail-closed
-- state: planned
+- state: ready-for-specify
 - objetivo: O backlog operacional vira exigência declarada e o init recusa sem vínculo
 - scope-in: backlogctl como dependência exigida, bind no init, saída --skip-backlog carimbada no bundle
 - scope-out: Remoção da saída explícita, alteração da matriz de CI

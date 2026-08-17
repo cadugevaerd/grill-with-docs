@@ -560,6 +560,301 @@ class Reconciliation(unittest.TestCase):
         self.assertEqual(tools.mutations(), [])
 
 
+AUDIT = PLUGIN / "skills/grill-with-docs/scripts/audit_decisions.py"
+
+
+def load_audit():
+    name = "audit_decisions_backlog_contract"
+    spec = importlib.util.spec_from_file_location(name, AUDIT)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class ParserAgreement(unittest.TestCase):
+    """T002 — one parser, so the two readers cannot disagree."""
+
+    HEADERS = {
+        "em dash": "## BL-0001 — Titulo\n- state: open\n",
+        "ascii hyphen": "## BL-0001 - Titulo\n- state: open\n",
+        "en dash": "## BL-0001 – Titulo\n- state: open\n",
+        "three digits": "## BL-001 — Titulo\n- state: open\n",
+        "no title": "## BL-0001\n- state: open\n",
+    }
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.path = Path(self.temporary.name) / "DECISION-BACKLOG.md"
+        self.audit = load_audit()
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_both_readers_see_the_same_blocks(self) -> None:
+        # A decision written with a plain hyphen used to be audited — and could
+        # block the phase — while being invisible to the mirror.
+        for name, text in self.HEADERS.items():
+            with self.subTest(name):
+                self.path.write_text(text, encoding="utf-8")
+                self.assertEqual(len(MODULE.parse_deferred(self.path)),
+                                 len(self.audit.split_blocks(text, "BL")), name)
+
+    def test_the_title_survives_every_separator(self) -> None:
+        for name in ("em dash", "ascii hyphen", "en dash", "three digits"):
+            with self.subTest(name):
+                self.path.write_text(self.HEADERS[name], encoding="utf-8")
+                self.assertEqual(MODULE.parse_deferred(self.path)[0]["title"], "Titulo", name)
+
+    def test_a_missing_title_is_empty_not_a_skipped_block(self) -> None:
+        self.path.write_text(self.HEADERS["no title"], encoding="utf-8")
+        entries = MODULE.parse_deferred(self.path)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["title"], "")
+
+
+class InverseStates(unittest.TestCase):
+    """T004 — the way back from item status to decision state."""
+
+    def test_the_inverse_covers_every_state_the_bridge_emits(self) -> None:
+        self.assertEqual(MODULE.ITEM_STATE_TO_DECISION,
+                         {"in_progress": "open", "done": "resolved", "cancelled": "superseded"})
+
+    def test_the_two_maps_round_trip(self) -> None:
+        for decision, item_state in MODULE.STATE_TARGET.items():
+            self.assertEqual(MODULE.ITEM_STATE_TO_DECISION[item_state], decision)
+
+    def test_a_state_the_bridge_never_emits_has_no_translation(self) -> None:
+        # FR-016: report, never approximate.
+        for orphan in ("open", "merged"):
+            self.assertIsNone(MODULE.ITEM_STATE_TO_DECISION.get(orphan), orphan)
+
+
+class Projection(unittest.TestCase):
+    """T005-T009, T014-T017, T023, T024 — generation, mark and verification."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.item = self.root / "item"
+        self.item.mkdir()
+        self.original = MODULE.resolve_cli
+
+    def tearDown(self) -> None:
+        MODULE.resolve_cli = self.original
+        self.temporary.cleanup()
+
+    def linked(self, work_id, bl_id, status="in_progress", title=None, extra=""):
+        body = f"- phase: FASE-001\n- owner: alguem\n- evidence-needed: e\n- next-action: n{extra}"
+        return {"id": f"AAA-{bl_id[-1]}", "status": status,
+                "title": title or f"{bl_id} — Titulo de {bl_id}",
+                "description": f"{body}\n\n---\n{MODULE.WORK_ID_MARKER}: {work_id}\n{MODULE.BL_MARKER}: {bl_id}\n"}
+
+    def bound(self, items):
+        tools = StubToolchain({
+            ("backlog", "list"): (0, envelope([{"code": "AAA", "name": "n", "bound_path": str(self.root)}])),
+            ("item", "list"): (0, envelope(items)),
+        })
+        MODULE.resolve_cli = lambda given=None: (CLI, tools)
+        return tools
+
+    def projection(self):
+        return (self.item / "DECISION-BACKLOG.md").read_text(encoding="utf-8")
+
+    def test_two_generations_are_byte_identical(self) -> None:
+        self.bound([self.linked("w", "BL-0001"), self.linked("w", "BL-0002", status="done")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        first = self.projection()
+        payload = MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual(self.projection(), first)
+        self.assertEqual(payload["verdict"], "REUSED")
+        self.assertFalse(payload["changed"])
+
+    def test_the_answer_order_does_not_reach_the_file(self) -> None:
+        items = [self.linked("w", "BL-0001"), self.linked("w", "BL-0002", status="done")]
+        self.bound(items)
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        forward = self.projection()
+        self.bound(list(reversed(items)))
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual(self.projection(), forward)
+
+    def test_the_record_carries_what_the_auditor_requires(self) -> None:
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        text = self.projection()
+        for required in ("- state: open", "- phase: FASE-001", "- owner:", "- evidence-needed:", "- next-action:"):
+            self.assertIn(required, text, required)
+        self.assertEqual(len(load_audit().split_blocks(text, "BL")), 1)
+
+    def test_item_status_decides_the_decision_state(self) -> None:
+        self.bound([self.linked("w", "BL-0001", status="done")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        self.assertIn("- state: resolved", self.projection())
+
+    def test_only_this_work_item_reaches_the_record_and_the_mark(self) -> None:
+        mine = [self.linked("w", "BL-0001")]
+        self.bound(mine)
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        alone, alone_text = MODULE.authority_mark([]), self.projection()
+        self.bound(mine + [self.linked("other", "BL-0009", status="done")])
+        payload = MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual(self.projection(), alone_text)
+        self.assertEqual(payload["verdict"], "REUSED")
+        self.assertNotIn("BL-0009", self.projection())
+        del alone
+
+    def test_preview_writes_nothing(self) -> None:
+        self.bound([self.linked("w", "BL-0001")])
+        payload = MODULE.project(self.root, self.item, "w", apply=False, db=DB)
+        self.assertEqual(payload["verdict"], "PREVIEW")
+        self.assertFalse((self.item / "DECISION-BACKLOG.md").exists())
+
+    def test_an_empty_work_item_still_produces_a_valid_record(self) -> None:
+        self.bound([])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        self.assertIn("# DECISION-BACKLOG", self.projection())
+        self.assertEqual(MODULE.parse_deferred(self.item / "DECISION-BACKLOG.md"), [])
+
+    def test_the_write_leaves_no_staging_file_behind(self) -> None:
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        leftovers = [p.name for p in self.item.iterdir() if p.name.startswith(".")]
+        self.assertEqual(leftovers, [])
+
+    def test_a_fresh_record_verifies_clean(self) -> None:
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual(MODULE.verify(self.root, self.item, "w", db=DB)["verdict"], "FRESH")
+
+    def test_a_state_change_in_the_authority_is_named(self) -> None:
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        self.bound([self.linked("w", "BL-0001", status="done")])
+        payload = MODULE.verify(self.root, self.item, "w", db=DB)
+        self.assertEqual(payload["verdict"], "DIVERGED")
+        self.assertIn("STATE-DIVERGED", [d["type"] for d in payload["divergences"]])
+        self.assertIn("BL-0001", [d["id"] for d in payload["divergences"]])
+
+    def test_a_decision_only_in_the_authority_is_named(self) -> None:
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        self.bound([self.linked("w", "BL-0001"), self.linked("w", "BL-0002")])
+        payload = MODULE.verify(self.root, self.item, "w", db=DB)
+        types = {(d["id"], d["type"]) for d in payload["divergences"]}
+        self.assertIn(("BL-0002", "MISSING-IN-PROJECTION"), types)
+
+    def test_a_single_character_edit_is_detected(self) -> None:
+        # FR-017 and SC-009: the file stays versioned and therefore editable;
+        # "unsupported" has to mean detectable.
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        path = self.item / "DECISION-BACKLOG.md"
+        path.write_text(self.projection().replace("- owner: alguem", "- owner: alguen"), encoding="utf-8")
+        payload = MODULE.verify(self.root, self.item, "w", db=DB)
+        self.assertEqual(payload["verdict"], "DIVERGED")
+
+    def test_a_record_without_a_mark_is_named(self) -> None:
+        (self.item / "DECISION-BACKLOG.md").write_text("# DECISION-BACKLOG\n\n## BL-0001 — x\n- state: open\n",
+                                                       encoding="utf-8")
+        self.bound([self.linked("w", "BL-0001")])
+        payload = MODULE.verify(self.root, self.item, "w", db=DB)
+        self.assertIn("MARK-ABSENT", [d["type"] for d in payload["divergences"]])
+
+    def test_an_unmapped_item_state_is_named_not_approximated(self) -> None:
+        self.bound([self.linked("w", "BL-0001", status="merged")])
+        payload = MODULE.verify(self.root, self.item, "w", db=DB)
+        self.assertIn("STATE-UNMAPPED", [d["type"] for d in payload["divergences"]])
+
+    def audit_findings(self, mode: str | None, text: str) -> list[str]:
+        state = {"decision_backlog_mode": mode} if mode else {}
+        (self.item / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        (self.item / "DECISION-BACKLOG.md").write_text(text, encoding="utf-8")
+        audit = load_audit()
+        findings: list[str] = []
+        path = audit.managed_path(self.item, "state.json", "state", findings)
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        projected = loaded.get("decision_backlog_mode") == "projected"
+        if projected and not audit.PROJECTION_MARK.search(text):
+            findings.append("DECISION-BACKLOG: PROJECTION-UNMARKED")
+        return findings
+
+    def test_an_unmarked_record_passes_while_the_bundle_is_legacy(self) -> None:
+        # Demanding the mark unconditionally would fail every bundle written
+        # before the migration exists, which is a later phase.
+        self.assertEqual(self.audit_findings(None, "## BL-0001 — x\n- state: open\n"), [])
+
+    def test_an_unmarked_record_fails_once_the_bundle_declares_itself_projected(self) -> None:
+        findings = self.audit_findings("projected", "## BL-0001 — x\n- state: open\n")
+        self.assertIn("DECISION-BACKLOG: PROJECTION-UNMARKED", findings)
+
+    def test_applying_the_projection_declares_the_mode(self) -> None:
+        (self.item / "state.json").write_text(json.dumps({"status": "in-progress"}), encoding="utf-8")
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        state = json.loads((self.item / "state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["decision_backlog_mode"], "projected")
+        self.assertEqual(state["status"], "in-progress")
+
+    def test_a_marked_record_satisfies_the_declared_mode(self) -> None:
+        (self.item / "state.json").write_text(json.dumps({}), encoding="utf-8")
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        self.assertEqual(self.audit_findings("projected", self.projection()), [])
+
+    def test_a_record_from_an_older_generator_is_recognised_not_just_diverged(self) -> None:
+        # FR-018: an older format must be identifiable, so a migration can tell
+        # "written by a previous version" apart from "someone edited this".
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        path = self.item / "DECISION-BACKLOG.md"
+        path.write_text(self.projection().replace(MODULE.PROJECTION_FORMAT, "grill-projection/v0"), encoding="utf-8")
+        payload = MODULE.verify(self.root, self.item, "w", db=DB)
+        self.assertIn("FORMAT-OLDER", [d["type"] for d in payload["divergences"]])
+
+    def test_verification_refuses_instead_of_claiming_freshness(self) -> None:
+        # FR-012: without the authority there is nothing to compare against,
+        # and silence would read as "fresh".
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+
+        def refuse(given=None):
+            raise MODULE.BacklogUnavailable("backlogctl not installed")
+
+        MODULE.resolve_cli = refuse
+        with self.assertRaises(MODULE.BacklogUnavailable):
+            MODULE.verify(self.root, self.item, "w", db=DB)
+
+    def test_a_failed_write_leaves_the_previous_record_intact(self) -> None:
+        # SC-007: staging plus rename means the reader never sees a half file.
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        good = self.projection()
+        path = self.item / "DECISION-BACKLOG.md"
+        original = MODULE.atomic_projection_write
+        try:
+            def explode(target, content):
+                staging = target.with_name(f".{target.name}.staging")
+                staging.write_text(content[: len(content) // 2], encoding="utf-8")
+                raise OSError("disk went away")
+
+            MODULE.atomic_projection_write = explode
+            self.bound([self.linked("w", "BL-0001", status="done")])
+            with self.assertRaises(OSError):
+                MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        finally:
+            MODULE.atomic_projection_write = original
+        self.assertEqual(path.read_text(encoding="utf-8"), good)
+
+    def test_a_change_outside_this_work_item_does_not_move_the_mark(self) -> None:
+        mine = [self.linked("w", "BL-0001")]
+        self.bound(mine)
+        before = MODULE.project(self.root, self.item, "w", apply=True, db=DB)["mark"]
+        self.bound(mine + [self.linked("other", "BL-0007", status="cancelled")])
+        after = MODULE.project(self.root, self.item, "w", apply=False, db=DB)["mark"]
+        self.assertEqual(before, after)
+
+
 WORKSPACE = PLUGIN / "skills/grill-with-docs/scripts/grill_workspace.py"
 WORKFLOW_TEMPLATE = PLUGIN / "skills/grill-with-docs/assets/WORKFLOW.template.md"
 

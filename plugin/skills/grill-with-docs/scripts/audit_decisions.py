@@ -15,6 +15,7 @@ ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 PHASE_ID = re.compile(r"^FASE-\d{3}$")
 ADR_ID = re.compile(r"^ADR-\d{4}$")
 BL_ID = re.compile(r"^BL-\d{4}$")
+PROJECTION_MARK = re.compile(r"(?m)^<!--\s*grill-projection:\S+\s+mark=[0-9a-f]{64}\s*-->\s*$")
 DQ_ID = re.compile(r"^DQ-\d{4}$")
 ROUND_ID = re.compile(r"^R-(\d{4})$")
 FIELD = re.compile(r"(?m)^\s*-\s*([\w/-]+):\s*(.*?)\s*$")
@@ -419,9 +420,25 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
                 elif positions.get(dependency, 10**9) >= positions.get(phase.phase_id, -1):
                     findings.append(f"ROADMAP: ordem não topológica {phase.phase_id}->{dependency}")
 
+    projected_mode = False
+    if state_path and state_path.is_file():
+        try:
+            declared = json.loads(state_path.read_text(encoding="utf-8"))
+            projected_mode = isinstance(declared, dict) and declared.get("decision_backlog_mode") == "projected"
+        except (OSError, ValueError):
+            projected_mode = False
+
     backlog_items: dict[str, dict[str, str]] = {}
     if backlog and backlog.is_file():
         text = backlog.read_text(encoding="utf-8")
+        # A projected record must say which slice produced it, and the check is
+        # offline: this gate never consults the authority, because the authority
+        # is machine local and a reviewer cloning the branch would report false
+        # drift. The requirement is conditional on the bundle declaring itself
+        # projected — demanding it unconditionally would strand every bundle
+        # written before the migration exists.
+        if projected_mode and not PROJECTION_MARK.search(text):
+            findings.append("DECISION-BACKLOG: PROJECTION-UNMARKED")
         for bl_id, block in split_blocks(text, "BL"):
             if bl_id in backlog_items:
                 findings.append(f"BACKLOG: duplicate {bl_id}")
