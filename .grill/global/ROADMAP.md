@@ -2,12 +2,36 @@
 
 Generated deterministically from reconciled work items.
 
+- **feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4** (feature): backlog-ssot
 - **feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420** (feature): gauntlet-loop
 - **feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7** (feature): release-repo-sync
 - **fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0** (fix): high-defects
 
 ## Qualified artifact IDs
 
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/ADR-0001`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/ADR-0002`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/ADR-0003`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/DQ-0001`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/DQ-0002`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/DQ-0003`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/DQ-0004`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/DQ-0005`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/DQ-0006`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/DQ-0007`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/FASE-001`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/FASE-002`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/FASE-003`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/FASE-004`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/FASE-005`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/FASE-006`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/R-0001`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/R-0002`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/R-0003`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/R-0004`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/R-0005`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/R-0006`
+- `feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/R-0007`
 - `feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/ADR-0001`
 - `feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/ADR-0002`
 - `feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420/ADR-0003`
