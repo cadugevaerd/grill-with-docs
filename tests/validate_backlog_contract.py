@@ -484,6 +484,19 @@ class Reconciliation(unittest.TestCase):
         entry = payload["items"][0]
         self.assertEqual((entry["state"], entry["target"]), ("superseded", "cancelled"))
 
+    def test_the_description_never_freezes_a_state_the_item_owns(self) -> None:
+        # The item's status is the authority. Copying state into free text
+        # would leave the description asserting open on an item already done,
+        # because transitions move the status and never rewrite the text.
+        self.backlog("## BL-0001 — R\n- state: resolved\n- owner: alguem\n")
+        tools = self.bound([])
+        self.sync(tools, apply=True)
+        argv = next(call for call in tools.calls if call[2:4] == ["item", "add"])
+        description = argv[argv.index("--description") + 1]
+        self.assertNotIn("state:", description)
+        self.assertIn("owner: alguem", description)
+        self.assertIn(f"{MODULE.BL_MARKER}: BL-0001", description)
+
     def test_an_unrecognised_state_fails_closed_instead_of_guessing(self) -> None:
         # A typo used to be coerced to open, which would report a resolved
         # decision as still in flight.

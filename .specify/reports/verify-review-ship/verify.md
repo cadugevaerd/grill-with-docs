@@ -1,17 +1,18 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree 6028c6a0bf121dd30a3eb8e51d468cae3798dfb08088c5d4e93c9d7fb1b76dd3 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 68dd3c8724d3d01ed4acaf236f25ba61704af8e24118693643f0f36e759185f1   (gate reports excluded)
+Source fingerprint: tree 81c0bd9b4b80b2cc9928ce22569d17666e857b64f38a2c0329cfe783505269a0 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan ac49cbc2c8496efb1077406d34bb3fae1f195f05f27c0d28360967c402f16c68   (gate reports excluded)
 Converge: CONVERGED
 
-Handoff: a primeira execução de `/speckit.converge` retornou `tasks_appended`, com T027 e T028. As duas foram implementadas e a segunda execução retornou `converged`, sem nova fase e sem alteração em `tasks.md`. Este relatório se apoia na segunda.
+Handoff: três passagens de `/speckit.converge`. A primeira retornou `tasks_appended` com T027 e T028; a segunda, `converged`; a terceira, disparada por mudanças de código feitas durante a revisão, retornou `tasks_appended` com T029 e agora fecha em `converged`. Este relatório se apoia na terceira. As duas versões anteriores deste relatório ficaram stale por mudança de fonte, conforme o próprio contrato exige.
 
 ### Operational Gates
 
 | Gate | Command | Result | Evidence | Validator |
 |---|---|---|---|---|
-| tests | `python3 tests/run_validators.py` | PASS | 969 testes, exit 0, 1 skip dependente de ambiente; baseline de abertura era 940 | sessão |
-| tests (alvo) | `python3 tests/validate_backlog_contract.py` | PASS | 51 testes, exit 0; eram 22 antes da fase | sessão |
+| tests | `python3 tests/run_validators.py` | PASS | 970 testes, exit 0, 1 skip dependente de ambiente; baseline de abertura era 940 | sessão |
+| tests (alvo) | `python3 tests/validate_backlog_contract.py` | PASS | 52 testes, exit 0; eram 22 antes da fase | sessão |
+| tests (sem backlogctl) | `HOME=/nonexistent python3 tests/validate_backlog_contract.py` | PASS | 52 testes, exit 0; prova que a cobertura não depende do binário nem do ambiente do operador, que é a condição da matriz de CI | sessão |
 | distribution | `python3 tests/validate_distribution.py` | PASS | `distribution: OK` com 2.9.0 idêntico nos oito lugares | sessão |
 | build | — | SKIPPED | projeto é biblioteca de scripts stdlib, sem etapa de build | sessão |
 | lint / typecheck / format | — | SKIPPED | não há linter, type checker nem formatter declarados no repositório ou no CI | sessão |

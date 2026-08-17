@@ -202,7 +202,14 @@ def index_existing(existing: list[dict[str, Any]]) -> dict[tuple[str, str], dict
 
 
 def describe(entry: dict[str, str], work_id: str, root: Path) -> str:
-    body = "\n".join(f"- {key}: {value}" for key, value in entry.items() if key not in {"id", "title"})
+    """Render the decision body, minus anything the item itself owns.
+
+    ``state`` is deliberately excluded: the item's own status is the authority
+    for it, and copying it into free text would freeze the value written at
+    creation while transitions moved the real one, leaving the description
+    asserting ``open`` on an item already ``done``.
+    """
+    body = "\n".join(f"- {key}: {value}" for key, value in entry.items() if key not in {"id", "title", "state"})
     return (f"{body}\n\n---\n{WORK_ID_MARKER}: {work_id}\n{BL_MARKER}: {entry['id']}\n"
             f"repo: {root}\norigem: grill-with-docs backlog-sync")
 
