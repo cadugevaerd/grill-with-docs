@@ -347,9 +347,41 @@
         "reason": "",
         "state": "complete",
         "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/plan.md",
+            "sha256": "914f20ee430d9cbda32e97f55e8d6296c56dd2fc80c5e3cfa981dd3ede335d80"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/plan.md",
+            "sha256": "914f20ee430d9cbda32e97f55e8d6296c56dd2fc80c5e3cfa981dd3ede335d80"
+          },
+          {
+            "path": "specs/016-decision-projection/research.md",
+            "sha256": "d1869e73b553c82940e3126eac8732625cd802bd0c9e6056c076d1c2b1597ecc"
+          },
+          {
+            "path": "specs/016-decision-projection/data-model.md",
+            "sha256": "d0548d0c05c5805fcaa82bc5f8306cf6080a661020aaae3a88715709682f8683"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
       }
     ],
-    "current_step": "plan",
+    "current_step": "checklist",
     "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
@@ -371,7 +403,7 @@
       "analyze": "pending",
       "checklist": "pending",
       "converge": "pending",
-      "plan": "pending",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
