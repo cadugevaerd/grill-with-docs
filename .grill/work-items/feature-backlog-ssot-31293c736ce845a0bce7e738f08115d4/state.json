@@ -595,10 +595,41 @@
         "reason": "",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/ship.md",
+            "sha256": "ce432676a895e53fb8e10eee49f20d27d23ad99da4f570784eac4503324724b0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/ship.md",
+            "sha256": "ce432676a895e53fb8e10eee49f20d27d23ad99da4f570784eac4503324724b0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "previous_execution_branch": "feat/backlog-ssot",
+        "reason": "FASE-002 complete e mergeada em main como 63350eb; publicacao segue concentrada na FASE-005. Abrindo FASE-003, pre-requisito fail-closed.",
+        "state": "turned",
+        "step": "phase-turn"
       }
     ],
-    "current_step": "ship",
-    "execution_branch": "feat/backlog-ssot",
+    "current_step": "specify",
+    "execution_branch": null,
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -614,17 +645,17 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "complete",
-      "agent-execute": "complete",
-      "analyze": "complete",
-      "checklist": "complete",
-      "converge": "complete",
-      "plan": "complete",
-      "review": "complete",
+      "agent-assign": "pending",
+      "agent-execute": "pending",
+      "analyze": "pending",
+      "checklist": "pending",
+      "converge": "pending",
+      "plan": "pending",
+      "review": "pending",
       "ship": "pending",
-      "specify": "complete",
-      "tasks": "complete",
-      "verify": "complete"
+      "specify": "pending",
+      "tasks": "pending",
+      "verify": "pending"
     }
   },
   "limits": {
