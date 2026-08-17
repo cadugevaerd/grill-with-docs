@@ -39,7 +39,7 @@
 - delivery-units: DU-003
 
 ## FASE-004 — Migração de bundles legados
-- state: planned
+- state: ready-for-specify
 - objetivo: Bundle autoral migra uma única vez para o modelo de projeção, sem mutação implícita do backlog operacional
 - scope-in: Marcador de modo, comando de migração preview-first idempotente, estados históricos, recusa de mutação em bundle não migrado
 - scope-out: Backfill manual, alteração de itens preexistentes
@@ -51,7 +51,7 @@
 - delivery-units: DU-004
 
 ## FASE-006 — Detecção de skill sombreada no preflight
-- state: ready-for-specify
+- state: complete
 - objetivo: O preflight avisa quando um nome de skill publicado pelo plugin está sombreado no ambiente, e sabe removê-lo sob autorização explícita
 - scope-in: Detecção das skills do próprio plugin sombreadas por skill pessoal ou de projeto, relato no preflight e no init, remoção sob flag explícita
 - scope-out: Colisão entre skills de terceiros, opinião sobre nomes de outros plugins, remoção automática
