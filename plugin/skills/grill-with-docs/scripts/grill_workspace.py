@@ -1144,7 +1144,11 @@ def backlog_sync_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]
     root = project_root(args.root)
     item = root / ".grill" / "work-items" / args.work_id
     bundle = read_local_bundle(root, item)
-    validate_bundle_integrity(bundle)
+    # Identity, not artifact hashes: this command exists to read
+    # DECISION-BACKLOG.md, which the protocol requires to change. Gating on
+    # initial_artifacts made the precondition and the purpose mutually
+    # exclusive. Tamper evidence of the immutable block is what still matters.
+    validate_metadata(bundle.metadata, args.work_id)
     bridge = sibling("backlog_bridge")
     try:
         payload = bridge.sync_items(root, item, args.work_id, apply=args.apply)
