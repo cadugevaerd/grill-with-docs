@@ -1077,7 +1077,10 @@ class FailClosedPrerequisite(unittest.TestCase):
         self.temporary.cleanup()
 
     def create(self, *extra):
-        return workspace("init", self.root, "--type", "feature", "--slug", "alpha", "--work-id", "wx", *extra)
+        # Never the operator's real store: without --db this would both read
+        # and, before the create=False fix, write to it.
+        return workspace("init", self.root, "--type", "feature", "--slug", "alpha", "--work-id", "wx",
+                         "--db", str(self.root / "throwaway.db"), *extra)
 
     def state(self):
         return json.loads((self.root / ".grill/work-items/wx/state.json").read_text(encoding="utf-8"))
@@ -1137,9 +1140,16 @@ class FailClosedPrerequisite(unittest.TestCase):
         _, payload = workspace("audit", self.root, "--work-id", "wx")
         self.assertTrue(payload.get("backlog_skipped"), payload)
 
+    def test_creation_never_provisions_a_backlog(self) -> None:
+        # Conjuring a backlog named after the root directory would satisfy the
+        # check by inventing the very thing it is supposed to verify.
+        code, payload = self.create()
+        self.assertEqual(payload.get("error"), "BACKLOG-NOT-FOUND")
+
     def test_adoption_refuses_while_the_repository_is_unbound(self) -> None:
         self.create("--skip-backlog")
-        code, payload = workspace("backlog-adopt", self.root, "--work-id", "wx")
+        code, payload = workspace("backlog-adopt", self.root, "--work-id", "wx",
+                                  "--db", str(self.root / "throwaway.db"))
         self.assertNotEqual(code, 0)
         self.assertEqual(payload.get("code"), "BACKLOG-REQUIRED")
         self.assertTrue(self.state()["backlog_skipped"])

@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.1
+
+Corrige dois defeitos introduzidos pela 3.0.0 e descobertos na verificação final.
+
+- `init` **provisionava** um backlog quando não encontrava um. Isso satisfazia o pré-requisito inventando a própria coisa que deveria verificar, e criava um backlog nomeado a partir do diretório raiz — em execução de teste, um por diretório temporário. Agora `init` vincula apenas a backlog existente e recusa com `BACKLOG-NOT-FOUND`.
+- `init`, `preflight` e `backlog-adopt` ganham `--db`, pelo mesmo motivo que `backlog-sync` ganhou na 2.9.0: sem ele toda execução alcança o backlog real do operador. No caso do `init` isso era pior que ruído, porque ele **escrevia**.
+
 ## 3.2.0
 
 Fecha o ciclo da inversão de autoridade: bundles criados antes da projeção ganham caminho de migração.

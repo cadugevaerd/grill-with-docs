@@ -1,7 +1,7 @@
 # FASE-002 — Projeção versionada e determinística
 
 - phase: FASE-002
-- state: planned
+- state: complete
 - roadmap: ROADMAP.md#FASE-002
 - context-refs: Projeção, Evidência no commit, Autoridade de estado
 - ADRs: ADR-0001, ADR-0002

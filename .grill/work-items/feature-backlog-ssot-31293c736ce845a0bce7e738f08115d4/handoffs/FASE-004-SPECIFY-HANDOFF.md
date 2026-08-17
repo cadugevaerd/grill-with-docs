@@ -1,7 +1,7 @@
 # FASE-004 — Migração de bundles legados
 
 - phase: FASE-004
-- state: planned
+- state: complete
 - roadmap: ROADMAP.md#FASE-004
 - context-refs: Projeção, Item de backlog, Evidência no commit
 - ADRs: ADR-0003

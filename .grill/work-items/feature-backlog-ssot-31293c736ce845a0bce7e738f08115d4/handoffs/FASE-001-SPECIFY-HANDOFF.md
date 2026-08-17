@@ -1,7 +1,7 @@
 # FASE-001 — Destravar a ponte com o backlog operacional
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: Backlog de decisão, Backlog operacional, Item de backlog, Referência de decisão
 - ADRs: ADR-0003

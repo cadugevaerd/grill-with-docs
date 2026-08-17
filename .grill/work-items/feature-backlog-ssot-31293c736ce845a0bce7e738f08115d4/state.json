@@ -1,6 +1,6 @@
 {
-  "active_phase": "FASE-001",
-  "audit_verdict": "pending",
+  "active_phase": null,
+  "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
     "schema": "v1",
@@ -1528,9 +1528,344 @@
         "reason": "",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/019-legacy-bundle-migration/review.md",
+            "sha256": "fa98193785095eeee9f3b842e041ced65c2b521c2b8de77edf4331d692b4ca2a"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/019-legacy-bundle-migration/review.md",
+            "sha256": "fa98193785095eeee9f3b842e041ced65c2b521c2b8de77edf4331d692b4ca2a"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "previous_execution_branch": "feat/backlog-ssot",
+        "reason": "FASE-004 complete e mergeada. Abrindo FASE-005, verificacao e publicacao.",
+        "state": "turned",
+        "step": "phase-turn"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          },
+          {
+            "path": "specs/020-verification-and-release/verify.md",
+            "sha256": "99fd2e6f5e2cd26dd1251ce0355466e199e57087f5802ea8d856b2985c079aa0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          },
+          {
+            "path": "specs/020-verification-and-release/verify.md",
+            "sha256": "99fd2e6f5e2cd26dd1251ce0355466e199e57087f5802ea8d856b2985c079aa0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          },
+          {
+            "path": "specs/020-verification-and-release/verify.md",
+            "sha256": "99fd2e6f5e2cd26dd1251ce0355466e199e57087f5802ea8d856b2985c079aa0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          },
+          {
+            "path": "specs/020-verification-and-release/verify.md",
+            "sha256": "99fd2e6f5e2cd26dd1251ce0355466e199e57087f5802ea8d856b2985c079aa0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          },
+          {
+            "path": "specs/020-verification-and-release/verify.md",
+            "sha256": "99fd2e6f5e2cd26dd1251ce0355466e199e57087f5802ea8d856b2985c079aa0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          },
+          {
+            "path": "specs/020-verification-and-release/verify.md",
+            "sha256": "99fd2e6f5e2cd26dd1251ce0355466e199e57087f5802ea8d856b2985c079aa0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          },
+          {
+            "path": "specs/020-verification-and-release/verify.md",
+            "sha256": "99fd2e6f5e2cd26dd1251ce0355466e199e57087f5802ea8d856b2985c079aa0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          },
+          {
+            "path": "specs/020-verification-and-release/verify.md",
+            "sha256": "99fd2e6f5e2cd26dd1251ce0355466e199e57087f5802ea8d856b2985c079aa0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          },
+          {
+            "path": "specs/020-verification-and-release/verify.md",
+            "sha256": "99fd2e6f5e2cd26dd1251ce0355466e199e57087f5802ea8d856b2985c079aa0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/spec.md",
+            "sha256": "80897cb825cd15e2143edb08c6375017d08fabd8b698dac609210118ac991105"
+          },
+          {
+            "path": "specs/020-verification-and-release/verify.md",
+            "sha256": "99fd2e6f5e2cd26dd1251ce0355466e199e57087f5802ea8d856b2985c079aa0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/review.md",
+            "sha256": "eeab22cbb38867133b18fb4d4bf39df32499643115e0d6b4434831ba348c3c87"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/020-verification-and-release/review.md",
+            "sha256": "eeab22cbb38867133b18fb4d4bf39df32499643115e0d6b4434831ba348c3c87"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "ship"
       }
     ],
-    "current_step": "ship",
+    "current_step": "complete",
     "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
@@ -1554,7 +1889,7 @@
       "converge": "complete",
       "plan": "complete",
       "review": "complete",
-      "ship": "pending",
+      "ship": "complete",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
@@ -1567,11 +1902,11 @@
     "max_questions_per_run": 25,
     "max_scope_growth_streak": 3
   },
-  "milestone_status": "in-progress",
+  "milestone_status": "completed",
   "second_pass": {
     "new_material_dqs": 0
   },
-  "status": "in-progress",
+  "status": "complete",
   "version": "1.2.0",
   "work_id": "feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4",
   "workflow": {
