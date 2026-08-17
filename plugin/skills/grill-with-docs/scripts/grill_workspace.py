@@ -1116,11 +1116,15 @@ def ensure_project_workflow(root: Path) -> dict[str, Any]:
     return {"status": result.status, "path": "WORKFLOW.md", "sha256": workflow.digest(result.content)}
 
 
-def dependency_report(root: Path, *, allow_install: bool) -> dict[str, Any]:
-    """Detect the external toolchain; install only when explicitly authorised."""
+def dependency_report(root: Path, *, allow_install: bool, remove_shadows: bool = False) -> dict[str, Any]:
+    """Detect the external toolchain; install only when explicitly authorised.
+
+    ``remove_shadows`` is separate from ``allow_install`` on purpose: deleting a
+    skill directory outside the repository is not part of authorising an install.
+    """
     dependencies = sibling("ensure_dependencies")
     try:
-        return dependencies.preflight(root, allow_install=allow_install)
+        return dependencies.preflight(root, allow_install=allow_install, remove_shadows=remove_shadows)
     except (dependencies.ManifestError, OSError, json.JSONDecodeError) as error:
         return {"schema": dependencies.SCHEMA, "verdict": "BLOCKED", "error": type(error).__name__}
 
@@ -1144,7 +1148,8 @@ def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     payload = {
         "schema": "grill-preflight/v1",
         "workflow": ensure_project_workflow(root),
-        "dependencies": dependency_report(root, allow_install=args.allow_install),
+        "dependencies": dependency_report(root, allow_install=args.allow_install,
+                                          remove_shadows=getattr(args, "remove_shadows", False)),
     }
     if not args.skip_backlog:
         payload["backlog"] = backlog_report(root, apply=args.allow_install, db=getattr(args, "db", None))
@@ -3032,6 +3037,7 @@ def build_parser() -> JsonParser:
     preflight_parser.add_argument("--allow-install", action="store_true", dest="allow_install")
     preflight_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
     preflight_parser.add_argument("--db")
+    preflight_parser.add_argument("--remove-shadowed-skills", action="store_true", dest="remove_shadows")
     backlog_parser = subparsers.add_parser("backlog-sync")
     backlog_parser.add_argument("root")
     backlog_parser.add_argument("--work-id", required=True)
