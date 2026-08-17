@@ -100,9 +100,33 @@
         "reason": "",
         "state": "complete",
         "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "6b15d63b795d8007554237119dbee67f729d76a6d0ed833b7705d2bbec2dff65"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "6b15d63b795d8007554237119dbee67f729d76a6d0ed833b7705d2bbec2dff65"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
       }
     ],
-    "current_step": "tasks",
+    "current_step": "analyze",
     "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
@@ -128,7 +152,7 @@
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
-      "tasks": "pending",
+      "tasks": "complete",
       "verify": "pending"
     }
   },
