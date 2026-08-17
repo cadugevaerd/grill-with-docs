@@ -88,7 +88,7 @@ print("written")
 '''
 
 def symlink_supported():
- with tempfile.TemporaryDirectory() as temporary:
+ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
   try: (Path(temporary)/'link').symlink_to(Path(temporary))
   except (OSError,NotImplementedError): return False
   return True
@@ -96,7 +96,7 @@ SYMLINKS=symlink_supported()
 
 def build_v2_bundle(destination):
  """Produce a real v2 bundle with the live CLI, then hand it over as a template."""
- with tempfile.TemporaryDirectory() as temporary:
+ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
   root=Path(temporary)
   subprocess.run(['git','init','-q','-b','main',str(root)],check=True)
   (root/'WORKFLOW.md').write_bytes(TEMPLATE.read_bytes())
@@ -168,11 +168,11 @@ def build_rebind_repo(root):
 class WorkItemV3Contract(unittest.TestCase):
  @classmethod
  def setUpClass(cls):
-  cls.template=tempfile.TemporaryDirectory(); build_v2_bundle(Path(cls.template.name)/'bundle')
+  cls.template=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); build_v2_bundle(Path(cls.template.name)/'bundle')
  @classmethod
  def tearDownClass(cls): cls.template.cleanup()
  def setUp(self):
-  self.t=tempfile.TemporaryDirectory(); self.item=Path(self.t.name)/WORK_ID
+  self.t=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.item=Path(self.t.name)/WORK_ID
   shutil.copytree(Path(self.template.name)/'bundle',self.item); self.path=self.item/'WORK-ITEM.json'
   # Most of this suite exercises v3-specific validation, not the CLI-wiring
   # gate itself: default the capability probe to True so migrate_bundle can
@@ -269,7 +269,7 @@ class WorkItemV3Contract(unittest.TestCase):
   # required to exit 0. 'migration_wired' used to be a hardcoded False, so
   # this branch was dead; it must run for real now that grill_workspace.py
   # wires migrate-v3.
-  with tempfile.TemporaryDirectory() as t:
+  with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as t:
    root=Path(t); build_v2_repo(root)
    item=root/'.grill/work-items'/WORK_ID
    metadata=M.read_document(item/'WORK-ITEM.json')
@@ -305,7 +305,7 @@ class WorkItemV3Contract(unittest.TestCase):
   # working exit code (0) to METADATA-SCHEMA (2). Uses the REAL production
   # reader on disk, no mock: whatever its current wiring state is, the exit
   # code after attempting apply must never be worse than before.
-  with tempfile.TemporaryDirectory() as t:
+  with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as t:
    root=Path(t); build_v2_repo(root)
    before=cli_status(root)
    self.assertEqual(before,0,'fresh init should report status OK')
@@ -502,7 +502,7 @@ class WorkItemV3Contract(unittest.TestCase):
   # racing on the same bundle directory, not a serialized simulation.
   trials=20
   for trial in range(trials):
-   with tempfile.TemporaryDirectory() as t:
+   with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as t:
     item=Path(t)/WORK_ID; shutil.copytree(Path(self.template.name)/'bundle',item)
     parents=('feature-auth-a1b2','feature-other-b2c3')
     barrier=threading.Barrier(2); results=[]; guard=threading.Lock()
@@ -536,7 +536,7 @@ class WorkItemV3Contract(unittest.TestCase):
   worker_path=Path(self.t.name)/'lock_race_worker.py'; worker_path.write_text(_LOCK_RACE_WORKER,encoding='utf-8')
   trials=5
   for trial in range(trials):
-   with tempfile.TemporaryDirectory() as t:
+   with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as t:
     item=Path(t)/WORK_ID; shutil.copytree(Path(self.template.name)/'bundle',item)
     lock=M.lock_path(item,WORK_ID); lock.mkdir(parents=True)
     (lock/'owner.json').write_text(json.dumps({'pid':dead_pid,'host':socket.gethostname()}),encoding='utf-8')
@@ -566,7 +566,7 @@ class WorkItemV3Contract(unittest.TestCase):
   # versioned bundle (.grill/work-items/<id>/.migrate.lock), so `git status`
   # saw it and bundle_fingerprint() would have hashed it. It must live at
   # <git-common-dir>/grill/locks/, entirely outside the working tree.
-  with tempfile.TemporaryDirectory() as t:
+  with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as t:
    root=Path(t); build_v2_repo(root)
    item=root/'.grill/work-items'/WORK_ID
    def status(): return subprocess.run(['git','-C',str(root),'status','--porcelain'],capture_output=True,text=True,check=True).stdout
@@ -611,7 +611,7 @@ class WorkItemV3Contract(unittest.TestCase):
   padding='x'*(4*1024*1024)
   trials=5; detected=0
   for trial in range(trials):
-   with tempfile.TemporaryDirectory() as t:
+   with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as t:
     item=Path(t)/WORK_ID; shutil.copytree(Path(self.template.name)/'bundle',item)
     path=item/'WORK-ITEM.json'
     data=json.loads(path.read_text(encoding='utf-8'))
@@ -769,7 +769,7 @@ class WorkItemV3Contract(unittest.TestCase):
 class RebindWorkflowContract(unittest.TestCase):
  """Public contract for an explicit legacy-V3 workflow authority rebind."""
  def setUp(self):
-  self.t=tempfile.TemporaryDirectory(); self.root=Path(self.t.name)
+  self.t=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.root=Path(self.t.name)
   build_rebind_repo(self.root)
   self.item=self.root/'.grill/work-items'/WORK_ID; self.path=self.item/'WORK-ITEM.json'
   self.current_workflow_sha256=M.hash_bytes((self.root/'WORKFLOW.md').read_bytes())

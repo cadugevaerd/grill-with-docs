@@ -29,7 +29,7 @@ def load(path,name):
 V3=load(MODULE,'grill_core_workflow_v3_contract'); EW=load(ENSURE,'ensure_workflow_v3_contract')
 
 def symlink_supported():
- with tempfile.TemporaryDirectory() as temporary:
+ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
   root=Path(temporary)
   try: (root/'link').symlink_to(root/'target')
   except (OSError,NotImplementedError): return False
@@ -64,7 +64,7 @@ def rendered_v3(registry_sha256):
 
 class Base(unittest.TestCase):
  def setUp(self):
-  self.t=tempfile.TemporaryDirectory(); self.root=Path(self.t.name).resolve(); subprocess.run(['git','init','-q','-b','main',str(self.root)],check=True); self.path=self.root/'WORKFLOW.md'
+  self.t=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.root=Path(self.t.name).resolve(); subprocess.run(['git','init','-q','-b','main',str(self.root)],check=True); self.path=self.root/'WORKFLOW.md'
  def tearDown(self): self.t.cleanup()
  def materialise(self,content: bytes): self.path.write_bytes(content); return content
  def v2(self): return self.materialise(TEMPLATE_V2.read_bytes())
@@ -305,11 +305,11 @@ class RegistryIntegrity(unittest.TestCase):
  module always resolves REGISTRY/TEMPLATE_V3 relative to its own file: a
  fixture that only patched the repo's real asset would never be exercised."""
  def setUp(self):
-  tmp=tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+  tmp=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.addCleanup(tmp.cleanup)
   self.skill=Path(tmp.name)/'skill'; shutil.copytree(SKILL,self.skill)
   self.registry=self.skill/'assets/workflow-step-skills.json'
   self.module=self.skill/'scripts/grill_core/workflow_v3.py'
-  root_dir=tempfile.TemporaryDirectory(); self.addCleanup(root_dir.cleanup)
+  root_dir=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.addCleanup(root_dir.cleanup)
   self.root=Path(root_dir.name).resolve(); subprocess.run(['git','init','-q','-b','main',str(self.root)],check=True)
   self.path=self.root/'WORKFLOW.md'; self.path.write_bytes(TEMPLATE_V2.read_bytes())
  def _run(self,*args): return subprocess.run([sys.executable,str(self.module),*map(str,args)],text=True,capture_output=True)
@@ -475,11 +475,11 @@ class RuntimeWiringGate(unittest.TestCase):
  the exact anti-pattern LD-010 names as how this defect survived two rounds.
  """
  def setUp(self):
-  tmp=tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+  tmp=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.addCleanup(tmp.cleanup)
   self.skill=Path(tmp.name)/'skill'; shutil.copytree(SKILL,self.skill)
   self.module=self.skill/'scripts/grill_core/workflow_v3.py'
   self.ensure=self.skill/'scripts/ensure_workflow.py'
-  root_dir=tempfile.TemporaryDirectory(); self.addCleanup(root_dir.cleanup)
+  root_dir=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.addCleanup(root_dir.cleanup)
   self.root=Path(root_dir.name).resolve(); subprocess.run(['git','init','-q','-b','main',str(self.root)],check=True)
   self.path=self.root/'WORKFLOW.md'; self.path.write_bytes(TEMPLATE_V2.read_bytes())
  def _run(self,*args): return subprocess.run([sys.executable,str(self.module),*map(str,args)],text=True,capture_output=True)
@@ -515,10 +515,10 @@ class SiblingIntegrity(unittest.TestCase):
  os exit codes". sibling() now wraps exec_module in try/except and reports
  FILESYSTEM/rc=2, exactly like the pre-existing "spec is None" branch."""
  def setUp(self):
-  tmp=tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+  tmp=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.addCleanup(tmp.cleanup)
   self.skill=Path(tmp.name)/'skill'; shutil.copytree(SKILL,self.skill)
   self.module=self.skill/'scripts/grill_core/workflow_v3.py'
-  root_dir=tempfile.TemporaryDirectory(); self.addCleanup(root_dir.cleanup)
+  root_dir=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.addCleanup(root_dir.cleanup)
   self.root=Path(root_dir.name).resolve(); subprocess.run(['git','init','-q','-b','main',str(self.root)],check=True)
   (self.root/'WORKFLOW.md').write_bytes(TEMPLATE_V2.read_bytes())
  def _run(self,*args): return subprocess.run([sys.executable,str(self.module),*map(str,args)],text=True,capture_output=True)

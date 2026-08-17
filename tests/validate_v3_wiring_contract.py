@@ -172,7 +172,7 @@ def snapshot(root: Path) -> dict[str, bytes]:
 
 class WiringHarness(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name)
         subprocess.run(["git", "init", "-q", "-b", "main", str(self.root)], check=True)
         git(self.root, "config", "user.email", "wiring@example.invalid")
@@ -518,7 +518,7 @@ class ImportFailureContract(WiringHarness):
 
     def test_broken_grill_core_yields_one_json_for_migrate_v3(self) -> None:
         self._init_item("wa")
-        with tempfile.TemporaryDirectory() as scratch:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:
             broken_workspace = self._broken_scripts_copy(Path(scratch))
             process, payload = self._run_broken(broken_workspace, "migrate-v3", self.root, "--work-id", "wa", "--apply")
         self.assertEqual(process.returncode, 2, payload)
@@ -533,7 +533,7 @@ class ImportFailureContract(WiringHarness):
         self._init_item("wa")
         process, applied = invoke("migrate-v3", self.root, "--work-id", "wa", "--apply")
         self.assertEqual((process.returncode, applied["verdict"]), (0, "APPLIED"))
-        with tempfile.TemporaryDirectory() as scratch:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:
             broken_workspace = self._broken_scripts_copy(Path(scratch))
             process, payload = self._run_broken(broken_workspace, "audit", self.root, "--work-id", "wa")
         self.assertEqual(process.returncode, 2, payload)
@@ -545,7 +545,7 @@ class ImportFailureContract(WiringHarness):
         arbitrary exception raised while loading an optional core capability.
         """
         self._init_item("wa")
-        with tempfile.TemporaryDirectory() as scratch:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:
             copy_root = Path(scratch) / "scripts"
             shutil.copytree(SCRIPTS, copy_root)
             (copy_root / "grill_core" / "work_item_v3.py").write_text(
@@ -561,7 +561,7 @@ class ImportFailureContract(WiringHarness):
     def test_system_exit_and_stdout_noise_loading_grill_core_stay_one_json(self) -> None:
         self._init_item("wa")
         for source in ("raise SystemExit(7)\n", "print('IMPORT-NOISE'); raise RuntimeError('loader boom')\n"):
-            with self.subTest(source=source), tempfile.TemporaryDirectory() as scratch:
+            with self.subTest(source=source), tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:
                 copy_root = Path(scratch) / "scripts"
                 shutil.copytree(SCRIPTS, copy_root)
                 (copy_root / "grill_core" / "work_item_v3.py").write_text(source, encoding="utf-8")
@@ -588,7 +588,7 @@ class LazyCoreFailureContract(WiringHarness):
         )
         self.assertEqual((process.returncode, payload["verdict"]), (0, "UPDATED"))
         (self.root / "evidence.md").write_text("evidence\n", encoding="utf-8")
-        with tempfile.TemporaryDirectory() as scratch:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:
             copied = self._copied_skill(Path(scratch))
             (copied / "scripts/grill_core/step_skills.py").write_text(
                 "print('IMPORT-NOISE'); raise RuntimeError('late loader boom')\n", encoding="utf-8"
@@ -606,7 +606,7 @@ class LazyCoreFailureContract(WiringHarness):
 
     def test_hook_hides_system_exit_and_stdout_from_workflow_v3_loader(self) -> None:
         (self.root / "WORKFLOW.md").write_bytes(render_v3_workflow_bytes())
-        with tempfile.TemporaryDirectory() as scratch:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:
             copied = self._copied_skill(Path(scratch))
             (copied / "scripts/grill_core/workflow_v3.py").write_text(
                 "print('IMPORT-NOISE'); raise SystemExit(7)\n", encoding="utf-8"

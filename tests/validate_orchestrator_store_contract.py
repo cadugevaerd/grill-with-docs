@@ -126,7 +126,7 @@ class Canonicalization(unittest.TestCase):
 
 class StoreContract(unittest.TestCase):
  def setUp(self):
-  self.tmp=tempfile.TemporaryDirectory(); self.base=Path(self.tmp.name); self.r=make_repo(self.base/'repo')
+  self.tmp=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.base=Path(self.tmp.name); self.r=make_repo(self.base/'repo')
  def tearDown(self): self.tmp.cleanup()
  def paths(self): return store.store_paths(self.r)
  def register(self,**kw): return store.bootstrap(self.r,now=CLOCK,**kw)

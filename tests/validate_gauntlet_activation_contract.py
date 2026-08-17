@@ -284,7 +284,7 @@ def copy_skill(parent: Path, name: str = "copied-skill") -> Path:
 
 
 def symlink_supported() -> bool:
-    with tempfile.TemporaryDirectory() as temporary:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
         target = Path(temporary) / "target"
         target.mkdir()
         try:
@@ -308,7 +308,7 @@ def file_snapshot(root: Path) -> dict[str, tuple[bytes, int]]:
 class GauntletInitContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.template = tempfile.TemporaryDirectory()
+        cls.template = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         cls.template_root = Path(cls.template.name) / "ready"
         build_rebound_v3_repository(cls.template_root)
         cls.v2_item_template_root = Path(cls.template.name) / "v2-item"
@@ -319,7 +319,7 @@ class GauntletInitContract(unittest.TestCase):
         cls.template.cleanup()
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name) / "repo"
         shutil.copytree(self.template_root, self.root)
         self.config = self.root / CONFIG_RELATIVE
@@ -459,7 +459,7 @@ class GauntletInitContract(unittest.TestCase):
             self.assertEqual(after.get(relative), state, relative)
 
     def test_every_selected_worker_limit_from_one_through_five_is_persisted(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for workers in range(1, 6):
                 with self.subTest(max_workers=workers):
@@ -544,7 +544,7 @@ class GauntletInitContract(unittest.TestCase):
         )
 
     def test_trust_swap_between_capture_and_resolver_uses_one_authorized_snapshot(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             skill = copy_skill(parent, "trust-snapshot-skill")
             root = self.fresh_copy(parent, "trust-snapshot-root")
@@ -779,7 +779,7 @@ class GauntletInitContract(unittest.TestCase):
             ("item-write", "write", 2, f".grill/locks/{WORK_ID}.lock"),
             ("item-fsync", "fsync", 2, f".grill/locks/{WORK_ID}.lock"),
         )
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for name, operation, fail_at, lock_relative in cases:
                 with self.subTest(case=name):
@@ -839,7 +839,7 @@ class GauntletInitContract(unittest.TestCase):
             ("config-owner-open", 1, ".grill/.gauntlet-config.lock"),
             ("item-owner-open", 2, f".grill/locks/{WORK_ID}.lock"),
         )
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for name, fail_at, lock_relative in cases:
                 with self.subTest(case=name):
@@ -905,7 +905,7 @@ class GauntletInitContract(unittest.TestCase):
             ("config-short-write", 1, ".grill/.gauntlet-config.lock"),
             ("item-short-write", 2, f".grill/locks/{WORK_ID}.lock"),
         )
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for name, short_at, lock_relative in cases:
                 with self.subTest(case=name):
@@ -966,7 +966,7 @@ class GauntletInitContract(unittest.TestCase):
         self.assert_blocked_unchanged(self.root, before, process, payload, "WORK-ITEM-V3-REQUIRED")
 
     def test_codex_and_hermes_are_not_accepted_or_fallen_back_to_claude(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for runtime in ("codex", "hermes"):
                 with self.subTest(runtime=runtime):
@@ -977,7 +977,7 @@ class GauntletInitContract(unittest.TestCase):
                     self.assertNotIn(payload.get("runtime"), {"claude", runtime})
 
     def test_invalid_max_workers_inputs_are_one_json_and_write_nothing(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for index, value in enumerate((0, -1, 6, "1.0", "true", "3e0")):
                 with self.subTest(value=value):
@@ -1011,7 +1011,7 @@ class GauntletInitContract(unittest.TestCase):
                 b'{"schema":"grill-gauntlet/v1","schema":"grill-gauntlet/v1","activations":{}}\n'
             ),
         }
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for name, raw in cases.items():
                 with self.subTest(case=name):
@@ -1058,7 +1058,7 @@ class GauntletInitContract(unittest.TestCase):
             ("forbidden-credentials", forbidden_credentials),
             ("forbidden-budget", forbidden_budget),
         )
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for name, mutate in cases:
                 with self.subTest(case=name):
@@ -1200,7 +1200,7 @@ class GauntletInitContract(unittest.TestCase):
             ("trust-schema", trust_schema_tamper, "TRUSTED-CATALOGS-SCHEMA"),
             ("trust-missing", trust_missing, "TRUSTED-CATALOGS-UNREADABLE"),
         )
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for name, mutate, expected_code in cases:
                 with self.subTest(case=name):
@@ -1214,7 +1214,7 @@ class GauntletInitContract(unittest.TestCase):
                     self.assert_blocked_unchanged(root, before, process, payload, expected_code)
 
     def test_every_closed_skill_reason_and_stale_code_cross_public_boundary_without_leakage(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             skill = copy_skill(parent)
             step_skills = skill / "scripts/grill_core/step_skills.py"
@@ -1244,7 +1244,7 @@ class GauntletInitContract(unittest.TestCase):
 
     def test_unknown_skill_reason_uses_closed_fallback_and_never_reaches_stdout(self) -> None:
         secret_reason = "FUTURE_INTERNAL_REASON_WITH_SECRET_DETAIL"
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             skill = copy_skill(parent)
             step_skills = skill / "scripts/grill_core/step_skills.py"
@@ -1267,7 +1267,7 @@ class GauntletInitContract(unittest.TestCase):
             self.assertNotIn(secret_reason, json.dumps(payload, sort_keys=True))
 
     def test_unavailable_safe_directory_descriptors_stay_one_json_and_no_write(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             skill = copy_skill(parent)
             gauntlet = skill / "scripts/grill_core/gauntlet.py"
@@ -1342,7 +1342,7 @@ class GauntletInitContract(unittest.TestCase):
             ("catalog", "assets/claude-code-local-skills.catalog.json"),
             ("trust", "assets/workflow-trusted-catalogs.json"),
         )
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for name, relative in mutations:
                 with self.subTest(identity=name):
@@ -1367,7 +1367,7 @@ class GauntletInitContract(unittest.TestCase):
         self.assert_control_read_only(self.root, before)
 
     def test_status_invalid_root_and_item_remain_top_level_command_failures(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             invalid_root = Path(temporary) / "not-a-repository"
             invalid_root.mkdir()
             invalid_before = file_snapshot(invalid_root)
@@ -1389,7 +1389,7 @@ class GauntletInitContract(unittest.TestCase):
                 self.assert_control_read_only(self.root, before)
 
     def test_status_loader_failure_before_projection_is_top_level_blocked(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             skill = copy_skill(parent)
             gauntlet = skill / "scripts/grill_core/gauntlet.py"
@@ -1411,7 +1411,7 @@ class GauntletInitContract(unittest.TestCase):
 
     def test_all_controls_validate_missing_work_item_before_status_or_phase_boundary(self) -> None:
         missing_id = "missing-item-a1b2"
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             for command in ("gauntlet-status", "gauntlet-run", "gauntlet-resume", "gauntlet-cleanup"):
                 with self.subTest(command=command):
@@ -1507,7 +1507,7 @@ class GauntletInitContract(unittest.TestCase):
         self.assertFalse(self.config.exists())
 
     def test_resume_absent_and_stale_activation_both_require_current_activation(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
             absent_root = self.fresh_copy(parent, "absent")
             absent_before = file_snapshot(absent_root)

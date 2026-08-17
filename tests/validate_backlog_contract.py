@@ -94,7 +94,7 @@ class Identity(unittest.TestCase):
 
 class Resolution(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name).resolve()
 
     def tearDown(self) -> None:
@@ -143,7 +143,7 @@ class Resolution(unittest.TestCase):
 
 class BindLifecycle(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name).resolve()
         self.original = MODULE.resolve_cli
 
@@ -192,7 +192,7 @@ class BindLifecycle(unittest.TestCase):
 
 class ItemSync(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
@@ -284,7 +284,7 @@ class DeferredParsing(unittest.TestCase):
     """T008 — state is carried out, never used to filter."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.path = Path(self.temporary.name).resolve() / "DECISION-BACKLOG.md"
 
     def tearDown(self) -> None:
@@ -321,7 +321,7 @@ class Reconciliation(unittest.TestCase):
     """T009, T012-T015, T024-T026 — creation state, dedup and state repair."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
@@ -563,7 +563,7 @@ class ParserAgreement(unittest.TestCase):
     }
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.path = Path(self.temporary.name).resolve() / "DECISION-BACKLOG.md"
         self.audit = load_audit()
 
@@ -613,7 +613,7 @@ class Projection(unittest.TestCase):
     """T005-T009, T014-T017, T023, T024 — generation, mark and verification."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
@@ -872,7 +872,7 @@ class SyncGate(unittest.TestCase):
     """T004, T005, T007 — the subcommand gates identity, not artifact hashes."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name).resolve()
         subprocess.run(["git", "init", "-q", "-b", "main", str(self.root)], check=True)
         git(self.root, "config", "user.email", "tests@example.invalid")
@@ -949,7 +949,7 @@ class LegacyMigration(unittest.TestCase):
     """FASE-004 — authored bundles move into the projected model, once."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
@@ -1048,7 +1048,7 @@ class FailClosedPrerequisite(unittest.TestCase):
     """T003, T004, T006, T007, T008 — the prerequisite becomes enforceable."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name).resolve()
         subprocess.run(["git", "init", "-q", "-b", "main", str(self.root)], check=True)
         git(self.root, "config", "user.email", "tests@example.invalid")

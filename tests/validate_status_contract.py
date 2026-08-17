@@ -20,7 +20,7 @@ def status(root,*args):
     return p,json.loads(p.stdout)
 class StatusPublicContract(unittest.TestCase):
     def setUp(self):
-        self.t=tempfile.TemporaryDirectory(); self.r=Path(self.t.name)
+        self.t=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.r=Path(self.t.name)
         subprocess.run(["git","init","-q","-b","main",str(self.r)],check=True)
         for k,v in (("user.email","t@example.invalid"),("user.name","status tests")): subprocess.run(["git","-C",str(self.r),"config",k,v],check=True)
         # init now pins the project-wide workflow, so the fixture needs the real

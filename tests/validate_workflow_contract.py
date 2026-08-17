@@ -7,7 +7,7 @@ from pathlib import Path
 HERE=Path(__file__).resolve(); REPO=HERE.parents[1]; PLUGIN=REPO/'plugin'; SCRIPT=PLUGIN/'skills/grill-with-docs/scripts/ensure_workflow.py'; WS=PLUGIN/'skills/grill-with-docs/scripts/grill_workspace.py'; TEMPLATE=PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.template.md'; HOOKS=PLUGIN/'hooks/hooks.json'; MARK='grill-with-docs-workflow:v2'
 
 def symlink_supported():
- with tempfile.TemporaryDirectory() as temporary:
+ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
   root=Path(temporary); target=root/'target'; target.mkdir()
   try: (root/'link').symlink_to(target,target_is_directory=True)
   except (OSError,NotImplementedError): return False
@@ -25,7 +25,7 @@ def snapshot(root):
   st=path.lstat(); out[rel]=('link',os.readlink(path),st.st_mtime_ns) if path.is_symlink() else (('file',path.read_bytes(),st.st_mtime_ns) if path.is_file() else ('dir',st.st_mtime_ns))
  return out
 class Contract(unittest.TestCase):
- def setUp(self): self.t=tempfile.TemporaryDirectory(); self.root=Path(self.t.name); subprocess.run(['git','init','-q'],cwd=self.root,check=True)
+ def setUp(self): self.t=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.root=Path(self.t.name); subprocess.run(['git','init','-q'],cwd=self.root,check=True)
  def tearDown(self): self.t.cleanup()
  def test_template_contract(self):
   s=TEMPLATE.read_text(); self.assertIn(MARK,s)

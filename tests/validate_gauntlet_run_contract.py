@@ -377,7 +377,7 @@ class GauntletRunContractHarness(unittest.TestCase):
     """Public FASE-002 admission and explicit-recovery contract."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name) / "repo"
         build_rebound_v3_repository(self.root)
 
