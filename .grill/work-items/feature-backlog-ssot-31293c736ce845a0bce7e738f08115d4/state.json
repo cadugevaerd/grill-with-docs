@@ -794,9 +794,121 @@
         "reason": "",
         "state": "complete",
         "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/review.md",
+            "sha256": "30f4e64a8a1bc6904546bf14f62e67809f4f475819281f425b6c36b9c8901caa"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/review.md",
+            "sha256": "30f4e64a8a1bc6904546bf14f62e67809f4f475819281f425b6c36b9c8901caa"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/review.md",
+            "sha256": "30f4e64a8a1bc6904546bf14f62e67809f4f475819281f425b6c36b9c8901caa"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/review.md",
+            "sha256": "30f4e64a8a1bc6904546bf14f62e67809f4f475819281f425b6c36b9c8901caa"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "review"
       }
     ],
-    "current_step": "agent-execute",
+    "current_step": "ship",
     "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
@@ -814,16 +926,16 @@
     ],
     "steps": {
       "agent-assign": "complete",
-      "agent-execute": "pending",
+      "agent-execute": "complete",
       "analyze": "complete",
       "checklist": "complete",
-      "converge": "pending",
+      "converge": "complete",
       "plan": "complete",
-      "review": "pending",
+      "review": "complete",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "complete"
     }
   },
   "limits": {
