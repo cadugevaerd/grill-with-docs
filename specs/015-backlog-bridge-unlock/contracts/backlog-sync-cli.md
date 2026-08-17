@@ -34,7 +34,9 @@ Saída: um objeto JSON por execução, em uma linha, chaves ordenadas.
 
 `verdict` é `PREVIEW` quando nada mudou e `APPLIED` quando ao menos uma mutação ocorreu. `changed` acompanha.
 
-Cada entrada de `items` carrega `id`, `status` de desfecho, o `state` da decisão de origem e o `target` no backlog. Desfechos possíveis: `PROPOSED`, `APPLIED`, `REUSED`, `TRANSITIONED`.
+Cada entrada de `items` carrega `id`, `status` de desfecho, o `state` da decisão de origem e o `target` no backlog. Desfechos possíveis: `PROPOSED`, `APPLIED`, `REUSED`, `TRANSITIONED`, `TRANSITION-REFUSED`.
+
+`TRANSITION-REFUSED` não é recusa da execução: o comando conclui, o item fica intocado e o operador decide. A ponte nunca emite `item reconcile-status` para contornar a FSM.
 
 ## Envelopes de recusa
 
@@ -46,7 +48,7 @@ Cada entrada de `items` carrega `id`, `status` de desfecho, o `state` da decisã
 
 `BUNDLE-INTEGRITY` deixa de ser alcançável por este comando. Continua válido nos comandos que legitimamente exigem bundle intocado.
 
-Nenhuma recusa deixa mutação parcial: as chamadas de mutação só começam depois de o conjunto completo de propostas ser calculado.
+Toda recusa de pré-condição — vínculo, identidade, disponibilidade — ocorre antes da primeira mutação, porque o conjunto completo de propostas é calculado antes de qualquer escrita. Uma interrupção no meio da aplicação não é compensada: não há transação entre chamadas sucessivas. A garantia oferecida é de convergência, não de atomicidade — a execução seguinte reconhece o que já existe, completa o que falta e não duplica.
 
 ## Contrato falado com o backlog operacional
 

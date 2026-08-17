@@ -66,5 +66,6 @@ Valor de relato, um por decisão processada.
 | `APPLIED` | item criado nesta execução |
 | `REUSED` | vínculo já existia e o estado já estava correto |
 | `TRANSITIONED` | vínculo já existia e o estado do item foi corrigido |
+| `TRANSITION-REFUSED` | vínculo já existia e o estado desejado é inalcançável a partir do atual; nada foi tocado |
 
-`TRANSITIONED` é novo nesta fase e é o que permite ao operador distinguir "nada a fazer" de "estado reconciliado".
+`TRANSITIONED` é novo nesta fase e é o que permite ao operador distinguir "nada a fazer" de "estado reconciliado". `TRANSITION-REFUSED` cobre o caso em que a FSM não admite o caminho, por exemplo item já em `done` cuja decisão voltou a `open`; a ponte não força, não usa o reparo administrativo e não silencia.

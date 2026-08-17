@@ -64,7 +64,9 @@ Um operador roda o espelho duas vezes, por engano ou porque um passo anterior fa
 - Trabalho sem nenhuma decisão registrada: prévia devolve lista vazia e a aplicação não altera nada.
 - Falha depois de criar um item e antes de concluir o restante: a execução seguinte reconhece o que já existe e completa o que falta, sem duplicar.
 - Decisão cujo item correspondente foi apagado à mão do backlog: a execução seguinte recria o item.
-- Decisão que muda de estado entre duas execuções: a segunda execução leva o item ao estado novo, quando esse caminho for permitido.
+- Decisão que muda de estado entre duas execuções: a segunda execução leva o item ao estado novo quando o caminho for permitido, e relata reconciliação recusada quando não for, sem tocar o item.
+- Decisão cujo item já está concluído e cuja decisão volta a um estado anterior: caminho não permitido, portanto reconciliação recusada e relato explícito, nunca alteração silenciosa.
+- Item vinculado cujos marcadores foram removidos à mão: o vínculo deixa de ser recuperável e a decisão é tratada como não espelhada, o que pode gerar um item novo; o relato deve deixar isso visível.
 
 ## Requirements *(mandatory)*
 
@@ -79,7 +81,9 @@ Um operador roda o espelho duas vezes, por engano ou porque um passo anterior fa
 - **FR-007**: O sistema MUST reconhecer decisões já espelhadas e relatá-las como existentes, sem criar item novo.
 - **FR-008**: O sistema MUST tratar a prévia como comportamento padrão, alterando o backlog apenas sob autorização explícita.
 - **FR-009**: O sistema MUST recusar de forma nomeada quando o repositório não tiver backlog vinculado, sem criar o vínculo por iniciativa própria.
-- **FR-010**: O sistema MUST relatar, por decisão, qual foi o desfecho: criada, já existente ou proposta.
+- **FR-010**: O sistema MUST relatar, por decisão, qual foi o desfecho: proposta, criada, já existente e correta, estado reconciliado, ou reconciliação recusada.
+- **FR-013**: Quando o estado desejado não for alcançável a partir do estado atual do item, o sistema MUST relatar a decisão como reconciliação recusada, sem tentar a transição e sem alterar o item.
+- **FR-014**: O sistema MUST calcular o conjunto completo de propostas antes de emitir qualquer mutação, de modo que toda recusa de pré-condição ocorra com o backlog intacto.
 - **FR-011**: O sistema MUST falar com o backlog apenas pela interface pública dele, nunca acessando o armazenamento diretamente.
 - **FR-012**: A cobertura automatizada MUST exercitar todos os caminhos acima sem exigir o backlog real instalado.
 
@@ -99,7 +103,8 @@ Um operador roda o espelho duas vezes, por engano ou porque um passo anterior fa
 - **SC-003**: Executar o espelho duas vezes seguidas sobre o mesmo trabalho não cria nenhum item adicional.
 - **SC-004**: Cada item criado permite identificar, sem ambiguidade, de qual trabalho e de qual decisão veio.
 - **SC-005**: A verificação automatizada completa passa nos três sistemas operacionais suportados sem o backlog real instalado.
-- **SC-006**: Nenhum cenário de recusa deixa o backlog em estado parcialmente alterado.
+- **SC-006**: Nenhuma recusa de pré-condição chega a alterar o backlog: falha de vínculo, de identidade ou de disponibilidade ocorre antes da primeira mutação, em 100% dos casos.
+- **SC-007**: Uma interrupção no meio da aplicação não exige reparo manual: a execução seguinte reconhece o que já existe, completa o que falta e não duplica nada.
 
 ## Assumptions
 
