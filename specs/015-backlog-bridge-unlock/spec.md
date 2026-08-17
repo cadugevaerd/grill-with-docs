@@ -81,11 +81,12 @@ Um operador roda o espelho duas vezes, por engano ou porque um passo anterior fa
 - **FR-007**: O sistema MUST reconhecer decisões já espelhadas e relatá-las como existentes, sem criar item novo.
 - **FR-008**: O sistema MUST tratar a prévia como comportamento padrão, alterando o backlog apenas sob autorização explícita.
 - **FR-009**: O sistema MUST recusar de forma nomeada quando o repositório não tiver backlog vinculado, sem criar o vínculo por iniciativa própria.
-- **FR-010**: O sistema MUST relatar, por decisão, qual foi o desfecho: proposta, criada, já existente e correta, estado reconciliado, ou reconciliação recusada.
-- **FR-013**: Quando o estado desejado não for alcançável a partir do estado atual do item, o sistema MUST relatar a decisão como reconciliação recusada, sem tentar a transição e sem alterar o item.
-- **FR-014**: O sistema MUST calcular o conjunto completo de propostas antes de emitir qualquer mutação, de modo que toda recusa de pré-condição ocorra com o backlog intacto.
+- **FR-010**: O sistema MUST relatar, por decisão, qual foi o desfecho: proposta, criada, já existente e correta, estado reconciliado, reconciliação recusada, ou estado de origem não reconhecido.
 - **FR-011**: O sistema MUST falar com o backlog apenas pela interface pública dele, nunca acessando o armazenamento diretamente.
 - **FR-012**: A cobertura automatizada MUST exercitar todos os caminhos acima sem exigir o backlog real instalado.
+- **FR-013**: Quando o estado desejado não for alcançável a partir do estado atual do item, o sistema MUST relatar a decisão como reconciliação recusada, sem tentar a transição e sem alterar o item.
+- **FR-014**: O sistema MUST calcular o conjunto completo de propostas antes de emitir qualquer mutação, de modo que toda recusa de pré-condição ocorra com o backlog intacto.
+- **FR-015**: Quando o estado declarado de uma decisão não pertencer ao vocabulário conhecido, o sistema MUST recusar de forma nomeada, sem criar nem transicionar item, e MUST nomear o valor ofensor. Presumir um estado padrão relataria decisão resolvida como em curso.
 
 ### Key Entities
 
@@ -105,6 +106,7 @@ Um operador roda o espelho duas vezes, por engano ou porque um passo anterior fa
 - **SC-005**: A verificação automatizada completa passa nos três sistemas operacionais suportados sem o backlog real instalado.
 - **SC-006**: Nenhuma recusa de pré-condição chega a alterar o backlog: falha de vínculo, de identidade ou de disponibilidade ocorre antes da primeira mutação, em 100% dos casos.
 - **SC-007**: Uma interrupção no meio da aplicação não exige reparo manual: a execução seguinte reconhece o que já existe, completa o que falta e não duplica nada.
+- **SC-008**: Toda resposta do comando nomeia o backlog que foi alvo, inclusive as recusas, de modo que a cobertura automatizada obtenha o mesmo resultado com e sem o binário do backlog instalado.
 
 ## Assumptions
 

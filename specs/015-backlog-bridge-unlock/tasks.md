@@ -146,3 +146,7 @@ Nota: o CLAUDE.md registra 877 como baseline histórica; o número real hoje é 
 - [x] T028 Relatar quando a mesma chave `(work_id, BL-NNNN)` aparecer em mais de um item do backlog, em vez de reconciliar silenciosamente apenas o primeiro, per FR-006 (partial)
 
 Ambas as tarefas de convergencia foram implementadas na mesma passagem. Suite do validador da ponte: 48 -> 51 testes.
+
+## Phase 8: Convergence
+
+- [x] T029 Declarar o desfecho `STATE-UNKNOWN` em `spec.md` FR-010, em `data-model.md` e no contrato `contracts/backlog-sync-cli.md`, e acrescentar FR-015 exigindo recusa nomeada para estado de decisão não reconhecido, per FR-010 (partial)

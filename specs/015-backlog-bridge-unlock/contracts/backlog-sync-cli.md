@@ -32,9 +32,9 @@ Saída: um objeto JSON por execução, em uma linha, chaves ordenadas.
 }
 ```
 
-`verdict` é `PREVIEW` quando nada mudou e `APPLIED` quando ao menos uma mutação ocorreu. `changed` acompanha.
+`verdict` é `PREVIEW` quando nada mudou e `APPLIED` quando ao menos uma mutação ocorreu. `changed` acompanha. `db` está presente em **todo** envelope, inclusive nas recusas, para que a resposta sempre diga qual store foi alvo.
 
-Cada entrada de `items` carrega `id`, `status` de desfecho, o `state` da decisão de origem e o `target` no backlog. Desfechos possíveis: `PROPOSED`, `APPLIED`, `REUSED`, `TRANSITIONED`, `TRANSITION-REFUSED`.
+Cada entrada de `items` carrega `id`, `status` de desfecho, o `state` da decisão de origem e o `target` no backlog. Desfechos possíveis: `PROPOSED`, `APPLIED`, `REUSED`, `TRANSITIONED`, `TRANSITION-REFUSED`, `STATE-UNKNOWN`.
 
 `TRANSITION-REFUSED` não é recusa da execução: o comando conclui, o item fica intocado e o operador decide. A ponte nunca emite `item reconcile-status` para contornar a FSM.
 
