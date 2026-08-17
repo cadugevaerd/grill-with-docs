@@ -484,6 +484,16 @@ class Reconciliation(unittest.TestCase):
         entry = payload["items"][0]
         self.assertEqual((entry["state"], entry["target"]), ("superseded", "cancelled"))
 
+    def test_an_unrecognised_state_fails_closed_instead_of_guessing(self) -> None:
+        # A typo used to be coerced to open, which would report a resolved
+        # decision as still in flight.
+        self.backlog("## BL-0001 — Typo\n- state: resolvd\n")
+        tools = self.bound([])
+        payload = self.sync(tools, apply=True)
+        self.assertEqual([entry["status"] for entry in payload["items"]], ["STATE-UNKNOWN"])
+        self.assertFalse(payload["changed"])
+        self.assertEqual(tools.mutations(), [])
+
     def test_a_decision_without_a_declared_state_is_treated_as_open(self) -> None:
         self.backlog("## BL-0001 — Sem estado\n- owner: alguem\n")
         payload = self.sync(self.bound([]), apply=False)
@@ -605,11 +615,14 @@ class SyncGate(unittest.TestCase):
     def test_the_subcommand_accepts_an_alternate_store(self) -> None:
         # Without --db the command always reaches the operator's real backlog,
         # so this coverage would consult a different store on CI than on a
-        # developer machine and pass for different reasons in each.
+        # developer machine and pass for different reasons in each. The
+        # assertion holds in both because every envelope, including the
+        # refusal raised when backlogctl is absent, names the targeted store.
         self.write_decision()
         store = self.root / "throwaway.db"
         _, payload = workspace("backlog-sync", self.root, "--work-id", "work-a", "--db", store)
         self.assertEqual(payload.get("db"), str(store))
+        self.assertNotEqual(payload.get("db"), str(Path("~/.backlog/backlog.db").expanduser()))
 
     def test_the_gate_is_still_wired_into_the_commands_that_need_it(self) -> None:
         source = WORKSPACE.read_text(encoding="utf-8")

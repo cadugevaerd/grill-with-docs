@@ -55,6 +55,15 @@ def sibling(name: str) -> Any:
     return module
 
 
+def store_path(db: str | None) -> str:
+    """Resolve the store a run targets, before anything can fail.
+
+    Every envelope reports it, including the refusals, so an operator always
+    knows which backlog was addressed even when the CLI is missing.
+    """
+    return str(Path(db or DEFAULT_DB).expanduser())
+
+
 class BacklogUnavailable(RuntimeError):
     """backlogctl could not be resolved or answered outside its contract."""
 
@@ -132,8 +141,8 @@ def resolve_backlog(root: Path, cli: str, tools: Any, db: str, requested: str | 
 
 def ensure_bind(root: Path, *, apply: bool = False, db: str | None = None, tools: Any = None,
                 code: str | None = None) -> dict[str, Any]:
+    store = store_path(db)
     cli, tools = resolve_cli(tools)
-    store = str(Path(db or DEFAULT_DB).expanduser())
     resolution = resolve_backlog(root, cli, tools, store, code)
     payload = {"schema": SCHEMA, "db": store, "backlog": resolution, "changed": False}
     if resolution["status"] == "BOUND" or not apply:
@@ -200,8 +209,8 @@ def describe(entry: dict[str, str], work_id: str, root: Path) -> str:
 
 def sync_items(root: Path, work_item: Path, work_id: str, *, apply: bool = False,
                db: str | None = None, tools: Any = None) -> dict[str, Any]:
+    store = store_path(db)
     cli, tools = resolve_cli(tools)
-    store = str(Path(db or DEFAULT_DB).expanduser())
     resolution = resolve_backlog(root, cli, tools, store)
     if resolution["status"] != "BOUND":
         return {"schema": SCHEMA, "db": store, "verdict": "BLOCKED", "code": "BACKLOG-NOT-BOUND",
@@ -215,7 +224,15 @@ def sync_items(root: Path, work_item: Path, work_id: str, *, apply: bool = False
     proposals: list[dict[str, Any]] = []
     for entry in entries:
         state = entry.get("state") or DEFAULT_STATE
-        target = STATE_TARGET.get(state, STATE_TARGET[DEFAULT_STATE])
+        if state not in STATE_TARGET:
+            # Coercing an unrecognised state to open would report a resolved
+            # decision as still in flight. Fail closed and name the offender
+            # instead of guessing; the bridge may run on a bundle the audit
+            # has not vetted.
+            proposals.append({"id": entry["id"], "state": state, "target": None,
+                              "action": "none", "status": "STATE-UNKNOWN"})
+            continue
+        target = STATE_TARGET[state]
         shared = {"id": entry["id"], "state": state, "target": target}
         found = known.get((work_id, entry["id"]))
         if found is None:
@@ -283,7 +300,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             payload = ensure_bind(root, apply=arguments.apply, db=arguments.db, code=arguments.code)
     except BacklogUnavailable as error:
-        payload = {"schema": SCHEMA, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}
+        payload = {"schema": SCHEMA, "db": store_path(arguments.db), "verdict": "BLOCKED",
+                   "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     return 0 if payload.get("verdict") in {"OK", "PREVIEW", "APPLIED"} else 2
 

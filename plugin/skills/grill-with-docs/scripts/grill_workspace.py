@@ -1153,7 +1153,8 @@ def backlog_sync_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]
     try:
         payload = bridge.sync_items(root, item, args.work_id, apply=args.apply, db=args.db)
     except bridge.BacklogUnavailable as error:
-        return {"schema": bridge.SCHEMA, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}, EXIT_BLOCKED
+        return {"schema": bridge.SCHEMA, "db": bridge.store_path(args.db), "verdict": "BLOCKED",
+                "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}, EXIT_BLOCKED
     return payload, EXIT_OK if payload.get("verdict") in {"PREVIEW", "APPLIED"} else EXIT_BLOCKED
 
 
