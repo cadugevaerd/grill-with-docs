@@ -82,9 +82,18 @@ def tree(root):
  if not root.exists(): return out
  for p in sorted(root.rglob('*')):
   key=str(p.relative_to(root))
-  if p.is_symlink(): out[key]='@link'
-  elif p.is_dir(): out[key]=('@dir',p.stat().st_mtime_ns)
-  else: out[key]=(hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns)
+  try:
+   if p.is_symlink(): out[key]='@link'
+   elif p.is_dir(): out[key]=('@dir',p.stat().st_mtime_ns)
+   else: out[key]=(hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns)
+  except FileNotFoundError:
+   # Git owns this tree and runs maintenance on it, creating and removing
+   # `.git/objects/maintenance.lock` between the two snapshots. An entry that
+   # vanishes mid-walk was never part of the state being asserted; recording
+   # it as absent is what keeps the assertion about the grill and not about
+   # git's housekeeping. Same defect family as SGD-12, which fixed only the
+   # status validator's own helper.
+   continue
  return out
 
 class Canonicalization(unittest.TestCase):
