@@ -7,3 +7,35 @@ converge:
     - "specs/**/review.md"
     - ".grill/work-items/**/state.json"
     - ".grill/work-items/**/ROUND-LOG.jsonl"
+
+# Ship. Adaptado a este repositorio, nao copiado do template: o backlog e
+# externo (backlogctl/SGD, sem BACKLOG.md) e os ADRs vivem por work item em
+# .grill/work-items/<id>/docs/adr, nao num docs/adr da raiz. Rotear aprendizado
+# para esses caminhos do template escreveria no lugar errado.
+ship:
+  require_verify_report: true
+  require_review_report: true
+  require_rollback_plan: true
+  require_monitoring_notes: true
+  default_decision_on_critical: "NO-GO"
+  remote: "origin"
+  base_branch: "main"
+  merge_strategy: "no-ff"
+  require_clean_worktree: true
+  rerun_integration_gates: true
+  learning_gate:
+    enabled: true
+    require_human_approval: true
+    require_evidence: true
+    deduplicate: true
+    auto_commit_versioned_changes: true
+    rerun_analyze_on_constitution_change: true
+    rerun_verify_review: true
+    # adr-docs e backlog ficam de fora: nao ha destino estatico valido neste
+    # repositorio, e um fallback silencioso escreveria no lugar errado.
+    allow_targets: ["agent-context", "memory", "discard"]
+    context_section_heading: "Project Learnings"
+  memory:
+    mode: "propose-only"
+    write_after_verified_merge: true
+    required: false

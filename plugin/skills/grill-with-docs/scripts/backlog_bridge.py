@@ -23,6 +23,20 @@ CONTRACT_VERSION = "2"
 CATEGORY = "general"
 CRITICALITY = {"critical", "high", "medium", "low"}
 DEFAULT_CRITICALITY = "medium"
+DEFAULT_STATE = "open"
+# ADR-0023 of this work item: a deferred decision is born ``in_progress`` because
+# ``open -> done`` is not a legal transition, so an item created ``open`` could
+# never reach ``done`` in one step and would force a fabricated intermediate.
+STATE_TARGET = {"open": "in_progress", "resolved": "done", "superseded": "cancelled"}
+# Measured exhaustively against backlogctl 2.4.0; the bridge never emits a
+# destination outside this table.
+LEGAL_TRANSITIONS = {
+    "open": {"open", "in_progress", "cancelled"},
+    "in_progress": {"open", "in_progress", "done", "cancelled"},
+    "done": {"done", "merged"},
+    "cancelled": {"open", "cancelled"},
+    "merged": {"merged"},
+}
 BLOCK = re.compile(r"(?m)^##\s+(BL-\d{4})\s+—\s+(.+?)\s*$")
 WORK_ID_MARKER = "grill-work-id"
 BL_MARKER = "grill-bl"
@@ -39,6 +53,15 @@ def sibling(name: str) -> Any:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def store_path(db: str | None) -> str:
+    """Resolve the store a run targets, before anything can fail.
+
+    Every envelope reports it, including the refusals, so an operator always
+    knows which backlog was addressed even when the CLI is missing.
+    """
+    return str(Path(db or DEFAULT_DB).expanduser())
 
 
 class BacklogUnavailable(RuntimeError):
@@ -118,8 +141,8 @@ def resolve_backlog(root: Path, cli: str, tools: Any, db: str, requested: str | 
 
 def ensure_bind(root: Path, *, apply: bool = False, db: str | None = None, tools: Any = None,
                 code: str | None = None) -> dict[str, Any]:
+    store = store_path(db)
     cli, tools = resolve_cli(tools)
-    store = str(Path(db or DEFAULT_DB).expanduser())
     resolution = resolve_backlog(root, cli, tools, store, code)
     payload = {"schema": SCHEMA, "db": store, "backlog": resolution, "changed": False}
     if resolution["status"] == "BOUND" or not apply:
@@ -136,7 +159,12 @@ def ensure_bind(root: Path, *, apply: bool = False, db: str | None = None, tools
 
 
 def parse_deferred(path: Path) -> list[dict[str, str]]:
-    """Read the open BL blocks of one work item's DECISION-BACKLOG.md."""
+    """Read every BL block of one work item's DECISION-BACKLOG.md.
+
+    State is carried out, never used to filter: mirroring only ``open`` blocks
+    made the mirror useful exactly while the audit gate refused the phase, so
+    a closed milestone had nothing left to mirror.
+    """
     if not path.is_file():
         return []
     audit = sibling("audit_decisions")
@@ -146,22 +174,50 @@ def parse_deferred(path: Path) -> list[dict[str, str]]:
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         values = audit.fields(text[match.end():end])
-        if values.get("state") != "open":
-            continue
         entries.append({"id": match.group(1), "title": match.group(2), **values})
     return entries
 
 
+def index_existing(existing: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
+    """Map (work_id, BL) to the item that already represents it.
+
+    The store accepts duplicates without complaining, so this index is the only
+    thing standing between a rerun and a second copy of every decision.
+    """
+    index: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in existing:
+        markers = dict(re.findall(rf"(?m)^({WORK_ID_MARKER}|{BL_MARKER}):\s*(.+)$", item.get("description") or ""))
+        work_id, bl_id = markers.get(WORK_ID_MARKER), markers.get(BL_MARKER)
+        if not (work_id and bl_id):
+            continue
+        key = (work_id.strip(), bl_id.strip())
+        if key in index:
+            # Duplicates predate this deduplication and the store never refused
+            # them. Reconciling the first silently would hide the rest, so the
+            # extra identities travel with the entry and surface in the report.
+            index[key].setdefault("duplicates", []).append(item.get("id"))
+            continue
+        index[key] = dict(item)
+    return index
+
+
 def describe(entry: dict[str, str], work_id: str, root: Path) -> str:
-    body = "\n".join(f"- {key}: {value}" for key, value in entry.items() if key not in {"id", "title"})
+    """Render the decision body, minus anything the item itself owns.
+
+    ``state`` is deliberately excluded: the item's own status is the authority
+    for it, and copying it into free text would freeze the value written at
+    creation while transitions moved the real one, leaving the description
+    asserting ``open`` on an item already ``done``.
+    """
+    body = "\n".join(f"- {key}: {value}" for key, value in entry.items() if key not in {"id", "title", "state"})
     return (f"{body}\n\n---\n{WORK_ID_MARKER}: {work_id}\n{BL_MARKER}: {entry['id']}\n"
             f"repo: {root}\norigem: grill-with-docs backlog-sync")
 
 
 def sync_items(root: Path, work_item: Path, work_id: str, *, apply: bool = False,
                db: str | None = None, tools: Any = None) -> dict[str, Any]:
+    store = store_path(db)
     cli, tools = resolve_cli(tools)
-    store = str(Path(db or DEFAULT_DB).expanduser())
     resolution = resolve_backlog(root, cli, tools, store)
     if resolution["status"] != "BOUND":
         return {"schema": SCHEMA, "db": store, "verdict": "BLOCKED", "code": "BACKLOG-NOT-BOUND",
@@ -169,33 +225,85 @@ def sync_items(root: Path, work_item: Path, work_id: str, *, apply: bool = False
     code = resolution["code"]
     entries = parse_deferred(work_item / "DECISION-BACKLOG.md")
     existing = call(cli, tools, store, ["item", "list", "--code", code]).get("data") or []
-    known = {
-        (found.get(WORK_ID_MARKER), found.get(BL_MARKER))
-        for found in (dict(re.findall(rf"(?m)^({WORK_ID_MARKER}|{BL_MARKER}):\s*(.+)$",
-                                      item.get("description") or "")) for item in existing)
-    }
+    known = index_existing(existing)
+    # FR-014: the whole proposal set is computed before the first mutation, so
+    # every precondition refusal happens with the backlog untouched.
     proposals: list[dict[str, Any]] = []
     for entry in entries:
-        if (work_id, entry["id"]) in known:
-            proposals.append({"id": entry["id"], "status": "REUSED"})
+        state = entry.get("state") or DEFAULT_STATE
+        if state not in STATE_TARGET:
+            # Coercing an unrecognised state to open would report a resolved
+            # decision as still in flight. Fail closed and name the offender
+            # instead of guessing; the bridge may run on a bundle the audit
+            # has not vetted.
+            proposals.append({"id": entry["id"], "state": state, "target": None,
+                              "action": "none", "status": "STATE-UNKNOWN"})
             continue
-        criticality = entry.get("criticality", DEFAULT_CRITICALITY)
-        proposals.append({
-            "id": entry["id"],
-            "status": "APPLIED" if apply else "PROPOSED",
-            "argv": ["item", "add", "--code", code,
-                     "--title", f"{entry['id']} — {entry['title']}",
-                     "--description", describe(entry, work_id, root),
-                     "--category", CATEGORY,
-                     "--criticality", criticality if criticality in CRITICALITY else DEFAULT_CRITICALITY],
-        })
+        target = STATE_TARGET[state]
+        shared = {"id": entry["id"], "state": state, "target": target}
+        found = known.get((work_id, entry["id"]))
+        if found is None:
+            criticality = entry.get("criticality", DEFAULT_CRITICALITY)
+            proposals.append({
+                **shared,
+                "action": "create",
+                "status": "APPLIED" if apply else "PROPOSED",
+                "argv": ["item", "add", "--code", code,
+                         "--title", f"{entry['id']} — {entry['title']}",
+                         "--description", describe(entry, work_id, root),
+                         "--category", CATEGORY,
+                         "--criticality", criticality if criticality in CRITICALITY else DEFAULT_CRITICALITY,
+                         "--status", target],
+            })
+            continue
+        duplicates = found.get("duplicates")
+        if duplicates:
+            shared["duplicates"] = list(duplicates)
+        current = found.get("status") or ""
+        # An item whose status the store did not report gives nothing to
+        # reconcile against; unknown is not evidence of divergence, so the
+        # link alone is enough to call it mirrored.
+        if not current or current == target:
+            proposals.append({**shared, "action": "none", "status": "REUSED", "item_id": found.get("id")})
+        elif target in LEGAL_TRANSITIONS.get(current, set()):
+            proposals.append({
+                **shared,
+                "action": "transition",
+                "status": "TRANSITIONED" if apply else "PROPOSED",
+                "item_id": found.get("id"),
+                "argv": ["item", "transition", "--id", str(found.get("id")), "--status", target],
+            })
+        else:
+            # No legal path from current to target. The bridge refuses instead of
+            # reaching for reconcile-status, which the backlog contract forbids
+            # as an ordinary transition.
+            proposals.append({**shared, "action": "none", "status": "TRANSITION-REFUSED",
+                              "item_id": found.get("id"), "current": current})
     changed = False
+    failure: str | None = None
     if apply:
         for proposal in proposals:
-            if proposal["status"] != "APPLIED":
+            if proposal.get("action") not in {"create", "transition"}:
                 continue
-            proposal["item"] = call(cli, tools, store, proposal["argv"]).get("data")
-            changed = True
+            if failure is not None:
+                # Something already broke. Stop writing, but keep the entry in
+                # the report so the operator sees what was left undone.
+                proposal["status"] = "SKIPPED"
+                continue
+            try:
+                proposal["item"] = call(cli, tools, store, proposal["argv"]).get("data")
+                changed = True
+            except BacklogUnavailable as error:
+                # There is no transaction across successive calls. Reporting a
+                # bare failure would assert that nothing happened while earlier
+                # items had already landed, so the partial record travels with
+                # the refusal.
+                proposal["status"] = "FAILED"
+                proposal["detail"] = str(error)
+                failure = str(error)
+    if failure is not None:
+        return {"schema": SCHEMA, "db": store, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE",
+                "detail": failure, "backlog": resolution, "changed": changed, "items": proposals}
     return {"schema": SCHEMA, "db": store, "verdict": "APPLIED" if changed else "PREVIEW",
             "backlog": resolution, "changed": changed, "items": proposals}
 
@@ -217,7 +325,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             payload = ensure_bind(root, apply=arguments.apply, db=arguments.db, code=arguments.code)
     except BacklogUnavailable as error:
-        payload = {"schema": SCHEMA, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}
+        payload = {"schema": SCHEMA, "db": store_path(arguments.db), "verdict": "BLOCKED",
+                   "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}
     print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
     return 0 if payload.get("verdict") in {"OK", "PREVIEW", "APPLIED"} else 2
 

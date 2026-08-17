@@ -39,7 +39,7 @@ Baseline atual: 877 testes, exit 0, com 1 skip dependente de ambiente em `valida
 - `--skip-backlog`: desliga a integração com o backlog;
 - `GRILL_SKIP_DEPENDENCIES=1`: desliga a detecção em ambiente air-gapped e **nunca** é reportado como `OK`.
 
-Subcomandos auxiliares: `preflight ROOT [--allow-install] [--skip-backlog]` e `backlog-sync ROOT --work-id ID [--apply]`.
+Subcomandos auxiliares: `preflight ROOT [--allow-install] [--skip-backlog]` e `backlog-sync ROOT --work-id ID [--apply] [--db PATH]`.
 
 ## Extensões do Spec Kit
 

@@ -1,0 +1,342 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "pending",
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
+    "state": "present"
+  },
+  "development": {
+    "audit": [
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+            "sha256": "2f15ead49251e6e5f08410a4aea66825e0b931956a305fe44293a911bf62d624"
+          },
+          {
+            "path": ".grill/work-items/feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/ROADMAP.md",
+            "sha256": "ccfdeb23431a1901712998825bda67ef6e98c9a1714f6bb11ab741e98544592d"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/spec.md",
+            "sha256": "d08323a141aeed1909a346dbbd3a719439ac6d7a79c3780ea4cac0210d8601a7"
+          },
+          {
+            "path": "specs/015-backlog-bridge-unlock/checklists/requirements.md",
+            "sha256": "f8df0acd6802732bedf4fb14ffe3ca0bb6e528baf23245ca0ded596bbaba42d7"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/plan.md",
+            "sha256": "4c3dbcf877d187af4fa1906f2a0f14f0b3d74dde1d32a6f7a5afa7b06c4c9a2b"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/plan.md",
+            "sha256": "4c3dbcf877d187af4fa1906f2a0f14f0b3d74dde1d32a6f7a5afa7b06c4c9a2b"
+          },
+          {
+            "path": "specs/015-backlog-bridge-unlock/research.md",
+            "sha256": "053b792be67d203015355183fccb4ead5d02290921368a10cc448065dee86ecb"
+          },
+          {
+            "path": "specs/015-backlog-bridge-unlock/data-model.md",
+            "sha256": "7b905cc1feea38c440e2f3d8df73fae6664c1d2941461ea6d9c82ced44ec1a43"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/checklists/bridge.md",
+            "sha256": "f742236c1f1f355ed1823e1c8e13e8f102ae265f2c716612b3bfa3b6b6f16334"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/checklists/bridge.md",
+            "sha256": "f742236c1f1f355ed1823e1c8e13e8f102ae265f2c716612b3bfa3b6b6f16334"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "6b15d63b795d8007554237119dbee67f729d76a6d0ed833b7705d2bbec2dff65"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "6b15d63b795d8007554237119dbee67f729d76a6d0ed833b7705d2bbec2dff65"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "0300efbc825e36a777af951fa7755a5eb9a3530c3d6c35cc0f804e5a6f3bb2c1"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "0300efbc825e36a777af951fa7755a5eb9a3530c3d6c35cc0f804e5a6f3bb2c1"
+          },
+          {
+            "path": "specs/015-backlog-bridge-unlock/spec.md",
+            "sha256": "9d8e05e4c0734547ff15cb73d267c6ad99f36bc16a72b7860f2f1344c770a342"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/agent-assignments.yml",
+            "sha256": "a878165dcde93908592f70fba555ba9b0d41962730f3035d86cccacaf71b277c"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/agent-assignments.yml",
+            "sha256": "a878165dcde93908592f70fba555ba9b0d41962730f3035d86cccacaf71b277c"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "0d8ad376c85652e2d75dd8fecf0ae1303676c28255c0df3c8dc76f466dce1eb2"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "0d8ad376c85652e2d75dd8fecf0ae1303676c28255c0df3c8dc76f466dce1eb2"
+          },
+          {
+            "path": "tests/validate_backlog_contract.py",
+            "sha256": "d62045a9fb907329bf20b547b82698ec650fc897d293ab918d50429af0ce6f41"
+          },
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/backlog_bridge.py",
+            "sha256": "008ef33bdfab82900497c380bd4986f178e2cd83ce31e797c5ace045fe8c30f8"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "68dd3c8724d3d01ed4acaf236f25ba61704af8e24118693643f0f36e759185f1"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "68dd3c8724d3d01ed4acaf236f25ba61704af8e24118693643f0f36e759185f1"
+          },
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/backlog_bridge.py",
+            "sha256": "961e685ebf865784b3a78da62993cc0252d4937b4ed5ec1c8e92452bfbc6a55c"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/verify.md",
+            "sha256": "1921002f661778519c355fb08ea00067b12326932934a44d4886a998a0753012"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/verify.md",
+            "sha256": "1921002f661778519c355fb08ea00067b12326932934a44d4886a998a0753012"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/review.md",
+            "sha256": "104300bba122d599c9e5382e72c874c4b463fd2413cda32072fcf6fe79b63a70"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/review.md",
+            "sha256": "104300bba122d599c9e5382e72c874c4b463fd2413cda32072fcf6fe79b63a70"
+          },
+          {
+            "path": "specs/015-backlog-bridge-unlock/verify.md",
+            "sha256": "0f80a216484eb44d494a944e25c37a32f907f54e750b3ccdde8a74f555b3f7bb"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "review"
+      }
+    ],
+    "current_step": "ship",
+    "execution_branch": "feat/backlog-ssot",
+    "schema": "grill-development/v1",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "agent-assign",
+      "agent-execute",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "pending",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    }
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "in-progress",
+  "version": "1.2.0",
+  "work_id": "feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4",
+    "version": "v2"
+  }
+}
