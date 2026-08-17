@@ -77,3 +77,13 @@ O que ele encontrou, e que a revisão do autor não tinha encontrado:
 Os quatro foram corrigidos. Os demais achados dele — divergência entre os dois parsers, relato de falha parcial, coerção de estado desconhecido — já tinham sido corrigidos em fases posteriores ao commit que ele revisou.
 
 Vale registrar o que isso mostra: a revisão do autor encontrou 16 defeitos e ainda assim deixou passar um teste morto que contradizia a própria correção que a fase entregou. A independência não era formalidade.
+
+### Correção do achado Critical (revisão independente, posterior)
+
+Este relatório afirmou que as mitigações da remoção eram "só sob autorização, só nomes do próprio plugin, e nunca seguindo o atalho". A terceira é verdadeira e **insuficiente**, e a primeira era falsa na prática.
+
+O revisor independente encontrou o que eu não vi: a remoção era acionada por `--allow-install`, flag documentada como "autoriza a instalação delegada e a criação/bind do backlog". Apagar diretório fora do repositório não está nessa descrição, e `init` repassa `allow_install`, então o caminho mais comum do plugin disparava a remoção. Um operador com cópia customizada em `~/.claude/skills/grill-with-docs/` rodando `init --allow-install` só pelo bind do backlog teria a customização apagada em silêncio — sem preview, num plugin em que todo o resto é preview-first com `--apply` dedicado.
+
+A documentação também estava errada, não incompleta: dizia que a remoção "tira apenas o atalho e preserva o destino". Vale para atalho; diretório real é apagado inteiro.
+
+Corrigido em v3.2.2: remoção exige `--remove-shadowed-skills`, que só existe no `preflight`; `init` nunca remove; a doc descreve o comportamento real; dois testes fixam o contrato.
