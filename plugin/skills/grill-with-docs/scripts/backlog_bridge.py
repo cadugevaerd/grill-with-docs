@@ -143,7 +143,14 @@ def resolve_backlog(root: Path, cli: str, tools: Any, db: str, requested: str | 
 
 
 def ensure_bind(root: Path, *, apply: bool = False, db: str | None = None, tools: Any = None,
-                code: str | None = None) -> dict[str, Any]:
+                code: str | None = None, create: bool = True) -> dict[str, Any]:
+    """Resolve, and optionally bind, the backlog that owns this repository.
+
+    ``create`` exists because binding and provisioning are different acts.
+    ``init`` binds to a backlog that already exists; conjuring one named after
+    whatever directory happens to be the root is not a prerequisite being
+    satisfied, it is the prerequisite being faked.
+    """
     store = store_path(db)
     cli, tools = resolve_cli(tools)
     resolution = resolve_backlog(root, cli, tools, store, code)
@@ -152,6 +159,10 @@ def ensure_bind(root: Path, *, apply: bool = False, db: str | None = None, tools
         payload["verdict"] = "OK" if resolution["status"] == "BOUND" else "PREVIEW"
         return payload
     if resolution["status"] == "NEEDS-CREATE":
+        if not create:
+            payload["verdict"] = "BLOCKED"
+            payload["code"] = "BACKLOG-NOT-FOUND"
+            return payload
         call(cli, tools, store, ["backlog", "create", "--code", resolution["code"],
                                  "--name", resolution["name"], "--profile", "software"])
     call(cli, tools, store, ["backlog", "bind", "--code", resolution["code"], "--path", str(root)])

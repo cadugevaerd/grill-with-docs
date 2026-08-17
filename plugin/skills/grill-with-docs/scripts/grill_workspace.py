@@ -1125,12 +1125,12 @@ def dependency_report(root: Path, *, allow_install: bool) -> dict[str, Any]:
         return {"schema": dependencies.SCHEMA, "verdict": "BLOCKED", "error": type(error).__name__}
 
 
-def backlog_report(root: Path, *, apply: bool) -> dict[str, Any]:
+def backlog_report(root: Path, *, apply: bool, create: bool = True, db: str | None = None) -> dict[str, Any]:
     bridge = sibling("backlog_bridge")
     try:
-        return bridge.ensure_bind(root, apply=apply)
+        return bridge.ensure_bind(root, apply=apply, create=create, db=db)
     except bridge.BacklogUnavailable as error:
-        return {"schema": bridge.SCHEMA, "db": bridge.store_path(None), "verdict": "BLOCKED",
+        return {"schema": bridge.SCHEMA, "db": bridge.store_path(db), "verdict": "BLOCKED",
                 "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}
 
 
@@ -1147,7 +1147,7 @@ def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         "dependencies": dependency_report(root, allow_install=args.allow_install),
     }
     if not args.skip_backlog:
-        payload["backlog"] = backlog_report(root, apply=args.allow_install)
+        payload["backlog"] = backlog_report(root, apply=args.allow_install, db=getattr(args, "db", None))
     payload["verdict"] = payload["dependencies"].get("verdict", "BLOCKED")
     return payload, EXIT_OK if payload["verdict"] == "OK" else EXIT_BLOCKED
 
@@ -1185,7 +1185,7 @@ def backlog_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any], int
     item = root / ".grill" / "work-items" / args.work_id
     bundle = read_local_bundle(root, item)
     validate_metadata(bundle.metadata, args.work_id)
-    report = backlog_report(root, apply=args.apply)
+    report = backlog_report(root, apply=args.apply, db=getattr(args, "db", None))
     if not backlog_is_bound(report):
         return {"schema": "grill-backlog/v1", "work_id": args.work_id, "verdict": "BLOCKED",
                 "code": "BACKLOG-REQUIRED", "backlog": report,
@@ -1278,7 +1278,10 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         # Binding no longer waits for --allow-install: the prerequisite is the
         # bind itself, and gating it behind an install flag is what let every
         # consumer repository stay unbound while looking configured.
-        environment["backlog"] = backlog_report(root, apply=True)
+        # create=False: init binds to a backlog that already exists. Creating
+        # one named after the root directory would satisfy the check by
+        # inventing the very thing it is supposed to verify.
+        environment["backlog"] = backlog_report(root, apply=True, create=False, db=getattr(args, "db", None))
         if not backlog_is_bound(environment["backlog"]):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "BACKLOG-REQUIRED",
                              environment["backlog"].get("code") or "no bound backlog")
@@ -3020,10 +3023,15 @@ def build_parser() -> JsonParser:
     init_parser.add_argument("--allow-install", action="store_true", dest="allow_install")
     init_parser.add_argument("--require-dependencies", action="store_true", dest="require_dependencies")
     init_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
+    # Same reason backlog-sync needed it: without --db every run reaches the
+    # operator's real store, so coverage would consult a different backlog on
+    # CI than on a developer machine — and, worse, could write to it.
+    init_parser.add_argument("--db")
     preflight_parser = subparsers.add_parser("preflight")
     preflight_parser.add_argument("root")
     preflight_parser.add_argument("--allow-install", action="store_true", dest="allow_install")
     preflight_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
+    preflight_parser.add_argument("--db")
     backlog_parser = subparsers.add_parser("backlog-sync")
     backlog_parser.add_argument("root")
     backlog_parser.add_argument("--work-id", required=True)
@@ -3033,6 +3041,7 @@ def build_parser() -> JsonParser:
     adopt_parser.add_argument("root")
     adopt_parser.add_argument("--work-id", required=True)
     adopt_parser.add_argument("--apply", action="store_true")
+    adopt_parser.add_argument("--db")
     project_parser = subparsers.add_parser("backlog-project")
     project_parser.add_argument("root")
     project_parser.add_argument("--work-id", required=True)

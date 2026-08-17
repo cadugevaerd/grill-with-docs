@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v3.2.0
+# Grill with Docs v3.2.1
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -45,7 +45,7 @@ O preflight é declarado em `assets/dependencies.json` e executado por `scripts/
 
 Três das extensões exigidas (`agent-assign`, `bugfix`, `verify-review-ship`) vivem no catálogo `community` do Spec Kit, que é discovery-only. Instalar por `--from <archive-url>` exige confirmação interativa de fonte não confiável, que um instalador automatizado não deve responder no lugar do humano. Por isso `--allow-install` registra o catálogo community como confiável em `.specify/extension-catalogs.yml` (`install_allowed: true`) e instala pelo nome. Essa é uma decisão de confiança explícita, versionada no repositório e revisável: a partir dela, `specify extension add` passa a instalar extensões de terceiros desse catálogo sem novo aviso.
 
-O backlog operacional é **exigido** desde a 3.0.0: `init` recusa com `BACKLOG-REQUIRED` sem backlog resolvido e vinculado, e o bind deixou de depender de `--allow-install`. `--skip-backlog` é a única saída, fica **carimbada** no `state.json` do work item e aparece em toda auditoria como `backlog_skipped` — um bundle criado por ela não pode parecer conforme com um pré-requisito que contornou. `backlog-adopt` limpa o carimbo depois que o repositório é vinculado, para que a saída não vire cela. As demais dependências continuam apenas detectadas e reportadas; `--allow-install` segue autorizando a instalação delegada. `--require-dependencies` transforma a falta em `MISSING-DEPENDENCY` fail-closed. `GRILL_SKIP_DEPENDENCIES=1` desliga a detecção em ambiente air-gapped e nunca é reportado como `OK`.
+O backlog operacional é **exigido** desde a 3.0.0: `init` recusa com `BACKLOG-REQUIRED` sem backlog resolvido e vinculado — e vincula apenas a backlog **existente**, nunca provisionando um novo, porque criar o que se deveria verificar não é verificar, e o bind deixou de depender de `--allow-install`. `--skip-backlog` é a única saída, fica **carimbada** no `state.json` do work item e aparece em toda auditoria como `backlog_skipped` — um bundle criado por ela não pode parecer conforme com um pré-requisito que contornou. `backlog-adopt` limpa o carimbo depois que o repositório é vinculado, para que a saída não vire cela. As demais dependências continuam apenas detectadas e reportadas; `--allow-install` segue autorizando a instalação delegada. `--require-dependencies` transforma a falta em `MISSING-DEPENDENCY` fail-closed. `GRILL_SKIP_DEPENDENCIES=1` desliga a detecção em ambiente air-gapped e nunca é reportado como `OK`.
 
 ```text
 python3 .../grill_workspace.py preflight ROOT [--allow-install] [--skip-backlog]
