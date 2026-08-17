@@ -142,7 +142,7 @@
     {
       "id": "backlogctl",
       "kind": "binary",
-      "required": false,
+      "required": true,
       "command": "backlogctl",
       "env": "BACKLOGCTL_EXECUTABLE",
       "version_args": [
@@ -153,7 +153,7 @@
         "${HOME}/.claude/plugins/data/backlog-claude-skills/bin/backlogctl"
       ],
       "owner": "plugin backlog",
-      "reason": "bind do repo e espelho de BL no backlog",
+      "reason": "bind do repo e espelho de BL no backlog; exigido desde a 3.0.0",
       "install": [
         [
           "node",

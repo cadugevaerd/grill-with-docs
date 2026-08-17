@@ -29,7 +29,7 @@ class StatusPublicContract(unittest.TestCase):
         subprocess.run(["git","-C",str(self.r),"add","."],check=True); subprocess.run(["git","-C",str(self.r),"commit","-qm","init"],check=True)
     def tearDown(self): self.t.cleanup()
     def item(self, wid="work-a", root=None):
-        root=root or self.r; p=cli(WS,"init",root,"--type","feature","--slug","alpha","--work-id",wid); self.assertEqual(p.returncode,0,p.stderr); return root/".grill/work-items"/wid
+        root=root or self.r; p=cli(WS,"init",root,"--type","feature","--slug","alpha","--work-id",wid, "--skip-backlog"); self.assertEqual(p.returncode,0,p.stderr); return root/".grill/work-items"/wid
     def test_core_entrypoint_zero_items_exact_schema(self):
         p,x=status(self.r); self.assertEqual(p.returncode,0)
         self.assertEqual(x["schema"],"grill-status/v1"); self.assertEqual(x["verdict"],"OK")

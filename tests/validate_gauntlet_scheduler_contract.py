@@ -147,7 +147,7 @@ def build_rebound_v3_repository(
     git(root, "add", "WORKFLOW.md")
     git(root, "commit", "-qm", "fixture workflow v2")
 
-    process, payload = invoke(WORKSPACE, "init", root, "--type", "feature", "--slug", slug, "--work-id", work_id)
+    process, payload = invoke(WORKSPACE, "init", root, "--type", "feature", "--slug", slug, "--work-id", work_id, "--skip-backlog")
     if process.returncode != 0 or payload.get("status") != "CREATED" or process.stderr:
         raise AssertionError((process.returncode, payload, process.stderr))
     process, payload = invoke(WORKSPACE, "migrate-v3", root, "--work-id", work_id, "--apply")

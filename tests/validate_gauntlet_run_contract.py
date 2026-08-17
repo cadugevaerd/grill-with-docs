@@ -313,7 +313,8 @@ def seed_worker_diagnosis(root: Path, work_id: str, run_id: str, worker_id: str,
 def add_activated_rebound_v3_work_item(root: Path, work_id: str) -> None:
     """Add a separate current V3 item through the public FASE-001 surface."""
     process, payload = invoke(
-        WORKSPACE, "init", root, "--type", "feature", "--slug", "durable-run-second", "--work-id", work_id
+        WORKSPACE, "init", root, "--type", "feature", "--slug", "durable-run-second",
+        "--work-id", work_id, "--skip-backlog",
     )
     if process.returncode != 0 or payload.get("status") != "CREATED" or process.stderr:
         raise AssertionError((process.returncode, payload, process.stderr))
@@ -340,7 +341,7 @@ def build_rebound_v3_repository(root: Path) -> None:
     git(root, "commit", "-qm", "fixture workflow v2")
 
     process, payload = invoke(
-        WORKSPACE, "init", root, "--type", "feature", "--slug", "durable-run", "--work-id", WORK_ID
+        WORKSPACE, "init", root, "--type", "feature", "--slug", "durable-run", "--work-id", WORK_ID, "--skip-backlog"
     )
     if process.returncode != 0 or payload.get("status") != "CREATED" or process.stderr:
         raise AssertionError((process.returncode, payload, process.stderr))

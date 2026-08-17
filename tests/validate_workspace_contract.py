@@ -119,7 +119,7 @@ class WorkspaceV2Contract(unittest.TestCase):
 
     def _init_item(self, root: Path | None = None, work_id: str = "work-a", kind: str = "feature", slug: str = "alpha") -> Path:
         root = root or self.root
-        process, payload = invoke("init", root, "--type", kind, "--slug", slug, "--work-id", work_id)
+        process, payload = invoke("init", root, "--type", kind, "--slug", slug, "--work-id", work_id, '--skip-backlog')
         self.assertEqual(process.returncode, 0, (payload, process.stderr))
         self.assertEqual(payload["status"], "CREATED")
         item = root / ".grill" / "work-items" / work_id
@@ -228,7 +228,7 @@ class WorkspaceV2Contract(unittest.TestCase):
         with mock.patch.object(module, "init_command", side_effect=error), mock.patch.object(module, "build_parser") as parser:
             parser.return_value.parse_args.return_value.command = "init"
             with mock.patch("builtins.print") as output:
-                self.assertEqual(module.main(["init", str(self.root), "--type", "feature", "--slug", "alpha"]), module.EXIT_BLOCKED)
+                self.assertEqual(module.main(["init", str(self.root), "--type", "feature", "--slug", "alpha", "--skip-backlog"]), module.EXIT_BLOCKED)
             payload = json.loads(output.call_args.args[0])
         self.assertEqual(payload, {"verdict": "BLOCKED", "code": "FILESYSTEM", "error": "[Errno 13] denied: 'source' -> 'target'", "errno": 13, "path": "source", "path2": "target"})
 
@@ -238,7 +238,7 @@ class WorkspaceV2Contract(unittest.TestCase):
         with mock.patch.object(module, "init_command", side_effect=error), mock.patch.object(module, "build_parser") as parser:
             parser.return_value.parse_args.return_value.command = "init"
             with mock.patch("builtins.print") as output:
-                self.assertEqual(module.main(["init", str(self.root), "--type", "feature", "--slug", "alpha"]), module.EXIT_BLOCKED)
+                self.assertEqual(module.main(["init", str(self.root), "--type", "feature", "--slug", "alpha", "--skip-backlog"]), module.EXIT_BLOCKED)
             line = output.call_args.args[0]
         payload = json.loads(line)
         self.assertEqual(payload["path"], "\\xffsource")
@@ -314,14 +314,14 @@ class WorkspaceV2Contract(unittest.TestCase):
 
     def test_init_reuse_identity_conflict_and_immutable_tamper(self) -> None:
         item = self._init_item(work_id="stable-id")
-        process, payload = invoke("init", self.root, "--type", "feature", "--slug", "alpha", "--work-id", "stable-id")
+        process, payload = invoke("init", self.root, "--type", "feature", "--slug", "alpha", "--work-id", "stable-id", '--skip-backlog')
         self.assertEqual((process.returncode, payload["status"]), (0, "REUSED"))
-        process, payload = invoke("init", self.root, "--type", "fix", "--slug", "alpha", "--work-id", "stable-id")
+        process, payload = invoke("init", self.root, "--type", "fix", "--slug", "alpha", "--work-id", "stable-id", '--skip-backlog')
         self.assertEqual((process.returncode, payload["code"]), (2, "IDENTITY-DIVERGENCE"))
         metadata = self._metadata(item)
         metadata["immutable"]["slug"] = "tampered"
         self._write_metadata(item, metadata)
-        process, payload = invoke("init", self.root, "--type", "feature", "--slug", "alpha", "--work-id", "stable-id")
+        process, payload = invoke("init", self.root, "--type", "feature", "--slug", "alpha", "--work-id", "stable-id", '--skip-backlog')
         self.assertEqual((process.returncode, payload["code"]), (2, "IMMUTABLE-TAMPERED"))
 
     def test_init_rejects_type_slug_and_work_id(self) -> None:
@@ -330,17 +330,17 @@ class WorkspaceV2Contract(unittest.TestCase):
             ("--type", "feature", "--slug", "../escape", "--work-id", "valid-id"),
             ("--type", "feature", "--slug", "alpha", "--work-id", "../escape"),
         ):
-            process, _payload = invoke("init", self.root, *args)
+            process, _payload = invoke("init", self.root, *args, '--skip-backlog')
             self.assertEqual(process.returncode, 2)
     @unittest.skipUnless(SYMLINK_SUPPORTED, "symlink creation is unavailable")
     def test_init_rejects_symlink_root(self) -> None:
         outside = self._new_repo()
         (self.root / ".grill").symlink_to(outside, target_is_directory=True)
-        process, payload = invoke("init", self.root, "--type", "feature", "--slug", "alpha", "--work-id", "safe-id")
+        process, payload = invoke("init", self.root, "--type", "feature", "--slug", "alpha", "--work-id", "safe-id", '--skip-backlog')
         self.assertEqual((process.returncode, payload["code"]), (2, "SYMLINK-REJECTED"))
 
     def test_concurrent_same_id_and_automatic_ids_do_not_corrupt(self) -> None:
-        command = ("init", self.root, "--type", "feature", "--slug", "parallel", "--work-id", "parallel-id")
+        command = ("init", self.root, "--type", "feature", "--slug", "parallel", "--work-id", "parallel-id", "--skip-backlog")
         with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
             results = list(executor.map(lambda _index: invoke(*command), range(6)))
         failures = [(process.returncode, payload) for process, payload in results if process.returncode != 0]
@@ -349,7 +349,7 @@ class WorkspaceV2Contract(unittest.TestCase):
         self.assertEqual(statuses.count("CREATED"), 1)
         self.assertEqual(statuses.count("REUSED"), 5)
         self.assertEqual(len(list((self.root / ".grill/work-items").glob("parallel-id"))), 1)
-        automatic = [invoke("init", self.root, "--type", "fix", "--slug", "automatic")[1]["work_id"] for _ in range(4)]
+        automatic = [invoke("init", self.root, "--type", "fix", "--slug", "automatic", '--skip-backlog')[1]["work_id"] for _ in range(4)]
         self.assertEqual(len(set(automatic)), 4)
 
     def test_audit_without_constitution_is_read_only_and_uses_real_auditor(self) -> None:
@@ -602,10 +602,10 @@ class WorkspaceV2Contract(unittest.TestCase):
         process, payload = invoke("audit", self.root, "--work-id", "stale-gate")
         self.assertEqual((process.returncode, payload["code"]), (3, "CONSTITUTION-STALE"))
         other = self._new_repo(); path = other / ".specify/memory/constitution.md"; path.parent.mkdir(parents=True); path.write_bytes(b"\xff")
-        process, _payload = invoke("init", other, "--type", "feature", "--slug", "utf", "--work-id", "utf-id")
+        process, _payload = invoke("init", other, "--type", "feature", "--slug", "utf", "--work-id", "utf-id", '--skip-backlog')
         self.assertEqual(process.returncode, 3)
         third = self._new_repo(); path = third / ".specify/memory/constitution.md"; path.parent.mkdir(parents=True); path.write_text("# C\n## [PROJECT_PRINCIPLE]\n", encoding="utf-8")
-        process, _payload = invoke("init", third, "--type", "feature", "--slug", "placeholder", "--work-id", "placeholder-id")
+        process, _payload = invoke("init", third, "--type", "feature", "--slug", "placeholder", "--work-id", "placeholder-id", '--skip-backlog')
         self.assertEqual(process.returncode, 3)
 
     def test_reconcile_source_root_and_real_qualified_ids(self) -> None:
@@ -928,7 +928,7 @@ class WorkspaceV2Contract(unittest.TestCase):
     def test_constitution_repeated_headings_get_unique_ids(self) -> None:
         constitution = self._constitution()
         constitution.write_text("# C\n## Rules\na\n## Rules\nb\n## Rules\nc\n", encoding="utf-8")
-        process, payload = invoke("init", self.root, "--type", "feature", "--slug", "repeat", "--work-id", "repeat")
+        process, payload = invoke("init", self.root, "--type", "feature", "--slug", "repeat", "--work-id", "repeat", '--skip-backlog')
         self.assertEqual(process.returncode, 0, payload)
         check = self._read_check(self.root / ".grill/work-items/repeat")
         self.assertEqual([entry["id"] for entry in check["clauses"]], ["rules", "rules-2", "rules-3"])

@@ -675,10 +675,18 @@ def state_template(root: Path, work_id: str, constitution: dict[str, Any], workf
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
 
-def initial_files(root: Path, work_id: str, immutable: dict[str, Any]) -> dict[str, bytes]:
+def initial_files(root: Path, work_id: str, immutable: dict[str, Any], *,
+                  backlog_skipped: bool = False) -> dict[str, bytes]:
     _, _, clauses = constitution_info(root)
     files = {name: read_asset(name) for name in ROOT_FILES if name not in {"state.json", "CONSTITUTION-CHECK.md"}}
     files["state.json"] = state_template(root, work_id, immutable["constitution"], immutable["workflow"])
+    if backlog_skipped:
+        # Stamped here, not after publication: initial_artifacts is computed
+        # from these bytes, so writing the stamp afterwards would make every
+        # bundle created through the escape hatch fail its own integrity gate.
+        state = json.loads(files["state.json"].decode("utf-8"))
+        state["backlog_skipped"] = True
+        files["state.json"] = (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
     files["CONSTITUTION-CHECK.md"] = check_document(immutable["constitution"], clauses, pending=immutable["constitution"]["state"] == "present")
     files["handoffs/FASE-001-SPECIFY-HANDOFF.md"] = (ASSETS / "PHASE-SPECIFY-HANDOFF.template.md").read_bytes()
     return files
@@ -1122,7 +1130,12 @@ def backlog_report(root: Path, *, apply: bool) -> dict[str, Any]:
     try:
         return bridge.ensure_bind(root, apply=apply)
     except bridge.BacklogUnavailable as error:
-        return {"schema": bridge.SCHEMA, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}
+        return {"schema": bridge.SCHEMA, "db": bridge.store_path(None), "verdict": "BLOCKED",
+                "code": "BACKLOG-UNAVAILABLE", "detail": str(error)}
+
+
+def backlog_is_bound(report: dict[str, Any]) -> bool:
+    return (report.get("backlog") or {}).get("status") == "BOUND"
 
 
 def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -1137,6 +1150,53 @@ def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         payload["backlog"] = backlog_report(root, apply=args.allow_install)
     payload["verdict"] = payload["dependencies"].get("verdict", "BLOCKED")
     return payload, EXIT_OK if payload["verdict"] == "OK" else EXIT_BLOCKED
+
+
+def write_state_field(item: Path, key: str, value: Any) -> None:
+    """Set or drop one field of state.json, atomically."""
+    path = item / "state.json"
+    state = json.loads(path.read_text(encoding="utf-8"))
+    if value is None:
+        state.pop(key, None)
+    else:
+        state[key] = value
+    staging = path.with_name(f".{path.name}.staging")
+    staging.write_text(json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    staging.replace(path)
+
+
+def stamp_backlog_skipped(item: Path) -> None:
+    """Record that this bundle was created without a bound backlog.
+
+    Without the stamp a bundle created through the escape hatch would be
+    indistinguishable from a compliant one, and the gate would end up
+    asserting a prerequisite it never checked.
+    """
+    write_state_field(item, "backlog_skipped", True)
+
+
+def backlog_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Clear the escape stamp once the repository is actually bound.
+
+    Without this the escape hatch would be a cell: a bundle created without a
+    backlog could never reach approval, even after being bound.
+    """
+    root = project_root(args.root)
+    item = root / ".grill" / "work-items" / args.work_id
+    bundle = read_local_bundle(root, item)
+    validate_metadata(bundle.metadata, args.work_id)
+    report = backlog_report(root, apply=args.apply)
+    if not backlog_is_bound(report):
+        return {"schema": "grill-backlog/v1", "work_id": args.work_id, "verdict": "BLOCKED",
+                "code": "BACKLOG-REQUIRED", "backlog": report,
+                "detail": "vincule o backlog antes de limpar o carimbo"}, EXIT_BLOCKED
+    state = json.loads((item / "state.json").read_text(encoding="utf-8"))
+    if not state.get("backlog_skipped"):
+        return {"schema": "grill-backlog/v1", "work_id": args.work_id, "verdict": "OK",
+                "code": "NOTHING-TO-ADOPT", "backlog": report, "changed": False}, EXIT_OK
+    write_state_field(item, "backlog_skipped", None)
+    return {"schema": "grill-backlog/v1", "work_id": args.work_id, "verdict": "APPLIED",
+            "backlog": report, "changed": True}, EXIT_OK
 
 
 def backlog_sync_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -1199,8 +1259,15 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "MISSING-DEPENDENCY",
                          ",".join(dependencies.get("missing_required") or ["unknown"]))
     environment = {"workflow": workflow, "dependencies": dependencies}
-    if not getattr(args, "skip_backlog", False):
-        environment["backlog"] = backlog_report(root, apply=getattr(args, "allow_install", False))
+    skipped_backlog = bool(getattr(args, "skip_backlog", False))
+    if not skipped_backlog:
+        # Binding no longer waits for --allow-install: the prerequisite is the
+        # bind itself, and gating it behind an install flag is what let every
+        # consumer repository stay unbound while looking configured.
+        environment["backlog"] = backlog_report(root, apply=True)
+        if not backlog_is_bound(environment["backlog"]):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "BACKLOG-REQUIRED",
+                             environment["backlog"].get("code") or "no bound backlog")
     target = root / ".grill" / "work-items" / work_id
     lock = acquire_lock(root, work_id, target, reuse_if_target_exists=True)
     try:
@@ -1212,7 +1279,7 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint, **environment}, EXIT_OK
         constitution_created, constitution_hash = ensure_managed_constitution(root)
         immutable = immutable_metadata(root, args, work_id)
-        files = initial_files(root, work_id, immutable)
+        files = initial_files(root, work_id, immutable, backlog_skipped=skipped_backlog)
         metadata = metadata_document(immutable, files)
         staging = write_bundle_staging(root, work_id, metadata, files)
         try:
@@ -1229,6 +1296,7 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         bundle = read_local_bundle(root, target)
         return {"status": "CREATED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
                 "constitution": "CREATED" if constitution_created else "PRESERVED", "constitution_sha256": constitution_hash,
+                "backlog_skipped": skipped_backlog,
                 **environment}, EXIT_OK
     finally:
         if lock is not None:
@@ -1335,7 +1403,24 @@ def audit_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         "constitutional": constitutional,
         "audit": receipt,
     }
+    # Surfaced on every verdict, never silenced. A bundle created through the
+    # escape hatch must not be able to look compliant with a prerequisite it
+    # bypassed. It does not flip the verdict on its own: blocking outright
+    # would make every air-gapped and CI-created bundle unauditable, which is a
+    # worse failure than the one it prevents.
+    if bundle_skipped_backlog(before):
+        payload["backlog_skipped"] = True
     return payload, exit_code
+
+
+def bundle_skipped_backlog(bundle: ItemBundle) -> bool:
+    raw = bundle.files.get("state.json")
+    if raw is None:
+        return False
+    try:
+        return bool(json.loads(raw.decode("utf-8")).get("backlog_skipped"))
+    except (UnicodeError, ValueError, AttributeError):
+        return False
 
 
 def local_items(root: Path) -> list[ItemBundle]:
@@ -2930,6 +3015,10 @@ def build_parser() -> JsonParser:
     backlog_parser.add_argument("--work-id", required=True)
     backlog_parser.add_argument("--apply", action="store_true")
     backlog_parser.add_argument("--db")
+    adopt_parser = subparsers.add_parser("backlog-adopt")
+    adopt_parser.add_argument("root")
+    adopt_parser.add_argument("--work-id", required=True)
+    adopt_parser.add_argument("--apply", action="store_true")
     project_parser = subparsers.add_parser("backlog-project")
     project_parser.add_argument("root")
     project_parser.add_argument("--work-id", required=True)
@@ -3113,6 +3202,7 @@ def main(argv: list[str] | None = None) -> int:
             "status": status_command,
             "preflight": preflight_command,
             "backlog-sync": backlog_sync_command,
+            "backlog-adopt": backlog_adopt_command,
             "backlog-project": backlog_project_command,
             "backlog-verify": backlog_verify_command,
         }
