@@ -93,7 +93,7 @@ class Identity(unittest.TestCase):
 class Resolution(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -142,7 +142,7 @@ class Resolution(unittest.TestCase):
 class BindLifecycle(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.original = MODULE.resolve_cli
 
     def tearDown(self) -> None:
@@ -191,7 +191,7 @@ class BindLifecycle(unittest.TestCase):
 class DeferredParsing(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -219,7 +219,7 @@ class DeferredParsing(unittest.TestCase):
 class ItemSync(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
         (self.item / "DECISION-BACKLOG.md").write_text(
@@ -311,7 +311,7 @@ class DeferredParsing(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.path = Path(self.temporary.name) / "DECISION-BACKLOG.md"
+        self.path = Path(self.temporary.name).resolve() / "DECISION-BACKLOG.md"
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -347,7 +347,7 @@ class Reconciliation(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
         self.original = MODULE.resolve_cli
@@ -585,7 +585,7 @@ class ParserAgreement(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.path = Path(self.temporary.name) / "DECISION-BACKLOG.md"
+        self.path = Path(self.temporary.name).resolve() / "DECISION-BACKLOG.md"
         self.audit = load_audit()
 
     def tearDown(self) -> None:
@@ -635,7 +635,7 @@ class Projection(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
         self.original = MODULE.resolve_cli
@@ -773,6 +773,11 @@ class Projection(unittest.TestCase):
         audit = load_audit()
         findings: list[str] = []
         path = audit.managed_path(self.item, "state.json", "state", findings)
+        # managed_path refuses an unsafe path and returns None. Dereferencing it
+        # turned a legitimate refusal into an AttributeError on macOS, where the
+        # temporary directory sits behind the /var to /private/var alias.
+        if path is None:
+            return findings
         loaded = json.loads(path.read_text(encoding="utf-8"))
         projected = loaded.get("decision_backlog_mode") == "projected"
         if projected and not audit.PROJECTION_MARK.search(text):
@@ -889,7 +894,7 @@ class SyncGate(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         subprocess.run(["git", "init", "-q", "-b", "main", str(self.root)], check=True)
         git(self.root, "config", "user.email", "tests@example.invalid")
         git(self.root, "config", "user.name", "Contract Tests")
@@ -966,7 +971,7 @@ class LegacyMigration(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
         self.original = MODULE.resolve_cli
@@ -1065,7 +1070,7 @@ class FailClosedPrerequisite(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         subprocess.run(["git", "init", "-q", "-b", "main", str(self.root)], check=True)
         git(self.root, "config", "user.email", "tests@example.invalid")
         git(self.root, "config", "user.name", "Contract Tests")
