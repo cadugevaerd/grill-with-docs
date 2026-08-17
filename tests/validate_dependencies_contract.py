@@ -350,11 +350,32 @@ class ShadowedSkills(unittest.TestCase):
         self.assertFalse(self.personal().is_symlink())
         self.assertTrue((target / "SKILL.md").is_file())
 
-    def test_removal_of_a_directory_shadow(self) -> None:
+    def test_removal_of_a_directory_shadow_takes_the_whole_directory(self) -> None:
+        # Destructive and irreversible: there is no smaller thing to remove when
+        # the shadow is a real directory. The contract has to say so plainly.
         self.personal().mkdir()
         (self.personal() / "SKILL.md").write_text("x", encoding="utf-8")
         self.assertTrue(MODULE.remove_shadowed_skill(self.detect()[0])["removed"])
         self.assertEqual(self.detect(), [])
+
+    def test_authorising_an_install_never_removes_a_shadow(self) -> None:
+        # allow_install authorises delegated installs and the backlog bind.
+        # Deleting a directory outside the repository is a different act, and
+        # hiding it behind a flag that does not name it is an implicit waiver.
+        self.personal().mkdir()
+        (self.personal() / "SKILL.md").write_text("nao apague", encoding="utf-8")
+        payload = MODULE.preflight(self.root, allow_install=True, tools=StubToolchain(environ=self.environ),
+                                   manifest={"dependencies": []})
+        self.assertTrue((self.personal() / "SKILL.md").is_file())
+        self.assertEqual([entry.get("removed") for entry in payload["shadowed_skills"]], [None])
+
+    def test_the_dedicated_flag_is_what_removes(self) -> None:
+        self.personal().mkdir()
+        (self.personal() / "SKILL.md").write_text("x", encoding="utf-8")
+        payload = MODULE.preflight(self.root, remove_shadows=True, tools=StubToolchain(environ=self.environ),
+                                   manifest={"dependencies": []})
+        self.assertEqual([entry["removed"] for entry in payload["shadowed_skills"]], [True])
+        self.assertFalse(self.personal().exists())
 
     def test_a_failed_removal_is_named_and_does_not_raise(self) -> None:
         result = MODULE.remove_shadowed_skill({"skill": "grill-with-docs",

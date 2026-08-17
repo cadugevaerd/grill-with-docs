@@ -186,7 +186,7 @@ class GauntletSchedulerContractHarness(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name) / "repo"
         build_rebound_v3_repository(self.root)
 
@@ -514,7 +514,7 @@ class GauntletDagAndWaveContractHarness(unittest.TestCase):
     effective-cap tests below can exercise a real, non-degenerate cap."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name) / "repo"
         build_rebound_v3_repository(self.root, max_workers=5)
         process, payload = invoke(WORKSPACE, "gauntlet-run", self.root, "--work-id", WORK_ID)
@@ -848,7 +848,7 @@ class GauntletProgressTerminationRemediationHarness(unittest.TestCase):
     non-degenerate cap."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name) / "repo"
         build_rebound_v3_repository(self.root, max_workers=5)
         process, payload = invoke(WORKSPACE, "gauntlet-run", self.root, "--work-id", WORK_ID)

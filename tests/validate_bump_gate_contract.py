@@ -211,7 +211,11 @@ class RealGit(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        # Git owns this tree and keeps working in it: background maintenance can
+        # write into .git/objects while the directory is being removed, and the
+        # teardown then dies with "Directory not empty" for a reason that has
+        # nothing to do with the assertion. Third instance of the SGD-12 family.
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name)
         self.previous = os.getcwd()
         self.git("init", "-q", "-b", "main", ".")

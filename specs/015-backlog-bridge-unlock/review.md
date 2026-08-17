@@ -82,3 +82,20 @@ Ressalvas que acompanham a aprovação, ambas não bloqueantes e ambas declarada
 2. SC-005 exige os três sistemas operacionais e só a matriz de CI verifica; permanece não verificado até a branch ser empurrada.
 
 > Revalidação: o fingerprint de árvore avançou de `7044396efb54` para `c85b04c9eda7` por uma mudança **exclusivamente de configuração** — o bloco `ship` acrescentado a `verify-review-ship-config.yml`, sem o qual o gate de ship é `BLOCKED` por invariante. Nenhum arquivo de produção ou de teste mudou. Os gates foram reexecutados sobre a árvore nova, com o mesmo resultado: 972 testes, exit 0. Veredito reafirmado.
+
+---
+
+## Correção posterior — a independência existiu
+
+Este relatório afirmou que o revisor independente não retornou. **Isso ficou falso.** Ele retornou depois, com três rodadas de revisão, e a afirmação de ausência de independência estava errada em todos os relatórios desta milestone.
+
+O que ele encontrou, e que a revisão do autor não tinha encontrado:
+
+- **Duas classes `DeferredParsing` com o mesmo nome** em `tests/validate_backlog_contract.py`. A segunda sobrescrevia a primeira no namespace do módulo, deixando dois testes mortos. Um deles, `test_only_open_blocks_are_mirrored`, afirmava o filtro `state: open` que a FASE-001 removeu de propósito — provado por execução direta: o teste esperava `['BL-0001']` e o código atual devolve `['BL-0001', 'BL-0002']`. Ele **reprovaria** se rodasse. A suíte reportava verde escondendo 2 de 101 métodos.
+- **`StubToolchain.mutations()` não contava `item transition`**, então um `assertEqual(mutations(), [])` diria "nada mutou" com uma transição real emitida. Nenhum teste passava pelo motivo errado hoje, mas o helper é reaproveitável e a armadilha era real.
+- **Docstring de `backlog_sync_command`** ainda dizia "the open BLs", contradizendo a mudança central da fase.
+- **Visibilidade de `STATE-UNKNOWN`**: uma decisão pulada por estado inválido saía com `verdict: PREVIEW` e exit 0. Quem lê só o código de saída não veria a omissão.
+
+Os quatro foram corrigidos. Os demais achados dele — divergência entre os dois parsers, relato de falha parcial, coerção de estado desconhecido — já tinham sido corrigidos em fases posteriores ao commit que ele revisou.
+
+Vale registrar o que isso mostra: a revisão do autor encontrou 16 defeitos e ainda assim deixou passar um teste morto que contradizia a própria correção que a fase entregou. A independência não era formalidade.

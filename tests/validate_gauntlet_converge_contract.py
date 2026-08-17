@@ -271,7 +271,7 @@ class GauntletConvergeContractHarness(unittest.TestCase):
     """
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name) / "repo"
         build_rebound_v3_repository(self.root)
         process, payload = invoke(WORKSPACE, "gauntlet-run", self.root, "--work-id", WORK_ID)
@@ -1418,7 +1418,7 @@ class ShipGateWithoutGauntletContract(unittest.TestCase):
     """FR-008: the gate is a no-op for a V2 work item with no Store at all."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name) / "repo"
         subprocess.run(["git", "init", "-q", "-b", "main", str(self.root)], check=True)
         git(self.root, "config", "user.email", "gauntlet-converge-contract@example.invalid")

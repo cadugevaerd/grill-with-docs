@@ -27,7 +27,7 @@ CHECK_END = "<!-- grill-constitution-check:end -->"
 
 
 def symlink_supported() -> bool:
-    with tempfile.TemporaryDirectory() as temporary:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
         root = Path(temporary)
         target = root / "target"
         target.mkdir()
@@ -92,7 +92,7 @@ def snapshot(root: Path) -> dict[str, bytes]:
 
 class WorkspaceV2Contract(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name)
         self.extra: list[tempfile.TemporaryDirectory] = []
         self._init_repo(self.root)
@@ -111,7 +111,7 @@ class WorkspaceV2Contract(unittest.TestCase):
         git(root, "commit", "-q", "-m", "initial workflow")
 
     def _new_repo(self) -> Path:
-        temporary = tempfile.TemporaryDirectory()
+        temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.extra.append(temporary)
         root = Path(temporary.name)
         self._init_repo(root)
@@ -194,7 +194,7 @@ class WorkspaceV2Contract(unittest.TestCase):
 
     def test_rename_child_fallback_does_not_open_when_capability_is_unavailable(self):
         module = load_workspace_module()
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary); source = parent / "source"; target = parent / "target"
             source.mkdir()
             with mock.patch.object(module.os, "supports_dir_fd", set()), mock.patch.object(module.os, "open", side_effect=AssertionError("open called")):
@@ -203,7 +203,7 @@ class WorkspaceV2Contract(unittest.TestCase):
 
     def test_rename_child_moves_directory_and_rejects_preexisting_target(self):
         module = load_workspace_module()
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary); source = parent / "source"; target = parent / "target"
             source.mkdir(); module.rename_child(parent, source, target)
             self.assertFalse(source.exists()); self.assertTrue(target.is_dir())
@@ -215,7 +215,7 @@ class WorkspaceV2Contract(unittest.TestCase):
         module = load_workspace_module()
         if not hasattr(module.os, "O_DIRECTORY") or not hasattr(module.os, "O_NOFOLLOW"): self.skipTest("unsupported")
         original_supports = module.os.supports_dir_fd
-        with tempfile.TemporaryDirectory() as temporary:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary); source = parent / "source"; target = parent / "target"; source.mkdir()
             real_open = module.os.open
             with mock.patch.object(module, "_rename_dirfd_capable", return_value=True), mock.patch.object(module.os, "open", wraps=real_open) as opened, mock.patch.object(module.os, "rename", wraps=module.os.rename) as renamed:
@@ -366,7 +366,7 @@ class WorkspaceV2Contract(unittest.TestCase):
 
     def test_audit_supports_artifact_root_outside_project_root(self) -> None:
         item = self._init_item(work_id="external-artifacts")
-        temporary = tempfile.TemporaryDirectory()
+        temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.extra.append(temporary)
         external = Path(temporary.name).resolve() / "arbitrary-directory-name"
         shutil.copytree(item, external)

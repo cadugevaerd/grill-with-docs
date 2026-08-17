@@ -282,10 +282,13 @@ def detect_shadowed_skills(root: Path, environ: dict[str, str] | None = None) ->
 
 
 def remove_shadowed_skill(entry: dict[str, Any]) -> dict[str, Any]:
-    """Remove one shadow, and only the shadow.
+    """Remove one shadow.
 
-    A symlink is unlinked, never followed: removing the target would destroy a
-    skill the operator may only have wanted to rename.
+    A symlink is unlinked, never followed, so the target survives. A real
+    directory, however, is removed **whole** — there is no smaller thing to
+    remove in that case. That is destructive and irreversible, which is why the
+    caller must ask for it through a flag that says so, and never as a side
+    effect of authorising a dependency install.
     """
     path = Path(entry["path"])
     try:
@@ -299,7 +302,7 @@ def remove_shadowed_skill(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def preflight(root: Path, *, allow_install: bool = False, tools: Toolchain | None = None,
-              manifest: dict[str, Any] | None = None) -> dict[str, Any]:
+              manifest: dict[str, Any] | None = None, remove_shadows: bool = False) -> dict[str, Any]:
     tools = tools or Toolchain()
     if tools.environ.get(SKIP_ENV) == "1":
         # Air-gapped and CI runs opt out explicitly; a skip never counts as OK,
@@ -316,7 +319,12 @@ def preflight(root: Path, *, allow_install: bool = False, tools: Toolchain | Non
         # Reported, never blocking: a shadow breaks the session command, but
         # refusing the whole preflight over it would hide the dependency report
         # the operator came for.
-        payload["shadowed_skills"] = [remove_shadowed_skill(entry) for entry in shadows] if allow_install else shadows
+        # Removal is deliberately NOT tied to allow_install. That flag
+        # authorises delegated installs and the backlog bind; deleting a
+        # directory outside the repository is a different act, and hiding it
+        # behind a flag that does not name it is the implicit waiver the
+        # constitution forbids. Detection always reports; removal is opt-in.
+        payload["shadowed_skills"] = [remove_shadowed_skill(entry) for entry in shadows] if remove_shadows else shadows
     missing = [report["id"] for report in reports if report["required"] and report["status"] != "present"]
     payload["missing_required"] = missing
     payload["verdict"] = "MISSING-DEPENDENCY" if missing else "OK"
@@ -327,10 +335,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("root")
     parser.add_argument("--allow-install", action="store_true")
+    parser.add_argument("--remove-shadowed-skills", action="store_true", dest="remove_shadows")
     arguments = parser.parse_args(argv)
     root = Path(arguments.root).expanduser().resolve()
     try:
-        payload = preflight(root, allow_install=arguments.allow_install)
+        payload = preflight(root, allow_install=arguments.allow_install, remove_shadows=arguments.remove_shadows)
     except (ManifestError, OSError, json.JSONDecodeError) as error:
         payload = {"schema": SCHEMA, "verdict": "BLOCKED", "error": type(error).__name__, "detail": str(error)}
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))

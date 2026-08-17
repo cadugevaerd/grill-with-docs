@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.2.2
+
+Corrige um defeito crítico de destrutividade introduzido pela 3.1.0, apontado por revisão independente.
+
+- A remoção de skill sombreada **deixa de ser acionada por `--allow-install`** e passa a exigir `--remove-shadowed-skills`, flag que só existe para isso e só no `preflight`. `init` nunca remove. `--allow-install` autoriza instalação delegada e bind do backlog; apagar diretório fora do repositório é outro ato, e escondê-lo atrás de uma flag que não o nomeia é o waiver implícito que a Constituição proíbe.
+- A documentação estava **errada**, não apenas incompleta. O `SKILL.md` afirmava que a remoção "tira apenas o atalho e preserva o destino". Isso vale para atalho; um diretório real era, e continua sendo sob a flag dedicada, apagado inteiro e sem volta. O texto agora diz isso.
+- Cenário concreto que isso destravava: um operador com cópia customizada em `~/.claude/skills/grill-with-docs/` rodava `init --allow-install` só querendo o bind do backlog, e a customização era apagada em silêncio.
+
 ## 3.2.1
 
 Corrige dois defeitos introduzidos pela 3.0.0 e descobertos na verificação final.

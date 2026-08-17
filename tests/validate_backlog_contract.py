@@ -56,7 +56,9 @@ class StubToolchain:
         return 0, envelope([])
 
     def mutations(self):
-        return [call for call in self.calls if call[2] in {"store", "create", "bind"} or call[2:4] in (["backlog", "create"], ["backlog", "bind"], ["item", "add"])]
+        # item transition muta tanto quanto item add: sem ela, um assert de
+        # "nenhuma mutacao" passaria com uma transicao real emitida.
+        return [call for call in self.calls if call[2] in {"store", "create", "bind"} or call[2:4] in (["backlog", "create"], ["backlog", "bind"], ["item", "add"], ["item", "transition"])]
 
 
 class Envelope(unittest.TestCase):
@@ -92,8 +94,8 @@ class Identity(unittest.TestCase):
 
 class Resolution(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.root = Path(self.temporary.name).resolve()
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -141,8 +143,8 @@ class Resolution(unittest.TestCase):
 
 class BindLifecycle(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.root = Path(self.temporary.name).resolve()
         self.original = MODULE.resolve_cli
 
     def tearDown(self) -> None:
@@ -188,38 +190,10 @@ class BindLifecycle(unittest.TestCase):
         self.assertEqual(json.loads(captured.getvalue())["code"], "BACKLOG-UNAVAILABLE")
 
 
-class DeferredParsing(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
-
-    def tearDown(self) -> None:
-        self.temporary.cleanup()
-
-    def write(self, text):
-        path = self.root / "DECISION-BACKLOG.md"
-        path.write_text(text, encoding="utf-8")
-        return path
-
-    def test_only_open_blocks_are_mirrored(self) -> None:
-        path = self.write(
-            "# DECISION-BACKLOG\n\n"
-            "## BL-0001 — Limite por cliente\n- state: open\n- motivo: pendente\n\n"
-            "## BL-0002 — Ja resolvida\n- state: resolved\n- motivo: fechada\n"
-        )
-        entries = MODULE.parse_deferred(path)
-        self.assertEqual([entry["id"] for entry in entries], ["BL-0001"])
-        self.assertEqual(entries[0]["motivo"], "pendente")
-
-    def test_absent_or_empty_backlog_yields_nothing(self) -> None:
-        self.assertEqual(MODULE.parse_deferred(self.root / "missing.md"), [])
-        self.assertEqual(MODULE.parse_deferred(self.write("# DECISION-BACKLOG\n")), [])
-
-
 class ItemSync(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
         (self.item / "DECISION-BACKLOG.md").write_text(
@@ -310,8 +284,8 @@ class DeferredParsing(unittest.TestCase):
     """T008 — state is carried out, never used to filter."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.path = Path(self.temporary.name) / "DECISION-BACKLOG.md"
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.path = Path(self.temporary.name).resolve() / "DECISION-BACKLOG.md"
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -338,16 +312,17 @@ class DeferredParsing(unittest.TestCase):
         ))
         self.assertEqual(len(entries), 2)
 
-    def test_a_missing_file_is_not_an_error(self) -> None:
+    def test_a_missing_or_empty_file_is_not_an_error(self) -> None:
         self.assertEqual(MODULE.parse_deferred(self.path.with_name("absent.md")), [])
+        self.assertEqual(MODULE.parse_deferred(self.write("# DECISION-BACKLOG\n")), [])
 
 
 class Reconciliation(unittest.TestCase):
     """T009, T012-T015, T024-T026 — creation state, dedup and state repair."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
         self.original = MODULE.resolve_cli
@@ -529,6 +504,10 @@ class Reconciliation(unittest.TestCase):
         self.assertEqual([entry["status"] for entry in payload["items"]], ["STATE-UNKNOWN"])
         self.assertFalse(payload["changed"])
         self.assertEqual(tools.mutations(), [])
+        # The skip has to reach the verdict, not just the item list: a caller
+        # reading only the exit code would otherwise see success.
+        self.assertEqual(payload["verdict"], "BLOCKED")
+        self.assertEqual(payload["skipped"], ["BL-0001"])
 
     def test_a_decision_without_a_declared_state_is_treated_as_open(self) -> None:
         self.backlog("## BL-0001 — Sem estado\n- owner: alguem\n")
@@ -584,8 +563,8 @@ class ParserAgreement(unittest.TestCase):
     }
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.path = Path(self.temporary.name) / "DECISION-BACKLOG.md"
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.path = Path(self.temporary.name).resolve() / "DECISION-BACKLOG.md"
         self.audit = load_audit()
 
     def tearDown(self) -> None:
@@ -634,8 +613,8 @@ class Projection(unittest.TestCase):
     """T005-T009, T014-T017, T023, T024 — generation, mark and verification."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
         self.original = MODULE.resolve_cli
@@ -773,6 +752,11 @@ class Projection(unittest.TestCase):
         audit = load_audit()
         findings: list[str] = []
         path = audit.managed_path(self.item, "state.json", "state", findings)
+        # managed_path refuses an unsafe path and returns None. Dereferencing it
+        # turned a legitimate refusal into an AttributeError on macOS, where the
+        # temporary directory sits behind the /var to /private/var alias.
+        if path is None:
+            return findings
         loaded = json.loads(path.read_text(encoding="utf-8"))
         projected = loaded.get("decision_backlog_mode") == "projected"
         if projected and not audit.PROJECTION_MARK.search(text):
@@ -888,8 +872,8 @@ class SyncGate(unittest.TestCase):
     """T004, T005, T007 — the subcommand gates identity, not artifact hashes."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.root = Path(self.temporary.name).resolve()
         subprocess.run(["git", "init", "-q", "-b", "main", str(self.root)], check=True)
         git(self.root, "config", "user.email", "tests@example.invalid")
         git(self.root, "config", "user.name", "Contract Tests")
@@ -965,8 +949,8 @@ class LegacyMigration(unittest.TestCase):
     """FASE-004 — authored bundles move into the projected model, once."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.root = Path(self.temporary.name).resolve()
         self.item = self.root / "item"
         self.item.mkdir()
         self.original = MODULE.resolve_cli
@@ -1064,8 +1048,8 @@ class FailClosedPrerequisite(unittest.TestCase):
     """T003, T004, T006, T007, T008 — the prerequisite becomes enforceable."""
 
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.root = Path(self.temporary.name).resolve()
         subprocess.run(["git", "init", "-q", "-b", "main", str(self.root)], check=True)
         git(self.root, "config", "user.email", "tests@example.invalid")
         git(self.root, "config", "user.name", "Contract Tests")
@@ -1143,8 +1127,16 @@ class FailClosedPrerequisite(unittest.TestCase):
     def test_creation_never_provisions_a_backlog(self) -> None:
         # Conjuring a backlog named after the root directory would satisfy the
         # check by inventing the very thing it is supposed to verify.
+        #
+        # The refusal reason legitimately differs by environment: without the
+        # binary it is UNAVAILABLE, with it and no match it is NOT-FOUND.
+        # Pinning one made this pass locally and fail on the matrix, which is
+        # the same environment coupling this milestone kept correcting.
         code, payload = self.create()
-        self.assertEqual(payload.get("error"), "BACKLOG-NOT-FOUND")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(payload.get("code"), "BACKLOG-REQUIRED")
+        self.assertIn(payload.get("error"), {"BACKLOG-NOT-FOUND", "BACKLOG-UNAVAILABLE"})
+        self.assertFalse((self.root / ".grill/work-items/wx").exists())
 
     def test_adoption_refuses_while_the_repository_is_unbound(self) -> None:
         self.create("--skip-backlog")

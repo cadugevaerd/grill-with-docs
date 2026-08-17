@@ -60,3 +60,30 @@ Nenhum.
 - APPROVE: run `/speckit.verify-review-ship.ship`
 
 Ressalvas: sem revisor independente; SC-005 pendente da matriz de CI.
+
+---
+
+## Correção posterior — a independência existiu
+
+Este relatório afirmou que o revisor independente não retornou. **Isso ficou falso.** Ele retornou depois, com três rodadas de revisão, e a afirmação de ausência de independência estava errada em todos os relatórios desta milestone.
+
+O que ele encontrou, e que a revisão do autor não tinha encontrado:
+
+- **Duas classes `DeferredParsing` com o mesmo nome** em `tests/validate_backlog_contract.py`. A segunda sobrescrevia a primeira no namespace do módulo, deixando dois testes mortos. Um deles, `test_only_open_blocks_are_mirrored`, afirmava o filtro `state: open` que a FASE-001 removeu de propósito — provado por execução direta: o teste esperava `['BL-0001']` e o código atual devolve `['BL-0001', 'BL-0002']`. Ele **reprovaria** se rodasse. A suíte reportava verde escondendo 2 de 101 métodos.
+- **`StubToolchain.mutations()` não contava `item transition`**, então um `assertEqual(mutations(), [])` diria "nada mutou" com uma transição real emitida. Nenhum teste passava pelo motivo errado hoje, mas o helper é reaproveitável e a armadilha era real.
+- **Docstring de `backlog_sync_command`** ainda dizia "the open BLs", contradizendo a mudança central da fase.
+- **Visibilidade de `STATE-UNKNOWN`**: uma decisão pulada por estado inválido saía com `verdict: PREVIEW` e exit 0. Quem lê só o código de saída não veria a omissão.
+
+Os quatro foram corrigidos. Os demais achados dele — divergência entre os dois parsers, relato de falha parcial, coerção de estado desconhecido — já tinham sido corrigidos em fases posteriores ao commit que ele revisou.
+
+Vale registrar o que isso mostra: a revisão do autor encontrou 16 defeitos e ainda assim deixou passar um teste morto que contradizia a própria correção que a fase entregou. A independência não era formalidade.
+
+### Correção do achado Critical (revisão independente, posterior)
+
+Este relatório afirmou que as mitigações da remoção eram "só sob autorização, só nomes do próprio plugin, e nunca seguindo o atalho". A terceira é verdadeira e **insuficiente**, e a primeira era falsa na prática.
+
+O revisor independente encontrou o que eu não vi: a remoção era acionada por `--allow-install`, flag documentada como "autoriza a instalação delegada e a criação/bind do backlog". Apagar diretório fora do repositório não está nessa descrição, e `init` repassa `allow_install`, então o caminho mais comum do plugin disparava a remoção. Um operador com cópia customizada em `~/.claude/skills/grill-with-docs/` rodando `init --allow-install` só pelo bind do backlog teria a customização apagada em silêncio — sem preview, num plugin em que todo o resto é preview-first com `--apply` dedicado.
+
+A documentação também estava errada, não incompleta: dizia que a remoção "tira apenas o atalho e preserva o destino". Vale para atalho; diretório real é apagado inteiro.
+
+Corrigido em v3.2.2: remoção exige `--remove-shadowed-skills`, que só existe no `preflight`; `init` nunca remove; a doc descreve o comportamento real; dois testes fixam o contrato.
