@@ -15,7 +15,7 @@
 - delivery-units: DU-001
 
 ## FASE-002 — Projeção versionada e determinística
-- state: ready-for-specify
+- state: complete
 - objetivo: DECISION-BACKLOG.md passa a ser gerado, byte-idêntico em reexecução, e a auditoria o valida sem processo externo
 - scope-in: Geração canônica, fingerprint da autoridade, comando explícito de verificação de frescor, auditoria offline
 - scope-out: Consulta à autoridade dentro do gate de auditoria
@@ -27,7 +27,7 @@
 - delivery-units: DU-002
 
 ## FASE-003 — Pré-requisito fail-closed
-- state: planned
+- state: ready-for-specify
 - objetivo: O backlog operacional vira exigência declarada e o init recusa sem vínculo
 - scope-in: backlogctl como dependência exigida, bind no init, saída --skip-backlog carimbada no bundle
 - scope-out: Remoção da saída explícita, alteração da matriz de CI

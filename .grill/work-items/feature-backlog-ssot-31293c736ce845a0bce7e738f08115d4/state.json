@@ -511,9 +511,93 @@
         "reason": "",
         "state": "complete",
         "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          },
+          {
+            "path": "specs/016-decision-projection/review.md",
+            "sha256": "e6e05cd958615971a2f52de606e4bec7eda4e86be1ff16846035ef31e9f06ee7"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          },
+          {
+            "path": "specs/016-decision-projection/review.md",
+            "sha256": "e6e05cd958615971a2f52de606e4bec7eda4e86be1ff16846035ef31e9f06ee7"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/verify.md",
+            "sha256": "75a13a42224f381414c644087ca1b00e08535696789870648f72a21f50b25228"
+          },
+          {
+            "path": "specs/016-decision-projection/review.md",
+            "sha256": "e6e05cd958615971a2f52de606e4bec7eda4e86be1ff16846035ef31e9f06ee7"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "review"
       }
     ],
-    "current_step": "converge",
+    "current_step": "ship",
     "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
@@ -534,13 +618,13 @@
       "agent-execute": "complete",
       "analyze": "complete",
       "checklist": "complete",
-      "converge": "pending",
+      "converge": "complete",
       "plan": "complete",
-      "review": "pending",
+      "review": "complete",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "complete"
     }
   },
   "limits": {
