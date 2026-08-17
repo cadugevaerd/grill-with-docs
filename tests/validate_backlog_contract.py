@@ -802,6 +802,50 @@ class Projection(unittest.TestCase):
         MODULE.project(self.root, self.item, "w", apply=True, db=DB)
         self.assertEqual(self.audit_findings("projected", self.projection()), [])
 
+    def test_a_record_from_an_older_generator_is_recognised_not_just_diverged(self) -> None:
+        # FR-018: an older format must be identifiable, so a migration can tell
+        # "written by a previous version" apart from "someone edited this".
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        path = self.item / "DECISION-BACKLOG.md"
+        path.write_text(self.projection().replace(MODULE.PROJECTION_FORMAT, "grill-projection/v0"), encoding="utf-8")
+        payload = MODULE.verify(self.root, self.item, "w", db=DB)
+        self.assertIn("FORMAT-OLDER", [d["type"] for d in payload["divergences"]])
+
+    def test_verification_refuses_instead_of_claiming_freshness(self) -> None:
+        # FR-012: without the authority there is nothing to compare against,
+        # and silence would read as "fresh".
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+
+        def refuse(given=None):
+            raise MODULE.BacklogUnavailable("backlogctl not installed")
+
+        MODULE.resolve_cli = refuse
+        with self.assertRaises(MODULE.BacklogUnavailable):
+            MODULE.verify(self.root, self.item, "w", db=DB)
+
+    def test_a_failed_write_leaves_the_previous_record_intact(self) -> None:
+        # SC-007: staging plus rename means the reader never sees a half file.
+        self.bound([self.linked("w", "BL-0001")])
+        MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        good = self.projection()
+        path = self.item / "DECISION-BACKLOG.md"
+        original = MODULE.atomic_projection_write
+        try:
+            def explode(target, content):
+                staging = target.with_name(f".{target.name}.staging")
+                staging.write_text(content[: len(content) // 2], encoding="utf-8")
+                raise OSError("disk went away")
+
+            MODULE.atomic_projection_write = explode
+            self.bound([self.linked("w", "BL-0001", status="done")])
+            with self.assertRaises(OSError):
+                MODULE.project(self.root, self.item, "w", apply=True, db=DB)
+        finally:
+            MODULE.atomic_projection_write = original
+        self.assertEqual(path.read_text(encoding="utf-8"), good)
+
     def test_a_change_outside_this_work_item_does_not_move_the_mark(self) -> None:
         mine = [self.linked("w", "BL-0001")]
         self.bound(mine)
