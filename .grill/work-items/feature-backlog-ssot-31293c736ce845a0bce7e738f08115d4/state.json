@@ -124,9 +124,37 @@
         "reason": "",
         "state": "complete",
         "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "0300efbc825e36a777af951fa7755a5eb9a3530c3d6c35cc0f804e5a6f3bb2c1"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/tasks.md",
+            "sha256": "0300efbc825e36a777af951fa7755a5eb9a3530c3d6c35cc0f804e5a6f3bb2c1"
+          },
+          {
+            "path": "specs/015-backlog-bridge-unlock/spec.md",
+            "sha256": "9d8e05e4c0734547ff15cb73d267c6ad99f36bc16a72b7860f2f1344c770a342"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
       }
     ],
-    "current_step": "analyze",
+    "current_step": "agent-assign",
     "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
@@ -145,7 +173,7 @@
     "steps": {
       "agent-assign": "pending",
       "agent-execute": "pending",
-      "analyze": "pending",
+      "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
       "plan": "complete",

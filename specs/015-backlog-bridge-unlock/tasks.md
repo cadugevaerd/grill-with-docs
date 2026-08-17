@@ -32,7 +32,7 @@ Pré-requisitos bloqueantes. O mapa de estados é consumido por todas as histór
 - [ ] T004 [US1] Escrever teste que monta bundle temporário, altera `DECISION-BACKLOG.md` após a criação e exige que `backlog_sync_command` não retorne `BUNDLE-INTEGRITY`, em `tests/validate_backlog_contract.py`
 - [ ] T005 [US1] Escrever teste que adultera o bloco `immutable` do mesmo bundle e exige recusa `IMMUTABLE-TAMPERED`, em `tests/validate_backlog_contract.py`
 - [ ] T006 [US1] Substituir `validate_bundle_integrity` por `validate_metadata` em `backlog_sync_command`, em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`
-- [ ] T007 [US1] Confirmar que `validate_bundle_integrity` permanece em uso nos demais comandos que exigem bundle intocado, em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`
+- [ ] T007 [US1] Escrever teste que exige `BUNDLE-INTEGRITY` ainda alcançável por um comando que legitimamente requer bundle intocado, provando que o gate não foi removido globalmente, em `tests/validate_backlog_contract.py`
 
 **Checkpoint**: história 1 entregue e testável sozinha.
 
@@ -73,13 +73,20 @@ Pré-requisitos bloqueantes. O mapa de estados é consumido por todas as histór
 
 ## Phase 6: Polish & Cross-Cutting
 
+- [ ] T024 [P] Escrever teste que exige zero mutação quando `--apply` está ausente, após a refatoração de `sync_items`, cobrindo FR-008, em `tests/validate_backlog_contract.py`
+- [ ] T025 [P] Escrever teste que exige as recusas `BACKLOG-NOT-BOUND` e `BACKLOG-UNAVAILABLE` preservadas após a refatoração, cobrindo FR-009, em `tests/validate_backlog_contract.py`
+- [ ] T026 [P] Escrever teste que simula falha após a primeira mutação e exige que a execução seguinte complete sem duplicar, cobrindo SC-007, em `tests/validate_backlog_contract.py`
 - [ ] T019 [P] Acrescentar o `state` de origem e o `target` a cada entrada de `items` no envelope de saída, conforme o contrato, em `plugin/skills/grill-with-docs/scripts/backlog_bridge.py`
 - [ ] T020 [P] Atualizar a descrição de `backlog-sync` em `plugin/skills/grill-with-docs/SKILL.md` para refletir que decisões de qualquer estado são espelhadas
-- [ ] T021 Bump de `2.8.0` para `2.9.0` nos oito lugares: `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`, constante `VERSION` em `tests/validate_distribution.py`, heading de `plugin/skills/grill-with-docs/SKILL.md`, heading de `plugin/skills/grill-with-docs/references/session-protocol.md`, e heading de `README.md`
+- [ ] T021 Rodar `python3 tests/validate_distribution.py` para confirmar consistência antes de mexer, e então fazer o bump de `2.8.0` para `2.9.0` nos oito lugares: `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`, constante `VERSION` em `tests/validate_distribution.py`, heading de `plugin/skills/grill-with-docs/SKILL.md`, heading de `plugin/skills/grill-with-docs/references/session-protocol.md`, e heading de `README.md`
 - [ ] T022 Registrar a mudança em `CHANGELOG.md`
-- [ ] T023 Rodar `python3 tests/run_validators.py` e exigir exit 0 com contagem maior que a baseline de T001
+- [ ] T023 Rodar `python3 tests/run_validators.py` e exigir exit 0 com contagem maior que a baseline de 940 de T001. SC-005, que exige os três sistemas operacionais, é verificado pela matriz de CI e não por esta tarefa
 
 ---
+
+## Cobertura acrescentada após `analyze`
+
+T024, T025 e T026 fecham as três lacunas apontadas: FR-008, FR-009 e SC-007 não tinham tarefa. T007 deixou de ser inspeção e virou teste. Cobertura sai de 18/21 para 21/21.
 
 ## Dependencies
 
