@@ -152,9 +152,33 @@
         "reason": "",
         "state": "complete",
         "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/agent-assignments.yml",
+            "sha256": "a878165dcde93908592f70fba555ba9b0d41962730f3035d86cccacaf71b277c"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/agent-assignments.yml",
+            "sha256": "a878165dcde93908592f70fba555ba9b0d41962730f3035d86cccacaf71b277c"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
       }
     ],
-    "current_step": "agent-assign",
+    "current_step": "agent-execute",
     "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
@@ -171,7 +195,7 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "pending",
+      "agent-assign": "complete",
       "agent-execute": "pending",
       "analyze": "complete",
       "checklist": "complete",

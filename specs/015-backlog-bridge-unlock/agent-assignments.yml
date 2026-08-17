@@ -1,0 +1,108 @@
+# Agent Assignments
+# Feature: 015-backlog-bridge-unlock — Destravar a ponte com o backlog operacional
+# Generated: 2026-08-17
+# Command: /speckit.agent-assign.assign
+#
+# Confirmacao: aceita pelo operador via diretiva de sessao "seguir o workflow
+# ate o work item estar finalizado", que instrui a nao pausar. Registrado aqui
+# em vez de simulada como resposta interativa.
+
+agents_scanned:
+  - name: "engineering-minimal-change-engineer"
+    source: "user"
+    description: "Diffs minimos; recusa scope creep; prefere repeticao a abstracao prematura"
+  - name: "engineering-backend-architect"
+    source: "user"
+    description: "Logica de servico, estado e integracao"
+  - name: "testing-api-tester"
+    source: "user"
+    description: "Validacao de contrato, envelopes e superficie de CLI"
+  - name: "engineering-devops-automator"
+    source: "user"
+    description: "Distribuicao, versionamento e pipeline"
+  - name: "engineering-code-reviewer"
+    source: "user"
+    description: "Revisao de correcao, manutenibilidade e seguranca"
+
+# 217 definicoes de agente existem no nivel de usuario; nenhuma no nivel de
+# projeto. Apenas as cinco acima sao pertinentes a esta fase.
+
+assignments:
+  T001:
+    agent: "default"
+    reason: "Executar a suite e registrar baseline; nenhuma especializacao aplicavel"
+  T002:
+    agent: "engineering-minimal-change-engineer"
+    reason: "Acrescentar constante de mapa de estados; o risco e crescer alem do necessario"
+  T003:
+    agent: "testing-api-tester"
+    reason: "Fixa o mapa de estados e proibe destinos ilegais, afirmando sobre comando emitido"
+  T004:
+    agent: "testing-api-tester"
+    reason: "Regressao do gate de integridade sobre bundle temporario"
+  T005:
+    agent: "testing-api-tester"
+    reason: "Regressao da recusa por adulteracao de identidade"
+  T006:
+    agent: "engineering-minimal-change-engineer"
+    reason: "Troca de uma unica chamada de validacao em grill_workspace.py"
+  T007:
+    agent: "testing-api-tester"
+    reason: "Prova que BUNDLE-INTEGRITY continua alcancavel onde e legitimo"
+  T008:
+    agent: "testing-api-tester"
+    reason: "Cobre parse_deferred devolvendo estados terminais"
+  T009:
+    agent: "testing-api-tester"
+    reason: "Afirma sobre o --status emitido na criacao"
+  T010:
+    agent: "engineering-minimal-change-engineer"
+    reason: "Remocao do filtro de estado; mudanca de duas linhas"
+  T011:
+    agent: "engineering-minimal-change-engineer"
+    reason: "Propagacao do estado para o --status da criacao"
+  T012:
+    agent: "testing-api-tester"
+    reason: "Idempotencia sob reaplicacao"
+  T013:
+    agent: "testing-api-tester"
+    reason: "Reconciliacao de estado divergente"
+  T014:
+    agent: "testing-api-tester"
+    reason: "Recusa de transicao inalcancavel, sem emitir comando"
+  T015:
+    agent: "testing-api-tester"
+    reason: "Colisao de identificador local entre work items distintos"
+  T016:
+    agent: "engineering-minimal-change-engineer"
+    reason: "Converter conjunto em indice; alteracao contida em sync_items"
+  T017:
+    agent: "engineering-backend-architect"
+    reason: "Logica de reconciliacao com cinco desfechos; a unica tarefa com desenho real"
+  T018:
+    agent: "engineering-minimal-change-engineer"
+    reason: "Ordenar calculo antes de mutacao, conforme FR-014"
+  T019:
+    agent: "engineering-minimal-change-engineer"
+    reason: "Acrescentar campos ao envelope de saida"
+  T020:
+    agent: "default"
+    reason: "Atualizacao de documentacao da skill"
+  T021:
+    agent: "engineering-devops-automator"
+    reason: "Bump coordenado nos oito lugares travados pelo contrato de distribuicao"
+  T022:
+    agent: "default"
+    reason: "Registro em CHANGELOG"
+  T023:
+    agent: "default"
+    reason: "Portao final; executar a suite completa"
+  T024:
+    agent: "testing-api-tester"
+    reason: "FR-008, previa como padrao apos a refatoracao"
+  T025:
+    agent: "testing-api-tester"
+    reason: "FR-009, recusas preservadas apos a refatoracao"
+  T026:
+    agent: "testing-api-tester"
+    reason: "SC-007, convergencia apos interrupcao"
