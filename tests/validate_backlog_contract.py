@@ -56,7 +56,9 @@ class StubToolchain:
         return 0, envelope([])
 
     def mutations(self):
-        return [call for call in self.calls if call[2] in {"store", "create", "bind"} or call[2:4] in (["backlog", "create"], ["backlog", "bind"], ["item", "add"])]
+        # item transition muta tanto quanto item add: sem ela, um assert de
+        # "nenhuma mutacao" passaria com uma transicao real emitida.
+        return [call for call in self.calls if call[2] in {"store", "create", "bind"} or call[2:4] in (["backlog", "create"], ["backlog", "bind"], ["item", "add"], ["item", "transition"])]
 
 
 class Envelope(unittest.TestCase):
@@ -188,34 +190,6 @@ class BindLifecycle(unittest.TestCase):
         self.assertEqual(json.loads(captured.getvalue())["code"], "BACKLOG-UNAVAILABLE")
 
 
-class DeferredParsing(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name).resolve()
-
-    def tearDown(self) -> None:
-        self.temporary.cleanup()
-
-    def write(self, text):
-        path = self.root / "DECISION-BACKLOG.md"
-        path.write_text(text, encoding="utf-8")
-        return path
-
-    def test_only_open_blocks_are_mirrored(self) -> None:
-        path = self.write(
-            "# DECISION-BACKLOG\n\n"
-            "## BL-0001 — Limite por cliente\n- state: open\n- motivo: pendente\n\n"
-            "## BL-0002 — Ja resolvida\n- state: resolved\n- motivo: fechada\n"
-        )
-        entries = MODULE.parse_deferred(path)
-        self.assertEqual([entry["id"] for entry in entries], ["BL-0001"])
-        self.assertEqual(entries[0]["motivo"], "pendente")
-
-    def test_absent_or_empty_backlog_yields_nothing(self) -> None:
-        self.assertEqual(MODULE.parse_deferred(self.root / "missing.md"), [])
-        self.assertEqual(MODULE.parse_deferred(self.write("# DECISION-BACKLOG\n")), [])
-
-
 class ItemSync(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -338,8 +312,9 @@ class DeferredParsing(unittest.TestCase):
         ))
         self.assertEqual(len(entries), 2)
 
-    def test_a_missing_file_is_not_an_error(self) -> None:
+    def test_a_missing_or_empty_file_is_not_an_error(self) -> None:
         self.assertEqual(MODULE.parse_deferred(self.path.with_name("absent.md")), [])
+        self.assertEqual(MODULE.parse_deferred(self.write("# DECISION-BACKLOG\n")), [])
 
 
 class Reconciliation(unittest.TestCase):
@@ -529,6 +504,10 @@ class Reconciliation(unittest.TestCase):
         self.assertEqual([entry["status"] for entry in payload["items"]], ["STATE-UNKNOWN"])
         self.assertFalse(payload["changed"])
         self.assertEqual(tools.mutations(), [])
+        # The skip has to reach the verdict, not just the item list: a caller
+        # reading only the exit code would otherwise see success.
+        self.assertEqual(payload["verdict"], "BLOCKED")
+        self.assertEqual(payload["skipped"], ["BL-0001"])
 
     def test_a_decision_without_a_declared_state_is_treated_as_open(self) -> None:
         self.backlog("## BL-0001 — Sem estado\n- owner: alguem\n")

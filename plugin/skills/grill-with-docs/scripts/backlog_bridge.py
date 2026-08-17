@@ -320,6 +320,14 @@ def sync_items(root: Path, work_item: Path, work_id: str, *, apply: bool = False
     if failure is not None:
         return {"schema": SCHEMA, "db": store, "verdict": "BLOCKED", "code": "BACKLOG-UNAVAILABLE",
                 "detail": failure, "backlog": resolution, "changed": changed, "items": proposals}
+    skipped = [entry["id"] for entry in proposals if entry["status"] == "STATE-UNKNOWN"]
+    if skipped:
+        # A decision skipped for an unreadable state must reach the exit code.
+        # Buried in items only, an automated caller reading the verdict would
+        # see success while a decision was silently left out — the same class
+        # of silence this work item exists to remove.
+        return {"schema": SCHEMA, "db": store, "verdict": "BLOCKED", "code": "STATE-UNKNOWN",
+                "skipped": skipped, "backlog": resolution, "changed": changed, "items": proposals}
     return {"schema": SCHEMA, "db": store, "verdict": "APPLIED" if changed else "PREVIEW",
             "backlog": resolution, "changed": changed, "items": proposals}
 

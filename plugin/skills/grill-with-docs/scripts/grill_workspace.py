@@ -1200,7 +1200,7 @@ def backlog_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any], int
 
 
 def backlog_sync_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    """Mirror the open BLs of one work item into the bound backlog, preview-first."""
+    """Mirror every BL of one work item into the bound backlog, preview-first."""
     root = project_root(args.root)
     item = root / ".grill" / "work-items" / args.work_id
     bundle = read_local_bundle(root, item)
