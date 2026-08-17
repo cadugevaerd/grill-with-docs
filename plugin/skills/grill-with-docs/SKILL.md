@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v3.0.0
+# Grill with Docs v3.1.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -68,6 +68,8 @@ A deduplicação é por `(work_id, BL-NNNN)`, lida dos marcadores da descrição
 O registro carrega uma marca de origem que cobre **apenas** a fatia deste work item — mudança em decisão de outro work item, ou de outro repositório que compartilhe o mesmo backlog, não a altera. O campo `revision` do backlog não serve para isso, porque avança a cada mexida em qualquer item.
 
 `backlog-verify` compara registro e autoridade e devolve `FRESH` ou `DIVERGED`, nomeando cada decisão divergente. Sem o backlog disponível ele recusa, em vez de afirmar frescor. A auditoria **não** faz essa comparação: ela é offline por decisão, para que o veredito seja reproduzível em qualquer clone, e só exige a marca quando o bundle já se declarou projetado.
+
+O preflight também detecta **skill sombreada**: um nome publicado por este plugin que exista como skill pessoal ou de projeto. O relato nomeia o caminho e, quando é atalho, o destino resolvido; atalho quebrado conta como sombra, porque continua ocupando o nome. Por padrão só reporta; `--allow-install` autoriza a remoção, que tira apenas o atalho e preserva o destino. O alcance é restrito aos nomes deste plugin — ele não opina sobre nomes de terceiros.
 
 `WORK-ITEM.json` registra metadata imutável e hash canônico: `work_id`, tipo, slug, branch, HEAD, base ref/commit, Constituição e workflow. Escopo, dependências e conflitos ADR permanecem declarados em campos próprios para reconciliação.
 

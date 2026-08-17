@@ -236,6 +236,68 @@ def install(root: Path, manifest: dict[str, Any], reports: Iterable[dict[str, An
     return results
 
 
+PUBLISHED_SKILLS = ("grill-with-docs",)
+
+
+def skill_search_roots(root: Path, environ: dict[str, str]) -> list[Path]:
+    """Where a same-named skill can shadow the plugin's own.
+
+    Project scope first, then the user's, which is the order a host agent
+    resolves. The plugin's own cache is deliberately absent: a copy living
+    there is the plugin, not a shadow of it.
+    """
+    home = Path(environ.get("HOME") or environ.get("USERPROFILE") or "~").expanduser()
+    return [root / ".claude" / "skills", root / ".agents" / "skills",
+            home / ".claude" / "skills", home / ".agents" / "skills"]
+
+
+def detect_shadowed_skills(root: Path, environ: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """Report every published name that also exists outside the plugin.
+
+    Observed defect: a personal skill named after the plugin won the host's
+    resolution, and the session command reached a version without the
+    protocol's subcommands. Nothing warned; the discovery came from an
+    argument making no sense to whoever answered.
+
+    Scope stays on the plugin's own names. It has authority over those and
+    none over third-party ones, and sweeping the whole environment for any
+    duplicate would raise false alarms.
+    """
+    environ = environ if environ is not None else dict(os.environ)
+    found: list[dict[str, Any]] = []
+    for base in skill_search_roots(root, environ):
+        for name in PUBLISHED_SKILLS:
+            candidate = base / name
+            # A broken link still occupies the name, so is_symlink comes first:
+            # exists() is False for a dangling one and would hide the shadow.
+            if not candidate.is_symlink() and not candidate.exists():
+                continue
+            entry: dict[str, Any] = {"skill": name, "path": str(candidate),
+                                     "kind": "symlink" if candidate.is_symlink() else "directory"}
+            if candidate.is_symlink():
+                entry["target"] = os.path.realpath(candidate)
+                entry["broken"] = not candidate.exists()
+            found.append(entry)
+    return found
+
+
+def remove_shadowed_skill(entry: dict[str, Any]) -> dict[str, Any]:
+    """Remove one shadow, and only the shadow.
+
+    A symlink is unlinked, never followed: removing the target would destroy a
+    skill the operator may only have wanted to rename.
+    """
+    path = Path(entry["path"])
+    try:
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        else:
+            shutil.rmtree(path)
+    except OSError as error:
+        return {**entry, "removed": False, "error": type(error).__name__}
+    return {**entry, "removed": True}
+
+
 def preflight(root: Path, *, allow_install: bool = False, tools: Toolchain | None = None,
               manifest: dict[str, Any] | None = None) -> dict[str, Any]:
     tools = tools or Toolchain()
@@ -249,6 +311,12 @@ def preflight(root: Path, *, allow_install: bool = False, tools: Toolchain | Non
     if allow_install and any(report["status"] != "present" for report in reports):
         payload["installed"] = install(root, manifest, reports, tools)
         payload["dependencies"] = reports = detect(root, manifest, tools)
+    shadows = detect_shadowed_skills(root, tools.environ)
+    if shadows:
+        # Reported, never blocking: a shadow breaks the session command, but
+        # refusing the whole preflight over it would hide the dependency report
+        # the operator came for.
+        payload["shadowed_skills"] = [remove_shadowed_skill(entry) for entry in shadows] if allow_install else shadows
     missing = [report["id"] for report in reports if report["required"] and report["status"] != "present"]
     payload["missing_required"] = missing
     payload["verdict"] = "MISSING-DEPENDENCY" if missing else "OK"
