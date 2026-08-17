@@ -1143,8 +1143,16 @@ class FailClosedPrerequisite(unittest.TestCase):
     def test_creation_never_provisions_a_backlog(self) -> None:
         # Conjuring a backlog named after the root directory would satisfy the
         # check by inventing the very thing it is supposed to verify.
+        #
+        # The refusal reason legitimately differs by environment: without the
+        # binary it is UNAVAILABLE, with it and no match it is NOT-FOUND.
+        # Pinning one made this pass locally and fail on the matrix, which is
+        # the same environment coupling this milestone kept correcting.
         code, payload = self.create()
-        self.assertEqual(payload.get("error"), "BACKLOG-NOT-FOUND")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(payload.get("code"), "BACKLOG-REQUIRED")
+        self.assertIn(payload.get("error"), {"BACKLOG-NOT-FOUND", "BACKLOG-UNAVAILABLE"})
+        self.assertFalse((self.root / ".grill/work-items/wx").exists())
 
     def test_adoption_refuses_while_the_repository_is_unbound(self) -> None:
         self.create("--skip-backlog")
