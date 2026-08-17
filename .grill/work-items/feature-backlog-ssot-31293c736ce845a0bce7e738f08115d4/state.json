@@ -288,10 +288,41 @@
         "reason": "",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/review.md",
+            "sha256": "f831761bed921a5cacd75628d15f8bca5db76a7e29bb59230d894f655c7973e0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/015-backlog-bridge-unlock/ship.md",
+            "sha256": "80ff86cb558f573e137ec78c745e6ea7b6b62720aa9252b8d63c6d01488077a9"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "previous_execution_branch": "feat/backlog-ssot",
+        "reason": "FASE-001 complete e mergeada em main como 68adb0d; publicacao adiada para a FASE-005 por decisao do operador. Abrindo FASE-002, projecao versionada e deterministica.",
+        "state": "turned",
+        "step": "phase-turn"
       }
     ],
-    "current_step": "ship",
-    "execution_branch": "feat/backlog-ssot",
+    "current_step": "specify",
+    "execution_branch": null,
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -307,17 +338,17 @@
       "ship"
     ],
     "steps": {
-      "agent-assign": "complete",
-      "agent-execute": "complete",
-      "analyze": "complete",
-      "checklist": "complete",
-      "converge": "complete",
-      "plan": "complete",
-      "review": "complete",
+      "agent-assign": "pending",
+      "agent-execute": "pending",
+      "analyze": "pending",
+      "checklist": "pending",
+      "converge": "pending",
+      "plan": "pending",
+      "review": "pending",
       "ship": "pending",
-      "specify": "complete",
-      "tasks": "complete",
-      "verify": "complete"
+      "specify": "pending",
+      "tasks": "pending",
+      "verify": "pending"
     }
   },
   "limits": {
