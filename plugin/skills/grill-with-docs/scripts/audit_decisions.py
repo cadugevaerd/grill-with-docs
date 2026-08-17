@@ -421,12 +421,15 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
                     findings.append(f"ROADMAP: ordem não topológica {phase.phase_id}->{dependency}")
 
     projected_mode = False
+    backlog_skipped = False
     if state_path and state_path.is_file():
         try:
             declared = json.loads(state_path.read_text(encoding="utf-8"))
-            projected_mode = isinstance(declared, dict) and declared.get("decision_backlog_mode") == "projected"
         except (OSError, ValueError):
-            projected_mode = False
+            declared = {}
+        if isinstance(declared, dict):
+            projected_mode = declared.get("decision_backlog_mode") == "projected"
+            backlog_skipped = bool(declared.get("backlog_skipped"))
 
     backlog_items: dict[str, dict[str, str]] = {}
     if backlog and backlog.is_file():

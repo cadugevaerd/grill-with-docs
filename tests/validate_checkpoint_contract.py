@@ -13,7 +13,7 @@ class CheckpointContract(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory(); self.r=Path(self.t.name); subprocess.run(['git','init','-q','-b','main',str(self.r)],check=True); (self.r/'WORKFLOW.md').write_bytes(TEMPLATE.read_bytes())
   subprocess.run(['git','-C',str(self.r),'add','.'],check=True); subprocess.run(['git','-C',str(self.r),'config','user.email','t@e']); subprocess.run(['git','-C',str(self.r),'config','user.name','t']); subprocess.run(['git','-C',str(self.r),'commit','-qm','init']);
-  self.assertEqual(run('init',self.r,'--type','feature','--slug','x','--work-id','wx').returncode,0); (self.r/'e').write_text('e')
+  self.assertEqual(run('init',self.r,'--type','feature','--slug','x','--work-id','wx','--skip-backlog').returncode,0); (self.r/'e').write_text('e')
  def tearDown(self): self.t.cleanup()
  def call(self,step,state,**kw):
   a=['checkpoint',self.r,'--work-id','wx','--step',step,'--state',state]

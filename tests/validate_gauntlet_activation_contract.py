@@ -191,6 +191,7 @@ def build_v2_repository(root: Path) -> None:
         "gauntlet-ready",
         "--work-id",
         WORK_ID,
+        "--skip-backlog",
     )
     if process.returncode != 0 or payload.get("status") != "CREATED" or process.stderr:
         raise AssertionError(
@@ -257,6 +258,7 @@ def add_rebound_v3_work_item(root: Path, work_id: str) -> None:
         "gauntlet-second",
         "--work-id",
         work_id,
+        "--skip-backlog",
     )
     if process.returncode != 0 or payload.get("status") != "CREATED" or process.stderr:
         raise AssertionError((process.returncode, payload, process.stderr))

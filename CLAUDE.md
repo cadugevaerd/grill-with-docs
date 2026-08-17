@@ -33,10 +33,11 @@ Baseline atual: 877 testes, exit 0, com 1 skip dependente de ambiente em `valida
 
 `grill_workspace.py init` fixa o `WORKFLOW.md` antes de montar o bundle e reporta o estado das dependências externas em `dependencies`. O preflight é declarado em `plugin/skills/grill-with-docs/assets/dependencies.json`.
 
-- padrão: só detecta e reporta, nunca bloqueia;
+- **backlogctl é exigido desde a 3.0.0**: `init` recusa com `BACKLOG-REQUIRED` sem backlog vinculado;
+- demais dependências: só detecta e reporta, nunca bloqueia;
 - `--allow-install`: autoriza a instalação delegada e a criação/bind do backlog. Essa flag é a confirmação explícita que o contrato do backlog exige;
 - `--require-dependencies`: torna a falta um `MISSING-DEPENDENCY` fail-closed;
-- `--skip-backlog`: desliga a integração com o backlog;
+- `--skip-backlog`: única saída para criar sem backlog. Fica carimbada em `state.json` e aparece em toda auditoria como `backlog_skipped`. `backlog-adopt ROOT --work-id ID --apply` limpa o carimbo depois do vínculo;
 - `GRILL_SKIP_DEPENDENCIES=1`: desliga a detecção em ambiente air-gapped e **nunca** é reportado como `OK`.
 
 Subcomandos auxiliares: `preflight ROOT [--allow-install] [--skip-backlog]` e `backlog-sync ROOT --work-id ID [--apply] [--db PATH]`.

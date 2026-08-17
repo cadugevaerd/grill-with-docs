@@ -897,7 +897,7 @@ class SyncGate(unittest.TestCase):
         git(self.root, "add", "WORKFLOW.md")
         git(self.root, "commit", "-q", "-m", "initial workflow")
         code, payload = workspace("init", self.root, "--type", "feature", "--slug", "alpha",
-                                  "--work-id", "work-a", "--skip-backlog")
+                                  "--work-id", "work-a", "--skip-backlog", '--skip-backlog')
         self.assertEqual(code, 0, payload)
         self.item = self.root / ".grill" / "work-items" / "work-a"
 
@@ -959,6 +959,91 @@ class SyncGate(unittest.TestCase):
         source = WORKSPACE.read_text(encoding="utf-8")
         self.assertGreaterEqual(source.count("validate_bundle_integrity(bundle)"), 3)
         self.assertNotIn("validate_bundle_integrity", source.split("def backlog_sync_command")[1].split("\ndef ")[0])
+
+
+class FailClosedPrerequisite(unittest.TestCase):
+    """T003, T004, T006, T007, T008 — the prerequisite becomes enforceable."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(self.root)], check=True)
+        git(self.root, "config", "user.email", "tests@example.invalid")
+        git(self.root, "config", "user.name", "Contract Tests")
+        (self.root / "WORKFLOW.md").write_bytes(WORKFLOW_TEMPLATE.read_bytes())
+        git(self.root, "add", "WORKFLOW.md")
+        git(self.root, "commit", "-q", "-m", "initial workflow")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def create(self, *extra):
+        return workspace("init", self.root, "--type", "feature", "--slug", "alpha", "--work-id", "wx", *extra)
+
+    def state(self):
+        return json.loads((self.root / ".grill/work-items/wx/state.json").read_text(encoding="utf-8"))
+
+    def test_creation_refuses_without_a_bound_backlog(self) -> None:
+        code, payload = self.create()
+        self.assertNotEqual(code, 0)
+        self.assertEqual(payload.get("code"), "BACKLOG-REQUIRED")
+        self.assertFalse((self.root / ".grill/work-items/wx").exists())
+
+    def test_the_refusal_is_named_and_carries_no_traceback(self) -> None:
+        code, payload = self.create()
+        self.assertEqual(payload.get("verdict"), "BLOCKED")
+        self.assertNotIn("Traceback", json.dumps(payload))
+
+    def test_the_escape_hatch_creates_and_stamps(self) -> None:
+        code, payload = self.create("--skip-backlog")
+        self.assertEqual(code, 0)
+        self.assertTrue(payload.get("backlog_skipped"))
+        self.assertTrue(self.state()["backlog_skipped"])
+
+    def test_a_normal_bundle_carries_no_stamp(self) -> None:
+        # Without a bound backlog the only reachable path is the escape hatch,
+        # so this asserts the stamp is not written unconditionally.
+        self.create("--skip-backlog")
+        state = self.state()
+        del state["backlog_skipped"]
+        (self.root / ".grill/work-items/wx/state.json").write_text(json.dumps(state), encoding="utf-8")
+        self.assertNotIn("backlog_skipped", self.state())
+
+    def test_the_stamp_is_inside_the_integrity_pin(self) -> None:
+        # Stamping after publication would make every escaped bundle fail its
+        # own integrity gate.
+        self.create("--skip-backlog")
+        module = load_workspace()
+        bundle = module.read_local_bundle(self.root, self.root / ".grill/work-items/wx")
+        module.validate_bundle_integrity(bundle)
+
+    def approve_check(self, item: Path) -> None:
+        path = item / "CONSTITUTION-CHECK.md"
+        text = path.read_text(encoding="utf-8")
+        start = text.index("```json") + len("```json")
+        end = text.index("```", start)
+        value = json.loads(text[start:end])
+        for clause in value["clauses"]:
+            clause.update(status="PASS", evidence=["tests/evidence.md"], justification="coberto")
+        path.write_text(text[:start] + "\n" + json.dumps(value, ensure_ascii=False, indent=2) + "\n" + text[end:],
+                        encoding="utf-8")
+
+    def test_the_audit_surfaces_the_stamp(self) -> None:
+        # Reported on the verdict, never silenced: a bundle created through the
+        # escape hatch must not be able to look compliant with a prerequisite
+        # it bypassed.
+        self.create("--skip-backlog")
+        item = self.root / ".grill/work-items/wx"
+        self.approve_check(item)
+        _, payload = workspace("audit", self.root, "--work-id", "wx")
+        self.assertTrue(payload.get("backlog_skipped"), payload)
+
+    def test_adoption_refuses_while_the_repository_is_unbound(self) -> None:
+        self.create("--skip-backlog")
+        code, payload = workspace("backlog-adopt", self.root, "--work-id", "wx")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(payload.get("code"), "BACKLOG-REQUIRED")
+        self.assertTrue(self.state()["backlog_skipped"])
 
 
 if __name__ == "__main__":

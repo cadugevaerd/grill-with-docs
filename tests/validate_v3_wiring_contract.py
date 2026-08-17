@@ -185,7 +185,7 @@ class WiringHarness(unittest.TestCase):
         self.temporary.cleanup()
 
     def _init_item(self, work_id: str = "wa", kind: str = "feature", slug: str = "alpha") -> Path:
-        process, payload = invoke("init", self.root, "--type", kind, "--slug", slug, "--work-id", work_id)
+        process, payload = invoke("init", self.root, "--type", kind, "--slug", slug, "--work-id", work_id, '--skip-backlog')
         self.assertEqual(process.returncode, 0, (payload, process.stderr))
         self.assertEqual(payload["status"], "CREATED")
         return self.root / ".grill" / "work-items" / work_id
@@ -741,7 +741,7 @@ class EnsureWorkflowV3Contract(WiringHarness):
         # A REUSED v3 document is read-only, never rewritten to v2.
         self.assertEqual((self.root / "WORKFLOW.md").read_bytes(), v3_bytes)
 
-        process, init_payload = invoke("init", self.root, "--type", "feature", "--slug", "beta", "--work-id", "wv3")
+        process, init_payload = invoke("init", self.root, "--type", "feature", "--slug", "beta", "--work-id", "wv3", '--skip-backlog')
         self.assertEqual(process.returncode, 0, (init_payload, process.stderr))
         self.assertEqual(init_payload["workflow"]["status"], "REUSED")
         self.assertEqual((self.root / "WORKFLOW.md").read_bytes(), v3_bytes)
@@ -777,7 +777,7 @@ class RegistryPinGateContract(WiringHarness):
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout)["reason"], "incompatible workflow")
 
-        process, init_payload = invoke("init", self.root, "--type", "feature", "--slug", "pingate", "--work-id", work_id)
+        process, init_payload = invoke("init", self.root, "--type", "feature", "--slug", "pingate", "--work-id", work_id, '--skip-backlog')
         self.assertEqual(process.returncode, 2, (init_payload, process.stderr))
         self.assertEqual(init_payload["code"], "WORKFLOW-UNAVAILABLE")
 

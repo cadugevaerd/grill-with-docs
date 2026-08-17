@@ -27,7 +27,7 @@
 - delivery-units: DU-002
 
 ## FASE-003 — Pré-requisito fail-closed
-- state: ready-for-specify
+- state: complete
 - objetivo: O backlog operacional vira exigência declarada e o init recusa sem vínculo
 - scope-in: backlogctl como dependência exigida, bind no init, saída --skip-backlog carimbada no bundle
 - scope-out: Remoção da saída explícita, alteração da matriz de CI
@@ -51,7 +51,7 @@
 - delivery-units: DU-004
 
 ## FASE-006 — Detecção de skill sombreada no preflight
-- state: planned
+- state: ready-for-specify
 - objetivo: O preflight avisa quando um nome de skill publicado pelo plugin está sombreado no ambiente, e sabe removê-lo sob autorização explícita
 - scope-in: Detecção das skills do próprio plugin sombreadas por skill pessoal ou de projeto, relato no preflight e no init, remoção sob flag explícita
 - scope-out: Colisão entre skills de terceiros, opinião sobre nomes de outros plugins, remoção automática

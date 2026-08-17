@@ -595,6 +595,317 @@
         "reason": "",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/ship.md",
+            "sha256": "ce432676a895e53fb8e10eee49f20d27d23ad99da4f570784eac4503324724b0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/016-decision-projection/ship.md",
+            "sha256": "ce432676a895e53fb8e10eee49f20d27d23ad99da4f570784eac4503324724b0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "previous_execution_branch": "feat/backlog-ssot",
+        "reason": "FASE-002 complete e mergeada em main como 63350eb; publicacao segue concentrada na FASE-005. Abrindo FASE-003, pre-requisito fail-closed.",
+        "state": "turned",
+        "step": "phase-turn"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/tasks.md",
+            "sha256": "369cf389fb2de17e4801ad09410961dd1831305a7141398e77df90454c7d604e"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/tasks.md",
+            "sha256": "369cf389fb2de17e4801ad09410961dd1831305a7141398e77df90454c7d604e"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/tasks.md",
+            "sha256": "369cf389fb2de17e4801ad09410961dd1831305a7141398e77df90454c7d604e"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/tasks.md",
+            "sha256": "369cf389fb2de17e4801ad09410961dd1831305a7141398e77df90454c7d604e"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/tasks.md",
+            "sha256": "369cf389fb2de17e4801ad09410961dd1831305a7141398e77df90454c7d604e"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/spec.md",
+            "sha256": "f8d55ee0c0663927758e25722b9ce3f4aa169c53d32d291056240f1c1ae2fda1"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/tasks.md",
+            "sha256": "369cf389fb2de17e4801ad09410961dd1831305a7141398e77df90454c7d604e"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/review.md",
+            "sha256": "30f4e64a8a1bc6904546bf14f62e67809f4f475819281f425b6c36b9c8901caa"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/review.md",
+            "sha256": "30f4e64a8a1bc6904546bf14f62e67809f4f475819281f425b6c36b9c8901caa"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/review.md",
+            "sha256": "30f4e64a8a1bc6904546bf14f62e67809f4f475819281f425b6c36b9c8901caa"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/017-failclosed-prerequisite/verify.md",
+            "sha256": "26e31afb4cd9403b89f2437123fa11e2e79b834c16c23e3cb38d9c3880be6da0"
+          },
+          {
+            "path": "specs/017-failclosed-prerequisite/review.md",
+            "sha256": "30f4e64a8a1bc6904546bf14f62e67809f4f475819281f425b6c36b9c8901caa"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "complete",
+        "step": "review"
       }
     ],
     "current_step": "ship",
