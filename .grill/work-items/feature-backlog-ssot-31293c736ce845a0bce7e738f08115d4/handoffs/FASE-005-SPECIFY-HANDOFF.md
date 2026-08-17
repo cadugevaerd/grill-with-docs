@@ -1,7 +1,7 @@
 # FASE-005 — Verificação e publicação 3.0.0
 
 - phase: FASE-005
-- state: planned
+- state: complete
 - roadmap: ROADMAP.md#FASE-005
 - context-refs: Projeção, Backlog operacional
 - ADRs: none

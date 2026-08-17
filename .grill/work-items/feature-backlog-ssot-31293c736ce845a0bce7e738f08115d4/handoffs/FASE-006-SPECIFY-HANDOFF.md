@@ -1,7 +1,7 @@
 # FASE-006 — Detecção de skill sombreada no preflight
 
 - phase: FASE-006
-- state: planned
+- state: complete
 - roadmap: ROADMAP.md#FASE-006
 - context-refs: Backlog operacional
 - ADRs: none

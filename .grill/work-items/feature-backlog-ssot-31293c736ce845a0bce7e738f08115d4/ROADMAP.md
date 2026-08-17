@@ -63,7 +63,7 @@
 - delivery-units: DU-006
 
 ## FASE-005 — Verificação e publicação 3.0.0
-- state: ready-for-specify
+- state: complete
 - objetivo: Os quatro defeitos ganham regressão e a versão incompatível é publicada de forma consistente
 - scope-in: Regressões, backlogctl falso pelo seam resolve_cli, bump nos oito lugares
 - scope-out: Registro de required status check na proteção de branch, que é ato humano

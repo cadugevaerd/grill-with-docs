@@ -1,7 +1,7 @@
 # FASE-003 — Pré-requisito fail-closed
 
 - phase: FASE-003
-- state: planned
+- state: complete
 - roadmap: ROADMAP.md#FASE-003
 - context-refs: Autoridade de estado, Backlog operacional
 - ADRs: ADR-0001
