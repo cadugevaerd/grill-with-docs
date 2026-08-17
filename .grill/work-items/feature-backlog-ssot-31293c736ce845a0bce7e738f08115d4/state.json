@@ -12,8 +12,26 @@
     "state": "present"
   },
   "development": {
-    "audit": [],
+    "audit": [
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+            "sha256": "2f15ead49251e6e5f08410a4aea66825e0b931956a305fe44293a911bf62d624"
+          },
+          {
+            "path": ".grill/work-items/feature-backlog-ssot-31293c736ce845a0bce7e738f08115d4/ROADMAP.md",
+            "sha256": "ccfdeb23431a1901712998825bda67ef6e98c9a1714f6bb11ab741e98544592d"
+          }
+        ],
+        "execution_branch": "feat/backlog-ssot",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      }
+    ],
     "current_step": "specify",
+    "execution_branch": "feat/backlog-ssot",
     "schema": "grill-development/v1",
     "sequence": [
       "specify",
@@ -37,7 +55,7 @@
       "plan": "pending",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
+      "specify": "in-progress",
       "tasks": "pending",
       "verify": "pending"
     }
