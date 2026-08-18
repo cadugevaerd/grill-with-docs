@@ -1,4 +1,4 @@
-# Protocolo de sessão v3.2.2
+# Protocolo de sessão v3.3.0
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -30,6 +30,9 @@ ship externo → state complete/GO → reconcile preview → apply na integraç�
 
 - [ ] Resolver e fixar o Git root real.
 - [ ] Confirmar branch/worktree dedicada para a feature, fix ou hotfix.
+- [ ] Se o trabalho nasce de um problema relatado, invocar `code-debug` **antes** de escolher o tipo; sem laudo de causa raiz não há como distinguir incidente de defeito nem defeito de funcionalidade faltante.
+- [ ] Executar `grill_workspace.py triage ROOT --report LAUDO.md --route ...` em preview, conferir a rota e só então repetir com `--apply`; fixar o `triage_id` retornado.
+- [ ] Aceitar `TRIAGE-RECORDED|TRIAGE-PREVIEW|REUSED`. `ROOT-CAUSE-UNPROVEN` significa investigação incompleta, não documento malformado: volte ao `code-debug`, não edite o laudo.
 - [ ] Executar `grill_workspace.py init ROOT --type ... --slug ...`; ele fixa o `WORKFLOW.md` project-wide e aceita somente `CREATED|REUSED` no campo `workflow`.
 - [ ] Ler o campo `dependencies` do retorno; usar `--allow-install` para instalação delegada e `--require-dependencies` quando o gate precisar ser fail-closed.
 - [ ] Fixar o `work_id` retornado e usar somente `.grill/work-items/<work-id>/`.
@@ -82,6 +85,14 @@ Para cada heading normativo H2/H3, `CONSTITUTION-CHECK.md` deve conter exatament
 Entradas de decisão novas usam `question_id` e `transition`. Eventos de lifecycle usam `record_type: lifecycle` e um `event` permitido, sem transição de decisão. Logs legados permanecem imutáveis: o auditor os lê no schema histórico e nunca exige reescrita retroativa.
 
 Duas rodadas sem progresso, terceira repetição, terceira expansão consecutiva ou 25 perguntas materiais: checkpoint + `SAFETY_STOP`. `stop|pausar` grava `PAUSED_USER`.
+
+## Triagem
+
+`triage` sela a rota antes de existir work item. Ele não classifica o problema — quem classifica é `code-debug`, e o core apenas verifica. Recuse-se a contornar: editar o laudo para que ele passe é fabricar a prova que o gate existe para exigir.
+
+Enquanto o laudo não declarar `causa raiz comprovada`, o comando devolve `ROOT-CAUSE-UNPROVEN` (NO-GO) e nenhuma rota abre. `hotfix` exige severidade crítica, impacto declarado, escopo fechado e rollback; `bugfix` exige uma spec existente para receber o patch; `feature` e `module` proíbem as duas coisas. Evidência faltante é `ROUTE-EVIDENCE-MISSING`, evidência contraditória é `ROUTE-EVIDENCE-CONFLICT`, e ambas listam exatamente quais campos.
+
+Preview é o padrão. O registro selado em `.grill/triage/<triage-id>.json` é imutável e deve ser commitado junto com o trabalho que ele originou.
 
 ## Hotfix-fast / incident
 

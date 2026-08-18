@@ -16,7 +16,7 @@ Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfood
 python3 tests/run_validators.py
 ```
 
-Baseline atual: 877 testes, exit 0, com 1 skip dependente de ambiente em `validate_workspace_contract.py`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
+Baseline atual: 1066 testes em 21 validadores, exit 0, com 1 skip dependente de ambiente em `validate_workspace_contract.py`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
 
 ## Restrições do core
 
@@ -41,6 +41,14 @@ Baseline atual: 877 testes, exit 0, com 1 skip dependente de ambiente em `valida
 - `GRILL_SKIP_DEPENDENCIES=1`: desliga a detecção em ambiente air-gapped e **nunca** é reportado como `OK`.
 
 Subcomandos auxiliares: `preflight ROOT [--allow-install] [--skip-backlog]` e `backlog-sync ROOT --work-id ID [--apply] [--db PATH]`.
+
+## Triagem e rotas
+
+`triage ROOT --report LAUDO.md --route bugfix|hotfix|feature|module --severity ... [--apply]` é pré-ciclo como o `preflight` e sela a decisão de rota em `.grill/triage/<id>.json`. O core **não classifica linguagem natural** — quem interpreta o problema é a skill `code-debug`, que emite o laudo; o core verifica que o laudo declara `causa raiz comprovada` e que a evidência exigida pela rota está presente. Sem isso, `ROOT-CAUSE-UNPROVEN` e nenhuma rota abre.
+
+A lógica pura mora em `plugin/skills/grill-with-docs/scripts/grill_core/triage.py`, que **não importa `grill_workspace`** e não toca disco: recebe texto já lido pela fronteira `safe_read_regular_fd` do CLI. Códigos são cunhados em `SCREAMING_SNAKE` e traduzidos para KEBAB por `translate_v3_code`. Contrato travado em `tests/validate_triage_contract.py`.
+
+Desde a 3.3.0 a triagem é **consultiva**: `init` e `hotfix` ainda não a exigem. Torná-la obrigatória (`TRIAGE-REQUIRED`, `ROUTE-MISMATCH`) é a fase seguinte, e é o que faz `feature` e `fix` deixarem de ser o mesmo bundle com rótulo diferente.
 
 ## Extensões do Spec Kit
 

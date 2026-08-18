@@ -1,0 +1,276 @@
+{
+  "active_phase": null,
+  "audit_verdict": "GO",
+  "backlog_skipped": true,
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
+    "state": "present"
+  },
+  "development": {
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+            "sha256": "dc68b8c5efd4a9d014d215c0475c620d1e2c33f3181f0dda1b71f2e4ccef65d4"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4/PLAN-CONTEXT.md",
+            "sha256": "44de576c4c36c20440e81b76156bb51d405c0b5b3f28fbaefccd7b25d9e9ed25"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4/CONSTITUTION-CHECK.md",
+            "sha256": "5a6567ed2aadbdcd34457a9856155e829195ede5112fabd41288ff6b4c69821a"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4/DELIVERY-MAP.md",
+            "sha256": "2eb91d9185538c2577cee26bd047397820406c6bf223d50fc5cddfb59992241e"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4/docs/adr/ADR-0003.md",
+            "sha256": "44415315a8348a355d0a8859f8a31e2f847e26b4a5c10f256b580184610e28a2"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4/DELIVERY-MAP.md",
+            "sha256": "2eb91d9185538c2577cee26bd047397820406c6bf223d50fc5cddfb59992241e"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_core/triage.py",
+            "sha256": "360cc797cf746806e48a52f60ecce08afb5d632493e436551a8a5b20eafd4e7e"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+            "sha256": "4b6aa83d9bb807a6ed4f3ed5dbc476d5c539bceee61130a97fb9fa21bbe2ff70"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "tests/validate_triage_contract.py",
+            "sha256": "5c3075d65059b6f4eb2302e165a3803be67ce17b29228c9bc6759b6d2855a1db"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4/docs/adr/ADR-0004.md",
+            "sha256": "7078683f75b92c561967e97813ccfaa6fca2da2272a9079b61836c714f8ad1ad"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "CHANGELOG.md",
+            "sha256": "e65c00c3ed4cc7f4cd709bdcb2479572ea87fbb7b0f075dad99409fa8c7c6f65"
+          }
+        ],
+        "execution_branch": "worktree-triage-fase-001",
+        "reason": "",
+        "state": "complete",
+        "step": "ship"
+      }
+    ],
+    "current_step": "complete",
+    "execution_branch": "worktree-triage-fase-001",
+    "schema": "grill-development/v1",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "agent-assign",
+      "agent-execute",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "complete",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    }
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "completed",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "complete",
+  "version": "1.2.0",
+  "work_id": "feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4",
+    "version": "v2"
+  }
+}

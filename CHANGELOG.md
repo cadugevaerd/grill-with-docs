@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.3.0
+
+Primeira fase da separação de trilhas: um trabalho passa a poder ser roteado por evidência, não por declaração.
+
+- `triage` é um subcomando novo, pré-ciclo como o `preflight`. Ele lê um laudo de causa raiz produzido por `code-debug`, verifica que o laudo prova o que afirma, confere a evidência que a rota escolhida exige, e sela a decisão em `.grill/triage/<triage-id>.json` sob `triage_sha256`. Preview por padrão; `--apply` grava.
+- **Enquanto a causa raiz não estiver comprovada, nenhuma rota abre** (`ROOT-CAUSE-UNPROVEN`). Um laudo cujo cabeçalho afirma prova mas cuja seção `## Causa raiz` ainda diz o contrário conta como não provado: um selo obtido editando uma linha não vale nada.
+- A matriz de evidência é o que impede as rotas de virarem questão de gosto. `hotfix` exige severidade crítica, impacto declarado, escopo fechado e rollback, e proíbe referência a spec; `bugfix` exige a spec existente que vai receber o patch, e proíbe escopo e rollback; `feature` e `module` proíbem as três. Falta é `ROUTE-EVIDENCE-MISSING`, contradição é `ROUTE-EVIDENCE-CONFLICT`, e as duas listam os campos exatos.
+- O motivo de o core não classificar sozinho está registrado no próprio módulo: ele é stdlib determinístico e não interpreta linguagem natural. A classificação é output de skill; a verificação é do core. `init` continua intocado nesta versão — a triagem ainda é consultiva, e passa a ser exigida na próxima fase.
+- `grill_core/triage.py` não importa `grill_workspace`, não abre arquivo, não chama git e não cria processo filho: recebe texto que o CLI já leu pela fronteira `safe_read_regular_fd`, para que as primitivas de segurança continuem existindo em um lugar só.
+- `.grill/triage/` fica fora da projeção global, então não dispara `GLOBAL-MUTATION`. O registro é evidência e deve ser commitado; pendente, ele aparece como `DIRTY-WORKTREE` no `reconcile --apply`.
+
 ## 3.2.2
 
 Corrige um defeito crítico de destrutividade introduzido pela 3.1.0, apontado por revisão independente.
