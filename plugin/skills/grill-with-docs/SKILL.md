@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v3.2.2
+# Grill with Docs v3.3.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -24,6 +24,35 @@ worktree C ──> .grill/work-items/<work-id-C>/ ─┘
 7. Hotfix-fast é uma exceção operacional fechada: exige escopo, reprodução/evidência, teste de correção, rollback e evidência constitucional; não depende de ROADMAP, BL, DQ ou reconciliação para ser seguro.
 8. Feature e fix permanecem plan-only; hotfix só entrega HOTFIX-GO para ship externo e reconciliação/auditoria documental completa são pós-ship.
 7. A sessão termina em `PLAN_ONLY_STOP`; não implementa código, não executa `specify|plan` e não faz commit/merge.
+
+## Triagem: da causa raiz para a rota
+
+O core é determinístico e **não classifica linguagem natural**. Quem interpreta um problema relatado é a skill de diagnóstico (`code-debug`), que investiga e emite um laudo de causa raiz; o que o core faz é verificar que o laudo prova o que afirma e que a evidência exigida pela rota escolhida está de fato presente, e então selar essa decisão.
+
+```text
+python3 "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/grill-with-docs/scripts/grill_workspace.py" \
+  triage ROOT --report LAUDO.md --route bugfix|hotfix|feature|module --severity critical|high|medium|low \
+  [--production-impact] [--spec-ref PATH] [--scope A,B] [--rollback TEXTO] [--triage-id ID] [--apply]
+```
+
+Pré-ciclo como `preflight`: roda antes de existir work item, não pega lock e não lê bundle. Preview por padrão — sem `--apply` calcula o registro inteiro e não escreve byte algum.
+
+O gate acima de todos: **enquanto o laudo não declarar `causa raiz comprovada`, nenhuma rota abre** (`ROOT-CAUSE-UNPROVEN`). Um laudo cujo cabeçalho afirma prova mas cuja seção `## Causa raiz` ainda diz o contrário conta como não provado — um selo que se obtém editando uma linha não vale nada. O laudo precisa ser um relatório `code-debug` (`# Relatório de debug`) com as seções `Sintoma reproduzido`, `Evidências`, `Causa raiz`, `Cadeia causal` e `Arquivos envolvidos` não vazias; a recusa **nomeia** a seção faltante.
+
+Matriz de evidência por rota — o que o core pode verificar sem interpretar:
+
+| Rota | Exige | Proíbe |
+|---|---|---|
+| `hotfix` | `--severity critical`, `--production-impact`, `--scope`, `--rollback` | `--spec-ref` |
+| `bugfix` | `--spec-ref` apontando para arquivo regular existente | `--scope`, `--rollback` |
+| `feature` | — | `--spec-ref`, `--scope`, `--rollback` |
+| `module` | — | `--spec-ref`, `--scope`, `--rollback` |
+
+Escopo fechado mais rollback é o que torna um incidente contível; referência a spec é o que torna um defeito um desvio de algo já acordado, em vez de funcionalidade faltante. Exigir uma e proibir a outra é o que impede as duas rotas de virarem questão de gosto.
+
+O registro vai para `.grill/triage/<triage-id>.json`, selado por `triage_sha256` sobre o documento inteiro menos o próprio selo — mesma construção de `immutable_sha256` e `hotfix_sha256`. Ele é **imutável**: nada o reescreve depois, e a rastreabilidade flui numa direção só, do bundle para a triagem, para que o selo nunca precise ser quebrado. Reexecutar com o mesmo `--triage-id` e a mesma decisão devolve `REUSED`; decisão diferente é `TRIAGE-IDENTITY-DIVERGENCE`; registro editado à mão é `TRIAGE-TAMPERED`.
+
+O registro é evidência e **deve ser commitado**: `reconcile --apply` exige worktree limpa fora de `.grill/global/`, então um registro pendente aparece como `DIRTY-WORKTREE`. `.grill/triage/` fica fora da projeção global e nunca dispara `GLOBAL-MUTATION`.
 
 ## Identidade e inicialização
 

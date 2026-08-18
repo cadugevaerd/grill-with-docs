@@ -175,6 +175,23 @@ def raise_from_work_item_error(error: Any) -> NoReturn:
     ) from error
 
 
+def raise_from_triage_error(error: Any) -> NoReturn:
+    """Re-raise a ``grill_core.triage.TriageError`` as ``CliFailure``.
+
+    Same boundary contract as :func:`raise_from_work_item_error`: every code
+    goes through :func:`translate_v3_code`, so the triage module mints its
+    conditions in ``SCREAMING_SNAKE`` and the public payload still speaks the
+    live ``SCREAMING-KEBAB`` vocabulary.
+    """
+    raise CliFailure(
+        error.exit_code,
+        error.verdict,
+        translate_v3_code(error.code),
+        error.message,
+        extra=dict(error.details) if error.details else None,
+    ) from error
+
+
 class JsonParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", message)
@@ -1155,6 +1172,119 @@ def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         payload["backlog"] = backlog_report(root, apply=args.allow_install, db=getattr(args, "db", None))
     payload["verdict"] = payload["dependencies"].get("verdict", "BLOCKED")
     return payload, EXIT_OK if payload["verdict"] == "OK" else EXIT_BLOCKED
+
+
+# A spec reference that does not resolve is a routing failure, not a missing
+# evidence file: the operator pointed `bugfix` at a spec that is not there, and
+# `EVIDENCE-MISSING` would send them looking at the report instead.
+SPEC_REF_FAILURES = {"EVIDENCE-MISSING", "EVIDENCE-NOT-REGULAR"}
+
+
+def triage_evidence(
+    root: Path,
+    relative: str,
+    *,
+    decode: bool,
+    missing_code: str | None = None,
+) -> tuple[dict[str, str], str | None]:
+    """Read one evidence file below ``root`` and fingerprint the bytes actually read.
+
+    Goes through :func:`safe_read_regular_fd`, so an absolute path, a ``..``
+    component or any symlink in the chain is refused before the open, and the
+    object hashed is the object read.
+    """
+    target = root / relative
+    try:
+        data = safe_read_regular_fd(root, target)
+    except CliFailure as failure:
+        if missing_code is not None and failure.code in SPEC_REF_FAILURES:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", missing_code, str(target)) from failure
+        raise
+    reference = {"path": Path(relative).as_posix(), "sha256": hash_bytes(data)}
+    if not decode:
+        return reference, None
+    try:
+        return reference, data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CliFailure(
+            EXIT_BLOCKED, "BLOCKED", "TRIAGE-REPORT-INVALID", "report is not valid UTF-8"
+        ) from exc
+
+
+def triage_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Seal a routing decision derived from a proven root-cause report.
+
+    Pre-cycle like :func:`preflight_command`: it runs before any work item
+    exists, so it takes no work-item lock and reads no bundle. Preview-first
+    like every other mutating command here -- without ``--apply`` it computes
+    the entire record and writes nothing.
+
+    The record lands in ``.grill/triage/``, never ``.grill/global/``, so it is
+    outside the projection ``snapshot_global`` guards and cannot trip
+    ``GLOBAL-MUTATION``.
+    """
+    triage = grill_core_module("triage")
+    root = project_root(args.root)
+    try:
+        report, text = triage_evidence(root, args.report, decode=True)
+        parsed = triage.parse_report(text)
+        triage.require_proven(parsed)
+        spec_ref = None
+        if args.spec_ref:
+            spec_ref, _ = triage_evidence(
+                root, args.spec_ref, decode=False, missing_code="SPEC-REF-NOT-FOUND"
+            )
+        scope = validate_scope(args.scope) if args.scope else []
+        triage.check_route_evidence(
+            args.route,
+            severity=args.severity,
+            production_impact=args.production_impact,
+            spec_ref=spec_ref,
+            scope=scope,
+            rollback=args.rollback,
+        )
+        record = triage.seal(
+            triage.build_record(
+                triage_id=args.triage_id or f"tri-{uuid.uuid4().hex}",
+                route=args.route,
+                severity=args.severity,
+                production_impact=args.production_impact,
+                report=report,
+                spec_ref=spec_ref,
+                scope=scope,
+                rollback=args.rollback,
+                recorded_at_commit=git_optional(root, "rev-parse", "HEAD") or None,
+            )
+        )
+    except triage.TriageError as error:
+        raise_from_triage_error(error)
+    payload: dict[str, Any] = {
+        "schema": triage.SCHEMA,
+        "triage_id": record["triage_id"],
+        "route": record["route"],
+        "report_status": parsed["status"],
+        "record": record,
+        "written": False,
+    }
+    if not args.apply:
+        payload["verdict"] = "TRIAGE-PREVIEW"
+        return payload, EXIT_OK
+    target = root / ".grill/triage" / f"{record['triage_id']}.json"
+    if target.exists():
+        existing = json.loads(safe_read_regular_fd(root, target).decode("utf-8"))
+        try:
+            body = triage.verify_seal(existing)
+        except triage.TriageError as error:
+            raise_from_triage_error(error)
+        if body != {key: value for key, value in record.items() if key != "triage_sha256"}:
+            raise CliFailure(
+                EXIT_BLOCKED, "BLOCKED", "TRIAGE-IDENTITY-DIVERGENCE", record["triage_id"]
+            )
+        payload["verdict"] = "REUSED"
+        return payload, EXIT_OK
+    payload["written"] = atomic_write(root, target, canonical(record))
+    payload["verdict"] = "TRIAGE-RECORDED"
+    return payload, EXIT_OK
 
 
 def write_state_field(item: Path, key: str, value: Any) -> None:
@@ -3038,6 +3168,23 @@ def build_parser() -> JsonParser:
     preflight_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
     preflight_parser.add_argument("--db")
     preflight_parser.add_argument("--remove-shadowed-skills", action="store_true", dest="remove_shadows")
+    triage_parser = subparsers.add_parser("triage")
+    triage_parser.add_argument("root")
+    triage_parser.add_argument("--report", required=True)
+    # No `choices=` on --route/--severity, same reason init's --type has none:
+    # argparse would collapse a wrong value into INVALID-ARGUMENTS, while the
+    # triage module answers with INVALID-ROUTE/INVALID-SEVERITY and lists what
+    # it accepts.
+    triage_parser.add_argument("--route", required=True)
+    triage_parser.add_argument("--severity", required=True)
+    triage_parser.add_argument("--production-impact", action="store_true", dest="production_impact")
+    triage_parser.add_argument("--spec-ref", dest="spec_ref")
+    # Comma-separated, the same shape `hotfix --scope` takes and validated by
+    # the same validate_scope: two spellings for one concept is how they drift.
+    triage_parser.add_argument("--scope")
+    triage_parser.add_argument("--rollback")
+    triage_parser.add_argument("--triage-id", dest="triage_id")
+    triage_parser.add_argument("--apply", action="store_true")
     backlog_parser = subparsers.add_parser("backlog-sync")
     backlog_parser.add_argument("root")
     backlog_parser.add_argument("--work-id", required=True)
@@ -3235,6 +3382,7 @@ def main(argv: list[str] | None = None) -> int:
             "phase-turn": phase_turn_command,
             "status": status_command,
             "preflight": preflight_command,
+            "triage": triage_command,
             "backlog-sync": backlog_sync_command,
             "backlog-adopt": backlog_adopt_command,
             "backlog-project": backlog_project_command,
