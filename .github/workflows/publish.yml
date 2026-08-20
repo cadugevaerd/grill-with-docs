@@ -76,6 +76,34 @@ jobs:
           git tag -a "$REF" -m "$REF" "$SHA"
           git push origin "refs/tags/$REF"
 
+      # Tag sem release é publicação incompleta: quem acompanha releases não vê a
+      # versão sair. A release é derivada da tag imutável, então encontrá-la já
+      # criada é o estado desejado de uma reexecução, não conflito.
+      - name: Criar a release da tag, sem sobrescrever
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ steps.resolve.outputs.ref }}
+          SHA: ${{ steps.resolve.outputs.sha }}
+        run: |
+          # `|| true` captura "release ainda não existe", que é o caso normal de
+          # uma versão nova e faria o passo abortar sob `bash -e`. Não engole
+          # falha de gate: a divergência de commit abaixo reprova explicitamente.
+          existing=$(gh release view "$REF" --json tagName -q .tagName 2>/dev/null || true)
+          if [ -n "$existing" ]; then
+            echo "release $REF já existe; nada a criar"
+          else
+            # --verify-tag recusa criar release órfã, sem tag que a ancore.
+            gh release create "$REF" --title "$REF" --generate-notes --verify-tag
+          fi
+          # A release herda o commit da tag, então conferir a tag é conferir a
+          # release — e prova que o que foi anunciado é o que foi verificado.
+          anchored=$(git rev-parse -q --verify "refs/tags/$REF^{commit}")
+          if [ "$anchored" != "$SHA" ]; then
+            echo "::error::release $REF está ancorada em ${anchored:-nada} e a publicação declara $SHA"
+            exit 1
+          fi
+          echo "release $REF ancorada em $SHA"
+
   publish:
     name: Publicar em ${{ matrix.target }}
     needs: release

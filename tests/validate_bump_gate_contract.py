@@ -355,6 +355,62 @@ class WorkflowWiring(unittest.TestCase):
         self.assertEqual(enforce["env"]["HEAD_SHA"], "${{ github.sha }}")
         self.assertIn('--base-ref "$BASE_SHA" --head-ref "$HEAD_SHA"', enforce["run"])
 
+    def release_step(self) -> dict:
+        document = self.load_yaml(self.PUBLISH)
+        return next(
+            step for step in document["jobs"]["release"]["steps"]
+            if step.get("name") == "Criar a release da tag, sem sobrescrever"
+        )
+
+    def test_publish_creates_the_release_after_the_tag_that_anchors_it(self) -> None:
+        """Release sem tag é orfã; tag sem release é publicação incompleta."""
+        document = self.load_yaml(self.PUBLISH)
+        steps = document["jobs"]["release"]["steps"]
+        tag_index = next(
+            index for index, step in enumerate(steps)
+            if step.get("name") == "Criar a tag, recusando remarcação"
+        )
+        release_index = next(
+            index for index, step in enumerate(steps)
+            if step.get("name") == "Criar a release da tag, sem sobrescrever"
+        )
+        self.assertLess(tag_index, release_index)
+        self.assertEqual(document["jobs"]["release"]["permissions"]["contents"], "write")
+        self.assertEqual(document["jobs"]["publish"]["needs"], "release")
+
+    def test_the_release_step_takes_no_new_secret_and_no_event_payload(self) -> None:
+        step = self.release_step()
+        self.assertEqual(step["env"]["GH_TOKEN"], "${{ github.token }}")
+        self.assertEqual(step["env"]["REF"], "${{ steps.resolve.outputs.ref }}")
+        self.assertEqual(step["env"]["SHA"], "${{ steps.resolve.outputs.sha }}")
+        self.assertNotIn("secrets.", str(step))
+        self.assertNotIn("github.event", str(step["run"]))
+
+    def test_an_existing_release_is_success_not_conflict(self) -> None:
+        """Reexecutar a mesma versão tem de ser verde, senão o pipeline vira ruído."""
+        run = self.release_step()["run"]
+        self.assertIn("gh release view", run)
+        self.assertIn("já existe; nada a criar", run)
+        self.assertIn("--verify-tag", run)
+        self.assertIn("--generate-notes", run)
+
+    def test_a_release_anchored_elsewhere_fails_the_publication(self) -> None:
+        run = self.release_step()["run"]
+        self.assertIn('refs/tags/$REF^{commit}', run)
+        self.assertIn('if [ "$anchored" != "$SHA" ]; then', run)
+        self.assertIn("::error::", run)
+        self.assertIn("exit 1", run)
+
+    def test_the_publish_workflow_has_valid_shell(self) -> None:
+        document = self.load_yaml(self.PUBLISH)
+        for job in document["jobs"].values():
+            for step in job.get("steps", []):
+                script = step.get("run")
+                if not script:
+                    continue
+                checked = subprocess.run(["bash", "-n"], input=script, text=True, capture_output=True)
+                self.assertEqual(checked.returncode, 0, (step.get("name"), checked.stderr))
+
     def test_constitution_requires_a_semver_bump_for_distributed_changes(self) -> None:
         text = self.CONSTITUTION.read_text(encoding="utf-8")
         self.assertIn("- version: 1.2.0", text)
