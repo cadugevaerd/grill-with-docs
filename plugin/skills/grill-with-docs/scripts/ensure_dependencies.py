@@ -21,6 +21,8 @@ HERE = Path(__file__).resolve()
 MANIFEST = HERE.parents[1] / "assets/dependencies.json"
 SCHEMA = "grill-dependencies/v1"
 KINDS = {"runtime", "binary", "path", "specify-extension"}
+EXTENSION_REGISTRY = ".specify/extensions/.registry"
+REGISTRY_SCHEMA = "1."
 PROBE_TIMEOUT = 15
 INSTALL_TIMEOUT = 600
 VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
@@ -140,30 +142,80 @@ def expand(command: list[str], tools: Toolchain) -> list[str] | None:
     return resolved
 
 
-def remediation(entry: dict[str, Any], tools: Toolchain) -> str | None:
-    commands = entry.get("install") or []
+def remediation(entry: dict[str, Any], tools: Toolchain, field: str = "install") -> str | None:
+    """Render the fix for the observed reason, not a fixed one per dependency.
+
+    An extension that is registered but disabled needs ``enable``, not ``add``;
+    telling the operator to reinstall what is already installed is the same
+    family of error this module exists to stop making.
+    """
+    literal = entry.get("remediation")
+    commands = entry.get(field) or []
+    if not commands:
+        return literal if isinstance(literal, str) and literal else None
     rendered = []
-    for command in commands:
+    for command in commands if isinstance(commands[0], list) else [commands]:
         expanded = expand(command, tools)
         rendered.append(" ".join(expanded if expanded else command))
-    if not rendered:
-        return None
     return " && ".join(rendered)
 
 
-def installed_extensions(root: Path, specify: str | None, tools: Toolchain) -> set[str]:
-    if specify is None:
-        return set()
-    code, output = tools.run([specify, "extension", "list"], cwd=root)
-    if code != 0 or "No extensions installed" in output:
-        return set()
-    return set(re.findall(r"[A-Za-z0-9][A-Za-z0-9._-]*", output))
+def extension_registry(root: Path) -> dict[str, Any] | None:
+    """The Spec Kit registry, or ``None`` when it cannot be read.
+
+    ``None`` is the single channel for "not observed" and covers three shapes
+    with one outcome: absent file, invalid JSON, and a ``schema_version`` this
+    code does not know. Reporting those as "extension missing" would trade one
+    false negative for another, so the caller must not read absence into it.
+    """
+    try:
+        payload = json.loads((root / EXTENSION_REGISTRY).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    version = payload.get("schema_version")
+    if not isinstance(version, str) or not version.startswith(REGISTRY_SCHEMA):
+        return None
+    extensions = payload.get("extensions")
+    return extensions if isinstance(extensions, dict) else None
+
+
+def extension_state(registry: dict[str, Any] | None, slug: str) -> tuple[str, str | None, str | None]:
+    """Map one slug onto (status, reason, version).
+
+    The slug is a mapping key, never a substring of free text: that is what
+    kills both the ANSI residue and the description-line false positive at
+    once, and it is why the source had to change rather than the regex.
+    """
+    if registry is None:
+        return "undetermined", None, None
+    record = registry.get(slug)
+    if not isinstance(record, dict):
+        return "missing", "ausente do registro de extensoes", None
+    enabled = record.get("enabled")
+    if enabled is not True:
+        # A record without a recognisable enable state is malformed, not
+        # disabled. Both block, but only one of them was observed, and this
+        # module's whole point is not to claim the difference away.
+        reason = ("registrada porem desabilitada no registro de extensoes" if enabled is False
+                  else "registro da extensao sem estado de habilitacao reconhecivel")
+        return "missing", reason, None
+    version = record.get("version")
+    return "present", None, version if isinstance(version, str) else None
+
+
+_UNREAD = object()
 
 
 def detect(root: Path, manifest: dict[str, Any], tools: Toolchain) -> list[dict[str, Any]]:
     reports: list[dict[str, Any]] = []
     specify_path: str | None = None
-    extensions: set[str] | None = None
+    # ``None`` is a meaningful registry state, so the "not yet read" sentinel
+    # cannot also be ``None`` — otherwise an unreadable registry would be
+    # re-read once per extension.
+    extensions: Any = _UNREAD
+    observed: dict[str, str] = {}
     for entry in manifest["dependencies"]:
         kind = entry["kind"]
         report: dict[str, Any] = {
@@ -192,19 +244,31 @@ def detect(root: Path, manifest: dict[str, Any], tools: Toolchain) -> list[dict[
         elif kind == "path":
             target = root / str(entry["path"])
             expected = entry.get("contains")
-            if target.exists() and (not expected or expected in read_text(target)):
+            structural = entry.get("schema_check")
+            readable = not structural or extension_registry(root) is not None
+            if target.exists() and (not expected or expected in read_text(target)) and readable:
                 report["status"] = "present"
                 report["source"] = str(target)
         elif kind == "specify-extension":
-            if extensions is None:
-                extensions = installed_extensions(root, specify_path, tools)
-            if entry["extension"] in extensions:
-                report["status"] = "present"
-                report["source"] = "specify extension list"
-        if report["status"] != "present":
-            report["remediation"] = remediation(entry, tools)
-            if entry.get("reason"):
-                report["reason"] = entry["reason"]
+            if extensions is _UNREAD:
+                extensions = extension_registry(root)
+            status, reason, version = extension_state(extensions, entry["extension"])
+            report["status"] = status
+            report["version"] = version
+            if status == "present":
+                report["source"] = str(root / EXTENSION_REGISTRY)
+            elif reason:
+                observed[entry["id"]] = reason
+        if report["status"] == "undetermined":
+            # Nothing was observed, so there is nothing to propose installing.
+            # "I do not know" must not be dressed up as "it is not there".
+            report["reason"] = f"registro de extensoes ilegivel: {EXTENSION_REGISTRY}"
+        elif report["status"] != "present":
+            field = "enable" if "desabilitada" in observed.get(entry["id"], "") else "install"
+            report["remediation"] = remediation(entry, tools, field)
+            report["reason"] = observed.get(entry["id"]) or entry.get("reason") or report.get("reason")
+            if report["reason"] is None:
+                report.pop("reason")
         reports.append(report)
     return reports
 
@@ -212,11 +276,20 @@ def detect(root: Path, manifest: dict[str, Any], tools: Toolchain) -> list[dict[
 def install(root: Path, manifest: dict[str, Any], reports: Iterable[dict[str, Any]], tools: Toolchain) -> list[dict[str, Any]]:
     """Run only the commands declared in the manifest, for entries not present."""
     by_id = {entry["id"]: entry for entry in manifest["dependencies"]}
-    pending = [report["id"] for report in reports if report["status"] != "present"]
+    # An undetermined entry is deliberately excluded: mutating the operator's
+    # environment on the strength of something never observed is the costliest
+    # failure mode available here, and it would install over what may already
+    # be installed.
+    pending = [report["id"] for report in reports if report["status"] not in ("present", "undetermined")]
+    registry = extension_registry(root)
     results: list[dict[str, Any]] = []
     for identifier in pending:
         entry = by_id[identifier]
         commands = entry.get("install") or []
+        if entry["kind"] == "specify-extension":
+            record = (registry or {}).get(entry["extension"])
+            if isinstance(record, dict) and not record.get("enabled"):
+                commands = [entry["enable"]]
         if not commands:
             results.append({"id": identifier, "status": "SKIPPED", "reason": "no declared installer"})
             continue

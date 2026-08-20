@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.3.1
+
+Corrige a detecção de extensão do preflight, que afirmava o que não tinha observado.
+
+- **Eram duas falhas, não uma.** `installed_extensions` tokenizava a saída crua de `specify extension list` com `re.findall` sobre o texto inteiro. O escape ANSI da linha do slug (`\x1b[2mgit\x1b[0m`) fazia o regex casar a partir do `2` e produzir `2mgit`; e a varredura do texto inteiro fazia `bugfix` ser dado como presente pela frase `Structured bugfix workflow` na descrição da própria extensão. Com as quatro extensões instaladas e habilitadas, o parser acertava zero das quatro pelo caminho correto — três falsos negativos e um falso positivo.
+- A correção **troca a fonte**, não o regex: a detecção lê `.specify/extensions/.registry`, onde o slug é chave de mapa. Chave exata mata as duas classes de uma vez, dá `enabled` e `version` — que antes voltava sempre `null` — e remove um subprocess do caminho de detecção.
+- Registro ilegível deixou de virar "extensão ausente". Arquivo ausente, JSON inválido e `schema_version` não reconhecido convergem em `undetermined`, status novo que **bloqueia** sob `--require-dependencies` mas não propõe instalação. A causa raiz aparece uma única vez, como a dependência declarada `spec-kit-extension-registry`. Trocar um falso negativo por outro não seria correção.
+- `--allow-install` não instala mais sobre estado não observado: `undetermined` sai da fila de instalação. Mutar o ambiente do operador a partir de uma não-observação era o modo de falha mais caro do conjunto.
+- Extensão registrada porém desabilitada bloqueia com remediação `specify extension enable <slug>` — nunca `add`. Mandar reinstalar o que já está instalado é a mesma família de erro que originou este trabalho.
+- O defeito sobreviveu a 1066 testes porque a fixture era mais limpa que a realidade: o teste alimentava `git (v1.0.0)`, texto que o terminal nunca emite. As regressões agora carregam os escapes e uma descrição-isca.
+- Custo aceito e nomeado: `grill-dependencies/v1` passa a admitir `undetermined` sem trocar o identificador do schema. Consumidor que compara com `present` permanece correto.
+
+Origem: SGD-16.
+
 ## 3.3.0
 
 Primeira fase da separação de trilhas: um trabalho passa a poder ser roteado por evidência, não por declaração.

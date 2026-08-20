@@ -80,6 +80,15 @@
       ]
     },
     {
+      "id": "spec-kit-extension-registry",
+      "kind": "path",
+      "required": true,
+      "path": ".specify/extensions/.registry",
+      "schema_check": "1.",
+      "reason": "registro do Spec Kit e a fonte de verdade das extensoes instaladas",
+      "remediation": "instale ao menos uma extensao com `specify extension add <slug>`, ou alinhe a versao do Spec Kit se o schema do registro nao for reconhecido"
+    },
+    {
       "id": "ext:git",
       "kind": "specify-extension",
       "required": true,
@@ -92,6 +101,12 @@
           "add",
           "git"
         ]
+      ],
+      "enable": [
+        "specify",
+        "extension",
+        "enable",
+        "git"
       ]
     },
     {
@@ -107,6 +122,12 @@
           "add",
           "agent-assign"
         ]
+      ],
+      "enable": [
+        "specify",
+        "extension",
+        "enable",
+        "agent-assign"
       ]
     },
     {
@@ -122,6 +143,12 @@
           "add",
           "bugfix"
         ]
+      ],
+      "enable": [
+        "specify",
+        "extension",
+        "enable",
+        "bugfix"
       ]
     },
     {
@@ -137,6 +164,12 @@
           "add",
           "verify-review-ship"
         ]
+      ],
+      "enable": [
+        "specify",
+        "extension",
+        "enable",
+        "verify-review-ship"
       ]
     },
     {
