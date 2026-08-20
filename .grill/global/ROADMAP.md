@@ -6,7 +6,9 @@ Generated deterministically from reconciled work items.
 - **feature-gauntlet-loop-0447622ec0714933a4e791d0b58b5420** (feature): gauntlet-loop
 - **feature-release-repo-sync-97a2bb32d4884a129ec2e845b76894b7** (feature): release-repo-sync
 - **feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4** (feature): triage-routing
+- **feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473** (feature): workflow-v3
 - **fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0** (fix): high-defects
+- **fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95** (fix): preflight-ansi
 
 ## Qualified artifact IDs
 
@@ -136,6 +138,26 @@ Generated deterministically from reconciled work items.
 - `feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4/R-0002`
 - `feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4/R-0003`
 - `feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4/R-0004`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/ADR-0001`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/ADR-0002`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/ADR-0003`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/ADR-0004`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/BL-0001`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/BL-0002`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/DQ-0001`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/DQ-0002`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/DQ-0003`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/DQ-0004`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/DQ-0005`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/FASE-001`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/FASE-002`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/FASE-003`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/FASE-004`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/R-0001`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/R-0002`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/R-0003`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/R-0004`
+- `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/R-0005`
 - `fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/ADR-0001`
 - `fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/ADR-0002`
 - `fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/ADR-0003`
@@ -150,3 +172,16 @@ Generated deterministically from reconciled work items.
 - `fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/R-0002`
 - `fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/R-0003`
 - `fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/R-0004`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/ADR-0001`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/ADR-0002`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/ADR-0003`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/ADR-0004`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/DQ-0001`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/DQ-0002`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/DQ-0003`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/DQ-0004`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/FASE-001`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/R-0001`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/R-0002`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/R-0003`
+- `fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95/R-0004`
