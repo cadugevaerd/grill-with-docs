@@ -3,7 +3,7 @@
 - execution-order: FASE-001
 
 ## FASE-001 — Detecção de extensão pelo registro
-- state: ready-for-specify
+- state: complete
 - objetivo: `preflight` reporta `OK` em ambiente íntegro e, quando não reporta, nomeia a causa observada e a ação que a resolve
 - scope-in: `ensure_dependencies.py` (detecção de extensão e remediação), `assets/dependencies.json` (registro como dependência declarada), validadores que enumeram status de dependência, os oito lugares do contrato de distribuição, `CHANGELOG.md`
 - scope-out: parser da saída de `specify extension list` (removido, não mantido em paralelo), demais tipos de dependência (`runtime`, `binary`), catálogo de confiança `.specify/extension-catalogs.yml`, hooks, qualquer instalação delegada

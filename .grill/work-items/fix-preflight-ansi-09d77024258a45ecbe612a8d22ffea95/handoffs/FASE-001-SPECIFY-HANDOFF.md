@@ -1,7 +1,7 @@
 # FASE-001 — Detecção de extensão pelo registro
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: registro de extensões, detecção de extensão, falso negativo, falso positivo, present, missing, undetermined, remediação, bump obrigatório
 - ADRs: ADR-0001, ADR-0002, ADR-0003, ADR-0004

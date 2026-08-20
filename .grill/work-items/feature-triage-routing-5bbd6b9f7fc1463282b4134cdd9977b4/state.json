@@ -1,7 +1,6 @@
 {
   "active_phase": null,
   "audit_verdict": "GO",
-  "backlog_skipped": true,
   "capability": {
     "name": "module-decomposition",
     "schema": "v1",
