@@ -158,31 +158,45 @@ class Detection(unittest.TestCase):
         for identifier in ("ext:agent-assign", "ext:bugfix", "ext:verify-review-ship"):
             self.assertLess(catalog, order.index(identifier))
 
-    def test_extensions_are_missing_without_specify_and_never_probe_it(self) -> None:
+    def write_registry(self, extensions, *, schema_version="1.0") -> None:
+        target = self.root / MODULE.EXTENSION_REGISTRY
+        target.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"schema_version": schema_version, "extensions": extensions}
+        target.write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_extensions_are_undetermined_without_a_registry_and_never_probe_specify(self) -> None:
         tools = StubToolchain()
         reports = MODULE.detect(self.root, MODULE.load_manifest(), tools)
-        self.assertEqual(self.report(reports, "ext:git")["status"], "missing")
+        # No registry means nothing was observed. Absence of `specify` is no
+        # longer relevant: the source is a file, not a subprocess.
+        self.assertEqual(self.report(reports, "ext:git")["status"], "undetermined")
         self.assertNotIn(["extension", "list"], [call[1:] for call in tools.calls])
 
-    def test_extension_list_is_read_once_and_empty_state_is_not_a_match(self) -> None:
+    def test_empty_registry_is_absence_and_the_cli_is_never_consulted(self) -> None:
         tools = StubToolchain(
             binaries={"specify": "/stub/specify"},
-            outputs={
-                ("/stub/specify", "--version"): (0, "specify 0.15.1"),
-                ("/stub/specify", "extension", "list"): (0, "No extensions installed. add git"),
-            },
+            outputs={("/stub/specify", "--version"): (0, "specify 0.15.1")},
         )
+        self.write_registry({})
         reports = MODULE.detect(self.root, MODULE.load_manifest(), tools)
+        # A readable but empty registry is observed absence, not indetermination.
         self.assertEqual(self.report(reports, "ext:git")["status"], "missing")
-        self.assertEqual(sum(1 for call in tools.calls if call[1:] == ["extension", "list"]), 1)
+        self.assertEqual([call for call in tools.calls if "extension" in call], [])
 
-    def test_installed_extension_is_detected(self) -> None:
+    def test_installed_extension_is_detected_and_a_decoy_description_is_not(self) -> None:
         tools = StubToolchain(
             binaries={"specify": "/stub/specify"},
-            outputs={
-                ("/stub/specify", "--version"): (0, "specify 0.15.1"),
-                ("/stub/specify", "extension", "list"): (0, "git (v1.0.0)\nverify-review-ship (v0.4.2)\n"),
-            },
+            outputs={("/stub/specify", "--version"): (0, "specify 0.15.1")},
+        )
+        # The old fixture fed clean text — `git (v1.0.0)` — which the terminal
+        # never actually emits. That is why the parser passed the suite and
+        # failed reality, so the decoy below is the point of this test.
+        self.write_registry(
+            {
+                "git": {"version": "1.0.0", "enabled": True,
+                        "description": "Structured bugfix workflow - capture bugs"},
+                "verify-review-ship": {"version": "0.4.2", "enabled": True},
+            }
         )
         reports = MODULE.detect(self.root, MODULE.load_manifest(), tools)
         self.assertEqual(self.report(reports, "ext:git")["status"], "present")
