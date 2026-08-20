@@ -20,6 +20,11 @@ DQ_ID = re.compile(r"^DQ-\d{4}$")
 ROUND_ID = re.compile(r"^R-(\d{4})$")
 FIELD = re.compile(r"(?m)^\s*-\s*([\w/-]+):\s*(.*?)\s*$")
 TOP_FIELD = re.compile(r"(?m)^([\w-]+):\s*(.*?)\s*$")
+HTML_COMMENT = re.compile(r"(?s)<!--.*?-->")
+HEADING = re.compile(r"(?m)^(#{2,3})\s+(.+?)\s*$")
+FOOTER_LINE = re.compile(r"(?m)^.*\*\*\s*(?:Version|Ratified|Last\s+Amended)\s*\*\*\s*:.*$")
+FOOTER_PAIR = re.compile(r"\*\*\s*([^*|:]+?)\s*\*\*\s*:\s*([^|]*)")
+GOVERNANCE_NAMES = {"governance", "governança", "governanca"}
 TECH_HEADING = re.compile(
     r"^#{2,6}\s+(Stack|Banco|Framework|Classes|Componentes|Implementação|API interna)\b",
     re.IGNORECASE | re.MULTILINE,
@@ -70,6 +75,52 @@ def fields(text: str) -> dict[str, str]:
 
 def top_fields(text: str) -> dict[str, str]:
     return {match.group(1): match.group(2).strip() for match in TOP_FIELD.finditer(text)}
+
+
+def footer_fields(text: str) -> dict[str, str]:
+    """Read the Spec Kit footer: `**Version**: X | **Ratified**: Y | **Last Amended**: Z`."""
+    values: dict[str, str] = {}
+    for line in FOOTER_LINE.findall(text):
+        for match in FOOTER_PAIR.finditer(line):
+            key = re.sub(r"\s+", "-", match.group(1).strip().casefold())
+            values.setdefault(key, match.group(2).strip())
+    return values
+
+
+def section_body(text: str, names: set[str]) -> str:
+    """Body of the first H2/H3 whose heading matches `names`, footer line excluded."""
+    headings = list(HEADING.finditer(text))
+    for index, heading in enumerate(headings):
+        normalized = re.sub(r"\s+", " ", heading.group(2).strip().strip("#").strip()).casefold()
+        if normalized not in names:
+            continue
+        level = len(heading.group(1))
+        end = len(text)
+        for following in headings[index + 1:]:
+            if len(following.group(1)) <= level:
+                end = following.start()
+                break
+        return FOOTER_LINE.sub("", text[heading.end():end]).strip()
+    return ""
+
+
+def constitution_metadata(text: str) -> dict[str, str]:
+    """Metadata of a Constitution in any of its three real shapes.
+
+    The managed Grill template writes `- key: value` bullets, older projects write
+    bare `key: value` lines, and a Constitution produced by the official Spec Kit
+    template carries a bold footer plus a `## Governance` section of prose.  HTML
+    comments are dropped first because the upstream template ships a commented
+    example footer that must never become a value.
+    """
+    stripped = HTML_COMMENT.sub("", text)
+    values = {**fields(stripped), **top_fields(stripped)}
+    for key, value in footer_fields(stripped).items():
+        if not values.get(key, "").strip():
+            values[key] = value
+    if not values.get("governance", "").strip():
+        values["governance"] = section_body(stripped, GOVERNANCE_NAMES)
+    return values
 
 
 def sha256(path: Path) -> str:
@@ -275,7 +326,7 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
 
     if constitution and constitution.is_file():
         text = constitution.read_text(encoding="utf-8")
-        values = {**fields(text), **top_fields(text)}
+        values = constitution_metadata(text)
         placeholders = ("{{", "}}", "YYYY-MM-DD", "<owner", "<regra", "<processo", "[PLACEHOLDER]")
         if any(token in text for token in placeholders):
             findings.append("constitution: placeholders presentes")
