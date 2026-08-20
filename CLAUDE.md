@@ -16,7 +16,7 @@ Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfood
 python3 tests/run_validators.py
 ```
 
-Baseline atual: 1102 testes em 23 validadores, exit 0, com 1 skip dependente de ambiente em `validate_workspace_contract.py`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
+Baseline atual: 1103 testes em 23 validadores, exit 0, com 1 skip dependente de ambiente em `validate_workspace_contract.py`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
 
 ## Restrições do core
 
@@ -61,7 +61,7 @@ A stack do Spec Kit deste repositório está no controle de versão de propósit
 - `.specify/extensions/` carrega código de terceiros vendorizado (`agent-assign` de xymelon, `bugfix` de Quratulain-bilal). Atualizações de extensão aparecem como diff.
 - `.specify/extensions/.cache/` é cache do catálogo e gera churn a cada refresh.
 - `.claude/settings.local.json` é override por máquina; mudanças locais de configuração viram diff.
-- `.specify/memory/constitution.md` na raiz é a **Constituição gerenciada do grill**, gerada de `assets/GRILL-CONSTITUTION.template.md` e não o placeholder do spec-kit. São 8 cláusulas normativas e ela é read-only depois do bootstrap: nenhum ADR ou decisão local funciona como waiver.
+- `.specify/memory/constitution.md` na raiz é a **Constituição gerenciada do grill**, gerada de `assets/GRILL-CONSTITUTION.template.md` e não o placeholder do spec-kit. São 9 cláusulas normativas e ela é read-only depois do bootstrap: nenhum ADR ou decisão local funciona como waiver. Duas dessas cláusulas — `Bump obrigatório do plugin` e `Release obrigatória por versão` — existem **só aqui**, não no asset: governam a distribuição deste plugin e não teriam sentido na constituição de um projeto consumidor. Emendar a Constituição é ato deliberado e caro: o hash muda e todo work item que selou o hash anterior passa a acusar `CONSTITUTION-STALE` até ser re-selado.
 
 ## Backlog
 

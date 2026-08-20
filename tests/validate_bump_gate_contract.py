@@ -357,10 +357,18 @@ class WorkflowWiring(unittest.TestCase):
 
     def test_constitution_requires_a_semver_bump_for_distributed_changes(self) -> None:
         text = self.CONSTITUTION.read_text(encoding="utf-8")
-        self.assertIn("- version: 1.1.0", text)
+        self.assertIn("- version: 1.2.0", text)
         self.assertIn("### Bump obrigatório do plugin", text)
         self.assertIn("`plugin/**` MUST incrementar a versão SemVer", text)
         self.assertIn("antes da tag de publicação", text)
+
+    def test_constitution_requires_a_release_for_every_published_version(self) -> None:
+        """Tag sem release é publicação incompleta: a cláusula tem de dizer isso."""
+        text = self.CONSTITUTION.read_text(encoding="utf-8")
+        self.assertIn("### Release obrigatória por versão", text)
+        self.assertIn("MUST ter release correspondente", text)
+        self.assertIn("criada pelo pipeline no merge para `main`", text)
+        self.assertIn("tag sem release é publicação incompleta", text)
 
     def test_the_matrix_workflow_no_longer_owns_the_gate(self) -> None:
         document = self.load_yaml(self.CI)
