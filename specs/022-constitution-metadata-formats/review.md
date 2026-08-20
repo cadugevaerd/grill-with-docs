@@ -52,8 +52,12 @@ como divergir em silêncio de novo.
 - `triage` continua consultiva: este ciclo registrou a rota `bugfix` em
   `tri-9981372e1dbc4d7ebfcf532f09d9573a`, mas nada a exigiu. Torná-la obrigatória segue sendo a fase
   seguinte, fora deste escopo.
-- O work item foi criado com `--skip-backlog` porque o vínculo do SGD é por caminho e não segue
-  worktree. Exige `backlog-adopt` depois do merge para limpar o carimbo.
+- Este ciclo rodou sem bundle de work item do grill. Um foi aberto durante a execução e depois
+  removido: a entrevista do grill nunca foi conduzida para ele, então não havia ADR, `ROUND-LOG` nem
+  `CONTEXT`, e sua auditoria travava em `CHECK-NOT-APPROVED`. Preencher o `CONSTITUTION-CHECK.md`
+  seria inventar trilha de decisão — em particular, a cláusula "Feature/fix plan-only" não admite
+  PASS honesto numa sessão que escreveu e mergeou código. O registro de triagem
+  `tri-9981372e1dbc4d7ebfcf532f09d9573a` e este diretório `specs/022-...` são a trilha real.
 
 ## Veredito
 

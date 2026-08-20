@@ -1,6 +1,6 @@
 # Feature Specification: Metadados da constituição em suas três formas reais
 
-**Work item**: `fix-constitution-metadata-a43184cce3ae4ae1be0e3bbcc0aa30b1`
+**Âncora**: registro de triagem `tri-9981372e1dbc4d7ebfcf532f09d9573a`
 **Rota**: bugfix
 **Laudo**: `specs/022-constitution-metadata-formats/laudo.md`
 **Origem**: relato de sessão consumidora rodando o plugin 3.3.0, reproduzido em 3.3.1.
