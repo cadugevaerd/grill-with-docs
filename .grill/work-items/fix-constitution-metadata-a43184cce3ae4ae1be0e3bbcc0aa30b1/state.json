@@ -1,7 +1,6 @@
 {
   "active_phase": "FASE-001",
   "audit_verdict": "pending",
-  "backlog_skipped": true,
   "capability": {
     "name": "module-decomposition",
     "schema": "v1",
