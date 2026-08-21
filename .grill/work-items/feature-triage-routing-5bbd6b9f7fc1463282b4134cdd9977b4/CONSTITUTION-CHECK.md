@@ -97,16 +97,26 @@
     },
     {
       "evidence": [
-        ".specify/memory/constitution.md#38b899e2",
+        "commit 0caed7f (2026-08-20) delimita a cláusula a versões novas posteriores à emenda",
+        "gh release list em 2026-08-21: somente v2.4.1; tags anteriores permanecem dívida declarada"
+      ],
+      "heading": "Release obrigatória por versão",
+      "id": "release-obrigat-ria-por-vers-o",
+      "justification": "NOT-APPLICABLE nesta re-selagem: ela não publica versão. As publicações deste work item são anteriores à emenda 1.2.0; releases ausentes anteriores permanecem dívida declarada, não conformidade retroativa.",
+      "status": "NOT-APPLICABLE"
+    },
+    {
+      "evidence": [
+        ".specify/memory/constitution.md#d5b676ff0a56aca3153e4c8e498723cc155ac02ee1b1b7c45dcd378db8d6f736",
         "WORK-ITEM.json"
       ],
       "heading": "Governance",
       "id": "governance",
-      "justification": "A Constituição 1.1.0 foi preservada byte a byte pelo init e seu SHA-256 está fixado no metadata imutável e neste check.",
+      "justification": "A Constituição 1.2.0 foi revalidada sem alteração de seus bytes e seu SHA-256 está fixado no metadata imutável e neste check.",
       "status": "PASS"
     }
   ],
-  "constitution_sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
+  "constitution_sha256": "d5b676ff0a56aca3153e4c8e498723cc155ac02ee1b1b7c45dcd378db8d6f736",
   "constitution_state": "present"
 }
 ```

@@ -12,7 +12,7 @@
     "branch": "fix/high-defects",
     "constitution": {
       "path": ".specify/memory/constitution.md",
-      "sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
+      "sha256": "d5b676ff0a56aca3153e4c8e498723cc155ac02ee1b1b7c45dcd378db8d6f736",
       "state": "present"
     },
     "head": "e107b19d1a1e3ec6032df5c2b0a37c2b11cd7cec",
@@ -25,10 +25,10 @@
       "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4"
     }
   },
-  "immutable_sha256": "e092703777ddc144aa9da4b5bf9141ee43c55ea6d77d44df20f9ee1a1fe62ea1",
+  "immutable_sha256": "a83b4e0f3dd8948fa065440e361e3f25c134e4a050de9583e9c75fd0c8339b37",
   "initial_artifacts": {
     "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
-    "CONSTITUTION-CHECK.md": "477330022fa8999d443b9de231d94a082fe3eaf3f1a85446ad95765909d502dd",
+    "CONSTITUTION-CHECK.md": "d7053e42e31531a816e96f569b5656a6e0a098b821521b7595ef9483c3939454",
     "CONTEXT.md": "046a1d433eab29a57783aae06ea414afc271d25bcc7372290ccde7f00fd97ee7",
     "DECISION-BACKLOG.md": "0ead85c254fb8b2c6a817a2cebaad3594fe88019041c904ec9176af012f806ab",
     "DECISION-FRONTIER.md": "3b129d57ccac57b1af5096e1639df58a20190abcef54382e0d948d778b44e0d6",
@@ -37,7 +37,7 @@
     "ROADMAP.md": "9c68e05c6993da8b319d96716b6d9fc90329af9876fdc74699eca4ee8b556734",
     "ROUND-LOG.jsonl": "fee46cc9873273ad4d3bc6abb41ca3bd30aacbe392b137d8c8b6c97b6aca13e7",
     "handoffs/FASE-001-SPECIFY-HANDOFF.md": "3cfe46ee546a9c46cf78fd7bf59ca897df07d24431a46ab4b61bf147fe919a58",
-    "state.json": "dc8c4b698faa744debc992844872d905e9b2dd783e07acc853ee0d95032a6d33"
+    "state.json": "0ad209d7cdf6b27cbcaedfd1f4150ee2e67e110a96862ab754d6aa68e47403f1"
   },
   "schema": "grill-work-item/v2",
   "scope": {

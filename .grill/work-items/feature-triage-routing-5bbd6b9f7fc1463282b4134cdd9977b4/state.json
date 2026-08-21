@@ -8,7 +8,7 @@
   },
   "constitution": {
     "path": ".specify/memory/constitution.md",
-    "sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
+    "sha256": "d5b676ff0a56aca3153e4c8e498723cc155ac02ee1b1b7c45dcd378db8d6f736",
     "state": "present"
   },
   "development": {

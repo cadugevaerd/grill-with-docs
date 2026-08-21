@@ -12,7 +12,7 @@
     "branch": "feat/v3-gauntlet",
     "constitution": {
       "path": ".specify/memory/constitution.md",
-      "sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
+      "sha256": "d5b676ff0a56aca3153e4c8e498723cc155ac02ee1b1b7c45dcd378db8d6f736",
       "state": "present"
     },
     "head": "3a1d9cac03f05cc5b0c2e195518c5f0b7bb91700",
@@ -25,10 +25,10 @@
       "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4"
     }
   },
-  "immutable_sha256": "199fe60c39c04b4e85140538bcb8223fd33307fa86866f964b3c7b15e51ca863",
+  "immutable_sha256": "9984bee2d36f5dab7480cd625ed35600ac6d82d2f5192fb65c6b907237010eaf",
   "initial_artifacts": {
     "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
-    "CONSTITUTION-CHECK.md": "477330022fa8999d443b9de231d94a082fe3eaf3f1a85446ad95765909d502dd",
+    "CONSTITUTION-CHECK.md": "53a3841f85836ab55647100da61ef70b66add541323a4ea840c01beed14b3c5c",
     "CONTEXT.md": "046a1d433eab29a57783aae06ea414afc271d25bcc7372290ccde7f00fd97ee7",
     "DECISION-BACKLOG.md": "0ead85c254fb8b2c6a817a2cebaad3594fe88019041c904ec9176af012f806ab",
     "DECISION-FRONTIER.md": "3b129d57ccac57b1af5096e1639df58a20190abcef54382e0d948d778b44e0d6",
@@ -37,7 +37,7 @@
     "ROADMAP.md": "9c68e05c6993da8b319d96716b6d9fc90329af9876fdc74699eca4ee8b556734",
     "ROUND-LOG.jsonl": "fee46cc9873273ad4d3bc6abb41ca3bd30aacbe392b137d8c8b6c97b6aca13e7",
     "handoffs/FASE-001-SPECIFY-HANDOFF.md": "3cfe46ee546a9c46cf78fd7bf59ca897df07d24431a46ab4b61bf147fe919a58",
-    "state.json": "58b663feeb763ada349e39b24d07915897526cddcaa5b7642b9f5e3d2a0bdd4f"
+    "state.json": "35e8875177e6715c680d2eb160a986df6c0dded8306f8b9ec0833137302074a3"
   },
   "schema": "grill-work-item/v2",
   "scope": {
