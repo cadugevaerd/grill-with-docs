@@ -1,6 +1,6 @@
 # grill-with-docs
 
-**v3.3.2 · MIT**
+**v3.4.0 · MIT**
 
 Plugin de planejamento arquitetural e entrega **Delivery First**: entrevista decisões, mantém work items isolados, valida a Constituição e produz evidência auditável. O plugin é plan-only para feature/fix (`PLAN_ONLY_STOP`); hotfix/incident segue uma faixa rápida, explícita e fail-closed (`HOTFIX-GO`). Auditoria e reconciliação não substituem o ship externo.
 
@@ -31,7 +31,10 @@ CORE="$PLUGIN_ROOT/skills/grill-with-docs/scripts/grill_workspace.py"
 python3 "$CORE" preflight "$PWD"
 python3 "$CORE" init "$PWD" --type feature --slug minha-feature
 python3 "$CORE" status "$PWD"
+python3 "$CORE" status "$PWD" --format markdown
 ```
+
+O formato padrão é JSON para automações. `--format markdown` produz a resposta humana canônica: `all good` quando não há pendências ou uma tabela estável de work items pendentes.
 
 O `init` fixa o `WORKFLOW.md` project-wide e reporta o estado das dependências externas (Spec Kit e extensões, `backlogctl`). Por padrão ele apenas relata; `--allow-install` autoriza a instalação delegada e o bind do repositório ao backlog, e `--require-dependencies` torna o gate fail-closed. O plugin nunca baixa binários por conta própria.
 

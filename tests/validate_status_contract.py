@@ -18,6 +18,8 @@ def status(root,*args):
     p=cli(WS,"status",root,*args)
     assert len(p.stdout.splitlines())==1,(p.stdout,p.stderr)
     return p,json.loads(p.stdout)
+def status_markdown(root,*args):
+    return cli(WS,"status",root,"--format","markdown",*args)
 class StatusPublicContract(unittest.TestCase):
     def setUp(self):
         self.t=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.r=Path(self.t.name)
@@ -37,7 +39,32 @@ class StatusPublicContract(unittest.TestCase):
         self.assertEqual(x["summary"],{"total":0,"in_progress":0,"blocked":0,"completed":0})
     def test_one_item_top_level_and_item_schema(self):
         self.item(); p,x=status(self.r); self.assertEqual(p.returncode,0); self.assertEqual(set(x),{"schema","verdict","code","project_root","summary","work_items","next_action"}); item=x["work_items"][0]
-        for k in ("work_id","type","slug","fingerprint","locations","recorded","planning","development","governance","blockers","findings","next_gate"): self.assertIn(k,item)
+        for k in ("work_id","type","slug","fingerprint","locations","recorded","planning","development","governance","blockers","findings","closed","operational_status","pending_reasons","next_gate"): self.assertIn(k,item)
+    def test_markdown_empty_workspace_requires_initialization(self):
+        p=status_markdown(self.r); self.assertEqual(p.returncode,0); self.assertEqual(p.stderr,"")
+        self.assertEqual(p.stdout,"| Item | Status | Pendência |\n|---|---|---|\n| workspace | pending | GWD não inicializado |\n")
+    def test_markdown_all_good_only_for_coherently_closed_item(self):
+        self.item(); self._terminal(); p=status_markdown(self.r)
+        self.assertEqual((p.returncode,p.stderr,p.stdout),(0,"","all good\n"))
+    def test_markdown_omits_closed_items_and_reports_pending_stage(self):
+        self.item("closed"); self._terminal("closed"); self.item("open")
+        p=status_markdown(self.r); self.assertEqual(p.returncode,0); self.assertNotIn("| closed |",p.stdout)
+        self.assertIn("| open | pending | etapa GWD pendente: specify |",p.stdout)
+    def test_markdown_terminal_contradiction_is_blocked(self):
+        self.item(); path=self.r/".grill/work-items/work-a/state.json"; value=json.loads(path.read_text(encoding="utf-8"))
+        value["status"]="complete"; value["milestone_status"]="completed"; path.write_text(json.dumps(value),encoding="utf-8")
+        p=status_markdown(self.r); self.assertEqual(p.returncode,0); self.assertIn("| work-a | blocked |",p.stdout)
+        self.assertIn("fechamento inconsistente: ",p.stdout)
+    def test_markdown_in_progress_stage_is_named(self):
+        item=self.item(); path=item/"state.json"; value=json.loads(path.read_text(encoding="utf-8"))
+        value["development"]["steps"]["specify"]="in-progress"; path.write_text(json.dumps(value),encoding="utf-8")
+        p=status_markdown(self.r); self.assertEqual(p.returncode,0); self.assertIn("| work-a | in-progress | etapa GWD em andamento: specify |",p.stdout)
+    def test_markdown_escapes_cells_deterministically(self):
+        spec=importlib.util.spec_from_file_location("status_markdown_contract",STATUS)
+        if spec is None or spec.loader is None: self.fail("unable to load status module")
+        module=importlib.util.module_from_spec(spec); sys.modules[spec.name]=module; spec.loader.exec_module(module)
+        payload={"verdict":"OK","code":"OK","work_items":[{"work_id":"a|b\\c","closed":False,"operational_status":"pending","pending_reasons":["line one\nline|two\\"]}]}
+        self.assertEqual(module.render_markdown(payload),"| Item | Status | Pendência |\n|---|---|---|\n| a\\|b\\\\c | pending | line one line\\|two\\\\ |\n")
     def test_missing_work_id_is_one_json_exit1(self):
         p,x=status(self.r,"--work-id","absent"); self.assertEqual(p.returncode,1); self.assertEqual(x["code"],"WORK-ITEM-MISSING"); self.assertEqual(len(p.stdout.splitlines()),1); self.assertEqual(p.stderr,"")
     def test_current_worktree_is_not_cross_worktree(self):
@@ -47,8 +74,11 @@ class StatusPublicContract(unittest.TestCase):
     def _git(self,*args): subprocess.run(["git","-C",str(self.r),*args],check=True,capture_output=True)
     def _terminal(self, wid="work-a"):
         p=self.r/".grill/work-items"/wid/"state.json"; d=json.loads(p.read_text(encoding="utf-8"))
-        d["status"]="complete"; d["milestone_status"]="completed"
+        d["status"]="complete"; d["milestone_status"]="completed"; d["active_phase"]=None; d["audit_verdict"]="GO"
+        d["development"]["steps"]={step:"complete" for step in d["development"]["sequence"]}; d["development"]["current_step"]="complete"
         p.write_text(json.dumps(d,indent=2)+"\n",encoding="utf-8")
+        roadmap=self.r/".grill/work-items"/wid/"ROADMAP.md"
+        roadmap.write_text(roadmap.read_text(encoding="utf-8").replace("- state: planned","- state: complete"),encoding="utf-8")
     def _findings(self, wid="work-a"):
         _,x=status(self.r); return next(w for w in x["work_items"] if w["work_id"]==wid)["findings"]
     def _switch_to_phase_branch(self, name="011-gauntlet-loop"):
@@ -198,6 +228,8 @@ class StatusPublicContract(unittest.TestCase):
                 if p.is_file() and ".git" not in p.relative_to(self.r).parts}
     def test_read_only_fingerprint(self):
         before=self.snapshot_tree(); status(self.r); after=self.snapshot_tree(); self.assertEqual(before,after)
+    def test_markdown_read_only_fingerprint(self):
+        before=self.snapshot_tree(); status_markdown(self.r); after=self.snapshot_tree(); self.assertEqual(before,after)
     def test_the_snapshot_still_sees_everything_the_grill_owns(self):
         """Excluir .git/ não pode virar desculpa para o teste não olhar nada."""
         self.item(); tree=self.snapshot_tree()

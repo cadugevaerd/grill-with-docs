@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.4.0
+
+Status humano passa a ser um contrato canônico, sem quebrar a API JSON existente.
+
+- `status --format markdown` retorna exatamente `all good` sem pendências, ou uma tabela Markdown estável de work items pendentes.
+- Work items fechados só são omitidos quando milestone, fases, auditoria, etapas GWD e integridade estão coerentemente concluídos; contradições aparecem como `blocked`.
+- O JSON `grill-status/v1` permanece default e recebe campos aditivos de fechamento, estado operacional e motivos de pendência.
+- Workspace não inicializado e erros globais deixam de poder parecer saudáveis na projeção humana.
+
 ## 3.3.1
 
 Corrige a detecção de extensão do preflight, que afirmava o que não tinha observado.

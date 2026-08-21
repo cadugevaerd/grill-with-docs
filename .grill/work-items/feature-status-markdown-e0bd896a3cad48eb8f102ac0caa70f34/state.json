@@ -1,0 +1,306 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "pending",
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "d5b676ff0a56aca3153e4c8e498723cc155ac02ee1b1b7c45dcd378db8d6f736",
+    "state": "present"
+  },
+  "development": {
+    "audit": [
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+            "sha256": "403ffb1ce73b9e5893853dfc003f467559676fbeac94a5037cae11f921d7c1c6"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 specify iniciado",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+            "sha256": "403ffb1ce73b9e5893853dfc003f467559676fbeac94a5037cae11f921d7c1c6"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 specify concluído",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/PLAN-CONTEXT.md",
+            "sha256": "c6c319e4d6561570b7106a6d8acd39512b80119fd3f911c9235c7d6ae44463b0"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 plan iniciado",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/PLAN-CONTEXT.md",
+            "sha256": "c6c319e4d6561570b7106a6d8acd39512b80119fd3f911c9235c7d6ae44463b0"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 plan concluído",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+            "sha256": "403ffb1ce73b9e5893853dfc003f467559676fbeac94a5037cae11f921d7c1c6"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 checklist iniciado",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+            "sha256": "403ffb1ce73b9e5893853dfc003f467559676fbeac94a5037cae11f921d7c1c6"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 checklist concluído",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+            "sha256": "403ffb1ce73b9e5893853dfc003f467559676fbeac94a5037cae11f921d7c1c6"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 tasks iniciado",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+            "sha256": "403ffb1ce73b9e5893853dfc003f467559676fbeac94a5037cae11f921d7c1c6"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 tasks concluído",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/docs/adr/ADR-0003.md",
+            "sha256": "bdd2b50db41a315f879c02e1a8e431c563f5f0577c6b99e1430bdb3bdb482868"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 analyze iniciado",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/docs/adr/ADR-0003.md",
+            "sha256": "bdd2b50db41a315f879c02e1a8e431c563f5f0577c6b99e1430bdb3bdb482868"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 analyze concluído",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/DELIVERY-MAP.md",
+            "sha256": "c09f6b928617e6034737d0d150b94a6936c4b086db9441e9cc02a33b9e0a3025"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 agent-assign iniciado",
+        "state": "in-progress",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/DELIVERY-MAP.md",
+            "sha256": "c09f6b928617e6034737d0d150b94a6936c4b086db9441e9cc02a33b9e0a3025"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 agent-assign concluído",
+        "state": "complete",
+        "step": "agent-assign"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_status.py",
+            "sha256": "66c46799a5ff320cd411e2dd03186a4c016ac46829e34b119a912277b7d756e0"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 agent-execute iniciado",
+        "state": "in-progress",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_status.py",
+            "sha256": "66c46799a5ff320cd411e2dd03186a4c016ac46829e34b119a912277b7d756e0"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 agent-execute concluído",
+        "state": "complete",
+        "step": "agent-execute"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_status.py",
+            "sha256": "66c46799a5ff320cd411e2dd03186a4c016ac46829e34b119a912277b7d756e0"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 converge iniciado",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/scripts/grill_status.py",
+            "sha256": "66c46799a5ff320cd411e2dd03186a4c016ac46829e34b119a912277b7d756e0"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 converge concluído",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/evidence/validation.md",
+            "sha256": "79842c8ae36d461d19dd04604b68c563ce2b1c46ac8e57af509f5f6356a7d26c"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 verify iniciado",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/evidence/validation.md",
+            "sha256": "79842c8ae36d461d19dd04604b68c563ce2b1c46ac8e57af509f5f6356a7d26c"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 verify concluído",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/evidence/validation.md",
+            "sha256": "79842c8ae36d461d19dd04604b68c563ce2b1c46ac8e57af509f5f6356a7d26c"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 review iniciado",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/evidence/validation.md",
+            "sha256": "79842c8ae36d461d19dd04604b68c563ce2b1c46ac8e57af509f5f6356a7d26c"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 review concluído",
+        "state": "complete",
+        "step": "review"
+      }
+    ],
+    "current_step": "ship",
+    "execution_branch": "feat/status-markdown",
+    "schema": "grill-development/v1",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "agent-assign",
+      "agent-execute",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "agent-assign": "complete",
+      "agent-execute": "complete",
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "pending",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    }
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "in-progress",
+  "version": "1.2.0",
+  "work_id": "feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4",
+    "version": "v2"
+  }
+}
