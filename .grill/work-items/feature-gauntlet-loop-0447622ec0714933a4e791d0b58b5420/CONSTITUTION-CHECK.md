@@ -29,7 +29,7 @@
       "evidence": ["ROADMAP.md", "state.json"],
       "heading": "Sequência obrigatória do desenvolvimento",
       "id": "sequ-ncia-obrigat-ria-do-desenvolvimento",
-      "justification": "A primeira fase está pronta para specify e o desenvolvimento preserva a sequência canônica.",
+      "justification": "O fechamento histórico autorizado registrou o checkpoint specify com evidências já aprovadas; state.json agora atesta todos os passos da sequência como completos, sem alegar nova invocação canônica.",
       "status": "PASS"
     },
     {
@@ -61,14 +61,21 @@
       "status": "PASS"
     },
     {
+      "evidence": ["commit 0caed7f (2026-08-20)", "gh release list (2026-08-21): somente v2.4.1"],
+      "heading": "Release obrigatória por versão",
+      "id": "release-obrigat-ria-por-vers-o",
+      "justification": "NOT-APPLICABLE nesta re-selagem: ela não publica versão. As publicações deste work item são anteriores à emenda 1.2.0; releases ausentes anteriores permanecem dívida declarada, não conformidade retroativa.",
+      "status": "NOT-APPLICABLE"
+    },
+    {
       "evidence": ["DECISION-FRONTIER.md", "CONTEXT.md"],
       "heading": "Governance",
       "id": "governance",
-      "justification": "Termos, decisões e gates foram registrados antes da execução da feature.",
+      "justification": "Termos, decisões, gates e a autorização explícita do fechamento histórico foram registrados sem fabricar uma invocação canônica inexistente.",
       "status": "PASS"
     }
   ],
-  "constitution_sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
+  "constitution_sha256": "d5b676ff0a56aca3153e4c8e498723cc155ac02ee1b1b7c45dcd378db8d6f736",
   "constitution_state": "present"
 }
 ```

@@ -8,7 +8,7 @@
   },
   "constitution": {
     "path": ".specify/memory/constitution.md",
-    "sha256": "38b899e2c10157e0eb37f6968d90af32ec735b6269771e604aa3e013b89976d6",
+    "sha256": "d5b676ff0a56aca3153e4c8e498723cc155ac02ee1b1b7c45dcd378db8d6f736",
     "state": "present"
   },
   "development": {
@@ -709,9 +709,25 @@
         "reason": "Milestone fechado por decisao explicita do operador em chat (2026-08-16), nao por attestation V3 genuina. FASE-003 (commit 4ac6746) e FASE-004 (commits 37fd179/6ce3f4b) publicados em origin/main, cada um com verify PASS + review APPROVE independentes. BL-0003/BL-0004 resolvidos pela mesma decisao -- nenhuma cadeia dispatch_intent/invocation_started/invocation_terminal/step_output foi produzida ou fabricada para o passo specify de FASE-003/FASE-004.",
         "state": "complete",
         "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/013-scheduler-waves/spec.md",
+            "sha256": "5555d3c9bf358de9260a751f915731b901174216b7b3e5de068086c13bdba1cf"
+          },
+          {
+            "path": "specs/013-scheduler-waves/precode-foundation.json",
+            "sha256": "c2813c96531fe69319bbebd95fc4009178b0fe1b7568e7d197a807baee8e9b48"
+          }
+        ],
+        "execution_branch": "013-scheduler-waves",
+        "reason": "Fechamento histórico autorizado pelo operador: registra a evidência já aprovada; não alega nova invocação canônica.",
+        "state": "complete",
+        "step": "specify"
       }
     ],
-    "current_step": "specify",
+    "current_step": "complete",
     "execution_branch": "013-scheduler-waves",
     "schema": "grill-development/v1",
     "sequence": [
@@ -736,7 +752,7 @@
       "plan": "complete",
       "review": "complete",
       "ship": "complete",
-      "specify": "in-progress",
+      "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
     }
