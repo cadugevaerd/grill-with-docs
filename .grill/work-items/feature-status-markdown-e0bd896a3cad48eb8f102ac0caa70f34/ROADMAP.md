@@ -3,7 +3,7 @@
 - execution-order: FASE-001
 
 ## FASE-001 — Status humano determinístico
-- state: ready-for-specify
+- state: complete
 - objetivo: a skill `grill-with-docs status` retorna `all good` somente quando não há pendência e, nos demais casos, uma tabela Markdown estável com item, status e causa
 - scope-in: projeção aditiva em `grill_status.py`, opção `status --format markdown` em `grill_workspace.py`, instrução canônica da skill, testes públicos de status e distribuição, documentação, bump e changelog
 - scope-out: alteração do JSON padrão para Markdown, remoção de itens fechados do JSON, mudança dos exit codes, reformatação do resumo dos hooks, implementação de `gauntlet-status`, reconciliação como requisito de fechamento
