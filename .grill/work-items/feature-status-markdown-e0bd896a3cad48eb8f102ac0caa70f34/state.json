@@ -1,6 +1,6 @@
 {
-  "active_phase": "FASE-001",
-  "audit_verdict": "pending",
+  "active_phase": null,
+  "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
     "schema": "v1",
@@ -252,9 +252,33 @@
         "reason": "FASE-001 review concluído",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/evidence/validation.md",
+            "sha256": "79842c8ae36d461d19dd04604b68c563ce2b1c46ac8e57af509f5f6356a7d26c"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 ship iniciado após gates de integração",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34/evidence/validation.md",
+            "sha256": "79842c8ae36d461d19dd04604b68c563ce2b1c46ac8e57af509f5f6356a7d26c"
+          }
+        ],
+        "execution_branch": "feat/status-markdown",
+        "reason": "FASE-001 ship concluído; gates de integração aprovados",
+        "state": "complete",
+        "step": "ship"
       }
     ],
-    "current_step": "ship",
+    "current_step": "complete",
     "execution_branch": "feat/status-markdown",
     "schema": "grill-development/v1",
     "sequence": [
@@ -278,7 +302,7 @@
       "converge": "complete",
       "plan": "complete",
       "review": "complete",
-      "ship": "pending",
+      "ship": "complete",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
@@ -291,11 +315,11 @@
     "max_questions_per_run": 25,
     "max_scope_growth_streak": 3
   },
-  "milestone_status": "in-progress",
+  "milestone_status": "completed",
   "second_pass": {
     "new_material_dqs": 0
   },
-  "status": "in-progress",
+  "status": "complete",
   "version": "1.2.0",
   "work_id": "feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34",
   "workflow": {

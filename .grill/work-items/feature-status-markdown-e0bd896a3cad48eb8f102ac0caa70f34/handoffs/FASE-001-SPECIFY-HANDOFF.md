@@ -1,7 +1,7 @@
 # FASE-001 — Status humano determinístico
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: status bruto, status humano, work item coerentemente fechado, pendência operacional, etapa GWD, all good, inicialização pendente, bump obrigatório
 - ADRs: ADR-0001, ADR-0002, ADR-0003, ADR-0004
