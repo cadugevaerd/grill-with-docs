@@ -23,6 +23,7 @@ spec.loader.exec_module(workspace)
 
 SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "agent-assign", "agent-execute", "converge", "verify", "review", "ship"]
 STATES = {"pending", "in-progress", "complete", "blocked"}
+TERMINAL_PHASE_STATES = {"complete", "superseded"}
 
 def git(root: Path, *args: str, raw: bool = False) -> str | bytes:
     p = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=not raw, check=False)
@@ -129,7 +130,78 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
     item_location = {"worktree": str(root), "path": bundle.origin, "branch": lv["branch"], "head": lv["head"], "dirty": lv["dirty"], "current": False}
     active = state.get("active_phase")
     snapshot = {name: {"size": len(data), "mtime_ns": (Path(bundle.origin) / name).stat().st_mtime_ns} for name, data in sorted(bundle.files.items())}
-    return {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": {"status": state.get("status"), "milestone_status": state.get("milestone_status"), "active_phase": active, "phase_state": phase_states.get(active, state.get("phase_state")), "execution_order": phases, "phases": phase_states, "modules": modules, "delivery_units": units, "development_types": types}, "development": {"tracking": tracking, "current_step": current, "completed": completed, "blocked": blocked, "steps": steps, "execution_branch": execution_branch}, "governance": {"constitution": {"state": constitution.get("state"), "path": constitution.get("path"), "hash": constitution.get("sha256")}, "check": {"state": "present" if check is not None else "missing", "hash": digest(check) if check is not None else None}, "audit": {"verdict": state.get("audit_verdict"), "hash": digest(audit) if audit is not None else None}, "reconciled": {"path": str(receipt) if receipt_bytes is not None else None, "hash": digest(receipt_bytes) if receipt_bytes is not None else None}}, "blockers": blocked, "findings": sorted(findings), "next_gate": "BLOCKED" if findings or blocked else (SEQUENCE[len(completed)] if len(completed) < len(SEQUENCE) else "complete")}
+    planning = {"status": state.get("status"), "milestone_status": state.get("milestone_status"), "active_phase": active, "phase_state": phase_states.get(active, state.get("phase_state")), "execution_order": phases, "phases": phase_states, "modules": modules, "delivery_units": units, "development_types": types}
+    governance = {"constitution": {"state": constitution.get("state"), "path": constitution.get("path"), "hash": constitution.get("sha256")}, "check": {"state": "present" if check is not None else "missing", "hash": digest(check) if check is not None else None}, "audit": {"verdict": state.get("audit_verdict"), "hash": digest(audit) if audit is not None else None}, "reconciled": {"path": str(receipt) if receipt_bytes is not None else None, "hash": digest(receipt_bytes) if receipt_bytes is not None else None}}
+    development = {"tracking": tracking, "current_step": current, "completed": completed, "blocked": blocked, "steps": steps, "execution_branch": execution_branch}
+    closed, operational_status, pending_reasons = classify_item(
+        planning=planning, development=development, governance=governance,
+        findings=findings, blockers=blocked,
+    )
+    return {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": planning, "development": development, "governance": governance, "blockers": blocked, "findings": sorted(findings), "closed": closed, "operational_status": operational_status, "pending_reasons": pending_reasons, "next_gate": "BLOCKED" if findings or blocked else (SEQUENCE[len(completed)] if len(completed) < len(SEQUENCE) else "complete")}
+
+
+def classify_item(*, planning: dict[str, Any], development: dict[str, Any], governance: dict[str, Any], findings: list[str], blockers: list[str]) -> tuple[bool, str, list[str]]:
+    """Classify one item without hiding contradictory terminal markers."""
+    steps = development.get("steps") if isinstance(development.get("steps"), dict) else {}
+    tracking = development.get("tracking")
+    phase_states = planning.get("phases") if isinstance(planning.get("phases"), dict) else {}
+    all_phases_terminal = bool(phase_states) and all(state in TERMINAL_PHASE_STATES for state in phase_states.values())
+    all_steps_complete = tracking == "tracked" and all(steps.get(step) == "complete" for step in SEQUENCE)
+    terminal_markers = planning.get("status") == "complete" and planning.get("milestone_status") == "completed"
+    closure_gaps: list[str] = []
+    if planning.get("status") != "complete": closure_gaps.append("state.status não é complete")
+    if planning.get("milestone_status") != "completed": closure_gaps.append("milestone_status não é completed")
+    if planning.get("active_phase") is not None: closure_gaps.append("active_phase não é null")
+    if not all_phases_terminal: closure_gaps.append("fases não são todas terminais")
+    if governance.get("audit", {}).get("verdict") != "GO": closure_gaps.append("auditoria não é GO")
+    if not all_steps_complete: closure_gaps.append("etapas GWD incompletas")
+    closed = not findings and not blockers and not closure_gaps
+    reasons: list[str] = []
+    if findings:
+        reasons.append("findings: " + ", ".join(sorted(set(str(value) for value in findings))))
+    if blockers:
+        reasons.append("etapa GWD bloqueada: " + ", ".join(sorted(set(str(value) for value in blockers))))
+    if terminal_markers and not closed:
+        reasons.append("fechamento inconsistente: " + ", ".join(closure_gaps))
+    if findings or blockers or (terminal_markers and not closed):
+        return closed, "blocked", reasons
+    in_progress = [step for step in SEQUENCE if steps.get(step) == "in-progress"]
+    if in_progress:
+        return closed, "in-progress", [f"etapa GWD em andamento: {in_progress[0]}"]
+    pending = [step for step in SEQUENCE if steps.get(step) == "pending"]
+    if pending:
+        return closed, "pending", [f"etapa GWD pendente: {pending[0]}"]
+    if not closed:
+        return closed, "pending", ["fechamento pendente: " + ", ".join(closure_gaps)]
+    return closed, "complete", []
+
+
+def markdown_cell(value: object) -> str:
+    return str(value).replace("\\", "\\\\").replace("\r\n", " ").replace("\n", " ").replace("\r", " ").replace("|", "\\|")
+
+
+def render_markdown(payload: dict[str, Any]) -> str:
+    """Render the human status contract from the canonical JSON projection."""
+    items = payload.get("work_items")
+    if not isinstance(items, list):
+        code = markdown_cell(payload.get("code", "STATUS-SCHEMA"))
+        detail = markdown_cell(payload.get("error", "payload work_items inválido"))
+        return f"| Item | Status | Pendência |\n|---|---|---|\n| workspace | blocked | {code}: {detail} |\n"
+    actionable = [item for item in items if isinstance(item, dict) and not item.get("closed", False)]
+    if actionable:
+        lines = ["| Item | Status | Pendência |", "|---|---|---|"]
+        for item in sorted(actionable, key=lambda value: str(value.get("work_id", ""))):
+            reasons = item.get("pending_reasons")
+            detail = "; ".join(str(reason) for reason in reasons) if isinstance(reasons, list) and reasons else "pendência não classificada"
+            lines.append(f"| {markdown_cell(item.get('work_id', '?'))} | {markdown_cell(item.get('operational_status', 'blocked'))} | {markdown_cell(detail)} |")
+        return "\n".join(lines) + "\n"
+    if payload.get("verdict") == "BLOCKED" or payload.get("code") not in {"OK", "EMPTY"}:
+        code = markdown_cell(payload.get("code", "STATUS-ERROR"))
+        detail = markdown_cell(payload.get("error", "erro global de status"))
+        return f"| Item | Status | Pendência |\n|---|---|---|\n| workspace | blocked | {code}: {detail} |\n"
+    if not items:
+        return "| Item | Status | Pendência |\n|---|---|---|\n| workspace | pending | GWD não inicializado |\n"
+    return "all good\n"
 
 def worktree_roots(root: Path, current: bool) -> list[Path]:
     if current: return [root]
@@ -179,8 +251,13 @@ def build_status(root_arg: str | Path, work_id: str | None = None, current_workt
     return {"schema":"grill-status/v1","verdict":"BLOCKED" if global_findings else "OK","code":code,"project_root":str(root),"summary":summary,"work_items":items,"next_action":"iniciar" if not items else ("resolver-bloqueios" if summary["blocked"] else "continuar")}, 2 if global_findings else 0
 
 def main(argv: list[str] | None = None) -> int:
-    parser=argparse.ArgumentParser(); parser.add_argument("root"); parser.add_argument("--work-id"); parser.add_argument("--current-worktree",action="store_true")
-    try: payload, code=build_status(*vars(parser.parse_args(argv)).values())
+    parser=argparse.ArgumentParser(); parser.add_argument("root"); parser.add_argument("--work-id"); parser.add_argument("--current-worktree",action="store_true"); parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    args = parser.parse_args(argv)
+    try: payload, code=build_status(args.root, args.work_id, args.current_worktree)
     except workspace.CliFailure as exc: payload, code={"schema":"grill-status/v1","verdict":exc.verdict,"code":exc.code,"error":exc.message}, exc.exit_code
-    print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))); return code
+    if args.format == "markdown":
+        sys.stdout.write(render_markdown(payload))
+    else:
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+    return code
 if __name__ == "__main__": raise SystemExit(main())

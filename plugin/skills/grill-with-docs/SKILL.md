@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v3.3.2
+# Grill with Docs v3.4.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -161,6 +161,17 @@ INIT → MAP_FRONTIER → ASK_ONE → RECORD → RECOMPUTE_FRONTIER
 Mesmo fingerprint admite no máximo duas perguntas sem evidência nova. Duas rodadas sem progresso, três expansões consecutivas ou 25 perguntas materiais exigem checkpoint e `SAFETY_STOP`. `pausar|stop` grava `PAUSED_USER`. Contradições nunca são sobrescritas.
 
 IDs `ADR-NNNN`, `DQ-NNNN`, `BL-NNNN`, `FASE-NNN` e `R-NNNN` são locais ao work item. Na projeção global tornam-se `<work-id>/<ID>`.
+
+## Status humano canônico
+
+Para responder a `status`, invoque a projeção canônica e reproduza o stdout literalmente; não resuma, traduza, reordene ou acrescente explicações:
+
+```text
+python3 "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/grill-with-docs/scripts/grill_workspace.py" \
+  status ROOT --format markdown
+```
+
+O JSON `grill-status/v1` continua sendo o formato padrão da CLI para automações. O Markdown omite somente work items coerentemente fechados. Se não houver pendência, o stdout é exatamente `all good`; caso contrário, é a tabela `Item | Status | Pendência` produzida pelo core.
 
 ## Auditoria read-only
 

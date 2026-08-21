@@ -3146,6 +3146,26 @@ def status_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     return payload, process.returncode if process.returncode in {0, 1, 2, 3} else EXIT_BLOCKED
 
 
+def status_markdown_command(args: argparse.Namespace) -> int:
+    """Emit the canonical human renderer without changing JSON status defaults."""
+    script = Path(__file__).with_name("grill_status.py")
+    command = [sys.executable, str(script), str(args.root), "--format", "markdown"]
+    if args.work_id:
+        command += ["--work-id", args.work_id]
+    if args.current_worktree:
+        command.append("--current-worktree")
+    try:
+        process = subprocess.run(command, capture_output=True, text=True, check=False, timeout=5)
+    except subprocess.TimeoutExpired:
+        sys.stdout.write("| Item | Status | Pendência |\n|---|---|---|\n| workspace | blocked | STATUS-TIMEOUT: resolver bloqueios |\n")
+        return EXIT_BLOCKED
+    if not process.stdout:
+        sys.stdout.write("| Item | Status | Pendência |\n|---|---|---|\n| workspace | blocked | STATUS-INVALID-OUTPUT: resolver bloqueios |\n")
+        return EXIT_BLOCKED
+    sys.stdout.write(process.stdout)
+    return process.returncode if process.returncode in {0, 1, 2, 3} else EXIT_BLOCKED
+
+
 def build_parser() -> JsonParser:
     parser = JsonParser()
     subparsers = parser.add_subparsers(dest="command", required=True, parser_class=JsonParser)
@@ -3343,6 +3363,7 @@ def build_parser() -> JsonParser:
     status_parser.add_argument("root")
     status_parser.add_argument("--work-id")
     status_parser.add_argument("--current-worktree", action="store_true")
+    status_parser.add_argument("--format", choices=("json", "markdown"), default="json")
     return parser
 
 
@@ -3356,6 +3377,8 @@ def diagnostic_path(value: object) -> str:
 def main(argv: list[str] | None = None) -> int:
     try:
         args = build_parser().parse_args(argv)
+        if args.command == "status" and args.format == "markdown":
+            return status_markdown_command(args)
         handlers = {
             "init": init_command,
             "audit": audit_command,
