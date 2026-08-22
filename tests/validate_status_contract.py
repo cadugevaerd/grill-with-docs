@@ -232,6 +232,45 @@ class StatusPublicContract(unittest.TestCase):
         self.item(); self._git("add","."); self._git("commit","-qm","bundle")
         self._terminal(); self._git("branch","outra"); self._git("checkout","-q","outra")
         self.assertNotIn("LIVE-VS-RECORDED",self._findings())
+
+    # Um bundle escrito sob v3 é julgado contra a sequência DELE. Projetar os
+    # nomes v4 sobre ele reportava todo ciclo v3 terminado como blocked.
+    def _to_v3(self, wid="work-a"):
+        path=self.r/".grill/work-items"/wid/"state.json"; state=json.loads(path.read_text(encoding="utf-8"))
+        development=state["development"]; development["schema"]="grill-development/v1"
+        development.pop("workflow_version",None)
+        development["sequence"]=["specify","plan","checklist","tasks","analyze","agent-assign","agent-execute","converge","verify","review","ship"]
+        development["steps"]={step:"pending" for step in development["sequence"]}
+        development["current_step"]="specify"
+        path.write_text(json.dumps(state,indent=2)+"\n",encoding="utf-8")
+        return path
+
+    def _item_payload(self, wid="work-a"):
+        _,payload=status(self.r); return next(w for w in payload["work_items"] if w["work_id"]==wid)
+
+    def test_finished_v3_bundle_is_complete_not_blocked_under_the_v4_build(self):
+        self.item(); self._to_v3(); self._terminal()
+        item=self._item_payload()
+        self.assertEqual(item["development"]["tracking"],"tracked")
+        self.assertEqual(item["findings"],[])
+        self.assertEqual(item["blockers"],[])
+        self.assertEqual(item["operational_status"],"complete")
+        self.assertEqual(item["pending_reasons"],[])
+        self.assertTrue(item["closed"])
+        self.assertEqual(item["next_gate"],"complete")
+        self.assertEqual(item["development"]["completed"],["specify","plan","checklist","tasks","analyze","agent-assign","agent-execute","converge","verify","review","ship"])
+
+    def test_pending_v3_bundle_names_the_v3_step_not_the_v4_rename(self):
+        self.item(); path=self._to_v3()
+        state=json.loads(path.read_text(encoding="utf-8")); development=state["development"]
+        for step in development["sequence"][:5]: development["steps"][step]="complete"
+        development["current_step"]="agent-assign"
+        path.write_text(json.dumps(state,indent=2)+"\n",encoding="utf-8")
+        item=self._item_payload()
+        self.assertEqual(item["operational_status"],"pending")
+        self.assertEqual(item["next_gate"],"agent-assign")
+        self.assertEqual(item["pending_reasons"],["etapa GWD pendente: agent-assign"])
+        self.assertNotIn("partition",json.dumps(item["pending_reasons"]))
     def test_incomplete_milestone_without_binding_reports_wrong_live_branch(self):
         self.item(); self._git("add","."); self._git("commit","-qm","bundle")
         p=self.r/".grill/work-items/work-a/state.json"; d=json.loads(p.read_text(encoding="utf-8"))

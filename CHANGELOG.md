@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.0.1
+
+- `grill_status.classify_item` passa a julgar cada bundle contra a sequência que
+  o próprio bundle declara, e não contra a sequência canônica do build. Um
+  ciclo terminado sob v3 reportava `blocked` com `etapas GWD incompletas` sob o
+  build v4, porque nenhum passo v4 existia no `steps` dele. `next_gate` seguia a
+  mesma projeção errada e nomeava `partition` onde a etapa pendente real era
+  `agent-assign`.
+
 ## 4.0.0
 
 BREAKING: a sequência canônica renomeia as duas etapas de execução. `agent-assign`
