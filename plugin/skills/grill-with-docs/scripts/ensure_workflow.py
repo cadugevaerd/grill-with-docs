@@ -28,11 +28,34 @@ TEMPLATE = HERE.parents[1] / "assets/WORKFLOW.template.md"
 # ESSENTIAL tuple below is untouched, byte for byte, so no v2 consumer is
 # affected by this addition.
 V3_MARKER_VERSION = "v3"
+# Same additive contract LD-004 established for v3: a NEW marker recognised
+# alongside VERSION, never assigned to it. Fresh bootstrap still materialises
+# v2 and the v2 ESSENTIAL tuple below stays byte-for-byte untouched, so no
+# consumer that changed nothing is affected by v4 existing.
+V4_MARKER_VERSION = "v4"
+#: Marker versions this build can READ and execute against, newest last. v2 is
+#: readable and bootstrappable but was never an execution surface.
+EXECUTABLE_MARKER_VERSIONS = (V3_MARKER_VERSION, V4_MARKER_VERSION)
 # Same path grill_core/workflow_v3.py resolves REGISTRY to (its ASSETS is
 # HERE.parents[2] / "assets" from one directory deeper); kept as a literal
 # here rather than imported so this module has no load-time dependency on
 # grill_core, matching the read-only, best-effort spirit of the hook.
 REGISTRY = HERE.parents[1] / "assets/workflow-step-skills.json"
+#: Registry asset per marker version. A materialised document pins the digest
+#: of the registry belonging to ITS version, so the hook has to publish that
+#: one -- publishing the active build's digest to a v3 repository would make
+#: every v3 document look REGISTRY-PIN-DIVERGENT to whoever reads the hook.
+REGISTRY_BY_VERSION = {
+    V3_MARKER_VERSION: REGISTRY,
+    V4_MARKER_VERSION: HERE.parents[1] / "assets/workflow-step-skills.v4.json",
+}
+#: The canonical cycle the hook prints, per marker version.
+FLOW_BY_VERSION = {
+    V3_MARKER_VERSION: ("specify → plan → checklist → tasks → analyze → agent-assign → "
+                        "agent-execute → converge → verify → review → ship"),
+    V4_MARKER_VERSION: ("specify → plan → checklist → tasks → analyze → partition → "
+                        "implement-parallel → converge → verify → review → ship"),
+}
 ESSENTIAL = (
     "## Loop externo",
     "## Ciclo externo de execução",
@@ -260,6 +283,14 @@ def resolve_workflow(root_argument: str | Path) -> WorkflowResult:
             # v3 content. Falling through here is impossible -- both arms
             # return -- so a v2/unmarked/human-equivalent file takes the
             # unmodified path below, byte for byte.
+            if version == V4_MARKER_VERSION:
+                # Same shape as the v3 arm below, for the same reason: a
+                # v4-marked file must never be judged by the v2 ESSENTIAL
+                # tuple, and readiness means the registry pin matches, not
+                # merely that the frontier words are present.
+                if _v4_ready(text):
+                    return WorkflowResult("REUSED", target, content, None)
+                return WorkflowResult("BLOCKED", None, b"", "incompatible workflow")
             if version == V3_MARKER_VERSION:
                 # _v3_ready, not compatible_v3: REUSED must mean "safe to
                 # execute against", which requires the registry pin to match,
@@ -353,15 +384,34 @@ def render_hook_output(event: str, message: str) -> str:
     return rendered
 
 
+def _v4_ready(text: str) -> bool:
+    """v4 READINESS: v4 frontier AND live v4 registry pin.
+
+    Same posture as :func:`_v3_ready` -- delegates to the module that owns the
+    v4 template and registry, so a document REUSED here can never disagree with
+    what ``workflow_v4 detect`` reports for identical bytes. An unloadable
+    module degrades to "not ready", never a crash.
+    """
+    module = _load_grill_core("workflow_v4")
+    if module is None or not hasattr(module, "execution_gate"):
+        return False
+    try:
+        return module.execution_gate(text).status == "OK"
+    except Exception:
+        return False
+
+
 def _execution_ready(text: str) -> bool:
     """True when ``text`` is a materialised workflow the hook can safely project status for."""
     version = managed_version(text)
+    if version == V4_MARKER_VERSION:
+        return _v4_ready(text)
     if version == V3_MARKER_VERSION:
         return _v3_ready(text)
     return version == VERSION and compatible(text)
 
 
-def _registry_prefix() -> str:
+def _registry_prefix(version: str | None = None) -> str:
     """LD-004 item 4 / LD-001: registry_sha256 (raw bytes hash) + the anti-emulation phrase.
 
     Built first, standalone, so it can be placed before the status projection
@@ -372,8 +422,9 @@ def _registry_prefix() -> str:
     instruction to invoke the canonical skill instead of emulating it holds
     regardless of whether the registry asset can be read right now.
     """
+    target = REGISTRY_BY_VERSION.get(version or V3_MARKER_VERSION, REGISTRY)
     try:
-        registry_sha256 = digest(REGISTRY.read_bytes())
+        registry_sha256 = digest(target.read_bytes())
     except OSError:
         registry_sha256 = "unavailable"
     return f"registry_sha256={registry_sha256}; read, resolve and invoke; do not emulate."
@@ -419,8 +470,10 @@ def hook() -> int:
             # Registry hash + anti-emulation phrase come first (see
             # _registry_prefix): truncation eats the tail (status/Fluxo), not
             # this head, when the 2048-byte hook budget is exceeded.
-            message = (f"{_registry_prefix()} Leia {path}; sha256={digest(content)}. {status_line} "
-                       "Fluxo: specify → plan → checklist → tasks → analyze → agent-assign → agent-execute → converge → verify → review → ship.")
+            materialised = managed_version(text) or V3_MARKER_VERSION
+            flow = FLOW_BY_VERSION.get(materialised, FLOW_BY_VERSION[V3_MARKER_VERSION])
+            message = (f"{_registry_prefix(materialised)} Leia {path}; sha256={digest(content)}. "
+                       f"{status_line} Fluxo: {flow}.")
         else:
             message = f"WORKFLOW.md incompatível em {path}; invoque grill-with-docs para auditar."
 

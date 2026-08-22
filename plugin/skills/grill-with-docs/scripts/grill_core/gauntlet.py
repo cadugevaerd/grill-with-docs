@@ -17,23 +17,47 @@ from pathlib import Path
 from typing import Any, Mapping
 
 
+try:  # normal library use, as a package
+    from . import workflow_versions
+except ImportError:  # pragma: no cover - direct-file load
+    import importlib.util as _importlib_util
+    _wv_spec = _importlib_util.spec_from_file_location(
+        "grill_core_workflow_versions", Path(__file__).resolve().parent / "workflow_versions.py"
+    )
+    workflow_versions = _importlib_util.module_from_spec(_wv_spec)
+    _wv_spec.loader.exec_module(workflow_versions)
+
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
-REGISTRY_PATH = ASSETS / "workflow-step-skills.json"
-CATALOG_PATH = ASSETS / "claude-code-local-skills.catalog.json"
-TRUSTED_CATALOGS_PATH = ASSETS / "workflow-trusted-catalogs.json"
+#: Per-version assets. v3's never move: a v3 WORKFLOW.md materialised in a
+#: consumer repository pins the v3 registry digest in its own prose.
+REGISTRY_PATH_BY_VERSION = {
+    v: ASSETS / n for v, n in workflow_versions.REGISTRY_FILENAME_BY_VERSION.items()
+}
+CATALOG_PATH_BY_VERSION = {
+    v: ASSETS / n for v, n in workflow_versions.CATALOG_FILENAME_BY_VERSION.items()
+}
+TRUSTED_CATALOGS_PATH_BY_VERSION = {
+    v: ASSETS / n for v, n in workflow_versions.TRUSTED_CATALOGS_FILENAME_BY_VERSION.items()
+}
+WORKFLOW_VERSION = workflow_versions.ACTIVE_VERSION
+REGISTRY_PATH = REGISTRY_PATH_BY_VERSION[WORKFLOW_VERSION]
+CATALOG_PATH = CATALOG_PATH_BY_VERSION[WORKFLOW_VERSION]
+TRUSTED_CATALOGS_PATH = TRUSTED_CATALOGS_PATH_BY_VERSION[WORKFLOW_VERSION]
 CONFIG_NAME = "gauntlet.yaml"
 CONFIG_SCHEMA = "grill-gauntlet/v1"
 CONFIG_LOCK = ".gauntlet-config.lock"
 CONFIG_LOCK_OWNER = ".owner"
-WORKFLOW_STEPS = (
-    "specify", "plan", "checklist", "tasks", "analyze", "agent-assign",
-    "agent-execute", "converge", "verify", "review", "ship",
-)
-TIER_POLICY = {
-    "specify": "large", "plan": "large", "checklist": "small", "tasks": "medium",
-    "analyze": "large", "agent-assign": "large", "agent-execute": "medium",
-    "converge": "medium", "verify": "medium", "review": "large", "ship": "large",
+#: Per-version tables, resolved from the SSOT. An activation record is
+#: validated against the table of the version *it* declares, never against the
+#: build's active one: activation records are immutable, so a v3 activation
+#: written before this build must keep validating after it.
+WORKFLOW_STEPS_BY_VERSION = workflow_versions.SEQUENCE_BY_VERSION
+TIER_POLICY_BY_VERSION = {
+    version: dict(policy)
+    for version, policy in workflow_versions.TIER_POLICY_BY_VERSION.items()
 }
+WORKFLOW_STEPS = WORKFLOW_STEPS_BY_VERSION[WORKFLOW_VERSION]
+TIER_POLICY = TIER_POLICY_BY_VERSION[WORKFLOW_VERSION]
 ADAPTER = "claude-code-skill/v1"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -344,6 +368,21 @@ def _read_regular_at(directory_fd: int, name: str) -> tuple[bytes | None, int | 
         os.close(descriptor)
 
 
+def _document_version(workflow_text: str) -> str:
+    """The marker version of the workflow document being activated.
+
+    An unmarked human-maintained equivalent is treated as the build's active
+    version: it declared the active frontier to get this far, so recording an
+    older version for it would be a lie in the activation record.
+    """
+    marker = None
+    for line in workflow_text.splitlines()[:5]:
+        if "grill-with-docs-workflow:" in line:
+            marker = line.split("grill-with-docs-workflow:", 1)[1].split("-->", 1)[0].strip()
+            break
+    return marker if marker in WORKFLOW_STEPS_BY_VERSION else WORKFLOW_VERSION
+
+
 def _validate_worker_count(value: Any) -> int:
     if type(value) is not int or not 1 <= value <= 5:
         raise _fail("INVALID-ARGUMENTS", "--max-workers must be an integer from 1 through 5")
@@ -365,7 +404,7 @@ def _validate_record(work_id: str, record: Any) -> None:
     tiers = record["tier_policy"]
     if not isinstance(work_item, dict) or set(work_item) != {"document_sha256"} or not isinstance(work_item["document_sha256"], str) or not SHA256_RE.fullmatch(work_item["document_sha256"]):
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation work item identity is invalid", work_id=work_id)
-    if not isinstance(workflow, dict) or set(workflow) != {"version", "sha256", "registry_sha256"} or workflow.get("version") != "v3" or not isinstance(workflow.get("sha256"), str) or not SHA256_RE.fullmatch(workflow["sha256"]) or not isinstance(workflow.get("registry_sha256"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", workflow["registry_sha256"]):
+    if not isinstance(workflow, dict) or set(workflow) != {"version", "sha256", "registry_sha256"} or workflow.get("version") not in WORKFLOW_STEPS_BY_VERSION or not isinstance(workflow.get("sha256"), str) or not SHA256_RE.fullmatch(workflow["sha256"]) or not isinstance(workflow.get("registry_sha256"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", workflow["registry_sha256"]):
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation workflow identity is invalid", work_id=work_id)
     if runtime != {"id": "claude", "adapter": ADAPTER}:
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation runtime is invalid", work_id=work_id)
@@ -373,7 +412,8 @@ def _validate_record(work_id: str, record: Any) -> None:
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation catalog identity is invalid", work_id=work_id)
     if not isinstance(limits, dict) or set(limits) != {"max_workers", "stall_minutes"} or type(limits.get("max_workers")) is not int or not 1 <= limits["max_workers"] <= 5 or limits.get("stall_minutes") != 15:
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation limits are invalid", work_id=work_id)
-    if not isinstance(tiers, dict) or set(tiers) != {"adapter", "minimum_by_step", "supplemental", "promotions"} or tiers.get("adapter") != ADAPTER or tiers.get("minimum_by_step") != TIER_POLICY or tiers.get("supplemental") != {"markdown-maintenance": "small"} or tiers.get("promotions") != []:
+    expected_tiers = TIER_POLICY_BY_VERSION[workflow["version"]]
+    if not isinstance(tiers, dict) or set(tiers) != {"adapter", "minimum_by_step", "supplemental", "promotions"} or tiers.get("adapter") != ADAPTER or tiers.get("minimum_by_step") != expected_tiers or tiers.get("supplemental") != {"markdown-maintenance": "small"} or tiers.get("promotions") != []:
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation tier policy is invalid", work_id=work_id)
 
 
@@ -451,25 +491,32 @@ def current_activation(
     workflow_sha256 = _sha256(workflow_bytes)
     if immutable["workflow"].get("sha256") != workflow_sha256:
         raise _fail("WORK-ITEM-WORKFLOW-DIVERGENT", "work item is not bound to the current workflow", work_id=work_id)
+    # Everything below is keyed off the version of the document being
+    # activated, never off the build's active version: a repository still on
+    # v3 must activate against v3's registry, v3's catalogue and v3's tier
+    # floors, and record that it did.
+    version = _document_version(workflow_text)
+    steps = WORKFLOW_STEPS_BY_VERSION[version]
     try:
-        registry_bytes = REGISTRY_PATH.read_bytes()
+        registry_bytes = REGISTRY_PATH_BY_VERSION[version].read_bytes()
     except OSError as exc:
         raise _fail("REGISTRY-UNREADABLE", "shipped workflow registry is unavailable") from exc
     try:
-        catalog_bytes = CATALOG_PATH.read_bytes()
+        catalog_bytes = CATALOG_PATH_BY_VERSION[version].read_bytes()
     except OSError as exc:
         raise _fail("CATALOG-ABSENT", "shipped Claude catalog is unavailable") from exc
     try:
         catalog = step_skills.parse_strict(catalog_bytes)
         registry_sha256 = step_skills.registry_sha256(registry_bytes)
         resolutions, trusted_bytes = step_skills.resolve_shipped_workflow_skills(
-            WORKFLOW_STEPS, "claude", registry_sha256, registry=registry_bytes, catalog=catalog
+            steps, "claude", registry_sha256, registry=registry_bytes, catalog=catalog,
+            trusted_catalogs_path=TRUSTED_CATALOGS_PATH_BY_VERSION[version],
         )
     except step_skills.SkillResolutionError as exc:
         raise _fail(_skill_error_code(exc, step_skills), "Claude capability proof failed") from exc
     except Exception as exc:
         raise _fail("CATALOG-INVALID", "shipped Claude catalog is invalid") from exc
-    if len(resolutions) != len(WORKFLOW_STEPS) or {entry["adapter"] for entry in resolutions} != {ADAPTER}:
+    if len(resolutions) != len(steps) or {entry["adapter"] for entry in resolutions} != {ADAPTER}:
         raise _fail("RUNTIME-ENTRYPOINT-UNPROVEN", "Claude does not prove every canonical entrypoint")
     catalog_id = catalog.get("catalog_id") if isinstance(catalog, dict) else None
     catalog_sha256 = catalog.get("catalog_sha256") if isinstance(catalog, dict) else None
@@ -478,7 +525,7 @@ def current_activation(
     return {
         "work_item_id": work_id,
         "work_item": {"document_sha256": document_sha256},
-        "workflow": {"version": "v3", "sha256": workflow_sha256, "registry_sha256": registry_sha256},
+        "workflow": {"version": version, "sha256": workflow_sha256, "registry_sha256": registry_sha256},
         "runtime": {"id": "claude", "adapter": ADAPTER},
         "catalog": {
             "id": catalog_id,
@@ -503,7 +550,8 @@ def activate(
         **proof,
         "limits": {"max_workers": workers, "stall_minutes": 15},
         "tier_policy": {
-            "adapter": ADAPTER, "minimum_by_step": dict(TIER_POLICY),
+            "adapter": ADAPTER,
+            "minimum_by_step": dict(TIER_POLICY_BY_VERSION[proof["workflow"]["version"]]),
             "supplemental": {"markdown-maintenance": "small"}, "promotions": [],
         },
     }
@@ -556,13 +604,19 @@ def _activation_is_stale(
         raise _fail("SAFE-PATH-UNAVAILABLE", "could not capture work item identity") from exc
     if item_bytes is None or record["work_item"]["document_sha256"] != _sha256(item_bytes):
         return True, item_bytes
+    workflow = record["workflow"]
+    # Compared against the assets of the version the record itself declares.
+    # Reading the build's active assets here would report every v3 activation
+    # as STALE the moment v4 ships, for repositories that changed nothing.
+    version = workflow.get("version")
+    if version not in REGISTRY_PATH_BY_VERSION:
+        return True, item_bytes
     try:
-        registry_bytes = REGISTRY_PATH.read_bytes()
-        catalog_bytes = CATALOG_PATH.read_bytes()
-        trusted_bytes = TRUSTED_CATALOGS_PATH.read_bytes()
+        registry_bytes = REGISTRY_PATH_BY_VERSION[version].read_bytes()
+        catalog_bytes = CATALOG_PATH_BY_VERSION[version].read_bytes()
+        trusted_bytes = TRUSTED_CATALOGS_PATH_BY_VERSION[version].read_bytes()
     except Exception:
         return False, item_bytes
-    workflow = record["workflow"]
     catalog = record["catalog"]
     return any((
         workflow["sha256"] != _sha256(workflow_bytes),

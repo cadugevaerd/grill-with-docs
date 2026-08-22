@@ -110,27 +110,6 @@
       ]
     },
     {
-      "id": "ext:agent-assign",
-      "kind": "specify-extension",
-      "required": true,
-      "extension": "agent-assign",
-      "reason": "WORKFLOW.md exige a extensao agent-assign",
-      "install": [
-        [
-          "specify",
-          "extension",
-          "add",
-          "agent-assign"
-        ]
-      ],
-      "enable": [
-        "specify",
-        "extension",
-        "enable",
-        "agent-assign"
-      ]
-    },
-    {
       "id": "ext:bugfix",
       "kind": "specify-extension",
       "required": true,

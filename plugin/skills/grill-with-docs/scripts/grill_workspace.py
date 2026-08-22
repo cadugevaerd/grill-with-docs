@@ -2154,7 +2154,42 @@ def migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             shutil.rmtree(lock, ignore_errors=True)
 
 
-SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "agent-assign", "agent-execute", "converge", "verify", "review", "ship"]
+SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
+
+#: ``state.json`` development schema -> the workflow version it speaks.
+#: /v1 predates ``workflow_version`` and can only mean the v3 sequence; /v2
+#: declares its version explicitly, which is what stops a renamed sequence from
+#: being reported as a generic DEVELOPMENT-SCHEMA failure.
+DEVELOPMENT_SCHEMAS = {"grill-development/v1": "v3", "grill-development/v2": None}
+SEQUENCE_BY_VERSION = {"v3": ["specify", "plan", "checklist", "tasks", "analyze", "agent-assign", "agent-execute", "converge", "verify", "review", "ship"], "v4": ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]}
+ACTIVE_DEVELOPMENT_SCHEMA = "grill-development/v2"
+ACTIVE_WORKFLOW_VERSION = "v4"
+
+
+def development_workflow_version(development: object) -> str | None:
+    """Which workflow version a development block speaks, or None if it is not one.
+
+    Dual-read is the whole point: a bundle written under /v1 keeps projecting
+    and keeps checkpointing after this build ships, against the sequence it was
+    written with. Migration is a separate, explicit act.
+    """
+    if not isinstance(development, dict):
+        return None
+    schema = development.get("schema")
+    if schema not in DEVELOPMENT_SCHEMAS:
+        return None
+    implied = DEVELOPMENT_SCHEMAS[schema]
+    if implied is not None:
+        return implied
+    declared = development.get("workflow_version")
+    return declared if declared in SEQUENCE_BY_VERSION else None
+
+
+def development_sequence(development: object) -> list[str] | None:
+    """The canonical sequence a development block must declare, or None."""
+    version = development_workflow_version(development)
+    return None if version is None else SEQUENCE_BY_VERSION[version]
+
 
 
 def resolve_development_item(root: Path, work_id: str) -> Path:
@@ -2892,14 +2927,20 @@ def verify_checkpoint_attestation(
     try:
         project_id = store.project_identity(root)["project_id"]
         previous = None
-        index = SEQUENCE.index(step_id)
+        # The item's own sequence, never the build's: a bundle written under v3
+        # names its predecessor `agent-execute`, and looking that up in the v4
+        # tuple would report a missing predecessor that was never missing.
+        item_sequence = development_sequence(development) or list(SEQUENCE)
+        if step_id not in item_sequence:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-STATE-DIVERGENCE", step_id)
+        index = item_sequence.index(step_id)
         outputs = development.get("attested_outputs", {})
         if not isinstance(outputs, dict):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-STATE-DIVERGENCE", work_id)
         if index:
-            previous = outputs.get(SEQUENCE[index - 1])
+            previous = outputs.get(item_sequence[index - 1])
             if not isinstance(previous, dict):
-                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-PREDECESSOR-MISSING", SEQUENCE[index - 1])
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-PREDECESSOR-MISSING", item_sequence[index - 1])
         verdict = attestation.judge_checkpoint_attestation(
             bundle,
             project_id=project_id,
@@ -2928,15 +2969,16 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     try:
         path, state = read_development_state(root, item, args.work_id)
         development = state.get("development")
-        if not isinstance(development, dict) or development.get("schema") != "grill-development/v1":
+        if development_workflow_version(development) is None:
             if not args.initialize_legacy:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-UNTRACKED", args.work_id)
             if args.from_step is not None and (args.from_step != "specify" or args.step != "specify"):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-INITIALIZATION-UNSAFE", args.work_id)
             if args.from_step is None or not args.evidence or not args.reason.strip():
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-INITIALIZATION-REQUIRES-DECISION-EVIDENCE", args.work_id)
-            development = {"schema":"grill-development/v1", "sequence":SEQUENCE[:], "current_step":args.step,
-                           "steps":{step:"pending" for step in SEQUENCE}, "audit":[]}
+            development = {"schema":ACTIVE_DEVELOPMENT_SCHEMA, "workflow_version":ACTIVE_WORKFLOW_VERSION,
+                           "sequence":SEQUENCE[:], "current_step":args.step,
+                           "steps":{step:"pending" for step in SEQUENCE}, "renamed_from":{}, "audit":[]}
             state["development"] = development
             args.state = "in-progress"
         sequence = development.get("sequence"); steps = development.get("steps")
@@ -2944,7 +2986,7 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         # legítimo e vira lista, mas presente e de outro tipo derrubava o comando
         # com AttributeError no append lá embaixo — traceback onde devia haver
         # código nomeado.
-        if sequence != SEQUENCE or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
+        if sequence != development_sequence(development) or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         current = steps.get(args.step, "pending")
         evidence = []
@@ -3066,11 +3108,11 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     try:
         path, state = read_development_state(root, item, args.work_id)
         development = state.get("development")
-        if not isinstance(development, dict) or development.get("schema") != "grill-development/v1":
+        if development_workflow_version(development) is None:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-UNTRACKED", args.work_id)
         sequence = development.get("sequence")
         steps = development.get("steps")
-        if sequence != SEQUENCE or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
+        if sequence != development_sequence(development) or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         reason = args.reason.strip()
         if not reason:

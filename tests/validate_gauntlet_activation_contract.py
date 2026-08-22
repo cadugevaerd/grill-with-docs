@@ -1231,7 +1231,7 @@ class GauntletInitContract(unittest.TestCase):
                     injection = (
                         "\n# Contract-only copied-plugin fault injection.\n"
                         "def resolve_shipped_workflow_skills(\n"
-                        "    step_ids, runtime, registry_sha256_expected, *, registry, catalog\n"
+                        "    step_ids, runtime, registry_sha256_expected, *, registry, catalog, **_\n"
                         "):\n"
                         f"    raise SkillResolutionError({internal_code}, {reason!r})\n"
                     )
@@ -1252,7 +1252,7 @@ class GauntletInitContract(unittest.TestCase):
                 step_skills.read_text(encoding="utf-8")
                 + "\n# Contract-only copied-plugin fault injection.\n"
                 + "def resolve_shipped_workflow_skills(\n"
-                + "    step_ids, runtime, registry_sha256_expected, *, registry, catalog\n"
+                + "    step_ids, runtime, registry_sha256_expected, *, registry, catalog, **_\n"
                 + "):\n"
                 + f"    raise SkillResolutionError(BLOCKED_CAPABILITY, {secret_reason!r})\n",
                 encoding="utf-8",

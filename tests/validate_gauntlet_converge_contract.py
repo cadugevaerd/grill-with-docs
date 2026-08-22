@@ -41,10 +41,7 @@ DAG_SCHEMA = "grill-gauntlet-execution-dag/v1"
 
 # Mirrors grill_workspace.SEQUENCE, duplicated the same way every other
 # validator in this suite duplicates it rather than importing module globals.
-SEQUENCE = [
-    "specify", "plan", "checklist", "tasks", "analyze", "agent-assign",
-    "agent-execute", "converge", "verify", "review", "ship",
-]
+SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
 
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))

@@ -120,6 +120,21 @@ REGISTRY_FILENAME_BY_VERSION = {
     "v4": "workflow-step-skills.v4.json",
 }
 
+#: Skill catalogue asset per workflow version. v4 owns a distinct catalogue --
+#: with a distinct ``catalog_id`` -- rather than growing the v3 one, for the
+#: same reason the registry does not move: ``workflow-trusted-catalogs.json``
+#: pins the v3 catalogue by digest, and editing it in place would make every v3
+#: consumer read an UNTRUSTED_CATALOG overnight.
+CATALOG_FILENAME_BY_VERSION = {
+    "v3": "claude-code-local-skills.catalog.json",
+    "v4": "grill-v4-local-skills.catalog.json",
+}
+
+CATALOG_ID_BY_VERSION = {
+    "v3": "claude-code-local-skills",
+    "v4": "grill-v4-local-skills",
+}
+
 TRUSTED_CATALOGS_FILENAME_BY_VERSION = {
     "v3": "workflow-trusted-catalogs.json",
     "v4": "workflow-trusted-catalogs.v4.json",
@@ -142,3 +157,12 @@ DEVELOPMENT_SCHEMA_BY_VERSION = {
 #: Workflow versions whose documents the runtime can execute. v2 remains
 #: readable and bootstrappable but was never an execution surface.
 EXECUTABLE_VERSIONS = ("v3", "v4")
+
+#: The version this build ships as its default execution surface. v3 stays
+#: readable and executable for a consumer that has not migrated yet.
+ACTIVE_VERSION = "v4"
+
+#: Every canonical step id across every executable version. Reading a v3
+#: receipt after this build ships still has to recognise ``agent-execute`` as a
+#: canonical step id -- it was one, under the version that minted the receipt.
+ALL_STEPS = tuple(sorted(set(SEQUENCE_V3) | set(SEQUENCE_V4)))

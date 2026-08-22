@@ -1,0 +1,331 @@
+{
+  "schema": "workflow-step-skills/v1",
+  "workflow_version": "v4",
+  "registry_version": "2",
+  "runtimes": [
+    "hermes",
+    "claude",
+    "codex"
+  ],
+  "steps": {
+    "specify": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": false,
+      "proposed_skill_id": "speckit.specify",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "speckit-specify",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:claude@0.15.1"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "speckit.specify"
+    },
+    "plan": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": false,
+      "proposed_skill_id": "speckit.plan",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "speckit-plan",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:claude@0.15.1"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "speckit.plan"
+    },
+    "checklist": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": false,
+      "proposed_skill_id": "speckit.checklist",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "speckit-checklist",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:claude@0.15.1"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "speckit.checklist"
+    },
+    "tasks": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": false,
+      "proposed_skill_id": "speckit.tasks",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "speckit-tasks",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:claude@0.15.1"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "speckit.tasks"
+    },
+    "analyze": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": false,
+      "proposed_skill_id": "speckit.analyze",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "speckit-analyze",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:claude@0.15.1"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "speckit.analyze"
+    },
+    "partition": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": false,
+      "proposed_skill_id": "partition",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "grill-with-docs:grill-partition",
+          "entrypoint_kind": "skill",
+          "minimum_version": "4.0.0",
+          "resolved": true,
+          "source_ref": "grill-with-docs:partition@4.0.0"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "grill.partition"
+    },
+    "implement-parallel": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": false,
+      "proposed_skill_id": "implement-parallel",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "grill-with-docs:grill-implement-parallel",
+          "entrypoint_kind": "skill",
+          "minimum_version": "4.0.0",
+          "resolved": true,
+          "source_ref": "grill-with-docs:implement-parallel@4.0.0"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "grill.implement-parallel"
+    },
+    "converge": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": false,
+      "proposed_skill_id": "converge",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "speckit-converge",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:claude@0.15.1"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "speckit.converge"
+    },
+    "verify": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": false,
+      "proposed_skill_id": "verify-review-ship.verify",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "speckit-verify-review-ship-verify",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.4.2",
+          "resolved": true,
+          "source_ref": "speckit-extension:verify-review-ship@0.4.2"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "speckit.verify-review-ship.verify"
+    },
+    "review": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": false,
+      "proposed_skill_id": "verify-review-ship.review",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "speckit-verify-review-ship-review",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.4.2",
+          "resolved": true,
+          "source_ref": "speckit-extension:verify-review-ship@0.4.2"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "speckit.verify-review-ship.review"
+    },
+    "ship": {
+      "allowed_entrypoints": [
+        "skill",
+        "command"
+      ],
+      "human_authorization_required": true,
+      "proposed_skill_id": "verify-review-ship.ship",
+      "required": true,
+      "resolutions": {
+        "claude": {
+          "adapter": "claude-code-skill/v1",
+          "catalog_id": "grill-v4-local-skills",
+          "entrypoint": "speckit-verify-review-ship-ship",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.4.2",
+          "resolved": true,
+          "source_ref": "speckit-extension:verify-review-ship@0.4.2"
+        },
+        "codex": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        },
+        "hermes": {
+          "resolved": false,
+          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+        }
+      },
+      "skill_id": "speckit.verify-review-ship.ship"
+    }
+  }
+}

@@ -78,6 +78,7 @@ CONTENT a resolution attests):
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -88,13 +89,29 @@ from typing import Any, Iterable, Mapping, Sequence
 # constants
 # --------------------------------------------------------------------------
 
+# This module is also loaded by file path (tests, and the CLI's ``sibling``
+# helper), where a relative import has no package to resolve against. Same
+# defensive pattern ``gauntlet_runs`` uses for ``store``.
+try:  # normal library use, as a package
+    from . import workflow_versions
+except ImportError:  # pragma: no cover - direct-file load
+    _wv_spec = importlib.util.spec_from_file_location(
+        "grill_core_workflow_versions", Path(__file__).resolve().parent / "workflow_versions.py"
+    )
+    workflow_versions = importlib.util.module_from_spec(_wv_spec)
+    _wv_spec.loader.exec_module(workflow_versions)
+
 REGISTRY_SCHEMA = "workflow-step-skills/v1"
 RESOLUTION_SCHEMA = "skill-resolution/v1"
 INVOCATION_SCHEMA = "skill-invocation/v1"
 CATALOG_SCHEMA = "skill-catalog/v1"
 TRUSTED_CATALOGS_SCHEMA = "workflow-trusted-catalogs/v1"
 
-WORKFLOW_VERSION = "v3"
+#: The workflow version this build ships as its default execution surface.
+#: A v3 registry is still parseable -- ``validate_registry`` keys every check
+#: off the *document's own* declared version -- so a consumer that has not
+#: migrated keeps executing while its assets stay byte-frozen.
+WORKFLOW_VERSION = workflow_versions.ACTIVE_VERSION
 RESOLVER_VERSION = "1.0.0"
 
 #: The one and only execution mode a resolved step may carry (plan 4.1).
@@ -117,21 +134,14 @@ STALE_SKILL_RESOLUTION = "STALE_SKILL_RESOLUTION"
 #: was actually resolved and dispatched.
 UNATTESTED_STEP_OUTPUT = "UNATTESTED_STEP_OUTPUT"
 
-#: The 11 Spec Kit vertices, byte-identical to ``grill_workspace.SEQUENCE``,
-#: ``grill_status.SEQUENCE`` and ``assets/state.template.json``.
-SEQUENCE = (
-    "specify",
-    "plan",
-    "checklist",
-    "tasks",
-    "analyze",
-    "agent-assign",
-    "agent-execute",
-    "converge",
-    "verify",
-    "review",
-    "ship",
-)
+#: The 11 Spec Kit vertices of the active workflow version, byte-identical to
+#: ``grill_workspace.SEQUENCE``, ``grill_status.SEQUENCE`` and
+#: ``assets/state.template.json``. Per-version tables live in
+#: ``grill_core.workflow_versions``; this module never re-declares them.
+SEQUENCE = workflow_versions.SEQUENCE_V4
+SEQUENCE_BY_VERSION = workflow_versions.SEQUENCE_BY_VERSION
+#: Union across versions, for reading documents minted under an older one.
+ALL_STEPS = workflow_versions.ALL_STEPS
 
 RUNTIMES = ("hermes", "claude", "codex")
 ENTRYPOINT_KINDS = ("skill", "command")
@@ -147,8 +157,21 @@ UNRESOLVED_REASONS = (
 )
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
-REGISTRY_PATH = ASSETS / "workflow-step-skills.json"
-TRUSTED_CATALOGS_PATH = ASSETS / "workflow-trusted-catalogs.json"
+REGISTRY_PATH_BY_VERSION = {
+    version: ASSETS / name
+    for version, name in workflow_versions.REGISTRY_FILENAME_BY_VERSION.items()
+}
+TRUSTED_CATALOGS_PATH_BY_VERSION = {
+    version: ASSETS / name
+    for version, name in workflow_versions.TRUSTED_CATALOGS_FILENAME_BY_VERSION.items()
+}
+CATALOG_PATH_BY_VERSION = {
+    version: ASSETS / name
+    for version, name in workflow_versions.CATALOG_FILENAME_BY_VERSION.items()
+}
+REGISTRY_PATH = REGISTRY_PATH_BY_VERSION[WORKFLOW_VERSION]
+TRUSTED_CATALOGS_PATH = TRUSTED_CATALOGS_PATH_BY_VERSION[WORKFLOW_VERSION]
+CATALOG_PATH = CATALOG_PATH_BY_VERSION[WORKFLOW_VERSION]
 
 SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 ID_RE = re.compile(r"^[a-z0-9]+([.-][a-z0-9]+)*$")
@@ -402,9 +425,20 @@ def version_tuple(value: Any) -> tuple[int, int, int]:
 # --------------------------------------------------------------------------
 
 
-def load_registry(path: Path | None = None) -> tuple[dict[str, Any], str]:
-    """Read, validate and hash the registry. Returns ``(document, registry_sha256)``."""
-    target = REGISTRY_PATH if path is None else Path(path)
+def load_registry(path: Path | None = None, *,
+                  workflow_version: str | None = None) -> tuple[dict[str, Any], str]:
+    """Read, validate and hash the registry. Returns ``(document, registry_sha256)``.
+
+    ``workflow_version`` selects which shipped asset to read; it defaults to the
+    active version. Passing an explicit path wins over both.
+    """
+    if path is None:
+        version = workflow_version or WORKFLOW_VERSION
+        if version not in REGISTRY_PATH_BY_VERSION:
+            raise _blocked("REGISTRY_WORKFLOW_VERSION", value=version)
+        target = REGISTRY_PATH_BY_VERSION[version]
+    else:
+        target = Path(path)
     try:
         raw = target.read_bytes()
     except OSError as exc:
@@ -447,29 +481,33 @@ def validate_registry(document: Any) -> dict[str, Any]:
     """Full schema + logical-identity validation. Raises BLOCKED_CAPABILITY."""
     _exact_keys(document, _REGISTRY_KEYS, "REGISTRY_INVALID")
     _require(document["schema"] == REGISTRY_SCHEMA, "REGISTRY_SCHEMA", value=document["schema"])
+    # Keyed off the document's own declared version, never off a module global:
+    # a v3 registry must stay parseable by a build whose active version is v4.
+    declared = document["workflow_version"]
     _require(
-        document["workflow_version"] == WORKFLOW_VERSION,
+        declared in SEQUENCE_BY_VERSION,
         "REGISTRY_WORKFLOW_VERSION",
-        value=document["workflow_version"],
+        value=declared,
     )
     _text(document["registry_version"], re.compile(r"^[1-9][0-9]*$"), "REGISTRY_VERSION")
     _require(document["runtimes"] == list(RUNTIMES), "REGISTRY_RUNTIMES", value=document["runtimes"])
 
     steps = document["steps"]
     _require(isinstance(steps, dict), "REGISTRY_STEPS", problem="not an object")
+    expected = SEQUENCE_BY_VERSION[declared]
     order = tuple(steps)
-    if order != SEQUENCE:
+    if order != expected:
         raise _blocked(
             "REGISTRY_STEP_SET",
-            expected=list(SEQUENCE),
+            expected=list(expected),
             got=list(order),
-            missing=sorted(set(SEQUENCE) - set(order)),
-            unexpected=sorted(set(order) - set(SEQUENCE)),
+            missing=sorted(set(expected) - set(order)),
+            unexpected=sorted(set(order) - set(expected)),
         )
 
     skill_ids: dict[str, str] = {}
     entrypoints: dict[tuple[str, str], str] = {}
-    for step_id in SEQUENCE:
+    for step_id in expected:
         entry = steps[step_id]
         _exact_keys(entry, _STEP_KEYS, "REGISTRY_STEP_INVALID", step_id=step_id)
         skill_id = _text(entry["skill_id"], ID_RE, "REGISTRY_SKILL_ID", step_id=step_id)
@@ -624,7 +662,7 @@ def _parse_trusted_catalogs(raw: bytes) -> dict[str, str]:
         document["schema"] == TRUSTED_CATALOGS_SCHEMA, "TRUSTED_CATALOGS_SCHEMA", value=document["schema"]
     )
     _require(
-        document["workflow_version"] == WORKFLOW_VERSION,
+        document["workflow_version"] in SEQUENCE_BY_VERSION,
         "TRUSTED_CATALOGS_WORKFLOW_VERSION",
         value=document["workflow_version"],
     )
@@ -835,9 +873,15 @@ def resolve_shipped_workflow_skills(
     *,
     registry: bytes,
     catalog: Mapping[str, Any],
+    trusted_catalogs_path: Path | None = None,
 ) -> tuple[list[dict[str, Any]], bytes]:
-    """Resolve a batch using one hardcoded shipped trust-asset snapshot."""
-    trusted_bytes, trusted = _load_trusted_catalogs_snapshot()
+    """Resolve a batch using one shipped trust-asset snapshot.
+
+    ``trusted_catalogs_path`` selects which version's snapshot to trust; it
+    defaults to the active version's. A caller activating a v3 workflow must
+    pass v3's, or it would judge v3's catalogue against v4's trust pin.
+    """
+    trusted_bytes, trusted = _load_trusted_catalogs_snapshot(trusted_catalogs_path)
     return [
         _resolve_workflow_skill(
             step_id,
@@ -914,7 +958,7 @@ def skill_invocation_key(
         ("recovery_generation_id", recovery_generation_id),
     ):
         _text(value, FREE_REF_RE, "INVALID_INVOCATION_INPUT", field=name)
-    _require(step_id in SEQUENCE, "INVALID_INVOCATION_INPUT", field="step_id", value=step_id)
+    _require(step_id in ALL_STEPS, "INVALID_INVOCATION_INPUT", field="step_id", value=step_id)
     _require(
         isinstance(plan_revision, int) and not isinstance(plan_revision, bool) and plan_revision >= 0,
         "INVALID_INVOCATION_INPUT",
@@ -1127,7 +1171,7 @@ def validate_skill_invocation(
     _require(document["schema"] == INVOCATION_SCHEMA, "INVOCATION_SCHEMA", value=document["schema"])
     _require(document["status"] in INVOCATION_STATUSES, "INVOCATION_STATUS", value=document["status"])
     _require(document["runtime"] in RUNTIMES, "INVOCATION_RUNTIME", value=document["runtime"])
-    _require(document["step_id"] in SEQUENCE, "INVOCATION_STEP", value=document["step_id"])
+    _require(document["step_id"] in ALL_STEPS, "INVOCATION_STEP", value=document["step_id"])
     for field in (
         "skill_content_sha256",
         "registry_sha256",
