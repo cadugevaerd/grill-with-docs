@@ -27,6 +27,11 @@ jobs:
       version: ${{ steps.resolve.outputs.version }}
       ref: ${{ steps.resolve.outputs.ref }}
       sha: ${{ steps.resolve.outputs.sha }}
+      # O commit em que esta versão está publicada. Num push é o próprio HEAD;
+      # numa reconciliação é o commit que a tag já publicada carrega, que pode ser
+      # anterior. Tudo a jusante ancora aqui, nunca em `sha`, para não anunciar
+      # commit diferente do que a tag entrega a quem instala.
+      anchor: ${{ steps.tag.outputs.anchor }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -53,11 +58,14 @@ jobs:
           printf 'sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
 
       # Uma tag publicada é imutável: reescrevê-la mudaria o que já foi
-      # distribuído a quem instalou aquela versão.
+      # distribuído a quem instalou aquela versão. Nenhum caminho deste passo
+      # remarca — o que varia é só o que fazer ao encontrar a tag já publicada.
       - name: Criar a tag, recusando remarcação
+        id: tag
         env:
           REF: ${{ steps.resolve.outputs.ref }}
           SHA: ${{ steps.resolve.outputs.sha }}
+          EVENT: ${{ github.event_name }}
         run: |
           # `|| true` aqui captura "tag ainda não existe", que é o caso normal e
           # faria o passo abortar sob `bash -e`. Não engole falha de gate: a
@@ -65,16 +73,27 @@ jobs:
           existing=$(git rev-parse -q --verify "refs/tags/$REF^{commit}" || true)
           if [ -n "$existing" ]; then
             if [ "$existing" != "$SHA" ]; then
-              echo "::error::$REF já existe em $existing e a publicação pede $SHA; tag publicada é imutável"
-              exit 1
+              # Num push, a versão resolvida é a de HEAD: divergir significa pedir
+              # remarcação de uma tag já distribuída.
+              if [ "$EVENT" = "push" ]; then
+                echo "::error::$REF já existe em $existing e a publicação pede $SHA; tag publicada é imutável"
+                exit 1
+              fi
+              # Fora do push, `main` pode ter andado sem bump. A execução então é
+              # reconciliação da versão corrente, ancorada na tag que já existe —
+              # é o que permite reparar uma release perdida sem tocar na tag.
+              echo "$REF já existe em $existing; reconciliando sem remarcar"
+            else
+              echo "$REF já aponta para $SHA; nada a criar"
             fi
-            echo "$REF já aponta para $SHA; nada a criar"
+            printf 'anchor=%s\n' "$existing" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name "grill-with-docs release"
           git config user.email "release@users.noreply.github.com"
           git tag -a "$REF" -m "$REF" "$SHA"
           git push origin "refs/tags/$REF"
+          printf 'anchor=%s\n' "$SHA" >> "$GITHUB_OUTPUT"
 
       # Tag sem release é publicação incompleta: quem acompanha releases não vê a
       # versão sair. A release é derivada da tag imutável, então encontrá-la já
@@ -84,6 +103,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REF: ${{ steps.resolve.outputs.ref }}
           SHA: ${{ steps.resolve.outputs.sha }}
+          ANCHOR: ${{ steps.tag.outputs.anchor }}
+          EVENT: ${{ github.event_name }}
         run: |
           # `|| true` captura "release ainda não existe", que é o caso normal de
           # uma versão nova e faria o passo abortar sob `bash -e`. Não engole
@@ -98,11 +119,18 @@ jobs:
           # A release herda o commit da tag, então conferir a tag é conferir a
           # release — e prova que o que foi anunciado é o que foi verificado.
           anchored=$(git rev-parse -q --verify "refs/tags/$REF^{commit}")
-          if [ "$anchored" != "$SHA" ]; then
-            echo "::error::release $REF está ancorada em ${anchored:-nada} e a publicação declara $SHA"
+          if [ "$anchored" != "$ANCHOR" ]; then
+            echo "::error::release $REF está ancorada em ${anchored:-nada} e a tag publicada é $ANCHOR"
             exit 1
           fi
-          echo "release $REF ancorada em $SHA"
+          # Só o push publica versão nova, e aí a tag tem de ser a de HEAD. Numa
+          # reconciliação `main` pode estar adiantado, e exigir isso reprovaria
+          # justamente o reparo que a execução veio fazer.
+          if [ "$EVENT" = "push" ] && [ "$anchored" != "$SHA" ]; then
+            echo "::error::release $REF está ancorada em $anchored e a publicação declara $SHA"
+            exit 1
+          fi
+          echo "release $REF ancorada em $anchored"
 
   publish:
     name: Publicar em ${{ matrix.target }}
@@ -145,12 +173,14 @@ jobs:
           git -c http.extraheader="AUTHORIZATION: basic $header" \
               clone --depth 1 "https://github.com/$REPO.git" marketplace
 
+      # A entrada do marketplace aponta para o commit que a tag entrega, não para
+      # o HEAD do runner: num push são o mesmo, numa reconciliação não.
       - name: Apontar a entrada para a release
         env:
           TARGET: ${{ matrix.target }}
           VERSION: ${{ needs.release.outputs.version }}
           REF: ${{ needs.release.outputs.ref }}
-          SHA: ${{ needs.release.outputs.sha }}
+          SHA: ${{ needs.release.outputs.anchor }}
         run: |
           python3 tests/publish_to_marketplace.py \
             --target "$TARGET" --checkout marketplace \
@@ -182,7 +212,7 @@ jobs:
           REPO: ${{ matrix.repo }}
           VERSION: ${{ needs.release.outputs.version }}
           REF: ${{ needs.release.outputs.ref }}
-          SHA: ${{ needs.release.outputs.sha }}
+          SHA: ${{ needs.release.outputs.anchor }}
           CANONICAL: https://github.com/cadugevaerd/grill-with-docs.git
         run: |
           rm -rf marketplace-verify

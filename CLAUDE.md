@@ -16,7 +16,7 @@ Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfood
 python3 tests/run_validators.py
 ```
 
-Baseline atual: 1108 testes em 23 validadores, exit 0, com 1 skip dependente de ambiente em `validate_workspace_contract.py`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
+Baseline atual: 1120 testes em 23 validadores, exit 0, com 1 skip dependente de ambiente em `validate_workspace_contract.py`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
 
 ## Restrições do core
 
@@ -74,6 +74,7 @@ São dois workflows, e a separação é deliberada:
 - `.github/workflows/ci.yml` — matriz de portabilidade (3 SOs × Python), com `paths:` restrito ao que ela cobre. Tem guarda que pula a matriz em merge de PR, porque o evento `pull_request` já testou a mesma árvore.
 - `.github/workflows/bump-gate.yml` — o gate de versão, **sem** `paths:`. Ele roda em toda PR e sempre reporta.
 - `.github/workflows/publish.yml` — publica no push para `main` que toca `plugin/**`. O job `release` exige o bump, cria a tag anotada imutável e, desde a cláusula `Release obrigatória por versão`, cria também a GitHub Release ancorada nessa tag. Release preexistente é sucesso; tag ausente ou ancoragem divergente reprovam. Só depois o job `publish` aponta os marketplaces.
+  O job resolve um `anchor` — o commit em que a versão está publicada — e **tudo a jusante ancora nele, nunca em `github.sha`**. No push os dois coincidem. Fora do push (`workflow_dispatch`) a execução é *reconciliação*: se a tag daquela versão já existe em commit anterior, o job não remarca e também não morre — segue e garante release e marketplaces ancorados na tag. É o que permite reparar uma release perdida sem criar release à mão, que a cláusula trata como contorno. A imutabilidade segue intacta: remarcação só é tentada quando a tag não existe, e um push divergente continua reprovando.
 
 O gate mora sozinho porque `paths:` é declarado no nível do workflow, não do job: enquanto vivia no `ci.yml`, herdava o filtro da matriz e ficava mudo nas PRs que não o casavam. Um required check mudo prende a PR para sempre.
 
