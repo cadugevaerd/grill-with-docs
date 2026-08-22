@@ -1,0 +1,36 @@
+{
+  "schema": "workflow-tier-models/v1",
+  "workflow_version": "v4",
+  "binding_version": "1",
+  "tier_order": ["small", "medium", "large"],
+  "actor_classes": {
+    "leader": {"frontier_allowed": true},
+    "worker": {"frontier_allowed": false}
+  },
+  "runtimes": {
+    "claude": {
+      "resolved": true,
+      "adapter": "claude-code-skill/v1",
+      "selection": "subagent model parameter",
+      "tiers": {
+        "small": {"model": "haiku", "frontier": false},
+        "medium": {"model": "sonnet", "frontier": false},
+        "large": {"model": "opus", "frontier": true}
+      }
+    },
+    "codex": {
+      "resolved": true,
+      "adapter": "codex-skill/v1",
+      "selection": "codex -m <model>, model= in config.toml, or [agents] default_subagent_model",
+      "tiers": {
+        "small": {"model": "gpt-5.6-luna", "frontier": false},
+        "medium": {"model": "gpt-5.6-terra", "frontier": false},
+        "large": {"model": "gpt-5.6-sol", "frontier": true}
+      }
+    },
+    "hermes": {
+      "resolved": false,
+      "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+    }
+  }
+}

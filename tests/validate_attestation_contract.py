@@ -24,8 +24,10 @@ REPO = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO / "plugin/skills/grill-with-docs/scripts"
 STEP_SKILLS_MODULE = SCRIPTS / "grill_core/step_skills.py"
 ATTESTATION_MODULE = SCRIPTS / "grill_core/attestation.py"
-REGISTRY = REPO / "plugin/skills/grill-with-docs/assets/workflow-step-skills.json"
-CATALOG = REPO / "tests/fixtures/workflow-step-skills/claude-catalog.json"
+# The ACTIVE workflow version's assets. v3's stay byte-frozen and are pinned
+# in validate_step_skill_registry_contract.FrozenV3Assets.
+REGISTRY = REPO / "plugin/skills/grill-with-docs/assets/workflow-step-skills.v4.json"
+CATALOG = REPO / "tests/fixtures/workflow-step-skills/grill-v4-catalog.json"
 
 PROJECT_ID = "proj-demo"
 WORK_ITEM_ID = "feature-x-a1b2"

@@ -14,19 +14,31 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO / "plugin/skills/grill-with-docs/scripts"
 MODULE = SCRIPTS / "grill_core/step_skills.py"
-REGISTRY = REPO / "plugin/skills/grill-with-docs/assets/workflow-step-skills.json"
-TRUSTED_CATALOGS_ASSET = REPO / "plugin/skills/grill-with-docs/assets/workflow-trusted-catalogs.json"
-CATALOG = REPO / "tests/fixtures/workflow-step-skills/claude-catalog.json"
+ASSETS = REPO / "plugin/skills/grill-with-docs/assets"
+# The ACTIVE workflow version's assets. v3's are pinned separately, byte-frozen,
+# in FrozenV3Assets below -- a shipped v3 consumer still reads them.
+REGISTRY = ASSETS / "workflow-step-skills.v4.json"
+TRUSTED_CATALOGS_ASSET = ASSETS / "workflow-trusted-catalogs.v4.json"
+CATALOG = REPO / "tests/fixtures/workflow-step-skills/grill-v4-catalog.json"
+
+REGISTRY_V3 = ASSETS / "workflow-step-skills.json"
+TRUSTED_CATALOGS_ASSET_V3 = ASSETS / "workflow-trusted-catalogs.json"
+CATALOG_V3 = REPO / "tests/fixtures/workflow-step-skills/claude-catalog.json"
 
 # Frozen. Any edit to the registry asset must land here in the same commit.
 # LD-001: this is the SHA-256 of the asset's literal on-disk bytes -- the exact
-# string `sha256sum workflow-step-skills.json` prints -- never a JCS digest of
+# string `sha256sum workflow-step-skills.v4.json` prints -- never a JCS digest of
 # the parsed document. Verified independently in
 # Registry.test_registry_sha256_matches_plain_sha256sum_no_jcs_involved.
-REGISTRY_SHA256 = "sha256:9a326f32523c926f82b190dd9a08b11341614d112ad92d78c33e59fe015b478e"
-STEPS = ("specify", "plan", "checklist", "tasks", "analyze", "agent-assign",
-         "agent-execute", "converge", "verify", "review", "ship")
-TRUSTED = "claude-code-local-skills"
+REGISTRY_SHA256 = "sha256:e3f69871406205b77725b41bf0de0b24d9dbd661c004d502f0ddb49f22209ec1"
+#: v3's registry digest may never move: every v3 WORKFLOW.md materialised in a
+#: consumer repository pins it, and a change here is a fleet-wide outage.
+REGISTRY_V3_SHA256 = "sha256:9a326f32523c926f82b190dd9a08b11341614d112ad92d78c33e59fe015b478e"
+STEPS = ("specify", "plan", "checklist", "tasks", "analyze", "partition",
+         "implement-parallel", "converge", "verify", "review", "ship")
+STEPS_V3 = ("specify", "plan", "checklist", "tasks", "analyze", "agent-assign",
+            "agent-execute", "converge", "verify", "review", "ship")
+TRUSTED = "grill-v4-local-skills"
 DIGEST = "sha256:" + "0" * 64
 
 
@@ -125,7 +137,7 @@ class Registry(Base):
     def test_asset_parses_strictly_and_hash_is_frozen(self):
         document, sha = ss.load_registry(REGISTRY)
         self.assertEqual(document["schema"], "workflow-step-skills/v1")
-        self.assertEqual(document["workflow_version"], "v3")
+        self.assertEqual(document["workflow_version"], "v4")
         self.assertEqual(sha, REGISTRY_SHA256)
         self.assertEqual(sha, ss.registry_sha256(registry_bytes()))
 
@@ -220,10 +232,10 @@ class Registry(Base):
         """Plan 4.1 skill ids are the PROPOSED logical contract; phase 0 resolved the real ones."""
         document = registry()
         proposed = {document["steps"][s]["proposed_skill_id"] for s in STEPS}
-        self.assertIn("agent-execute", proposed)
+        self.assertIn("implement-parallel", proposed)
         entrypoints = {document["steps"][s]["resolutions"]["claude"]["entrypoint"] for s in STEPS}
-        for fiction in ("agent-execute", "agent-assign", "converge", "speckit.specify",
-                        "verify-review-ship.verify"):
+        for fiction in ("implement-parallel", "partition", "agent-execute", "agent-assign",
+                        "converge", "speckit.specify", "verify-review-ship.verify"):
             self.assertNotIn(fiction, entrypoints)
 
     def test_every_claude_entrypoint_is_a_real_observed_skill(self):
@@ -1205,6 +1217,45 @@ class Persistence(Base):
                              (ss.BLOCKED_CAPABILITY, "RESOLUTION_INVALID"))
 
 
+class FrozenV3Assets(unittest.TestCase):
+    """v3's shipped assets may never move, byte for byte.
+
+    Every v3 WORKFLOW.md materialised in a consumer repository pins
+    ``registry_sha256`` in its own prose, and the v3 trusted-catalogue snapshot
+    pins the v3 catalogue by digest. Repointing either in place would turn a
+    fleet of untouched consumer repositories into "incompatible workflow" and
+    UNTRUSTED_CATALOG overnight, with no preview and no migration path. That is
+    why v4 ships beside them rather than editing them.
+    """
+
+    def test_the_v3_registry_digest_never_moves(self):
+        digest = "sha256:" + hashlib.sha256(REGISTRY_V3.read_bytes()).hexdigest()
+        self.assertEqual(digest, REGISTRY_V3_SHA256)
+
+    def test_the_v3_registry_still_declares_the_v3_sequence(self):
+        document = json.loads(REGISTRY_V3.read_text(encoding="utf-8"))
+        self.assertEqual(document["workflow_version"], "v3")
+        self.assertEqual(tuple(document["steps"]), STEPS_V3)
+
+    def test_the_v3_registry_still_validates_under_the_live_resolver(self):
+        """A build whose active version is v4 must still parse a v3 registry."""
+        ss.validate_registry(json.loads(REGISTRY_V3.read_text(encoding="utf-8")))
+
+    def test_the_v3_trusted_snapshot_still_pins_the_v3_catalogue(self):
+        snapshot = json.loads(TRUSTED_CATALOGS_ASSET_V3.read_text(encoding="utf-8"))
+        self.assertEqual(snapshot["workflow_version"], "v3")
+        self.assertEqual(sorted(snapshot["catalogs"]), ["claude-code-local-skills"])
+
+    def test_v4_ships_its_own_catalogue_id_rather_than_growing_the_v3_one(self):
+        v3 = json.loads(CATALOG_V3.read_text(encoding="utf-8"))
+        v4 = json.loads(CATALOG.read_text(encoding="utf-8"))
+        self.assertNotEqual(v3["catalog_id"], v4["catalog_id"])
+        self.assertEqual(v4["catalog_id"], TRUSTED)
+
+    def test_the_two_registries_are_distinct_assets(self):
+        self.assertNotEqual(REGISTRY.read_bytes(), REGISTRY_V3.read_bytes())
+
+
 # --------------------------------------------------------------------------
 # hygiene the round demands
 # --------------------------------------------------------------------------
@@ -1217,7 +1268,12 @@ class Hygiene(Base):
     def test_frozen_catalog_fixture_is_self_consistent(self):
         cat = ss.validate_catalog(catalog())
         self.assertEqual(cat["catalog_sha256"], ss.sha256_jcs(cat["entries"]))
-        self.assertEqual(len(cat["entries"]), 11)
+        # Twelve, not eleven: the v4 catalogue carries one entry per step plus
+        # speckit-implement, which a worker invokes natively inside
+        # implement-parallel. Kept a literal, one per catalogue -- deriving it
+        # would erase the signal that someone added an entry without
+        # recomputing catalog_sha256.
+        self.assertEqual(len(cat["entries"]), 12)
         self.assertTrue(all(e["native_invocation"] for e in cat["entries"]))
 
     def test_public_cli_exposes_only_the_approved_gauntlet_bindings(self):

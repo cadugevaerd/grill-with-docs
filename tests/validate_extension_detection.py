@@ -24,7 +24,7 @@ PLUGIN = REPO / "plugin"
 SCRIPT = PLUGIN / "skills/grill-with-docs/scripts/ensure_dependencies.py"
 
 REGISTRY_PATH = ".specify/extensions/.registry"
-REQUIRED = ("git", "agent-assign", "bugfix", "verify-review-ship")
+REQUIRED = ("git", "bugfix", "verify-review-ship")
 
 
 def load() -> object:

@@ -13,7 +13,7 @@ exactly the way ``validate_gauntlet_run_contract.py`` itself does not import
 from ``validate_gauntlet_activation_contract.py``.
 
 Phase 2 (T007-T009) adds only regression-pinning cases: they prove FASE-003's
-core assumption -- that ``agent-execute`` is dispatched and checkpointed
+core assumption -- that ``implement-parallel`` is dispatched and checkpointed
 through the existing, unmodified ``checkpoint`` command exactly like every
 other of the eleven macro-steps, with no attestation exception -- already
 holds in shipped ``grill_workspace.py``/``grill_core/attestation.py`` code.
@@ -49,10 +49,7 @@ WORK_ID = "scheduler-waves-a1b2"
 # as a literal here -- not imported -- the same way validate_checkpoint_
 # contract.py already duplicates its own ``STEPS`` constant rather than
 # reaching into grill_workspace.py's module globals.
-SEQUENCE = [
-    "specify", "plan", "checklist", "tasks", "analyze", "agent-assign",
-    "agent-execute", "converge", "verify", "review", "ship",
-]
+SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
 
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
@@ -182,7 +179,7 @@ class GauntletSchedulerContractHarness(unittest.TestCase):
     Phase 2 (T007) only pins the User Story 1 boundary the rest of this
     phase depends on: dispatch order and per-step attestation are already
     enforced by the unmodified ``checkpoint`` command, with no special case
-    for ``agent-execute``.
+    for ``implement-parallel``.
     """
 
     def setUp(self) -> None:
@@ -276,29 +273,29 @@ class GauntletSchedulerContractHarness(unittest.TestCase):
         }
 
     # ------------------------------------------------------------------
-    # T007.1 -- agent-execute gets no special-case exemption from the
+    # T007.1 -- implement-parallel gets no special-case exemption from the
     # attestation gate; it goes through verify_checkpoint_attestation
     # exactly like any other step (ADR-0016, FR-001).
     # ------------------------------------------------------------------
 
-    def test_agent_execute_completion_without_attestation_is_rejected_like_any_other_step(self) -> None:
+    def test_implement_parallel_completion_without_attestation_is_rejected_like_any_other_step(self) -> None:
         run_id = "run-scheduler-checkpoint"
         generation_label = "gen-scheduler-checkpoint"
         predecessor: dict[str, Any] | None = None
-        for step_id in SEQUENCE[: SEQUENCE.index("agent-execute")]:
+        for step_id in SEQUENCE[: SEQUENCE.index("implement-parallel")]:
             predecessor = self.complete_step_with_real_attestation(
                 step_id, run_id=run_id, generation_label=generation_label, predecessor=predecessor,
             )
 
-        process, payload = self.checkpoint("agent-execute", "in-progress", reason="start agent-execute")
+        process, payload = self.checkpoint("implement-parallel", "in-progress", reason="start implement-parallel")
         self.assertEqual((process.returncode, payload.get("verdict")), (0, "UPDATED"), (payload, process.stderr))
 
         # --evidence is present so the run reaches the attestation-specific
         # check; EVIDENCE-REQUIRED would fire first if it were absent, which
         # would prove nothing about the attestation gate itself.
-        evidence = self.write_evidence("agent-execute-evidence.md")
+        evidence = self.write_evidence("implement-parallel-evidence.md")
         process, payload = self.checkpoint(
-            "agent-execute", "complete", evidence=[evidence], reason="complete agent-execute",
+            "implement-parallel", "complete", evidence=[evidence], reason="complete implement-parallel",
         )
 
         self.assertEqual(process.returncode, 2, (payload, process.stderr))
@@ -307,8 +304,8 @@ class GauntletSchedulerContractHarness(unittest.TestCase):
         self.assertEqual(payload.get("code"), "ATTESTATION-REQUIRED")
 
         development = self.development_state()
-        self.assertEqual(development["steps"]["agent-execute"], "in-progress")
-        self.assertEqual(development["current_step"], "agent-execute")
+        self.assertEqual(development["steps"]["implement-parallel"], "in-progress")
+        self.assertEqual(development["current_step"], "implement-parallel")
 
     # ------------------------------------------------------------------
     # T007.2 -- a blocked step never advances current_step past itself

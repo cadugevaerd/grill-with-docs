@@ -1,10 +1,12 @@
 {
   "version": "1.2.0",
   "development": {
-    "schema": "grill-development/v1",
-    "sequence": ["specify", "plan", "checklist", "tasks", "analyze", "agent-assign", "agent-execute", "converge", "verify", "review", "ship"],
+    "schema": "grill-development/v2",
+    "workflow_version": "v4",
+    "sequence": ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"],
     "current_step": "specify",
-    "steps": {"specify": "pending", "plan": "pending", "checklist": "pending", "tasks": "pending", "analyze": "pending", "agent-assign": "pending", "agent-execute": "pending", "converge": "pending", "verify": "pending", "review": "pending", "ship": "pending"},
+    "steps": {"specify": "pending", "plan": "pending", "checklist": "pending", "tasks": "pending", "analyze": "pending", "partition": "pending", "implement-parallel": "pending", "converge": "pending", "verify": "pending", "review": "pending", "ship": "pending"},
+    "renamed_from": {},
     "audit": []
   },
   "capability": {"name": "module-decomposition", "version": "v1", "schema": "v1"},

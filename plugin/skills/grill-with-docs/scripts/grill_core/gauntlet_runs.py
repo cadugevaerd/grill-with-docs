@@ -1406,9 +1406,31 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
     return _prepared_response(work_id, run_id, worker_id, expected_workspace)
 
 
+def _resolve_worker_model(runtime: str, tier: str) -> dict[str, Any]:
+    """Resolve the model a worker of this tier runs, or refuse.
+
+    Deliberately fails closed on an unreadable or half-filled binding: falling
+    back to "whatever the caller is running" is how a worker silently gets a
+    frontier model.
+    """
+    try:  # normal library use, as a package
+        from . import tier_models
+    except ImportError:  # pragma: no cover - direct-file load
+        spec = importlib.util.spec_from_file_location(
+            "grill_core_tier_models", Path(__file__).resolve().parent / "tier_models.py"
+        )
+        tier_models = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tier_models)
+    try:
+        return tier_models.resolve_model(runtime, tier, actor_class="worker")
+    except tier_models.TierModelError as error:
+        _fail(error.code, error.message)
+
+
 def declare_worker(root: str | Path, work_id: str, run_id: str, node_id: str, wave_id: str,
                    tier: str, scope_paths: Any, dag_path: Any, admission: Mapping[str, str], *,
-                   agent_execute_floor: str, markdown_floor: str) -> dict[str, Any]:
+                   agent_execute_floor: str, markdown_floor: str,
+                   runtime: str = "claude") -> dict[str, Any]:
     """FASE-003 first dispatch: ``worker_id = node_id`` verbatim, never a
     remediation (FR-007) -- remediation dispatch is ``gauntlet-remediate``,
     a later phase, and takes no ``--remediates``-shaped input here at all.
@@ -1451,6 +1473,11 @@ def declare_worker(root: str | Path, work_id: str, run_id: str, node_id: str, wa
     floor = markdown_floor if _is_markdown_only(scopes) else agent_execute_floor
     if TIER_ORDER[tier] < TIER_ORDER[floor]:
         _fail("DAG-NODE-TIER-UNRESOLVED", "worker tier does not satisfy its floor")
+    # ADR-0013: the worker's model is DERIVED from its tier, never chosen by
+    # the caller -- this function takes no --model at all. A frontier model for
+    # actor class `worker` is refused here, before any lease, grant or worktree
+    # exists, so a forbidden dispatch leaves nothing behind to clean up.
+    model = _resolve_worker_model(runtime, tier)
     identity = _validate_admission(admission)
     _require_base_commit(root, identity)
     store.recover_pending_transition(root)
@@ -1473,10 +1500,17 @@ def declare_worker(root: str | Path, work_id: str, run_id: str, node_id: str, wa
     for dep in nodes_by_id[node_id]["depends_on"]:
         if not _node_ready(run, dep):
             _fail("WAVE-NODE-NOT-READY", f"node dependency is not terminal: {node_id} depends on {dep}")
-    return prepare_worker(
+    prepared = prepare_worker(
         root, work_id, run_id, node_id, scopes, admission,
         node_id=node_id, remediates=None, wave_id=wave_id,
     )
+    # Reported, not stored: the worker record's key set is closed and already
+    # written in the field, so widening it is a separate, migrating change.
+    # The control that matters -- the refusal -- already happened above, before
+    # any durable state existed. Recording the resolved model durably is
+    # declared debt, not a silent omission.
+    return {**prepared, "model": model["model"], "model_frontier": model["frontier"],
+            "model_runtime": model["runtime"]}
 
 
 # FASE-003 (FR-008(d), FR-009, FR-010, ADR-0012, ADR-0015; T017-T019): progress
@@ -2251,10 +2285,27 @@ def converge_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, wa
         _fail("INTEGRATION_CONFLICT", f"wave members declare overlapping files: {', '.join(overlapping)}")
 
     collisions: set[str] = set()
+    changed_by_node: dict[str, set[str]] = {}
     for node_id, _, worker in mergeable:
-        collisions |= _branch_changed_paths(root, worker["workspace"]["branch"]) & untracked
+        changed_by_node[node_id] = _branch_changed_paths(root, worker["workspace"]["branch"])
+        collisions |= changed_by_node[node_id] & untracked
     if collisions:
         _fail("EXECUTION-TREE-DIRTY", f"untracked paths would be overwritten: {', '.join(sorted(collisions))}")
+
+    # The grant is only a fence if something checks it against what the branch
+    # actually changed. Until this pass existed, `_overlapping_scope` compared
+    # DECLARED files against each other and nothing ever compared a worker's
+    # diff to its own grant -- so a worker could edit tasks.md, or another
+    # node's files, and the merge would take it. Refuse before the first merge,
+    # so a wave never integrates half of a violating set.
+    for node_id, _, worker in mergeable:
+        if worker["workspace"].get("converged") is True:
+            continue
+        granted = set(worker.get("grant", {}).get("scope_paths") or [])
+        outside = sorted(changed_by_node[node_id] - granted)
+        if outside:
+            _fail("GRANT-SCOPE-VIOLATION",
+                  f"worker wrote outside its grant: {node_id} -> {', '.join(outside[:5])}")
 
     converged: list[str] = []
     for node_id, worker_id, worker in mergeable:

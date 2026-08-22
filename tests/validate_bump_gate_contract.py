@@ -468,7 +468,7 @@ class WorkflowWiring(unittest.TestCase):
 
     def test_constitution_requires_a_semver_bump_for_distributed_changes(self) -> None:
         text = self.CONSTITUTION.read_text(encoding="utf-8")
-        self.assertIn("- version: 1.2.0", text)
+        self.assertIn("- version: 2.0.0", text)
         self.assertIn("### Bump obrigatório do plugin", text)
         self.assertIn("`plugin/**` MUST incrementar a versão SemVer", text)
         self.assertIn("antes da tag de publicação", text)

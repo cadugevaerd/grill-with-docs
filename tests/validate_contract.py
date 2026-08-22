@@ -415,8 +415,22 @@ class AuditorContract(unittest.TestCase):
 
     def test_workflow_marker_and_state_integrity(self) -> None:
         workflow = self.root / "WORKFLOW.md"
-        workflow.write_text(workflow.read_text().replace("workflow:v2", "workflow:v3"), encoding="utf-8")
+        # v2, v3 and v4 are all legitimately materialised in the field, so the
+        # marker check is no longer "must be v2". What it still refuses is a
+        # marker this build does not know, and a document that declares two
+        # managed versions at once -- which is ambiguous about its own contract.
+        workflow.write_text(workflow.read_text().replace("workflow:v2", "workflow:v9"), encoding="utf-8")
         self.assert_no_go("WORKFLOW: marker/version")
+        write_project(self.root)
+        workflow.write_text(
+            "<!-- grill-with-docs-workflow:v3 -->\n" + workflow.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        self.assert_no_go("WORKFLOW: marker/version")
+        write_project(self.root)
+        # A v3-marked document, on the other hand, audits like any other.
+        workflow.write_text(workflow.read_text().replace("workflow:v2", "workflow:v3"), encoding="utf-8")
+        self.assertNotIn("WORKFLOW: marker/version", run_audit(self.root).stdout)
         write_project(self.root)
         state = json.loads((self.root / "state.json").read_text())
         state["workflow"]["sha256"] = "0" * 64

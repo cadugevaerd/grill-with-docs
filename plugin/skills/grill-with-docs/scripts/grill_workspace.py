@@ -2154,7 +2154,42 @@ def migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             shutil.rmtree(lock, ignore_errors=True)
 
 
-SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "agent-assign", "agent-execute", "converge", "verify", "review", "ship"]
+SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
+
+#: ``state.json`` development schema -> the workflow version it speaks.
+#: /v1 predates ``workflow_version`` and can only mean the v3 sequence; /v2
+#: declares its version explicitly, which is what stops a renamed sequence from
+#: being reported as a generic DEVELOPMENT-SCHEMA failure.
+DEVELOPMENT_SCHEMAS = {"grill-development/v1": "v3", "grill-development/v2": None}
+SEQUENCE_BY_VERSION = {"v3": ["specify", "plan", "checklist", "tasks", "analyze", "agent-assign", "agent-execute", "converge", "verify", "review", "ship"], "v4": ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]}
+ACTIVE_DEVELOPMENT_SCHEMA = "grill-development/v2"
+ACTIVE_WORKFLOW_VERSION = "v4"
+
+
+def development_workflow_version(development: object) -> str | None:
+    """Which workflow version a development block speaks, or None if it is not one.
+
+    Dual-read is the whole point: a bundle written under /v1 keeps projecting
+    and keeps checkpointing after this build ships, against the sequence it was
+    written with. Migration is a separate, explicit act.
+    """
+    if not isinstance(development, dict):
+        return None
+    schema = development.get("schema")
+    if schema not in DEVELOPMENT_SCHEMAS:
+        return None
+    implied = DEVELOPMENT_SCHEMAS[schema]
+    if implied is not None:
+        return implied
+    declared = development.get("workflow_version")
+    return declared if declared in SEQUENCE_BY_VERSION else None
+
+
+def development_sequence(development: object) -> list[str] | None:
+    """The canonical sequence a development block must declare, or None."""
+    version = development_workflow_version(development)
+    return None if version is None else SEQUENCE_BY_VERSION[version]
+
 
 
 def resolve_development_item(root: Path, work_id: str) -> Path:
@@ -2601,13 +2636,184 @@ def gauntlet_prepare_worker_command(args: argparse.Namespace) -> tuple[dict[str,
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+#: Which step's floor governs the workers dispatched under it, per workflow
+#: version. Kept beside the sequence tables it belongs to.
+EXECUTOR_STEP_BY_VERSION = {"v3": "agent-execute", "v4": "implement-parallel"}
+
+
 def _tier_floors(record: dict[str, Any]) -> tuple[str, str]:
     """FR-002 SSOT: resolve both tier floors from the caller's own current
     activation-pinned tier policy -- never a literal duplicated in
     ``grill_core``, so a future policy change can't silently desync from
-    this enforcement point."""
+    this enforcement point.
+
+    The executor step is looked up by the record's own workflow version. This
+    used to index ``minimum_by_step["agent-execute"]`` directly, which raised
+    KeyError the moment that step was renamed -- rc=1 with an empty stdout,
+    colliding with the NO-GO exit code, so a caller parsing JSON got nothing at
+    all. A missing floor is now a named, parseable denial.
+    """
     tier_policy = record["tier_policy"]
-    return tier_policy["minimum_by_step"]["agent-execute"], tier_policy["supplemental"]["markdown-maintenance"]
+    version = record.get("workflow", {}).get("version")
+    executor = EXECUTOR_STEP_BY_VERSION.get(version)
+    if executor is None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TIER-POLICY-VERSION-UNKNOWN",
+                         f"activation declares an unknown workflow version: {version}")
+    floors = tier_policy.get("minimum_by_step", {})
+    supplemental = tier_policy.get("supplemental", {})
+    if executor not in floors or "markdown-maintenance" not in supplemental:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TIER-POLICY-STEP-MISSING",
+                         f"activation tier policy declares no floor for {executor}")
+    return floors[executor], supplemental["markdown-maintenance"]
+
+
+def _feature_paths(root: Path, feature: str) -> tuple[Path, str, str]:
+    """Resolve one feature's spec directory and its two emitted documents."""
+    if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z._-]{0,127}", feature or ""):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--feature is invalid")
+    directory = root / "specs" / feature
+    if not directory.is_dir():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FEATURE-ABSENT", f"specs/{feature} does not exist")
+    return directory, f"specs/{feature}/execution-dag.json", f"specs/{feature}/partition-report.json"
+
+
+def partition_emit_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """WORKFLOW v4 `partition`: derive the Execution DAG from tasks.md.
+
+    Preview-first like every other mutating verb here: without ``--apply`` it
+    returns the two documents and writes nothing. The grouping itself is
+    deterministic and lives in ``grill_core.partition`` -- see ADR-0012 for why
+    it may not be a judgement call.
+    """
+    root = project_root(args.root)
+    resolve_gauntlet_subject(root, args.work_id)
+    partition = grill_core_module("partition")
+    directory, dag_ref, report_ref = _feature_paths(root, args.feature)
+    tasks_path = directory / "tasks.md"
+    if not tasks_path.is_file():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-ABSENT", f"specs/{args.feature}/tasks.md does not exist")
+    text = safe_read_regular_fd(root, tasks_path).decode("utf-8", errors="replace")
+    try:
+        dag, report = partition.partition(
+            text, feature=args.feature, sidecar_dir=f"specs/{args.feature}/implement",
+            groups=args.groups,
+        )
+    except partition.PartitionError as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message,
+                         extra={"work_id": args.work_id, **error.extra}) from error
+    payload = {
+        "verdict": report["verdict"], "work_id": args.work_id, "feature": args.feature,
+        "dag": dag_ref, "report": report_ref, "max_workers": dag["max_workers"],
+        "nodes": len(dag["nodes"]), "deferred_to_leader": report["deferred_to_leader"],
+        "unmapped_task_ids": report["unmapped_task_ids"],
+    }
+    if not args.apply:
+        return {**payload, "verdict": "PREVIEW", "partition_verdict": report["verdict"],
+                "execution_dag": dag, "partition_report": report}, EXIT_OK
+    for target, document in ((root / dag_ref, dag), (root / report_ref, report)):
+        reject_symlink_chain(root, target, allow_missing=True)
+        target.write_text(json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                          encoding="utf-8")
+    return {**payload, "verdict": "APPLIED", "partition_verdict": report["verdict"]}, EXIT_OK
+
+
+def gauntlet_partition_brief_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Emit one worker's brief from the DAG and the partition report.
+
+    Generated by command rather than written as prose so the same node always
+    yields the same brief. The brief is a hint; the fence is the worker's grant
+    plus the diff check at convergence.
+    """
+    root = project_root(args.root)
+    dag = _read_json_document(root, args.dag, "DAG-MALFORMED")
+    report = _read_json_document(root, args.report, "PARTITION-REPORT-MALFORMED")
+    nodes = {node["id"]: node for node in dag.get("nodes", []) if isinstance(node, dict)}
+    entries = {entry["id"]: entry for entry in report.get("nodes", []) if isinstance(entry, dict)}
+    if args.node_id not in nodes or args.node_id not in entries:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DAG-NODE-UNKNOWN", f"no such node: {args.node_id}")
+    node, entry = nodes[args.node_id], entries[args.node_id]
+    sidecar = next((f for f in node["files"] if f.endswith(f"/{args.node_id}.tasks.json")), None)
+    lines = [
+        f"You are worker {args.node_id} of feature {dag.get('feature')}.",
+        "",
+        "Tasks assigned to you: " + ", ".join(entry["task_ids"]) + ".",
+        "Paths you may write:",
+        *(f"  - {path}" for path in node["files"]),
+        "",
+        "Do not edit tasks.md. Record your result in "
+        + (sidecar or "your node sidecar")
+        + " and let the leader mark [X] after the merge.",
+        "Do not write .grill/ or .specify/reports/. Do not checkpoint the step.",
+        "Writing outside the paths above fails the merge with GRANT-SCOPE-VIOLATION.",
+    ]
+    return {"verdict": "BRIEF", "node_id": args.node_id, "tier": node["tier"],
+            "parallel": node["parallel"], "files": node["files"],
+            "task_ids": entry["task_ids"], "scope": entry["scope"],
+            "brief": "\n".join(lines)}, EXIT_OK
+
+
+def gauntlet_tasks_reconcile_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Mark completed tasks in tasks.md once, on the coordinator's branch.
+
+    Deterministic bookkeeping, no model in the loop: it reads the sidecars the
+    workers already merged and rewrites the checkboxes. Workers never touch
+    tasks.md -- if it were in two nodes' scopes the wave would be rejected for
+    overlap, and if it were in one the others would be writing out of scope.
+    """
+    root = project_root(args.root)
+    resolve_gauntlet_subject(root, args.work_id)
+    dag = _read_json_document(root, args.dag, "DAG-MALFORMED")
+    feature = dag.get("feature")
+    directory, _, _ = _feature_paths(root, feature)
+    tasks_path = directory / "tasks.md"
+    if not tasks_path.is_file():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-ABSENT", f"specs/{feature}/tasks.md does not exist")
+    completed: set[str] = set()
+    missing: list[str] = []
+    for node in dag.get("nodes", []):
+        sidecar = next((f for f in node.get("files", []) if f.endswith(f"/{node['id']}.tasks.json")), None)
+        if sidecar is None or not (root / sidecar).is_file():
+            missing.append(node["id"])
+            continue
+        document = _read_json_document(root, sidecar, "SIDECAR-MALFORMED")
+        for task_id in document.get("completed", []):
+            if isinstance(task_id, str):
+                completed.add(task_id)
+    text = safe_read_regular_fd(root, tasks_path).decode("utf-8", errors="replace")
+    marked: list[str] = []
+    lines = []
+    for line in text.splitlines(keepends=True):
+        # Read both `[x]` and `[X]`; write one. The corpus uses the lowercase
+        # form and speckit-implement's own instructions use the uppercase one.
+        match = re.match(r"^(- \[)[ xX](\]\s+)(T\d+)", line)
+        if match and match.group(3) in completed and not line.startswith("- [X]"):
+            line = line[:len(match.group(1))] + "X" + line[len(match.group(1)) + 1:]
+            marked.append(match.group(3))
+        lines.append(line)
+    payload = {"verdict": "PREVIEW", "work_id": args.work_id, "feature": feature,
+               "marked": sorted(marked), "completed": sorted(completed),
+               "missing_sidecars": missing}
+    if not args.apply:
+        return payload, EXIT_OK
+    reject_symlink_chain(root, tasks_path, allow_missing=False)
+    tasks_path.write_text("".join(lines), encoding="utf-8")
+    return {**payload, "verdict": "APPLIED"}, EXIT_OK
+
+
+def _read_json_document(root: Path, reference: Any, code: str) -> dict[str, Any]:
+    """Read one repo-relative JSON document through the safe-path boundary."""
+    if not isinstance(reference, str) or not reference:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "a document path is required")
+    candidate = Path(reference)
+    if candidate.is_absolute() or any(part in {"", ".", ".."} for part in candidate.parts):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", f"unsafe path: {reference}")
+    target = root / candidate
+    if not target.is_file():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, f"document is unavailable: {reference}")
+    try:
+        return json.loads(safe_read_regular_fd(root, target))
+    except ValueError as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, f"document is not valid JSON: {reference}") from error
 
 
 def gauntlet_dag_validate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -2892,14 +3098,20 @@ def verify_checkpoint_attestation(
     try:
         project_id = store.project_identity(root)["project_id"]
         previous = None
-        index = SEQUENCE.index(step_id)
+        # The item's own sequence, never the build's: a bundle written under v3
+        # names its predecessor `agent-execute`, and looking that up in the v4
+        # tuple would report a missing predecessor that was never missing.
+        item_sequence = development_sequence(development) or list(SEQUENCE)
+        if step_id not in item_sequence:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-STATE-DIVERGENCE", step_id)
+        index = item_sequence.index(step_id)
         outputs = development.get("attested_outputs", {})
         if not isinstance(outputs, dict):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-STATE-DIVERGENCE", work_id)
         if index:
-            previous = outputs.get(SEQUENCE[index - 1])
+            previous = outputs.get(item_sequence[index - 1])
             if not isinstance(previous, dict):
-                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-PREDECESSOR-MISSING", SEQUENCE[index - 1])
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-PREDECESSOR-MISSING", item_sequence[index - 1])
         verdict = attestation.judge_checkpoint_attestation(
             bundle,
             project_id=project_id,
@@ -2928,15 +3140,16 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     try:
         path, state = read_development_state(root, item, args.work_id)
         development = state.get("development")
-        if not isinstance(development, dict) or development.get("schema") != "grill-development/v1":
+        if development_workflow_version(development) is None:
             if not args.initialize_legacy:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-UNTRACKED", args.work_id)
             if args.from_step is not None and (args.from_step != "specify" or args.step != "specify"):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-INITIALIZATION-UNSAFE", args.work_id)
             if args.from_step is None or not args.evidence or not args.reason.strip():
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-INITIALIZATION-REQUIRES-DECISION-EVIDENCE", args.work_id)
-            development = {"schema":"grill-development/v1", "sequence":SEQUENCE[:], "current_step":args.step,
-                           "steps":{step:"pending" for step in SEQUENCE}, "audit":[]}
+            development = {"schema":ACTIVE_DEVELOPMENT_SCHEMA, "workflow_version":ACTIVE_WORKFLOW_VERSION,
+                           "sequence":SEQUENCE[:], "current_step":args.step,
+                           "steps":{step:"pending" for step in SEQUENCE}, "renamed_from":{}, "audit":[]}
             state["development"] = development
             args.state = "in-progress"
         sequence = development.get("sequence"); steps = development.get("steps")
@@ -2944,7 +3157,7 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         # legítimo e vira lista, mas presente e de outro tipo derrubava o comando
         # com AttributeError no append lá embaixo — traceback onde devia haver
         # código nomeado.
-        if sequence != SEQUENCE or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
+        if sequence != development_sequence(development) or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         current = steps.get(args.step, "pending")
         evidence = []
@@ -3066,11 +3279,11 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     try:
         path, state = read_development_state(root, item, args.work_id)
         development = state.get("development")
-        if not isinstance(development, dict) or development.get("schema") != "grill-development/v1":
+        if development_workflow_version(development) is None:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-UNTRACKED", args.work_id)
         sequence = development.get("sequence")
         steps = development.get("steps")
-        if sequence != SEQUENCE or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
+        if sequence != development_sequence(development) or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         reason = args.reason.strip()
         if not reason:
@@ -3290,6 +3503,22 @@ def build_parser() -> JsonParser:
     prepare_worker_parser.add_argument("--run-id", required=True)
     prepare_worker_parser.add_argument("--worker-id", required=True)
     prepare_worker_parser.add_argument("--scope", action="append", required=True)
+    partition_emit_parser = subparsers.add_parser("partition-emit")
+    partition_emit_parser.add_argument("root")
+    partition_emit_parser.add_argument("--work-id", required=True)
+    partition_emit_parser.add_argument("--feature", required=True)
+    partition_emit_parser.add_argument("--groups", type=int, default=3)
+    partition_emit_parser.add_argument("--apply", action="store_true")
+    partition_brief_parser = subparsers.add_parser("gauntlet-partition-brief")
+    partition_brief_parser.add_argument("root")
+    partition_brief_parser.add_argument("--dag", required=True)
+    partition_brief_parser.add_argument("--report", required=True)
+    partition_brief_parser.add_argument("--node-id", required=True)
+    tasks_reconcile_parser = subparsers.add_parser("gauntlet-tasks-reconcile")
+    tasks_reconcile_parser.add_argument("root")
+    tasks_reconcile_parser.add_argument("--work-id", required=True)
+    tasks_reconcile_parser.add_argument("--dag", required=True)
+    tasks_reconcile_parser.add_argument("--apply", action="store_true")
     dag_validate_parser = subparsers.add_parser("gauntlet-dag-validate")
     dag_validate_parser.add_argument("root")
     dag_validate_parser.add_argument("--work-id", required=True)
@@ -3391,6 +3620,9 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-resume": gauntlet_resume_command,
             "gauntlet-prepare-worker": gauntlet_prepare_worker_command,
             "gauntlet-cleanup": gauntlet_cleanup_command,
+            "partition-emit": partition_emit_command,
+            "gauntlet-partition-brief": gauntlet_partition_brief_command,
+            "gauntlet-tasks-reconcile": gauntlet_tasks_reconcile_command,
             "gauntlet-dag-validate": gauntlet_dag_validate_command,
             "gauntlet-wave-declare": gauntlet_wave_declare_command,
             "gauntlet-converge": gauntlet_converge_command,

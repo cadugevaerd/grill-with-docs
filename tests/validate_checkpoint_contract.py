@@ -6,7 +6,7 @@ REPO=Path(__file__).resolve().parents[1]
 PLUGIN=REPO/'plugin'
 SCRIPT=PLUGIN/'skills/grill-with-docs/scripts/grill_workspace.py'
 TEMPLATE=PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.template.md'
-STEPS=['specify','plan','checklist','tasks','analyze','agent-assign','agent-execute','converge','verify','review','ship']
+STEPS = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
 
 def run(*a): return subprocess.run([sys.executable,str(SCRIPT),*map(str,a)],text=True,capture_output=True)
 class CheckpointContract(unittest.TestCase):

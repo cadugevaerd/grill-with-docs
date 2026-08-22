@@ -21,7 +21,7 @@ workspace = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = workspace
 spec.loader.exec_module(workspace)
 
-SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "agent-assign", "agent-execute", "converge", "verify", "review", "ship"]
+SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
 STATES = {"pending", "in-progress", "complete", "blocked"}
 TERMINAL_PHASE_STATES = {"complete", "superseded"}
 
@@ -73,15 +73,19 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
     findings: list[str] = []
     if dev is None:
         tracking, current, completed, blocked, steps = "legacy-untracked", "unknown", [], [], {}
-    elif not isinstance(dev, dict) or dev.get("schema") != "grill-development/v1" or dev.get("sequence") != SEQUENCE or not isinstance(dev.get("steps"), dict):
+    elif workspace.development_sequence(dev) is None or dev.get("sequence") != workspace.development_sequence(dev) or not isinstance(dev.get("steps"), dict):
         tracking, current, completed, blocked, steps = "invalid", "unknown", [], [], dev.get("steps", {}) if isinstance(dev, dict) else {}
         findings.append("INVALID-DEVELOPMENT-SCHEMA")
     else:
+        # Projected against the bundle's OWN sequence. A bundle written under
+        # v3 still reports 11/11 after this build ships; it is not stale, it is
+        # a finished cycle of the version that ran it.
+        item_sequence = workspace.development_sequence(dev)
         tracking, steps = "tracked", dev["steps"]
         current = dev.get("current_step")
-        completed = [s for s in SEQUENCE if steps.get(s) == "complete"]
-        blocked = [s for s in SEQUENCE if steps.get(s) == "blocked"]
-        if any(steps.get(s) not in STATES for s in SEQUENCE) or any(steps.get(s) == "complete" and any(steps.get(p) != "complete" for p in SEQUENCE[:SEQUENCE.index(s)]) for s in SEQUENCE):
+        completed = [s for s in item_sequence if steps.get(s) == "complete"]
+        blocked = [s for s in item_sequence if steps.get(s) == "blocked"]
+        if any(steps.get(s) not in STATES for s in item_sequence) or any(steps.get(s) == "complete" and any(steps.get(p) != "complete" for p in item_sequence[:item_sequence.index(s)]) for s in item_sequence):
             findings.append("INVALID-DEVELOPMENT-SEQUENCE")
     phases, phase_states, modules, units, types = phases_and_map(bundle.files)
     lv = live(root)
@@ -112,7 +116,13 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
     # between discovery and this projection, and root-level constitution files
     # are outside the item bundle.
     constitution, constitution_text, _ = workspace.constitution_info(root)
-    if immutable.get("constitution", {}).get("sha256") != constitution.get("sha256"):
+    # Only for a work item that can still act. A finished item pinning the
+    # constitution it was decided under is provenance, not drift: flagging it
+    # forever means every constitutional amendment blocks the repository's own
+    # status permanently, which makes amending expensive for the wrong reason.
+    # An item still in flight is a different matter -- it would go on making
+    # decisions under a constitution that has since changed.
+    if not terminal and immutable.get("constitution", {}).get("sha256") != constitution.get("sha256"):
         findings.append("CONSTITUTION-HASH-MISMATCH")
     check_path = bundle.origin and Path(bundle.origin) / "CONSTITUTION-CHECK.md"
     audit_path = bundle.origin and Path(bundle.origin) / "AUDIT.md"

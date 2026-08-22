@@ -8,7 +8,7 @@ Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfood
 - `tests/` — validadores canônicos. `tests/run_validators.py` faz glob de `validate_*.py`, então um arquivo novo entra na suíte sozinho.
 - `tests/fixtures/` — repositórios sintéticos, incluindo `.specify/` próprios. Não confundir com o `.specify/` da raiz.
 - `.specify/` e `.claude/` na raiz — stack do Spec Kit deste repositório, versionada de propósito (ver abaixo).
-- `WORKFLOW.md` na raiz — workflow project-wide gerenciado, marcador `grill-with-docs-workflow:v2`.
+- `WORKFLOW.md` na raiz — workflow project-wide gerenciado, marcador `grill-with-docs-workflow:v4`.
 
 ## Rodar os testes
 
@@ -16,7 +16,7 @@ Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfood
 python3 tests/run_validators.py
 ```
 
-Baseline atual: 1120 testes em 23 validadores, exit 0, com 1 skip dependente de ambiente em `validate_workspace_contract.py`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
+Baseline atual: 1230 testes em 26 validadores, exit 0, com 1 skip dependente de ambiente em `validate_workspace_contract.py`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
 
 ## Restrições do core
 
@@ -27,7 +27,11 @@ Baseline atual: 1120 testes em 23 validadores, exit 0, com 1 skip dependente de 
 
 ## `ESSENTIAL` do WORKFLOW.md
 
-`ensure_workflow.py` valida `WORKFLOW.md` exigindo **todas** as substrings da tupla `ESSENTIAL`. Acrescentar um marcador novo marca como `incompatible workflow` todo `WORKFLOW.md` v2 já materializado em projetos consumidores. Não mexa nessa tupla sem bump de `VERSION` para `v3` e um caminho de migração.
+Cada versão gerenciada tem a **própria** tupla `ESSENTIAL`, e elas nunca são derivadas umas das outras: `ensure_workflow.ESSENTIAL` (v2), `workflow_v3.ESSENTIAL` e `workflow_v4.ESSENTIAL`. Acrescentar uma substring à tupla de uma versão marca como `incompatible workflow` todo `WORKFLOW.md` daquela versão já materializado em projeto consumidor. Uma versão nova é sempre um marcador novo com tupla nova, ao lado das anteriores — nunca uma edição da tupla existente.
+
+O mesmo vale para os assets: v3 e v4 têm registry, catálogo (com `catalog_id` próprio) e snapshot de confiança separados. Um documento v3 fixa o digest do registry v3 na própria prosa, então repontar aquele asset seria uma queda de frota, sem diff e sem caminho de migração.
+
+A ordem canônica de cada versão vive em `grill_core/workflow_versions.py`, que é o SSOT tabular. As tabelas são literais congelados, nunca derivadas umas das outras: derivar `SEQUENCE_V4` de `SEQUENCE_V3` pelo mapa de renomeação faria um typo no mapa reescrever a ordem canônica em vez de reprovar um teste.
 
 ## `init` e dependências
 
@@ -52,13 +56,13 @@ Desde a 3.3.0 a triagem é **consultiva**: `init` e `hotfix` ainda não a exigem
 
 ## Extensões do Spec Kit
 
-`git`, `agent-assign`, `bugfix` e `verify-review-ship` são exigidas pelo `WORKFLOW.md`. As três últimas vivem no catálogo `community`, que é discovery-only: instalar por `--from <archive-url>` dispara um aviso interativo de fonte não confiável e aborta em modo não-interativo. Um instalador automatizado não deve responder esse aviso no lugar do humano, então `--allow-install` registra o catálogo como confiável em `.specify/extension-catalogs.yml` (`install_allowed: true`) e instala pelo nome. É uma decisão de confiança explícita e revisável no diff.
+`git`, `bugfix` e `verify-review-ship` são exigidas pelo `WORKFLOW.md`. As duas últimas vivem no catálogo `community`, que é discovery-only: instalar por `--from <archive-url>` dispara um aviso interativo de fonte não confiável e aborta em modo não-interativo. Um instalador automatizado não deve responder esse aviso no lugar do humano, então `--allow-install` registra o catálogo como confiável em `.specify/extension-catalogs.yml` (`install_allowed: true`) e instala pelo nome. É uma decisão de confiança explícita e revisável no diff.
 
 ## Por que `.specify/` e `.claude/` são versionados
 
 A stack do Spec Kit deste repositório está no controle de versão de propósito, para que a configuração seja reproduzível e revisável. Consequências a conhecer:
 
-- `.specify/extensions/` carrega código de terceiros vendorizado (`agent-assign` de xymelon, `bugfix` de Quratulain-bilal). Atualizações de extensão aparecem como diff.
+- `.specify/extensions/` carrega código de terceiros vendorizado (`bugfix` de Quratulain-bilal; `agent-assign` de xymelon permanece na árvore como histórico, já não exigido desde a 4.0.0). Atualizações de extensão aparecem como diff.
 - `.specify/extensions/.cache/` é cache do catálogo e gera churn a cada refresh.
 - `.claude/settings.local.json` é override por máquina; mudanças locais de configuração viram diff.
 - `.specify/memory/constitution.md` na raiz é a **Constituição gerenciada do grill**, gerada de `assets/GRILL-CONSTITUTION.template.md` e não o placeholder do spec-kit. São 9 cláusulas normativas e ela é read-only depois do bootstrap: nenhum ADR ou decisão local funciona como waiver. Duas dessas cláusulas — `Bump obrigatório do plugin` e `Release obrigatória por versão` — existem **só aqui**, não no asset: governam a distribuição deste plugin e não teriam sentido na constituição de um projeto consumidor. Emendar a Constituição é ato deliberado e caro: o hash muda e todo work item que selou o hash anterior passa a acusar `CONSTITUTION-STALE` até ser re-selado.

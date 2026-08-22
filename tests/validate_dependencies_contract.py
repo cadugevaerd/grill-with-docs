@@ -155,9 +155,21 @@ class Detection(unittest.TestCase):
     def test_trusted_catalog_is_installed_before_the_community_extensions(self) -> None:
         order = [entry["id"] for entry in MODULE.load_manifest()["dependencies"]]
         catalog = order.index("spec-kit-community-catalog")
-        for identifier in ("ext:agent-assign", "ext:bugfix", "ext:verify-review-ship"):
+        for identifier in ("ext:bugfix", "ext:verify-review-ship"):
             self.assertLess(catalog, order.index(identifier))
 
+    def test_the_agent_assign_extension_is_no_longer_a_dependency(self) -> None:
+        """The removal is an assertion, not an absence.
+
+        v4 replaced agent-assign/agent-execute with partition/implement-parallel,
+        whose skills this plugin authors and ships. Nothing in the workflow needs
+        the community extension any more, and a dependency the workflow does not
+        need is a preflight that can fail for no reason.
+        """
+        order = [entry["id"] for entry in MODULE.load_manifest()["dependencies"]]
+        self.assertNotIn("ext:agent-assign", order)
+        for identifier in ("ext:git", "ext:bugfix", "ext:verify-review-ship"):
+            self.assertIn(identifier, order)
     def write_registry(self, extensions, *, schema_version="1.0") -> None:
         target = self.root / MODULE.EXTENSION_REGISTRY
         target.parent.mkdir(parents=True, exist_ok=True)

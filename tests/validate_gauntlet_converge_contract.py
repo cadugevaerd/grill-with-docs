@@ -41,10 +41,7 @@ DAG_SCHEMA = "grill-gauntlet-execution-dag/v1"
 
 # Mirrors grill_workspace.SEQUENCE, duplicated the same way every other
 # validator in this suite duplicates it rather than importing module globals.
-SEQUENCE = [
-    "specify", "plan", "checklist", "tasks", "analyze", "agent-assign",
-    "agent-execute", "converge", "verify", "review", "ship",
-]
+SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
 
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
@@ -885,13 +882,49 @@ class GauntletConvergeContractHarness(unittest.TestCase):
         dag_path = self.write_dag(document)
         self.declare_wave(dag_path, ["T1", "T2"])
         for node_id in ("T1", "T2"):
-            self.dispatch("wave-0001", node_id, dag_path=dag_path, files=[f"src/{node_id.lower()}.py"])
-        # Declared scopes are disjoint; the real commits collide anyway.
+            # `shared.txt` is inside each worker's GRANT while the DAG nodes
+            # declare disjoint `files`, so no declared-scope overlap is
+            # detected -- yet the real commits still collide. Both workers used
+            # to write it with no grant at all, which is a grant-scope
+            # violation now that the diff is checked against the grant, and
+            # would have masked the conflict this fixture exists to produce.
+            # (A grant is still not required to be a subset of its node's
+            # declared files; that gap is separate and open.)
+            self.dispatch("wave-0001", node_id, dag_path=dag_path,
+                          files=[f"src/{node_id.lower()}.py", "shared.txt"])
         self.commit_in_worker("T1", "shared.txt", "written by T1\n")
         self.commit_in_worker("T2", "shared.txt", "written by T2\n")
         self.terminate("T1")
         self.terminate("T2")
         return dag_path
+
+    def test_converge_refuses_a_worker_that_wrote_outside_its_grant(self) -> None:
+        """The grant is only a fence if the diff is checked against it.
+
+        `_overlapping_scope` compares DECLARED files against each other; until
+        this check existed nothing compared a worker's actual diff to its own
+        grant, so a worker could edit tasks.md, or another node's files, and
+        the merge would take it.
+        """
+        self.bind_execution_branch()
+        document = dag_document([
+            dag_node("T1", parallel=True, files=["src/a.py"]),
+            dag_node("T2", parallel=True, files=["src/b.py"]),
+        ])
+        dag_path = self.write_dag(document)
+        self.declare_wave(dag_path, ["T1", "T2"])
+        for node_id in ("T1", "T2"):
+            self.dispatch("wave-0001", node_id, dag_path=dag_path, files=[f"src/{node_id.lower()}.py"])
+        self.commit_in_worker("T1", "src/a.py", "worker T1 output\n")
+        self.commit_in_worker("T2", "docs/not-mine.md", "T2 wandered off\n")
+        self.terminate("T1")
+        self.terminate("T2")
+        head_before = self.head_of()
+        process, payload = self.converge("wave-0001", dag_path=dag_path)
+        self.assert_blocked(process, payload, "GRANT-SCOPE-VIOLATION")
+        # Refused before the FIRST merge: a wave never integrates half of a
+        # violating set, so the well-behaved worker is not merged either.
+        self.assertEqual(self.head_of(), head_before)
 
     def test_converge_blocks_a_real_git_conflict_without_reverting_earlier_merges(self) -> None:
         self.bind_execution_branch()
@@ -1345,7 +1378,10 @@ class GauntletConvergeContractHarness(unittest.TestCase):
         dag_path = self.write_dag(document)
         self.declare_wave(dag_path, ["T1", "T2"])
         for node_id in ("T1", "T2"):
-            self.dispatch("wave-0001", node_id, dag_path=dag_path, files=[f"src/{node_id.lower()}.py"])
+            # See content_conflict_fixture: the colliding file is granted, so
+            # the collision is a merge conflict rather than a grant violation.
+            self.dispatch("wave-0001", node_id, dag_path=dag_path,
+                          files=[f"src/{node_id.lower()}.py", "shared.txt"])
         self.commit_in_worker("T1", "shared.txt", "written by T1\n")
         self.commit_in_worker("T2", "shared.txt", "written by T2\n")
         self.terminate("T1")

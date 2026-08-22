@@ -18,7 +18,7 @@ Cada feature, fix ou hotfix MUST possuir work item isolado, identidade imutável
 Feature e fix terminam em PLAN_ONLY_STOP; nenhum plano autoriza alteração ou publicação.
 
 ### Sequência obrigatória do desenvolvimento
-O desenvolvimento MUST seguir, sem saltos: specify, plan, checklist, tasks, analyze, agent-assign, agent-execute, converge, verify, review, ship.
+O desenvolvimento MUST seguir, sem saltos: specify, plan, checklist, tasks, analyze, partition, implement-parallel, converge, verify, review, ship.
 
 ### Verify/review antes de ship
 Ship somente pode iniciar após verify e review completos, com evidências.

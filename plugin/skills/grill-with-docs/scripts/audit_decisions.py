@@ -63,6 +63,22 @@ class Phase:
     handoff_raw: str
 
 
+#: Managed WORKFLOW markers this audit accepts. Kept a local literal on
+#: purpose -- ``ensure_workflow.REGISTRY`` documents the same choice: this
+#: module must not acquire a load-time dependency on grill_core to read a
+#: document.
+ACCEPTED_WORKFLOW_MARKERS = ("v2", "v3", "v4")
+#: The canonical step order per marker, frozen locally for the same reason.
+WORKFLOW_SEQUENCE_BY_MARKER = {
+    "v2": ("specify", "plan", "checklist", "tasks", "analyze", "agent-assign",
+           "agent-execute", "converge", "verify", "review", "ship"),
+    "v3": ("specify", "plan", "checklist", "tasks", "analyze", "agent-assign",
+           "agent-execute", "converge", "verify", "review", "ship"),
+    "v4": ("specify", "plan", "checklist", "tasks", "analyze", "partition",
+           "implement-parallel", "converge", "verify", "review", "ship"),
+}
+
+
 def csv(value: str | None) -> tuple[str, ...]:
     if not value or value.strip().lower() == "none":
         return ()
@@ -343,8 +359,15 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
     if workflow and workflow.is_file():
         text = workflow.read_text(encoding="utf-8")
         markers = re.findall(r"grill-with-docs-workflow:(v\d+)", text)
-        if markers != ["v2"]:
-            findings.append("WORKFLOW: marker/version deve ser exatamente v2")
+        # Exactly one marker stays the invariant this line always protected: a
+        # document declaring two managed versions is ambiguous about which
+        # contract it is. Which one it declares is now open, because v2, v3 and
+        # v4 are all legitimately materialised in the field.
+        if len(markers) != 1 or markers[0] not in ACCEPTED_WORKFLOW_MARKERS:
+            findings.append(
+                "WORKFLOW: marker/version deve ser exatamente um de "
+                + "/".join(ACCEPTED_WORKFLOW_MARKERS)
+            )
         essentials = (
             "ROADMAP.md",
             "PLAN-CONTEXT.md",
@@ -354,12 +377,35 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
             "state.json",
             "docs/adr/",
             "handoffs/",
-            "agent-assign",
             "PLAN_ONLY_STOP",
         )
         for essential in essentials:
             if essential not in text:
                 findings.append(f"WORKFLOW: essencial ausente {essential}")
+        # The execution steps used to be checked as one literal token in the
+        # tuple above, which proved nothing about order and broke the moment a
+        # step was renamed. Check the whole declared sequence of the marker the
+        # document actually carries, in order -- strictly stronger.
+        expected = WORKFLOW_SEQUENCE_BY_MARKER.get(markers[0] if len(markers) == 1 else None)
+        if expected:
+            # Read the arrow chain, not the whole document: step names appear
+            # in ordinary prose too ("plan-only", "before_specify"), so a
+            # document-wide search would report a false reorder for a perfectly
+            # canonical file.
+            declared = None
+            for line in text.splitlines():
+                if "\u2192" not in line:
+                    continue
+                tokens = tuple(
+                    token for token in re.findall(r"[a-z][a-z-]*", line) if token in expected
+                )
+                if len(tokens) == len(expected):
+                    declared = tokens
+                    break
+            if declared is None:
+                findings.append("WORKFLOW: sequencia de etapas nao declarada")
+            elif declared != expected:
+                findings.append("WORKFLOW: sequencia de etapas fora da ordem canonica")
 
     context_terms: set[str] = set()
     if context and context.is_file():
