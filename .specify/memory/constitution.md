@@ -1,28 +1,30 @@
 <!-- grill-with-docs-constitution:v1 -->
 <!--
 Sync Impact Report
-Version change: 1.2.0 -> 2.0.0 (MAJOR: cláusula normativa redefinida)
-Modified principles: "Sequência obrigatória do desenvolvimento" -- as etapas
-  agent-assign e agent-execute foram substituídas por partition e
-  implement-parallel. A contagem permanece 11; a ordem permanece sem saltos.
-Added sections: nenhuma
+Version change: 2.0.0 -> 2.1.0 (MINOR: nova cláusula normativa)
+Modified principles: nenhuma. Nenhuma cláusula existente foi renomeada,
+  redefinida ou removida.
+Added sections: "Tier de modelo e esforço do worker Orca", sob Core Principles.
 Removed sections: nenhuma
-Rationale: a execução estava delegada à extensão community agent-assign, que casa
-  tarefa e agente por nome, sem declarar tier nem modelo e sem paralelismo
-  declarado. A sequência canônica passa a nomear o que o ciclo realmente faz:
-  partition particiona tasks.md em subfases file-disjuntas e emite o Execution
-  DAG; implement-parallel despacha os workers não-frontier sobre esse DAG e
-  submete o receipt da etapa. É redefinição de cláusula normativa, logo MAJOR.
-Deferred: a implementação das duas skills, do registry v4 e da migração de
-  state.json é WORKFLOW v4 e sai por work item próprio, não por esta emenda.
-Follow-up: work items existentes selam o hash da versão anterior e passam a
-  acusar CONSTITUTION-STALE; re-selagem é ato deliberado por work item. Os oito
-  work items vivos neste repositório já estão com os onze passos complete, logo
-  nenhum deles executa outro checkpoint e a re-selagem é no-op observável.
+Rationale: os workers despachados via Orca Orchestration vinham sem par
+  modelo/esforço declarado, então o runtime escolhia por default. Trabalho de
+  leitura consumia tier forte e migração de esquema podia cair em tier
+  econômico, sem nada no retorno que denunciasse a divergência. A cláusula
+  fixa a correspondência entre natureza do trabalho e tier, exige a declaração
+  explícita no worker-start e exige a conferência de launch.effective, que é o
+  único ponto onde o efetivo aparece. É acréscimo, não redefinição, logo MINOR.
+Deferred: nenhum. A cláusula é governança operacional e não depende de código
+  novo neste repositório. Orca é ferramenta de orquestração local do operador,
+  não faz parte do bundle publicado, logo a cláusula vive apenas na Constituição
+  viva e NÃO entra em assets/GRILL-CONSTITUTION.template.md.
+Follow-up: work items existentes selam o hash 2.0.0 e passam a acusar
+  CONSTITUTION-STALE; os oito work items vivos neste repositório estão com os
+  onze passos complete, logo nenhum executa outro checkpoint e a re-selagem é
+  no-op observável.
 -->
 # Grill Constitution
 
-- version: 2.0.0
+- version: 2.1.0
 - ratified: 2026-08-11
 - last-amended: 2026-08-22
 - governance: Grill lifecycle governance; changes require review, evidence, and work-item traceability.
@@ -49,6 +51,9 @@ Ambiguidade, corrupção, ausência de evidência ou violação MUST bloquear; n
 
 ### Rastreabilidade
 Decisões, mudanças, fases, módulos, DUs, receipts e gates MUST ser rastreáveis ao work item e ao commit.
+
+### Tier de modelo e esforço do worker Orca
+Todo worker criado via Orca Orchestration MUST declarar `--model` no `worker-start` e, quando o runtime suportar, também `--effort`. O tier MUST corresponder à natureza do trabalho: pesquisa, triagem, leitura de código e testes usam modelo econômico com esforço baixo; implementação delimitada usa modelo intermediário; arquitetura, segurança, migração, resposta a incidente e revisão final usam modelo forte com esforço alto. O retorno JSON do `worker-start` MUST ser conferido: `launch.effective` MUST corresponder ao par modelo/esforço solicitado, e divergência MUST bloquear o despacho em vez de prosseguir sob o efetivo. Reutilizar um `--terminal` existente MUST NOT ocorrer quando modelo ou esforço precisam ser definidos, porque essas preferências só se aplicam a terminais novos.
 
 ### Bump obrigatório do plugin
 Toda alteração em `plugin/**` MUST incrementar a versão SemVer antes de merge ou push. A versão MUST permanecer idêntica nos manifests, marketplaces, documentação de distribuição e validador; o gate de bump MUST executar tanto na PR quanto antes da tag de publicação. Nunca reutilize uma tag publicada nem edite um marketplace para contornar um bump ausente.
