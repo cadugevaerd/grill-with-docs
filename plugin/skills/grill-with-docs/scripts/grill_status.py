@@ -72,9 +72,9 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
     dev = state.get("development")
     findings: list[str] = []
     if dev is None:
-        tracking, current, completed, blocked, steps = "legacy-untracked", "unknown", [], [], {}
+        tracking, current, completed, blocked, steps, item_sequence = "legacy-untracked", "unknown", [], [], {}, SEQUENCE
     elif workspace.development_sequence(dev) is None or dev.get("sequence") != workspace.development_sequence(dev) or not isinstance(dev.get("steps"), dict):
-        tracking, current, completed, blocked, steps = "invalid", "unknown", [], [], dev.get("steps", {}) if isinstance(dev, dict) else {}
+        tracking, current, completed, blocked, steps, item_sequence = "invalid", "unknown", [], [], dev.get("steps", {}) if isinstance(dev, dict) else {}, SEQUENCE
         findings.append("INVALID-DEVELOPMENT-SCHEMA")
     else:
         # Projected against the bundle's OWN sequence. A bundle written under
@@ -145,18 +145,24 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
     development = {"tracking": tracking, "current_step": current, "completed": completed, "blocked": blocked, "steps": steps, "execution_branch": execution_branch}
     closed, operational_status, pending_reasons = classify_item(
         planning=planning, development=development, governance=governance,
-        findings=findings, blockers=blocked,
+        findings=findings, blockers=blocked, sequence=item_sequence,
     )
-    return {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": planning, "development": development, "governance": governance, "blockers": blocked, "findings": sorted(findings), "closed": closed, "operational_status": operational_status, "pending_reasons": pending_reasons, "next_gate": "BLOCKED" if findings or blocked else (SEQUENCE[len(completed)] if len(completed) < len(SEQUENCE) else "complete")}
+    return {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": planning, "development": development, "governance": governance, "blockers": blocked, "findings": sorted(findings), "closed": closed, "operational_status": operational_status, "pending_reasons": pending_reasons, "next_gate": "BLOCKED" if findings or blocked else (item_sequence[len(completed)] if len(completed) < len(item_sequence) else "complete")}
 
 
-def classify_item(*, planning: dict[str, Any], development: dict[str, Any], governance: dict[str, Any], findings: list[str], blockers: list[str]) -> tuple[bool, str, list[str]]:
-    """Classify one item without hiding contradictory terminal markers."""
+def classify_item(*, planning: dict[str, Any], development: dict[str, Any], governance: dict[str, Any], findings: list[str], blockers: list[str], sequence: list[str] | None = None) -> tuple[bool, str, list[str]]:
+    """Classify one item without hiding contradictory terminal markers.
+
+    `sequence` is the bundle's OWN canonical sequence. A bundle finished
+    under v3 is complete against the v3 steps; judging it against the v4
+    step names would report every finished v3 cycle as blocked.
+    """
+    sequence = SEQUENCE if sequence is None else sequence
     steps = development.get("steps") if isinstance(development.get("steps"), dict) else {}
     tracking = development.get("tracking")
     phase_states = planning.get("phases") if isinstance(planning.get("phases"), dict) else {}
     all_phases_terminal = bool(phase_states) and all(state in TERMINAL_PHASE_STATES for state in phase_states.values())
-    all_steps_complete = tracking == "tracked" and all(steps.get(step) == "complete" for step in SEQUENCE)
+    all_steps_complete = tracking == "tracked" and all(steps.get(step) == "complete" for step in sequence)
     terminal_markers = planning.get("status") == "complete" and planning.get("milestone_status") == "completed"
     closure_gaps: list[str] = []
     if planning.get("status") != "complete": closure_gaps.append("state.status não é complete")
@@ -175,10 +181,10 @@ def classify_item(*, planning: dict[str, Any], development: dict[str, Any], gove
         reasons.append("fechamento inconsistente: " + ", ".join(closure_gaps))
     if findings or blockers or (terminal_markers and not closed):
         return closed, "blocked", reasons
-    in_progress = [step for step in SEQUENCE if steps.get(step) == "in-progress"]
+    in_progress = [step for step in sequence if steps.get(step) == "in-progress"]
     if in_progress:
         return closed, "in-progress", [f"etapa GWD em andamento: {in_progress[0]}"]
-    pending = [step for step in SEQUENCE if steps.get(step) == "pending"]
+    pending = [step for step in sequence if steps.get(step) == "pending"]
     if pending:
         return closed, "pending", [f"etapa GWD pendente: {pending[0]}"]
     if not closed:
