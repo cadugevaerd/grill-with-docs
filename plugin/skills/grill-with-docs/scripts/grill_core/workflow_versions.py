@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""Frozen, per-version tables for the canonical workflow sequence.
+
+Stdlib only, no I/O, no network. This module is pure data: it must stay
+importable from anywhere in the core without dragging a dependency graph
+behind it, exactly like ``ensure_workflow.REGISTRY`` is kept a literal.
+
+Freezing contract
+-----------------
+Every table below is a **literal**, never derived from another table. v3 and
+v4 must be able to drift without one silently rewriting the other -- the same
+doctrine ``workflow_v3.ESSENTIAL`` states for the allowlists. Deriving
+``SEQUENCE_V4`` from ``SEQUENCE_V3`` through ``STEP_RENAMES_V3_TO_V4`` would
+read as tidier and would defeat the point: a typo in the rename map would
+silently rewrite the canonical order instead of failing a contract test.
+
+``STEP_RENAMES_V3_TO_V4`` exists for provenance (``state.json`` records where a
+step came from) and for diagnostics, never as the source of the v4 order.
+"""
+from __future__ import annotations
+
+#: Canonical order of the v3 cycle. Frozen: consumers with a v3 WORKFLOW.md
+#: materialised keep executing against this exact tuple forever.
+SEQUENCE_V3 = (
+    "specify",
+    "plan",
+    "checklist",
+    "tasks",
+    "analyze",
+    "agent-assign",
+    "agent-execute",
+    "converge",
+    "verify",
+    "review",
+    "ship",
+)
+
+#: Canonical order of the v4 cycle. Same length and same no-skip ordering; the
+#: two execution steps are renamed to say what they actually do.
+SEQUENCE_V4 = (
+    "specify",
+    "plan",
+    "checklist",
+    "tasks",
+    "analyze",
+    "partition",
+    "implement-parallel",
+    "converge",
+    "verify",
+    "review",
+    "ship",
+)
+
+#: Provenance only. Not the source of ``SEQUENCE_V4`` -- see module docstring.
+STEP_RENAMES_V3_TO_V4 = {
+    "agent-assign": "partition",
+    "agent-execute": "implement-parallel",
+}
+
+#: Minimum model tier per step (ADR-0001: smallest capable tier). Promotion may
+#: only happen before dispatch; there is never a silent downgrade.
+TIER_POLICY_V3 = {
+    "specify": "large",
+    "plan": "large",
+    "checklist": "small",
+    "tasks": "medium",
+    "analyze": "large",
+    "agent-assign": "large",
+    "agent-execute": "medium",
+    "converge": "medium",
+    "verify": "medium",
+    "review": "large",
+    "ship": "large",
+}
+
+#: v4 floors. ``partition`` drops from large to medium because it stopped being
+#: a judgement call: v3's ``agent-assign`` matched tasks to agents by name and
+#: reasoning, while ``partition`` is deterministic parsing plus bin-packing with
+#: the heuristic pinned in ``grill_core.partition``. ADR-0013 records this.
+TIER_POLICY_V4 = {
+    "specify": "large",
+    "plan": "large",
+    "checklist": "small",
+    "tasks": "medium",
+    "analyze": "large",
+    "partition": "medium",
+    "implement-parallel": "medium",
+    "converge": "medium",
+    "verify": "medium",
+    "review": "large",
+    "ship": "large",
+}
+
+#: The step whose floor governs the workers dispatched under it. Read through
+#: this map instead of indexing a tier policy with a hard-coded step id --
+#: ``grill_workspace._tier_floors`` used to do the latter and raised KeyError
+#: with rc=1 and an empty stdout, which collides with the NO-GO exit code.
+EXECUTOR_STEP_BY_VERSION = {
+    "v3": "agent-execute",
+    "v4": "implement-parallel",
+}
+
+SEQUENCE_BY_VERSION = {
+    "v3": SEQUENCE_V3,
+    "v4": SEQUENCE_V4,
+}
+
+TIER_POLICY_BY_VERSION = {
+    "v3": TIER_POLICY_V3,
+    "v4": TIER_POLICY_V4,
+}
+
+#: Registry asset per workflow version. v3 keeps the original filename so its
+#: bytes -- and therefore its ``registry_sha256`` -- never move: every v3
+#: WORKFLOW.md already materialised in a consumer repository pins that hash,
+#: and repointing it in place would turn all of them into
+#: REGISTRY-PIN-DIVERGENT with no preview and no migration path.
+REGISTRY_FILENAME_BY_VERSION = {
+    "v3": "workflow-step-skills.json",
+    "v4": "workflow-step-skills.v4.json",
+}
+
+TRUSTED_CATALOGS_FILENAME_BY_VERSION = {
+    "v3": "workflow-trusted-catalogs.json",
+    "v4": "workflow-trusted-catalogs.v4.json",
+}
+
+TEMPLATE_FILENAME_BY_VERSION = {
+    "v2": "WORKFLOW.template.md",
+    "v3": "WORKFLOW.v3.template.md",
+    "v4": "WORKFLOW.v4.template.md",
+}
+
+#: ``state.json`` development schema per workflow version. v2 of the schema adds
+#: an explicit ``workflow_version`` so a renamed sequence stops being reported
+#: as a generic DEVELOPMENT-SCHEMA failure.
+DEVELOPMENT_SCHEMA_BY_VERSION = {
+    "v3": "grill-development/v1",
+    "v4": "grill-development/v2",
+}
+
+#: Workflow versions whose documents the runtime can execute. v2 remains
+#: readable and bootstrappable but was never an execution surface.
+EXECUTABLE_VERSIONS = ("v3", "v4")
