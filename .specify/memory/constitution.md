@@ -1,24 +1,30 @@
 <!-- grill-with-docs-constitution:v1 -->
 <!--
 Sync Impact Report
-Version change: 1.1.0 -> 1.2.0 (MINOR: nova cláusula normativa)
-Modified principles: nenhuma renomeada ou redefinida
-Added sections: "Release obrigatória por versão"
+Version change: 1.2.0 -> 2.0.0 (MAJOR: cláusula normativa redefinida)
+Modified principles: "Sequência obrigatória do desenvolvimento" -- as etapas
+  agent-assign e agent-execute foram substituídas por partition e
+  implement-parallel. A contagem permanece 11; a ordem permanece sem saltos.
+Added sections: nenhuma
 Removed sections: nenhuma
-Rationale: a disciplina de publicação estava pela metade. "Bump obrigatório do plugin"
-  já exigia incremento de versão e tag imutável, mas nada exigia a release
-  correspondente. O resultado observável: só existe a release v2.4.1 (2026-08-10),
-  enquanto as tags seguiram até v3.3.2 -- o pipeline cria a tag e para aí.
-Deferred: automatizar a criação da release em .github/workflows/publish.yml é
-  implementação e sai por /speckit-specify, não por esta emenda.
-Follow-up: work items existentes selam o hash da versão anterior e passam a acusar
-  CONSTITUTION-STALE; re-selagem é ato deliberado por work item.
+Rationale: a execução estava delegada à extensão community agent-assign, que casa
+  tarefa e agente por nome, sem declarar tier nem modelo e sem paralelismo
+  declarado. A sequência canônica passa a nomear o que o ciclo realmente faz:
+  partition particiona tasks.md em subfases file-disjuntas e emite o Execution
+  DAG; implement-parallel despacha os workers não-frontier sobre esse DAG e
+  submete o receipt da etapa. É redefinição de cláusula normativa, logo MAJOR.
+Deferred: a implementação das duas skills, do registry v4 e da migração de
+  state.json é WORKFLOW v4 e sai por work item próprio, não por esta emenda.
+Follow-up: work items existentes selam o hash da versão anterior e passam a
+  acusar CONSTITUTION-STALE; re-selagem é ato deliberado por work item. Os oito
+  work items vivos neste repositório já estão com os onze passos complete, logo
+  nenhum deles executa outro checkpoint e a re-selagem é no-op observável.
 -->
 # Grill Constitution
 
-- version: 1.2.0
+- version: 2.0.0
 - ratified: 2026-08-11
-- last-amended: 2026-08-20
+- last-amended: 2026-08-22
 - governance: Grill lifecycle governance; changes require review, evidence, and work-item traceability.
 
 ## Core Principles
@@ -33,7 +39,7 @@ Cada feature, fix ou hotfix MUST possuir work item isolado, identidade imutável
 Feature e fix terminam em PLAN_ONLY_STOP; nenhum plano autoriza alteração ou publicação.
 
 ### Sequência obrigatória do desenvolvimento
-O desenvolvimento MUST seguir, sem saltos: specify, plan, checklist, tasks, analyze, agent-assign, agent-execute, converge, verify, review, ship.
+O desenvolvimento MUST seguir, sem saltos: specify, plan, checklist, tasks, analyze, partition, implement-parallel, converge, verify, review, ship.
 
 ### Verify/review antes de ship
 Ship somente pode iniciar após verify e review completos, com evidências.
