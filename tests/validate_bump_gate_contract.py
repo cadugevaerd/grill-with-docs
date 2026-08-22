@@ -397,9 +397,64 @@ class WorkflowWiring(unittest.TestCase):
     def test_a_release_anchored_elsewhere_fails_the_publication(self) -> None:
         run = self.release_step()["run"]
         self.assertIn('refs/tags/$REF^{commit}', run)
-        self.assertIn('if [ "$anchored" != "$SHA" ]; then', run)
+        self.assertIn('if [ "$anchored" != "$ANCHOR" ]; then', run)
         self.assertIn("::error::", run)
         self.assertIn("exit 1", run)
+
+    def tag_step(self) -> dict:
+        document = self.load_yaml(self.PUBLISH)
+        return next(
+            step for step in document["jobs"]["release"]["steps"]
+            if step.get("name") == "Criar a tag, recusando remarcação"
+        )
+
+    def test_the_tag_step_publishes_the_commit_this_version_is_anchored_on(self) -> None:
+        """Uma só noção de 'commit publicado', declarada onde a tag é resolvida."""
+        document = self.load_yaml(self.PUBLISH)
+        step = self.tag_step()
+        self.assertEqual(step["id"], "tag")
+        self.assertEqual(step["env"]["EVENT"], "${{ github.event_name }}")
+        self.assertEqual(
+            document["jobs"]["release"]["outputs"]["anchor"],
+            "${{ steps.tag.outputs.anchor }}",
+        )
+        # Os dois desfechos do passo — tag encontrada e tag criada — declaram a âncora.
+        self.assertEqual(step["run"].count("printf 'anchor=%s\\n'"), 2)
+
+    def test_a_push_still_refuses_to_remark_a_published_tag(self) -> None:
+        """Imutabilidade não é negociável no caminho que publica versão nova."""
+        run = self.tag_step()["run"]
+        self.assertIn('if [ "$EVENT" = "push" ]; then', run)
+        self.assertIn("tag publicada é imutável", run)
+        self.assertIn("exit 1", run)
+        self.assertNotIn("git tag -f", run)
+        self.assertNotIn("--force", run)
+
+    def test_a_dispatch_reconciles_instead_of_dying_on_an_existing_tag(self) -> None:
+        """Sem isto, release perdida é irreparável: o job morre antes do passo dela."""
+        run = self.tag_step()["run"]
+        self.assertIn("reconciliando sem remarcar", run)
+        immutability = run.index("tag publicada é imutável")
+        reconcile = run.index("reconciliando sem remarcar")
+        self.assertLess(immutability, reconcile)
+
+    def test_only_a_push_requires_the_tag_to_match_the_runner_head(self) -> None:
+        run = self.release_step()["run"]
+        self.assertIn('if [ "$EVENT" = "push" ] && [ "$anchored" != "$SHA" ]; then', run)
+        self.assertEqual(self.release_step()["env"]["ANCHOR"], "${{ steps.tag.outputs.anchor }}")
+        self.assertEqual(self.release_step()["env"]["EVENT"], "${{ github.event_name }}")
+
+    def test_the_marketplace_entry_anchors_on_the_tag_not_on_the_runner_head(self) -> None:
+        """Apontar o marketplace para HEAD serviria commit que a tag não entrega."""
+        document = self.load_yaml(self.PUBLISH)
+        steps = document["jobs"]["publish"]["steps"]
+        consumers = [
+            step for step in steps
+            if step.get("name") in ("Apontar a entrada para a release", "Verificar o estado publicado")
+        ]
+        self.assertEqual(len(consumers), 2)
+        for step in consumers:
+            self.assertEqual(step["env"]["SHA"], "${{ needs.release.outputs.anchor }}")
 
     def test_the_publish_workflow_has_valid_shell(self) -> None:
         document = self.load_yaml(self.PUBLISH)
