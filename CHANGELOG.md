@@ -1,5 +1,29 @@
 # Changelog
 
+## 4.0.0
+
+BREAKING: a sequência canônica renomeia as duas etapas de execução. `agent-assign`
+vira `partition` e `agent-execute` vira `implement-parallel`. A contagem
+permanece onze e a ordem sem saltos permanece.
+
+- `partition` particiona `tasks.md` em subfases file-disjuntas e emite um
+  Execution DAG determinístico. Fase é barreira; o paralelismo vem de disjunção
+  de arquivo dentro da fase. Largura declarada é teto, nunca promessa.
+- `implement-parallel` orquestra workers em worktree isolado. O modelo de cada
+  worker é derivado do tier do nó pelo binding versionado
+  `assets/workflow-tier-models.json`; modelo de fronteira para a classe `worker`
+  é recusado antes de qualquer worktree existir. Cobre `claude` e `codex`.
+- v4 é distribuído **ao lado** de v3: registry, catálogo e snapshot de confiança
+  próprios. Os assets v3 ficam byte-congelados, porque todo `WORKFLOW.md` v3 já
+  materializado fixa o digest do registry v3 na própria prosa.
+- `state.json` ganha `grill-development/v2` com `workflow_version` explícito.
+  Ambos os schemas são lidos: um bundle escrito sob v3 continua projetando e
+  continua fazendo checkpoint contra a sequência com que foi escrito.
+- A extensão `agent-assign` deixa de ser dependência exigida.
+- Constituição emendada para 2.0.0 (cláusula normativa de sequência redefinida).
+- ADR-0012 supersede o ADR-0004 quanto ao produtor do DAG; ADR-0013 registra o
+  piso de modelo do worker.
+
 ## 3.4.0
 
 Status humano passa a ser um contrato canônico, sem quebrar a API JSON existente.

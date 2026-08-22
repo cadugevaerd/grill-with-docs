@@ -1,4 +1,4 @@
-# Protocolo de sessão v3.4.0
+# Protocolo de sessão v4.0.0
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -6,7 +6,7 @@ Frases com **deve**, **nunca** e **somente** são normativas. A inicialização 
 
 `grill_workspace.py init` cria a Constituição gerenciada somente quando ausente, sem clobber, com fsync/readback; arquivo existente preserva bytes. Ausência não é `not-present`: é bootstrap pendente e deve ser resolvida no init. Symlink, ancestor symlink, UTF-8 inválido ou corrida insegura falham fechado.
 
-Após init, avance somente pela matriz persistente de 11 passos: `specify → plan → checklist → tasks → analyze → agent-assign → agent-execute → converge → verify → review → ship`. Use `grill_workspace.py checkpoint ROOT --work-id ID --step STEP --state in-progress|complete|blocked [--evidence PATH] [--reason TEXT]`. Não há saltos; `complete` exige evidência regular segura com SHA-256, `blocked` exige razão, retry parte de blocked e `ship` exige verify+review completos. Eventos idênticos retornam `REUSED`; divergência retorna `STATE-DIVERGENCE`. Legado retorna `LEGACY-UNTRACKED` e só pode ser inicializado explicitamente com `--initialize-legacy --from-step STEP`, decisão e evidência.
+Após init, avance somente pela matriz persistente de 11 passos: `specify → plan → checklist → tasks → analyze → partition → implement-parallel → converge → verify → review → ship`. Use `grill_workspace.py checkpoint ROOT --work-id ID --step STEP --state in-progress|complete|blocked [--evidence PATH] [--reason TEXT]`. Não há saltos; `complete` exige evidência regular segura com SHA-256, `blocked` exige razão, retry parte de blocked e `ship` exige verify+review completos. Eventos idênticos retornam `REUSED`; divergência retorna `STATE-DIVERGENCE`. Legado retorna `LEGACY-UNTRACKED` e só pode ser inicializado explicitamente com `--initialize-legacy --from-step STEP`, decisão e evidência.
 
 `grill_workspace.py status ROOT` é a única interface pública de status; hooks apenas projetam resumo humano e não escrevem/rede.
 

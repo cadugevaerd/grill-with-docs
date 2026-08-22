@@ -50,6 +50,32 @@ class StatusPublicContract(unittest.TestCase):
         self.item("closed"); self._terminal("closed"); self.item("open")
         p=status_markdown(self.r); self.assertEqual(p.returncode,0); self.assertNotIn("| closed |",p.stdout)
         self.assertIn("| open | pending | etapa GWD pendente: specify |",p.stdout)
+    def test_amending_the_constitution_does_not_block_a_finished_item(self):
+        """A finished item pins the constitution it was decided under.
+
+        That is provenance, not drift. Flagging it forever would mean every
+        constitutional amendment blocks the repository's own status
+        permanently, which makes amending expensive for the wrong reason.
+        """
+        self.item(); self._terminal()
+        constitution = self.r/".specify/memory/constitution.md"
+        constitution.write_text(constitution.read_text(encoding="utf-8") + "\n<!-- amended -->\n", encoding="utf-8")
+        p,x = status(self.r)
+        self.assertEqual(p.returncode, 0)
+        self.assertNotIn("CONSTITUTION-HASH-MISMATCH", x["work_items"][0]["findings"])
+
+    def test_amending_the_constitution_still_flags_an_item_in_flight(self):
+        """An item that can still act would go on deciding under a constitution
+        that has since changed. That one must be flagged."""
+        self.item()
+        constitution = self.r/".specify/memory/constitution.md"
+        constitution.write_text(constitution.read_text(encoding="utf-8") + "\n<!-- amended -->\n", encoding="utf-8")
+        p,x = status(self.r)
+        # Blocked, not merely annotated: an item that can still act must stop.
+        self.assertEqual(p.returncode, 2)
+        self.assertEqual(x["verdict"], "BLOCKED")
+        self.assertIn("CONSTITUTION-HASH-MISMATCH", x["work_items"][0]["findings"])
+
     def test_markdown_terminal_contradiction_is_blocked(self):
         self.item(); path=self.r/".grill/work-items/work-a/state.json"; value=json.loads(path.read_text(encoding="utf-8"))
         value["status"]="complete"; value["milestone_status"]="completed"; path.write_text(json.dumps(value),encoding="utf-8")

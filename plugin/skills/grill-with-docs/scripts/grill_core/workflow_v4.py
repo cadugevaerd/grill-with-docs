@@ -278,8 +278,10 @@ def bundled_template() -> bytes:
 
 def detect_command(root_argument: str | Path) -> tuple[dict, int]:
     root = resolve_root(root_argument)
-    path, raw, current = load_workflow(root)
-    text = raw.decode("utf-8", errors="replace")
+    # load_workflow returns (path, bytes, TEXT) -- the third element is the
+    # decoded document, not a digest. Hash the bytes explicitly.
+    path, raw, text = load_workflow(root)
+    current = digest(raw)
     detection = detect_text(text)
     gate = execution_gate(text)
     return {
@@ -310,8 +312,8 @@ def migrate_command(root_argument: str | Path, *, apply: bool = False,
     looked at the diff and accepts losing those edits.
     """
     root = resolve_root(root_argument)
-    path, raw, current = load_workflow(root)
-    text = raw.decode("utf-8", errors="replace")
+    path, raw, text = load_workflow(root)
+    current = digest(raw)
     target = render_v4()
     preview = {
         "schema": SCHEMA,
@@ -332,7 +334,7 @@ def migrate_command(root_argument: str | Path, *, apply: bool = False,
         return {**preview, "verdict": "BLOCKED", "code": "EXPECTED_SHA256_REQUIRED"}, EXIT_BLOCKED
     if expected_sha256 != current:
         return {**preview, "verdict": "BLOCKED", "code": "WORKFLOW_CHANGED"}, EXIT_BLOCKED
-    pristine = raw in (_v3.read_v2_template(), _v3.render_v3())
+    pristine = raw == _v3.read_v2_template() or raw == _v3.bundled_template()[0]
     if not pristine and not allow_local_edits:
         return {**preview, "verdict": "BLOCKED", "code": "WORKFLOW_LOCAL_EDITS"}, EXIT_BLOCKED
     atomic_replace(path, target, raw)

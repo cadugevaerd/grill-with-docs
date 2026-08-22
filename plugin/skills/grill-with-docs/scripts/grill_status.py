@@ -116,7 +116,13 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
     # between discovery and this projection, and root-level constitution files
     # are outside the item bundle.
     constitution, constitution_text, _ = workspace.constitution_info(root)
-    if immutable.get("constitution", {}).get("sha256") != constitution.get("sha256"):
+    # Only for a work item that can still act. A finished item pinning the
+    # constitution it was decided under is provenance, not drift: flagging it
+    # forever means every constitutional amendment blocks the repository's own
+    # status permanently, which makes amending expensive for the wrong reason.
+    # An item still in flight is a different matter -- it would go on making
+    # decisions under a constitution that has since changed.
+    if not terminal and immutable.get("constitution", {}).get("sha256") != constitution.get("sha256"):
         findings.append("CONSTITUTION-HASH-MISMATCH")
     check_path = bundle.origin and Path(bundle.origin) / "CONSTITUTION-CHECK.md"
     audit_path = bundle.origin and Path(bundle.origin) / "AUDIT.md"
