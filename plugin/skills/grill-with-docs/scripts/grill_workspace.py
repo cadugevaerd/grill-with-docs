@@ -688,7 +688,12 @@ def state_template(root: Path, work_id: str, constitution: dict[str, Any], workf
     value = json.loads((ASSETS / "state.template.json").read_text(encoding="utf-8"))
     value["work_id"] = work_id
     value["constitution"] = constitution
-    value["workflow"] = {**workflow, "version": "v2"}
+    # "schema", not "version": the value is this block's own frozen shape tag and
+    # has never tracked the WORKFLOW.md document version -- that one lives in
+    # development.workflow_version.  The old name invited exactly the misreading
+    # that a v4 document with "version": "v2" here was inconsistent.  Readers
+    # accept both spellings, so materialised bundles need no migration.
+    value["workflow"] = {**workflow, "schema": "v2"}
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
 
@@ -2154,16 +2159,26 @@ def migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             shutil.rmtree(lock, ignore_errors=True)
 
 
-SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
-
-#: ``state.json`` development schema -> the workflow version it speaks.
-#: /v1 predates ``workflow_version`` and can only mean the v3 sequence; /v2
-#: declares its version explicitly, which is what stops a renamed sequence from
-#: being reported as a generic DEVELOPMENT-SCHEMA failure.
-DEVELOPMENT_SCHEMAS = {"grill-development/v1": "v3", "grill-development/v2": None}
-SEQUENCE_BY_VERSION = {"v3": ["specify", "plan", "checklist", "tasks", "analyze", "agent-assign", "agent-execute", "converge", "verify", "review", "ship"], "v4": ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]}
-ACTIVE_DEVELOPMENT_SCHEMA = "grill-development/v2"
-ACTIVE_WORKFLOW_VERSION = "v4"
+#: Read from the SSOT rather than restated here.  These five names used to be
+#: local literals, which is how this file came to declare the active frontier in
+#: one constant while injecting the *previous* version's gate a few hundred lines
+#: below: two sources of truth cannot disagree loudly, only silently.
+#:
+#: This is a deliberate exception to the local-literal rule stated for
+#: ``V3_ORPHAN_IMMUTABLE_FIELDS`` (LD-010 item 4).  That rule exists to keep hot
+#: paths free of a load-time dependency on ``grill_core``; it does not reach
+#: ``workflow_versions``, which is pure data with no imports of its own -- a
+#: property its own contract test (``Purity``) enforces.  Do not "restore
+#: consistency" by copying these back.
+_workflow_versions = grill_core_module("workflow_versions")
+SEQUENCE = list(_workflow_versions.SEQUENCE_BY_VERSION[_workflow_versions.ACTIVE_VERSION])
+DEVELOPMENT_SCHEMAS = dict(_workflow_versions.DEVELOPMENT_SCHEMAS)
+SEQUENCE_BY_VERSION = {
+    version: list(sequence)
+    for version, sequence in _workflow_versions.SEQUENCE_BY_VERSION.items()
+}
+ACTIVE_DEVELOPMENT_SCHEMA = _workflow_versions.ACTIVE_DEVELOPMENT_SCHEMA
+ACTIVE_WORKFLOW_VERSION = _workflow_versions.ACTIVE_VERSION
 
 
 def development_workflow_version(development: object) -> str | None:
@@ -2266,12 +2281,12 @@ def migrate_v3_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     rebind_workflow = bool(getattr(args, "rebind_workflow", False))
     workflow_sha256: str | None = None
     if rebind_workflow:
-        workflow_v3 = grill_core_module("workflow_v3")
+        workflow_gate = grill_core_module("workflow_v4")
         try:
-            _, workflow_bytes, workflow_text = workflow_v3.load_workflow(root)
-            gate = workflow_v3.execution_gate(workflow_text)
-        except workflow_v3.Failure as error:
-            code = workflow_v3.CLI_CODE_ALIASES.get(error.code, error.code.replace("_", "-"))
+            _, workflow_bytes, workflow_text = workflow_gate.load_workflow(root)
+            gate = workflow_gate.execution_gate(workflow_text)
+        except workflow_gate.Failure as error:
+            code = translate_v3_code(error.code)
             raise CliFailure(
                 error.exit_code,
                 error.verdict,
@@ -2280,7 +2295,7 @@ def migrate_v3_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 extra=dict(error.extra) if error.extra else None,
             ) from error
         if gate.status != "OK":
-            code = workflow_v3.CLI_CODE_ALIASES.get(gate.code or "WORKFLOW_INCOMPATIBLE", (gate.code or "WORKFLOW_INCOMPATIBLE").replace("_", "-"))
+            code = translate_v3_code(gate.code or "WORKFLOW_INCOMPATIBLE")
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, "current workflow is not eligible for rebind")
         workflow_sha256 = hash_bytes(workflow_bytes)
     lock = acquire_lock(root, args.work_id, item) if args.apply else None
@@ -2294,10 +2309,10 @@ def migrate_v3_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                     # must instead bind the workflow accepted while its
                     # work-item commit window is held, never an earlier read.
                     try:
-                        _, workflow_bytes, workflow_text = workflow_v3.load_workflow(root)
-                        gate = workflow_v3.execution_gate(workflow_text)
-                    except workflow_v3.Failure as error:
-                        code = workflow_v3.CLI_CODE_ALIASES.get(error.code, error.code.replace("_", "-"))
+                        _, workflow_bytes, workflow_text = workflow_gate.load_workflow(root)
+                        gate = workflow_gate.execution_gate(workflow_text)
+                    except workflow_gate.Failure as error:
+                        code = translate_v3_code(error.code)
                         raise CliFailure(
                             error.exit_code,
                             error.verdict,
@@ -2306,10 +2321,7 @@ def migrate_v3_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                             extra=dict(error.extra) if error.extra else None,
                         ) from error
                     if gate.status != "OK":
-                        code = workflow_v3.CLI_CODE_ALIASES.get(
-                            gate.code or "WORKFLOW_INCOMPATIBLE",
-                            (gate.code or "WORKFLOW_INCOMPATIBLE").replace("_", "-"),
-                        )
+                        code = translate_v3_code(gate.code or "WORKFLOW_INCOMPATIBLE")
                         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, "current workflow is not eligible for rebind")
                     workflow_sha256 = hash_bytes(workflow_bytes)
                 assert workflow_sha256 is not None
@@ -2343,7 +2355,7 @@ def gauntlet_init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int
     root = project_root(args.root)
     resolve_development_item(root, args.work_id)
     gauntlet = grill_core_module("gauntlet")
-    workflow_v3 = grill_core_module("workflow_v3")
+    workflow_gate = grill_core_module("workflow_v4")
     work_item_v3 = grill_core_module("work_item_v3")
     step_skills = grill_core_module("step_skills")
     config_lock: Any | None = None
@@ -2367,9 +2379,9 @@ def gauntlet_init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
         try:
             try:
-                _, workflow_bytes, workflow_text = workflow_v3.load_workflow(root)
-            except workflow_v3.Failure as error:
-                code = workflow_v3.CLI_CODE_ALIASES.get(error.code, error.code.replace("_", "-"))
+                _, workflow_bytes, workflow_text = workflow_gate.load_workflow(root)
+            except workflow_gate.Failure as error:
+                code = translate_v3_code(error.code)
                 raise CliFailure(
                     error.exit_code,
                     error.verdict,
@@ -2385,7 +2397,7 @@ def gauntlet_init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int
                 grill_fd=config_lock.grill_fd,
                 workflow_bytes=workflow_bytes,
                 workflow_text=workflow_text,
-                workflow_v3=workflow_v3,
+                workflow_gate=workflow_gate,
                 work_item_v3=work_item_v3,
                 step_skills=step_skills,
             )
@@ -2428,7 +2440,7 @@ def gauntlet_activation_projection(args: argparse.Namespace) -> tuple[Path, str,
     # be safely projected. An unloadable core is therefore a top-level public
     # failure, never a synthetic STATUS response.
     gauntlet = grill_core_module("gauntlet")
-    workflow_v3 = grill_core_module("workflow_v3")
+    workflow_gate = grill_core_module("workflow_v4")
     work_item_v3 = grill_core_module("work_item_v3")
     step_skills = grill_core_module("step_skills")
     item_fd: int | None = None
@@ -2443,9 +2455,9 @@ def gauntlet_activation_projection(args: argparse.Namespace) -> tuple[Path, str,
         except gauntlet.GauntletError as error:
             return root, "BLOCKED", error.code
         try:
-            _, workflow_bytes, workflow_text = workflow_v3.load_workflow(root)
-        except workflow_v3.Failure as error:
-            code = workflow_v3.CLI_CODE_ALIASES.get(error.code, error.code.replace("_", "-"))
+            _, workflow_bytes, workflow_text = workflow_gate.load_workflow(root)
+        except workflow_gate.Failure as error:
+            code = translate_v3_code(error.code)
             return root, "BLOCKED", code
         try:
             state, reason = gauntlet.activation_state(
@@ -2455,7 +2467,7 @@ def gauntlet_activation_projection(args: argparse.Namespace) -> tuple[Path, str,
                 grill_fd=grill_fd,
                 workflow_bytes=workflow_bytes,
                 workflow_text=workflow_text,
-                workflow_v3=workflow_v3,
+                workflow_gate=workflow_gate,
                 work_item_v3=work_item_v3,
                 step_skills=step_skills,
             )
@@ -2511,7 +2523,7 @@ def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[st
     root = project_root(args.root)
     resolve_gauntlet_subject(root, args.work_id)
     gauntlet = grill_core_module("gauntlet")
-    workflow_v3 = grill_core_module("workflow_v3")
+    workflow_gate = grill_core_module("workflow_v4")
     work_item_v3 = grill_core_module("work_item_v3")
     step_skills = grill_core_module("step_skills")
     gauntlet_runs = grill_core_module("gauntlet_runs")
@@ -2521,15 +2533,15 @@ def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[st
         item_fd = open_development_item_fd(root, args.work_id)
         grill_fd = gauntlet.open_config_directory(root)
         try:
-            _, workflow_bytes, workflow_text = workflow_v3.load_workflow(root)
-        except workflow_v3.Failure as error:
-            code = workflow_v3.CLI_CODE_ALIASES.get(error.code, error.code.replace("_", "-"))
+            _, workflow_bytes, workflow_text = workflow_gate.load_workflow(root)
+        except workflow_gate.Failure as error:
+            code = translate_v3_code(error.code)
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message) from error
         try:
             state, reason = gauntlet.activation_state(
                 root=root, work_id=args.work_id, item_dir_fd=item_fd, grill_fd=grill_fd,
                 workflow_bytes=workflow_bytes, workflow_text=workflow_text,
-                workflow_v3=workflow_v3, work_item_v3=work_item_v3, step_skills=step_skills,
+                workflow_gate=workflow_gate, work_item_v3=work_item_v3, step_skills=step_skills,
             )
         except gauntlet.GauntletError as error:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
@@ -2539,7 +2551,7 @@ def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[st
         try:
             proof = gauntlet.current_activation(
                 root=root, work_id=args.work_id, item_dir_fd=item_fd, workflow_bytes=workflow_bytes,
-                workflow_text=workflow_text, workflow_v3=workflow_v3,
+                workflow_text=workflow_text, workflow_gate=workflow_gate,
                 work_item_v3=work_item_v3, step_skills=step_skills,
             )
             config, config_bytes, _ = gauntlet._read_config(grill_fd)
@@ -3006,22 +3018,47 @@ def read_development_state(root: Path, item: Path, work_id: str) -> tuple[Path, 
     return path, state
 
 
-def v3_checkpoint_attestation_required(root: Path) -> bool:
-    """Return whether the materialised workflow activates the v3 receipt gate.
+def checkpoint_attestation_required(root: Path) -> bool:
+    """Return whether the materialised workflow activates the receipt gate.
 
-    V2 work items retain their byte-compatible lifecycle.  A v3 marker (or a
-    human-equivalent v3 frontier) is different: an incompatible document is a
-    block, never a quiet downgrade to the unauthenticated v2 checkpoint path.
+    V2 work items retain their byte-compatible lifecycle.  A document declaring
+    the active frontier (by marker or as a human equivalent) is different: an
+    incompatible document is a block, never a quiet downgrade to the
+    unauthenticated v2 checkpoint path.
+
+    This asks the *active* frontier, not a version literal.  While it asked v3
+    specifically, a v4 document fell through the ``return False`` and shipped
+    with the attestation gate silently disabled -- precisely the quiet downgrade
+    the paragraph above forbids, reintroduced by the frontier moving underneath
+    a hardcoded check.
     """
     workflow_v3 = grill_core_module("workflow_v3")
+    workflow_v4 = grill_core_module("workflow_v4")
     workflow_path = root / "WORKFLOW.md"
     try:
         text = safe_read(workflow_path, root=root, utf8=True)
-        v3_declared = workflow_v3.compatible_v3(text) or workflow_v3.marker_version(text) == "v3"
-        if not v3_declared:
+        # Dispatch by the version the document declares, and only here.  The
+        # Gauntlet activation gate deliberately does not do this: refusing an
+        # older document there removes a *capability*.  Refusing one here would
+        # remove a *check*, dropping a v3 repository onto the unauthenticated v2
+        # checkpoint path -- the quiet downgrade this function exists to prevent.
+        # A markerless human equivalent is placed by which frontier it satisfies.
+        marker = workflow_v4.marker_version(text)
+        if marker == "v4" or (marker is None and workflow_v4.compatible_v4(text)):
+            gate_module = workflow_v4
+        elif marker == "v3" or (marker is None and workflow_v3.compatible_v3(text)):
+            gate_module = workflow_v3
+        else:
+            # v2, or a document declaring nothing this runtime knows: byte
+            # compatible lifecycle, exactly as before.
             return False
-        gate = workflow_v3.execution_gate(text)
-    except workflow_v3.Failure as exc:
+        gate = gate_module.execution_gate(text)
+    # Both classes are named Failure and both descend from the v3 definition,
+    # but they are not the same object here: workflow_v4 re-exports the Failure
+    # of its *own* internally loaded v3, while grill_core_module hands back a
+    # separately executed workflow_v3.  Catching only one lets the other escape
+    # this boundary as UNEXPECTED-FAILURE.
+    except (workflow_v3.Failure, workflow_v4.Failure) as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.message) from exc
     if gate.status != "OK":
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(gate.code or "WORKFLOW_INCOMPATIBLE"), "WORKFLOW.md")
@@ -3233,7 +3270,7 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SHIP-GATE", args.step)
             if args.step == "ship":
                 require_converged_runs(root, args.work_id)
-            if v3_checkpoint_attestation_required(root):
+            if checkpoint_attestation_required(root):
                 attestation_result = verify_checkpoint_attestation(
                     root,
                     development,

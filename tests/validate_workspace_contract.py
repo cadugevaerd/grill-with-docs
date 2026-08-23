@@ -275,7 +275,7 @@ class WorkspaceV2Contract(unittest.TestCase):
         self.assertFalse((self.root / ".grill/global").exists())
         self.assertEqual((self.root / "WORKFLOW.md").read_bytes(), WORKFLOW_TEMPLATE.read_bytes())
         state = json.loads((first / "state.json").read_text(encoding="utf-8"))
-        self.assertEqual(state["workflow"]["version"], "v2")
+        self.assertEqual(state["workflow"]["schema"], "v2")
 
     def test_v2_item_rejects_durable_worker_controls_without_workspace_mutation(self) -> None:
         """New FASE-002 controls must not upgrade or otherwise disturb V2 items."""
@@ -941,7 +941,7 @@ class WorkspaceV2Contract(unittest.TestCase):
         target = self.root / ".grill/work-items/state-migration/state.json"
         state = json.loads(target.read_text(encoding="utf-8"))
         self.assertEqual(state["work_id"], "state-migration")
-        self.assertEqual(state["workflow"]["version"], "v2")
+        self.assertEqual(state["workflow"]["schema"], "v2")
         generated = target.read_bytes()
         process, payload = invoke(*arguments)
         self.assertEqual((process.returncode, payload["verdict"]), (0, "REUSED"))

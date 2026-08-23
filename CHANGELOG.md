@@ -1,5 +1,45 @@
 # Changelog
 
+## 5.0.0
+
+BREAKING: v3 deixa de ser superfície de execução. `EXECUTABLE_VERSIONS` passa a
+`("v4",)` e ganha ao lado `KNOWN_VERSIONS = ("v3", "v4")`, a tupla das versões
+que o runtime ainda sabe **ler**. As cinco tabelas por versão do SSOT continuam
+chaveadas por `KNOWN_VERSIONS`, nunca por `EXECUTABLE_VERSIONS`: elas são
+indexadas pela versão que um activation record imutável declara, e perder a
+chave `v3` levantaria `KeyError` sobre recibos que este build não cunhou, em vez
+de devolver veredito sobre eles. Nenhum bundle precisa migrar.
+
+BREAKING: o bloco `workflow` do `state.json` passa a gravar `schema` no lugar de
+`version`, com o mesmo valor `"v2"`. O campo nunca rastreou a versão do
+`WORKFLOW.md` — quem faz isso é `development.workflow_version` — e o nome antigo
+fazia um bundle v4 com `"v2"` ali parecer inconsistente. A leitura é dual e
+permanente: bundles já materializados continuam auditáveis sem reescrita.
+
+- `gauntlet-init` reprovava com `WORKFLOW-INCOMPATIBLE` em qualquer repositório
+  na frontier ativa. `grill_workspace.py` não importava `workflow_v4` e injetava
+  `workflow_v3` no gate do Gauntlet, cujo `execution_gate` recusa marcador
+  diferente de `v3`. O mesmo defeito atingia `--rebind-workflow`. Os cinco
+  sítios que avaliam elegibilidade passam a usar o módulo da frontier ativa, e o
+  parâmetro injetado deixa de se chamar `workflow_v3` — agora `workflow_gate`,
+  que nomeia o papel em vez de uma versão.
+- `checkpoint_attestation_required` (antes `v3_checkpoint_attestation_required`)
+  perguntava apenas por v3, então um documento v4 caía no `return False` e o
+  `ship` completava com o gate de atestação silenciosamente desligado — a
+  degradação silenciosa para o caminho não autenticado que a função existe para
+  impedir. Passa a despachar o gate pela versão que o documento declara, de modo
+  que v3 mantém a atestação que sempre teve e v4 ganha a que faltava.
+- `grill_workspace.py` deixa de duplicar as tabelas do SSOT e passa a ler
+  `workflow_versions`. Era a causa estrutural do defeito acima: o arquivo
+  declarava `ACTIVE_WORKFLOW_VERSION = "v4"` numa constante própria e injetava o
+  gate v3 algumas centenas de linhas abaixo, sem que nada reprovasse.
+- As suítes que exercitam `gauntlet-init` deixam de materializar fixture v3 com
+  o migrador v3 e passam a materializar a frontier lida de `ACTIVE_VERSION`,
+  incluindo registry, catálogo, snapshot de confiança e política de tier. A
+  suíte inteira não continha uma única ocorrência de `workflow_v4`: writer e
+  reader eram a mesma versão e concordavam por construção, que foi como 1233
+  testes conviveram com o defeito.
+
 ## 4.0.1
 
 - `grill_status.classify_item` passa a julgar cada bundle contra a sequência que

@@ -19,8 +19,9 @@ step came from) and for diagnostics, never as the source of the v4 order.
 """
 from __future__ import annotations
 
-#: Canonical order of the v3 cycle. Frozen: consumers with a v3 WORKFLOW.md
-#: materialised keep executing against this exact tuple forever.
+#: Canonical order of the v3 cycle. Frozen: a bundle or receipt minted under v3
+#: keeps being read against this exact tuple forever, even though v3 is no
+#: longer an execution surface (see EXECUTABLE_VERSIONS).
 SEQUENCE_V3 = (
     "specify",
     "plan",
@@ -154,13 +155,39 @@ DEVELOPMENT_SCHEMA_BY_VERSION = {
     "v4": "grill-development/v2",
 }
 
-#: Workflow versions whose documents the runtime can execute. v2 remains
-#: readable and bootstrappable but was never an execution surface.
-EXECUTABLE_VERSIONS = ("v3", "v4")
+#: Workflow versions whose documents the runtime can execute. v3 was an
+#: execution surface until the gate moved to the v4 frontier; v2 never was.
+#: Shrinking this tuple is a deprecation, not a cleanup: it removes a
+#: capability a consumer had.
+EXECUTABLE_VERSIONS = ("v4",)
 
-#: The version this build ships as its default execution surface. v3 stays
-#: readable and executable for a consumer that has not migrated yet.
+#: Workflow versions the runtime must still be able to *read*. Executing and
+#: knowing how to read are different powers and this module keeps them apart:
+#: activation receipts are immutable and get revalidated by later builds, and a
+#: bundle written under an older sequence keeps projecting against the sequence
+#: it declares. Every per-version table below is keyed by this tuple, never by
+#: EXECUTABLE_VERSIONS -- dropping a key here would raise KeyError on a receipt
+#: this build did not mint, instead of returning a verdict about it.
+#: Invariant, tested: set(EXECUTABLE_VERSIONS) <= set(KNOWN_VERSIONS).
+KNOWN_VERSIONS = ("v3", "v4")
+
+#: The version this build executes. Kept distinct from KNOWN_VERSIONS so the
+#: gate has one obvious source and cannot drift from the tables.
 ACTIVE_VERSION = "v4"
+
+#: ``state.json`` development schema -> the workflow version it speaks, or None
+#: when the document declares its own. Frozen literal, never the inverse of
+#: DEVELOPMENT_SCHEMA_BY_VERSION: /v1 predates ``workflow_version`` and can only
+#: mean v3, while /v2 declares its version explicitly, so it maps to None rather
+#: than to v4. Computing this by inverting the other table would lose exactly
+#: that distinction.
+DEVELOPMENT_SCHEMAS = {
+    "grill-development/v1": "v3",
+    "grill-development/v2": None,
+}
+
+#: The development schema a bundle created by this build declares.
+ACTIVE_DEVELOPMENT_SCHEMA = "grill-development/v2"
 
 #: Every canonical step id across every executable version. Reading a v3
 #: receipt after this build ships still has to recognise ``agent-execute`` as a

@@ -193,10 +193,23 @@ class Registry(Base):
         self.assertEqual(STEPS, ss.SEQUENCE)
 
     def test_sequence_matches_the_live_workspace_and_status_constants(self):
+        """The CLI must agree with the registry on the canonical order.
+
+        ``grill_workspace.py`` used to restate the sequence as a literal and this
+        test compared the two texts.  Text parity is the weakest possible form of
+        SSOT: it only catches a drift someone already had to introduce by hand,
+        and it happily passed while that same file declared the active frontier
+        in one constant and injected the previous version's gate in another.  It
+        now reads ``workflow_versions`` instead, so the assertion is that the
+        restatement is *gone* and the read is present.  ``grill_status.py`` still
+        carries its literal and is still checked textually.
+        """
         text = (SCRIPTS / "grill_workspace.py").read_text(encoding="utf-8")
         status = (SCRIPTS / "grill_status.py").read_text(encoding="utf-8")
         literal = "SEQUENCE = " + json.dumps(list(STEPS)).replace('", "', '", "')
-        self.assertIn(literal, text)
+        self.assertNotIn(literal, text)
+        self.assertIn('grill_core_module("workflow_versions")', text)
+        self.assertEqual(tuple(ss.SEQUENCE), STEPS)
         self.assertIn(literal, status)
         template = json.loads((REPO / "plugin/skills/grill-with-docs/assets/state.template.json").read_text())
         self.assertEqual(tuple(template["development"]["sequence"]), STEPS)
