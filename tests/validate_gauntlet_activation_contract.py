@@ -29,11 +29,32 @@ SKILL = REPO / "plugin/skills/grill-with-docs"
 SCRIPTS = SKILL / "scripts"
 ASSETS = SKILL / "assets"
 WORKSPACE = SCRIPTS / "grill_workspace.py"
-WORKFLOW_MIGRATOR = SCRIPTS / "grill_core/workflow_v3.py"
+# The migrator is resolved from the SSOT's active frontier, never pinned to a
+# version literal. This is the whole point of the anchor: when ACTIVE_VERSION
+# moves, these fixtures materialise the new frontier and every suite below
+# exercises it at the CLI boundary. A literal here is what let the CLI inject
+# the previous version's gate while the tests kept proving the old one worked.
+def _load_workflow_versions():
+    spec = importlib.util.spec_from_file_location(
+        "grill_core_workflow_versions_fixture", SCRIPTS / "grill_core/workflow_versions.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+WORKFLOW_VERSIONS = _load_workflow_versions()
+ACTIVE_WORKFLOW_VERSION = WORKFLOW_VERSIONS.ACTIVE_VERSION
+WORKFLOW_MIGRATOR = SCRIPTS / f"grill_core/workflow_{ACTIVE_WORKFLOW_VERSION}.py"
 WORKFLOW_V2_TEMPLATE = ASSETS / "WORKFLOW.template.md"
-REGISTRY = ASSETS / "workflow-step-skills.json"
-CATALOG = ASSETS / "claude-code-local-skills.catalog.json"
-TRUSTED_CATALOGS = ASSETS / "workflow-trusted-catalogs.json"
+# Assets follow the same anchor as the migrator: each version owns its own
+# registry, catalogue and trust snapshot, and the fixture must read the ones the
+# active frontier actually resolves. Pinning the v3 filenames here is what made
+# these tests keep proving the previous frontier worked.
+REGISTRY = ASSETS / WORKFLOW_VERSIONS.REGISTRY_FILENAME_BY_VERSION[ACTIVE_WORKFLOW_VERSION]
+CATALOG = ASSETS / WORKFLOW_VERSIONS.CATALOG_FILENAME_BY_VERSION[ACTIVE_WORKFLOW_VERSION]
+TRUSTED_CATALOGS = ASSETS / WORKFLOW_VERSIONS.TRUSTED_CATALOGS_FILENAME_BY_VERSION[ACTIVE_WORKFLOW_VERSION]
+CATALOG_ID = WORKFLOW_VERSIONS.CATALOG_ID_BY_VERSION[ACTIVE_WORKFLOW_VERSION]
 WORK_ID = "gauntlet-ready-a1b2"
 SECOND_WORK_ID = "gauntlet-second-b2c3"
 CONFIG_RELATIVE = ".grill/gauntlet.yaml"
@@ -46,19 +67,10 @@ if str(SCRIPTS) not in sys.path:
 from grill_core import store
 
 ADAPTER = "claude-code-skill/v1"
-MINIMUM_BY_STEP = {
-    "specify": "large",
-    "plan": "large",
-    "checklist": "small",
-    "tasks": "medium",
-    "analyze": "large",
-    "agent-assign": "large",
-    "agent-execute": "medium",
-    "converge": "medium",
-    "verify": "medium",
-    "review": "large",
-    "ship": "large",
-}
+# Read from the SSOT for the active frontier. Restating the floors here is how
+# this file kept asserting the previous version's step names ("agent-assign",
+# "agent-execute") long after the frontier had renamed them.
+MINIMUM_BY_STEP = dict(WORKFLOW_VERSIONS.TIER_POLICY_BY_VERSION[ACTIVE_WORKFLOW_VERSION])
 MAPPED_SKILL_REASONS = (
     "INVALID_DIGEST", "INVALID_RESOLVER_VERSION", "INVALID_VERSION", "UNKNOWN_RUNTIME", "UNKNOWN_STEP",
     "RUNTIME_UNSUPPORTED", "RUNTIME_ENTRYPOINT_UNPROVEN", "ADAPTER_MISMATCH", "ENTRYPOINT_ABSENT",
@@ -208,7 +220,7 @@ def migrate_fixture_workflow(root: Path) -> None:
         root,
         "--apply",
         "--expected-sha256",
-        preview["current_sha256"],
+        preview.get("current_sha256", preview.get("sha256")),
     )
     require_success(process, payload, "APPLIED")
 
@@ -522,7 +534,7 @@ class GauntletInitContract(unittest.TestCase):
         self.assertEqual(
             record["workflow"],
             {
-                "version": "v3",
+                "version": ACTIVE_WORKFLOW_VERSION,
                 "sha256": sha256_bytes(workflow_bytes),
                 "registry_sha256": "sha256:" + sha256_bytes(REGISTRY.read_bytes()),
             },
@@ -530,8 +542,15 @@ class GauntletInitContract(unittest.TestCase):
         self.assertEqual(record["runtime"], {"id": "claude", "adapter": ADAPTER})
         self.assertEqual(catalog["schema"], "skill-catalog/v1")
         self.assertEqual(catalog["runtime"], "claude")
-        self.assertEqual(catalog["catalog_id"], "claude-code-local-skills")
-        self.assertEqual(len(catalog["entries"]), 11)
+        self.assertEqual(catalog["catalog_id"], CATALOG_ID)
+        # One entry per canonical step of the active sequence, plus the single
+        # supplemental (markdown-maintenance) entry. Still a tripwire against
+        # silent catalogue growth, but one that moves with the frontier instead
+        # of pinning a count that only ever held for one version.
+        self.assertEqual(
+            len(catalog["entries"]),
+            len(WORKFLOW_VERSIONS.SEQUENCE_BY_VERSION[ACTIVE_WORKFLOW_VERSION]) + 1,
+        )
         self.assertEqual(trusted["catalogs"][catalog["catalog_id"]], catalog["catalog_sha256"])
         self.assertEqual(
             record["catalog"],
@@ -554,14 +573,14 @@ class GauntletInitContract(unittest.TestCase):
             # Prime the exact Gauntlet module the copied public CLI will call.
             copied_cli.grill_core_module("gauntlet")
 
-            trust_path = skill / "assets/workflow-trusted-catalogs.json"
+            trust_path = skill / f"assets/{TRUSTED_CATALOGS.name}"
             authorized_bytes = trust_path.read_bytes()
             authorized_document = strict_json_bytes(authorized_bytes, source=str(trust_path))
             authorized_catalog_sha256 = authorized_document["catalogs"][
-                "claude-code-local-skills"
+                CATALOG_ID
             ]
             tampered_document = json.loads(json.dumps(authorized_document))
-            tampered_document["catalogs"]["claude-code-local-skills"] = "sha256:" + "0" * 64
+            tampered_document["catalogs"][CATALOG_ID] = "sha256:" + "0" * 64
             tampered_bytes = (
                 json.dumps(tampered_document, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
             ).encode("utf-8")
@@ -575,7 +594,7 @@ class GauntletInitContract(unittest.TestCase):
                 observations["snapshots"] += 1
                 self.assertEqual(snapshot[0], authorized_bytes)
                 self.assertEqual(
-                    snapshot[1]["claude-code-local-skills"],
+                    snapshot[1][CATALOG_ID],
                     authorized_catalog_sha256,
                 )
                 if observations["snapshots"] == 1:
@@ -1165,32 +1184,32 @@ class GauntletInitContract(unittest.TestCase):
 
     def test_catalog_registry_and_trust_asset_failures_are_precise_and_non_mutating(self) -> None:
         def catalog_content_tamper(skill: Path) -> None:
-            path = skill / "assets/claude-code-local-skills.catalog.json"
+            path = skill / f"assets/{CATALOG.name}"
             document = strict_json_bytes(path.read_bytes(), source=str(path))
             document["entries"][0]["content_sha256"] = "sha256:" + "0" * 64
             path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
         def catalog_missing(skill: Path) -> None:
-            (skill / "assets/claude-code-local-skills.catalog.json").unlink()
+            (skill / f"assets/{CATALOG.name}").unlink()
 
         def registry_byte_drift(skill: Path) -> None:
-            path = skill / "assets/workflow-step-skills.json"
+            path = skill / f"assets/{REGISTRY.name}"
             path.write_bytes(path.read_bytes() + b"\n")
 
         def trust_pin_tamper(skill: Path) -> None:
-            path = skill / "assets/workflow-trusted-catalogs.json"
+            path = skill / f"assets/{TRUSTED_CATALOGS.name}"
             document = strict_json_bytes(path.read_bytes(), source=str(path))
-            document["catalogs"]["claude-code-local-skills"] = "sha256:" + "0" * 64
+            document["catalogs"][CATALOG_ID] = "sha256:" + "0" * 64
             path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
         def trust_schema_tamper(skill: Path) -> None:
-            path = skill / "assets/workflow-trusted-catalogs.json"
+            path = skill / f"assets/{TRUSTED_CATALOGS.name}"
             document = strict_json_bytes(path.read_bytes(), source=str(path))
             document["schema"] = "workflow-trusted-catalogs/tampered"
             path.write_text(json.dumps(document, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
         def trust_missing(skill: Path) -> None:
-            (skill / "assets/workflow-trusted-catalogs.json").unlink()
+            (skill / f"assets/{TRUSTED_CATALOGS.name}").unlink()
 
         cases = (
             ("catalog-content", catalog_content_tamper, "CATALOG-CONTENT-MISMATCH"),
@@ -1338,9 +1357,9 @@ class GauntletInitContract(unittest.TestCase):
 
     def test_status_projects_each_shipped_registry_catalog_and_trust_drift_as_stale(self) -> None:
         mutations = (
-            ("registry", "assets/workflow-step-skills.json"),
-            ("catalog", "assets/claude-code-local-skills.catalog.json"),
-            ("trust", "assets/workflow-trusted-catalogs.json"),
+            ("registry", f"assets/{REGISTRY.name}"),
+            ("catalog", f"assets/{CATALOG.name}"),
+            ("trust", f"assets/{TRUSTED_CATALOGS.name}"),
         )
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)

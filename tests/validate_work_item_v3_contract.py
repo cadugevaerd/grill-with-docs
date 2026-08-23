@@ -13,6 +13,8 @@ V3_TEMPLATE=PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.v3.template.md'
 sys.path.insert(0,str(SCRIPTS))
 from grill_core import work_item_v3 as M  # noqa: E402
 from grill_core import workflow_v3 as WV3  # noqa: E402
+from grill_core import workflow_v4 as WV4  # noqa: E402
+from grill_core import workflow_versions as WV  # noqa: E402
 
 WORK_ID='wx'
 SOURCE={'kind':'backlog-request','request_key':'a'*64,'relation':'non-blocking','source_ref':'gauntlet/run-1/F-003'}
@@ -144,6 +146,23 @@ def render_v3_workflow_bytes():
  assert '__REGISTRY_SHA256__' not in rendered
  return rendered.encode('utf-8')
 
+# Rebind binds a work item to a workflow it is allowed to execute, so its
+# fixtures must materialise the active frontier, not a version literal. The v3
+# renderer above stays for the tests that are genuinely about a v3 document.
+ACTIVE_WORKFLOW_VERSION=WV.ACTIVE_VERSION
+ACTIVE_GATE={'v3':WV3,'v4':WV4}[ACTIVE_WORKFLOW_VERSION]
+
+def render_active_workflow_bytes():
+ rendered=WV4.render_v4() if ACTIVE_WORKFLOW_VERSION=='v4' else render_v3_workflow_bytes()
+ assert b'__REGISTRY_SHA256__' not in rendered
+ return rendered
+
+def active_registry_pin():
+ """The registry digest the active frontier bakes into its document."""
+ if ACTIVE_WORKFLOW_VERSION=='v4':
+  return WV4.registry_state()[1]
+ return WV3.registry_state()['sha256']
+
 def invoke_workspace(*args):
  completed=subprocess.run([sys.executable,str(WORKSPACE),*(str(value) for value in args)],text=True,capture_output=True)
  lines=completed.stdout.splitlines()
@@ -163,7 +182,7 @@ def build_rebind_repo(root):
  build_v2_repo(root)
  migrated,payload=invoke_workspace('migrate-v3',root,'--work-id',WORK_ID,'--apply')
  assert migrated.returncode==0 and payload.get('verdict')=='APPLIED',payload
- (root/'WORKFLOW.md').write_bytes(render_v3_workflow_bytes())
+ (root/'WORKFLOW.md').write_bytes(render_active_workflow_bytes())
 
 class WorkItemV3Contract(unittest.TestCase):
  @classmethod
@@ -802,11 +821,15 @@ class RebindWorkflowContract(unittest.TestCase):
   workflow_a=workflow.read_bytes(); workflow_b=workflow_a+b'\n'
   digest_a=M.hash_bytes(workflow_a); digest_b=M.hash_bytes(workflow_b)
   self.assertNotEqual(digest_a,digest_b)
-  self.assertEqual(WV3.execution_gate(workflow_a.decode('utf-8')).status,'OK')
-  self.assertEqual(WV3.execution_gate(workflow_b.decode('utf-8')).status,'OK')
+  self.assertEqual(ACTIVE_GATE.execution_gate(workflow_a.decode('utf-8')).status,'OK')
+  self.assertEqual(ACTIVE_GATE.execution_gate(workflow_b.decode('utf-8')).status,'OK')
 
-  workflow_v3=CLI.grill_core_module('workflow_v3')
-  original_load=workflow_v3.load_workflow; observed={'loads':0}
+  # Instrument the module the CLI actually loads for the gate. Patching the
+  # v3 module observed zero loads once rebind moved to the active frontier --
+  # a green assertion about a call that no longer happened.
+  gate_module_name='workflow_'+ACTIVE_WORKFLOW_VERSION
+  gate_module=CLI.grill_core_module(gate_module_name)
+  original_load=gate_module.load_workflow; observed={'loads':0}
   def publish_b_after_first_load(root):
    loaded=original_load(root); observed['loads']+=1
    if observed['loads']==1:
@@ -814,8 +837,8 @@ class RebindWorkflowContract(unittest.TestCase):
     workflow.write_bytes(workflow_b)
    return loaded
 
-  CLI._GRILL_CORE['workflow_v3']=workflow_v3
-  with mock.patch.object(workflow_v3,'load_workflow',side_effect=publish_b_after_first_load):
+  CLI._GRILL_CORE[gate_module_name]=gate_module
+  with mock.patch.object(gate_module,'load_workflow',side_effect=publish_b_after_first_load):
    returncode,payload,stderr=self.in_process('--apply')
   self.assertEqual(stderr,'')
   self.assertEqual(observed['loads'],2)
@@ -839,7 +862,7 @@ class RebindWorkflowContract(unittest.TestCase):
     self.assertFalse((self.root/'.grill/locks'/f'{WORK_ID}.lock').exists())
 
  def test_rebind_forged_v3_registry_pin_is_blocked_without_any_write(self):
-  workflow=self.root/'WORKFLOW.md'; live_pin=WV3.registry_state()['sha256'].encode('ascii')
+  workflow=self.root/'WORKFLOW.md'; live_pin=active_registry_pin().encode('ascii')
   forged=workflow.read_bytes().replace(live_pin,b'sha256:'+b'0'*64)
   self.assertNotEqual(forged,workflow.read_bytes())
   workflow.write_bytes(forged); before=snapshot(self.root)
