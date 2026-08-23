@@ -1,0 +1,219 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "GO",
+  "backlog_skipped": true,
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "ab07e134c87b01f897135df31294269a52b4a76e145006af36ade7e2ed4623f2",
+    "state": "present"
+  },
+  "development": {
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-workflow-version-derivada/spec.md",
+            "sha256": "b9ee547148986177da282a663e261ba145a8ef94307322041e8145b66cc68f6c"
+          },
+          {
+            "path": "specs/024-workflow-version-derivada/checklists/requirements.md",
+            "sha256": "2e79cdbf24920ab63c98d6158310feaafc64c9c14b72128d728233d60acbcbbb"
+          }
+        ],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-workflow-version-derivada/plan.md",
+            "sha256": "2bae846d334f346039747a475967b5d61b9039f96d983e806909b5980a9d4920"
+          },
+          {
+            "path": "specs/024-workflow-version-derivada/research.md",
+            "sha256": "8f16bdfca95ca3b5a8fbfd2a2731e46727f948bf4118b1738ea835d847aad386"
+          },
+          {
+            "path": "specs/024-workflow-version-derivada/data-model.md",
+            "sha256": "2e01eb6bd6ebbfc7c0016bc3a7b9db0214d7960d295d0b990fd8581423ea1295"
+          },
+          {
+            "path": "specs/024-workflow-version-derivada/contracts/cli.md",
+            "sha256": "98af510f2aaacf53173980f01cbda4fb996b71758e1c2636a7de107d68c30d32"
+          },
+          {
+            "path": "specs/024-workflow-version-derivada/quickstart.md",
+            "sha256": "95ee7dc1920ecb542c3aa76b7b176a1e68301bcbba0669276c5acf78e50ab108"
+          }
+        ],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-workflow-version-derivada/checklists/contract.md",
+            "sha256": "e5130c9529bad5c26bc756d1e9a15d69f4771f88ca13fef0cc6f77be7aaeb588"
+          }
+        ],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-workflow-version-derivada/tasks.md",
+            "sha256": "54ae3f97b2f480c3073cf9918f5739822d1b01aa00548dd943b15ac948e33e40"
+          }
+        ],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-workflow-version-derivada/tasks.md",
+            "sha256": "54ae3f97b2f480c3073cf9918f5739822d1b01aa00548dd943b15ac948e33e40"
+          },
+          {
+            "path": "specs/024-workflow-version-derivada/data-model.md",
+            "sha256": "2e01eb6bd6ebbfc7c0016bc3a7b9db0214d7960d295d0b990fd8581423ea1295"
+          },
+          {
+            "path": "specs/024-workflow-version-derivada/checklists/contract.md",
+            "sha256": "e5130c9529bad5c26bc756d1e9a15d69f4771f88ca13fef0cc6f77be7aaeb588"
+          }
+        ],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-workflow-version-derivada/execution-dag.json",
+            "sha256": "6f3166ea07a0c81cab5a4734ad2a717f2bd39407867368fe94678912b8e9d8a9"
+          },
+          {
+            "path": "specs/024-workflow-version-derivada/partition-report.json",
+            "sha256": "550dc75e455a0af7a88372149fab2fc60c5689650ea4887bf23e138b923d1a6b"
+          },
+          {
+            "path": "specs/024-workflow-version-derivada/tasks.md",
+            "sha256": "54ae3f97b2f480c3073cf9918f5739822d1b01aa00548dd943b15ac948e33e40"
+          }
+        ],
+        "execution_branch": "fix/audit",
+        "reason": "",
+        "state": "complete",
+        "step": "partition"
+      }
+    ],
+    "current_step": "implement-parallel",
+    "execution_branch": "fix/audit",
+    "renamed_from": {},
+    "schema": "grill-development/v2",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "partition",
+      "implement-parallel",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "pending",
+      "implement-parallel": "pending",
+      "partition": "complete",
+      "plan": "complete",
+      "review": "pending",
+      "ship": "pending",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "pending"
+    },
+    "workflow_version": "v4"
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "in-progress",
+  "version": "1.2.0",
+  "work_id": "fix-audit-workflow-version-2a9e7a7ba01f42dcb24b3bb83d801b03",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0",
+    "version": "v2"
+  }
+}

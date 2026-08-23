@@ -1,0 +1,46 @@
+{
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "conflicts-with-adrs": [],
+  "depends-on-work": [],
+  "immutable": {
+    "base_commit": "cb20ddede5fb3dc7ff73d59fd613a30158c3ffd8",
+    "base_ref": "HEAD",
+    "branch": "fix/audit",
+    "constitution": {
+      "path": ".specify/memory/constitution.md",
+      "sha256": "ab07e134c87b01f897135df31294269a52b4a76e145006af36ade7e2ed4623f2",
+      "state": "present"
+    },
+    "head": "cb20ddede5fb3dc7ff73d59fd613a30158c3ffd8",
+    "schema": "grill-work-item/v2",
+    "slug": "audit-workflow-version",
+    "type": "fix",
+    "work_id": "fix-audit-workflow-version-2a9e7a7ba01f42dcb24b3bb83d801b03",
+    "workflow": {
+      "path": "WORKFLOW.md",
+      "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0"
+    }
+  },
+  "immutable_sha256": "915b31b6975d880aa4be2d4d5289bef57d94fc13f0f383bb5fda0c2a4b8d7ddf",
+  "initial_artifacts": {
+    "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
+    "CONSTITUTION-CHECK.md": "232af76d38b422234c0b59f3480ac798b0c95819883924d77e33017054c3d8d6",
+    "CONTEXT.md": "046a1d433eab29a57783aae06ea414afc271d25bcc7372290ccde7f00fd97ee7",
+    "DECISION-BACKLOG.md": "0ead85c254fb8b2c6a817a2cebaad3594fe88019041c904ec9176af012f806ab",
+    "DECISION-FRONTIER.md": "3b129d57ccac57b1af5096e1639df58a20190abcef54382e0d948d778b44e0d6",
+    "DELIVERY-MAP.md": "26ce55d35ddb5c916fb1101e760320e51e5b57b205a924e67cbac6a720808d17",
+    "PLAN-CONTEXT.md": "9f43372c57b4ab07edece509be37d7ea7204ccf5300a984e2cc69a6216d82ded",
+    "ROADMAP.md": "9c68e05c6993da8b319d96716b6d9fc90329af9876fdc74699eca4ee8b556734",
+    "ROUND-LOG.jsonl": "fee46cc9873273ad4d3bc6abb41ca3bd30aacbe392b137d8c8b6c97b6aca13e7",
+    "handoffs/FASE-001-SPECIFY-HANDOFF.md": "3cfe46ee546a9c46cf78fd7bf59ca897df07d24431a46ab4b61bf147fe919a58",
+    "state.json": "4572d3c7d885b5c1813ac2b86376f05e15dd46f76fec2fa634f598b45aed9cca"
+  },
+  "schema": "grill-work-item/v2",
+  "scope": {
+    "paths": []
+  }
+}
