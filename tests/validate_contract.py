@@ -375,6 +375,42 @@ class AuditorContract(unittest.TestCase):
         self.assertEqual(go.returncode, 0, go.stdout + go.stderr)
         self.assertEqual(blocked.returncode, 2, blocked.stdout + blocked.stderr)
 
+    def test_workflow_block_reads_both_schema_and_legacy_version_spellings(self) -> None:
+        """The committed fixtures still carry the pre-rename ``version`` key.
+
+        ``state.json`` names this block's own frozen shape tag, which never
+        tracked the WORKFLOW.md document version. It was renamed to ``schema``
+        because the old name invited reading a v4 bundle carrying "v2" here as
+        an inconsistency. The read is dual and permanent -- materialised bundles
+        are not rewritten -- so both spellings must reach the same verdict.
+        """
+        legacy = run_audit(FIXTURES / "go-project")
+        self.assertEqual(legacy.returncode, 0, legacy.stdout + legacy.stderr)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:
+            renamed = Path(scratch) / "go-project"
+            shutil.copytree(FIXTURES / "go-project", renamed)
+            state_path = renamed / "state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(state["workflow"].pop("version"), "v2")
+            state["workflow"]["schema"] = "v2"
+            state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            current = run_audit(renamed)
+        self.assertEqual(current.returncode, 0, current.stdout + current.stderr)
+
+    def test_workflow_block_still_refuses_an_unknown_shape_tag(self) -> None:
+        """Dual-read widens the spelling, never the accepted value."""
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as scratch:
+            forged = Path(scratch) / "go-project"
+            shutil.copytree(FIXTURES / "go-project", forged)
+            state_path = forged / "state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            state["workflow"].pop("version")
+            state["workflow"]["schema"] = "v9"
+            state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            result = run_audit(forged)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("workflow schema divergence", result.stdout + result.stderr)
+
     def test_blocked_is_reachable_without_false_handoff(self) -> None:
         shutil.rmtree(self.root)
         self.root.mkdir()

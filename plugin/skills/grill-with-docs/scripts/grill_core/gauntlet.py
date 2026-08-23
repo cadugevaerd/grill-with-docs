@@ -456,16 +456,16 @@ def _skill_error_code(error: Any, step_skills: Any) -> str:
 
 def current_activation(
     *, root: Path, work_id: str, item_dir_fd: int, workflow_bytes: bytes, workflow_text: str,
-    workflow_v3: Any, work_item_v3: Any, step_skills: Any, work_item_bytes: bytes | None = None,
+    workflow_gate: Any, work_item_v3: Any, step_skills: Any, work_item_bytes: bytes | None = None,
 ) -> dict[str, Any]:
     """Prove all immutable inputs required to create or use an activation."""
     try:
-        gate = workflow_v3.execution_gate(workflow_text)
-    except workflow_v3.Failure as exc:
-        code = getattr(workflow_v3, "CLI_CODE_ALIASES", {}).get(exc.code, _public_code(exc.code))
+        gate = workflow_gate.execution_gate(workflow_text)
+    except workflow_gate.Failure as exc:
+        code = getattr(workflow_gate, "CLI_CODE_ALIASES", {}).get(exc.code, _public_code(exc.code))
         raise _fail(code, "workflow eligibility proof failed") from exc
     if gate.status != "OK":
-        code = getattr(workflow_v3, "CLI_CODE_ALIASES", {}).get(gate.code, _public_code(gate.code or "WORKFLOW_INCOMPATIBLE"))
+        code = getattr(workflow_gate, "CLI_CODE_ALIASES", {}).get(gate.code, _public_code(gate.code or "WORKFLOW_INCOMPATIBLE"))
         raise _fail(code, "workflow is not eligible for Gauntlet activation")
     if work_item_bytes is None:
         try:
@@ -538,13 +538,13 @@ def current_activation(
 
 def activate(
     *, root: Path, work_id: str, max_workers: Any, item_dir_fd: int, grill_fd: int,
-    workflow_bytes: bytes, workflow_text: str, workflow_v3: Any, work_item_v3: Any, step_skills: Any,
+    workflow_bytes: bytes, workflow_text: str, workflow_gate: Any, work_item_v3: Any, step_skills: Any,
 ) -> str:
     """Create or reuse an activation while the caller owns both write locks."""
     workers = _validate_worker_count(max_workers)
     proof = current_activation(
         root=root, work_id=work_id, item_dir_fd=item_dir_fd, workflow_bytes=workflow_bytes,
-        workflow_text=workflow_text, workflow_v3=workflow_v3, work_item_v3=work_item_v3, step_skills=step_skills,
+        workflow_text=workflow_text, workflow_gate=workflow_gate, work_item_v3=work_item_v3, step_skills=step_skills,
     )
     record = {
         **proof,
@@ -628,7 +628,7 @@ def _activation_is_stale(
 
 def activation_state(
     *, root: Path, work_id: str, item_dir_fd: int, grill_fd: int, workflow_bytes: bytes,
-    workflow_text: str, workflow_v3: Any, work_item_v3: Any, step_skills: Any,
+    workflow_text: str, workflow_gate: Any, work_item_v3: Any, step_skills: Any,
 ) -> tuple[str, str | None]:
     """Return the closed read-only activation projection and optional reason."""
     document, _, _ = _read_config(grill_fd)
@@ -643,7 +643,7 @@ def activation_state(
     try:
         proof = current_activation(
             root=root, work_id=work_id, item_dir_fd=item_dir_fd, workflow_bytes=workflow_bytes,
-            workflow_text=workflow_text, workflow_v3=workflow_v3, work_item_v3=work_item_v3,
+            workflow_text=workflow_text, workflow_gate=workflow_gate, work_item_v3=work_item_v3,
             step_skills=step_skills, work_item_bytes=work_item_bytes,
         )
     except GauntletError as exc:

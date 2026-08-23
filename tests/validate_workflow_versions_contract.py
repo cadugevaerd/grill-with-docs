@@ -171,7 +171,16 @@ class ExecutorAndAssets(unittest.TestCase):
         self.assertEqual(wv.DEVELOPMENT_SCHEMA_BY_VERSION["v3"], "grill-development/v1")
         self.assertEqual(wv.DEVELOPMENT_SCHEMA_BY_VERSION["v4"], "grill-development/v2")
 
-    def test_all_per_version_maps_agree_on_the_executable_versions(self) -> None:
+    def test_all_per_version_maps_agree_on_the_known_versions(self) -> None:
+        """Keyed by what the runtime can *read*, not by what it can execute.
+
+        These tables are indexed by the version an immutable activation receipt
+        or a materialised bundle declares, never by the build's own frontier --
+        ``gauntlet.py`` reads ``REGISTRY_FILENAME_BY_VERSION[record_version]``
+        and ``TIER_POLICY_BY_VERSION[record_version]`` for receipts this build
+        did not mint. Binding them to EXECUTABLE_VERSIONS would turn deprecating
+        a version into a KeyError on those receipts instead of a verdict.
+        """
         for name in (
             "SEQUENCE_BY_VERSION",
             "TIER_POLICY_BY_VERSION",
@@ -180,7 +189,38 @@ class ExecutorAndAssets(unittest.TestCase):
             "DEVELOPMENT_SCHEMA_BY_VERSION",
         ):
             with self.subTest(table=name):
-                self.assertEqual(tuple(sorted(getattr(wv, name))), tuple(sorted(wv.EXECUTABLE_VERSIONS)))
+                self.assertEqual(tuple(sorted(getattr(wv, name))), tuple(sorted(wv.KNOWN_VERSIONS)))
+
+    def test_every_executable_version_is_also_a_known_version(self) -> None:
+        """Executing implies reading; the reverse is exactly what deprecation is."""
+        self.assertTrue(set(wv.EXECUTABLE_VERSIONS) <= set(wv.KNOWN_VERSIONS))
+        self.assertIn(wv.ACTIVE_VERSION, wv.EXECUTABLE_VERSIONS)
+        self.assertNotIn("v2", wv.KNOWN_VERSIONS)
+
+    def test_deprecated_versions_stay_readable(self) -> None:
+        """A version dropped from execution keeps every table it is read from."""
+        deprecated = set(wv.KNOWN_VERSIONS) - set(wv.EXECUTABLE_VERSIONS)
+        for version in deprecated:
+            with self.subTest(version=version):
+                self.assertIn(version, wv.SEQUENCE_BY_VERSION)
+                self.assertIn(version, wv.TIER_POLICY_BY_VERSION)
+                self.assertIn(version, wv.REGISTRY_FILENAME_BY_VERSION)
+                self.assertIn(version, wv.DEVELOPMENT_SCHEMA_BY_VERSION)
+
+    def test_development_schemas_is_a_frozen_literal_not_an_inversion(self) -> None:
+        """/v2 maps to None -- "read the declared version" -- not to v4.
+
+        Computing this by inverting DEVELOPMENT_SCHEMA_BY_VERSION would lose
+        exactly that distinction and make a /v2 bundle claim the build's own
+        frontier instead of the one it declares.
+        """
+        self.assertEqual(wv.DEVELOPMENT_SCHEMAS["grill-development/v1"], "v3")
+        self.assertIsNone(wv.DEVELOPMENT_SCHEMAS["grill-development/v2"])
+        inverted = {schema: version for version, schema in wv.DEVELOPMENT_SCHEMA_BY_VERSION.items()}
+        self.assertNotEqual(wv.DEVELOPMENT_SCHEMAS, inverted)
+        self.assertEqual(
+            wv.DEVELOPMENT_SCHEMA_BY_VERSION[wv.ACTIVE_VERSION], wv.ACTIVE_DEVELOPMENT_SCHEMA
+        )
 
 
 class Purity(unittest.TestCase):

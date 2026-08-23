@@ -798,8 +798,11 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
                 findings.append(f"state: {key} path divergence")
             if expected and expected.is_file() and value.get("sha256") != sha256(expected):
                 findings.append(f"state: {key} hash divergence")
-            if key == "workflow" and value.get("version") != "v2":
-                findings.append("state: workflow version divergence")
+            if key == "workflow" and value.get("schema", value.get("version")) != "v2":
+                # Dual-read, permanent rather than a migration window: bundles
+                # written before the rename keep the "version" spelling and stay
+                # auditable without being rewritten.
+                findings.append("state: workflow schema divergence")
         limits = state_data.get("limits")
         if not isinstance(limits, dict) or not limits:
             findings.append("state: limits ausente/inválido")
