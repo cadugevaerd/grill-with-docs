@@ -1,6 +1,6 @@
 {
   "active_phase": "FASE-001",
-  "audit_verdict": "GO",
+  "audit_verdict": "pending",
   "backlog_skipped": true,
   "capability": {
     "name": "module-decomposition",
@@ -13,8 +13,24 @@
     "state": "present"
   },
   "development": {
-    "audit": [],
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "ATTESTATION-REQUIRED: sob 5.0.0 checkpoint_attestation_required retorna True neste root e toda conclusao de etapa exige a cadeia canonica completa. O core valida a cadeia mas nao a emite: nao ha comando que produza skill-resolution, dispatch-intent, skill-invocation e step-output. Montar o bundle a mao seria afirmar invocacao com lease e fencing token que nao ocorreu.",
+        "state": "blocked",
+        "step": "specify"
+      }
+    ],
     "current_step": "specify",
+    "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
     "schema": "grill-development/v2",
     "sequence": [
@@ -39,7 +55,7 @@
       "plan": "pending",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
+      "specify": "blocked",
       "tasks": "pending",
       "verify": "pending"
     },
@@ -56,7 +72,7 @@
   "second_pass": {
     "new_material_dqs": 0
   },
-  "status": "ready",
+  "status": "blocked",
   "version": "1.2.0",
   "work_id": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
   "workflow": {

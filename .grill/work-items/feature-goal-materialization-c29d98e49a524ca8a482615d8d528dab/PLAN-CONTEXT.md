@@ -3,7 +3,7 @@
 ## FASE-001 — Materialização e validação do goal.md
 - phase: FASE-001
 - ADRs: ADR-0101, ADR-0102
-- BLs: none
+- BLs: BL-0101
 - delivery-units: DU-001
 - development-type: platform-devops
 
