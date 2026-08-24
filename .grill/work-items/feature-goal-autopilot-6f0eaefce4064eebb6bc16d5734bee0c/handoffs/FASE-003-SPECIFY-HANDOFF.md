@@ -1,7 +1,7 @@
 # FASE-003 — Validador e distribuição
 
 - phase: FASE-003
-- state: planned
+- state: superseded
 - roadmap: ROADMAP.md#FASE-003
 - context-refs: goal.md
 - ADRs: ADR-0003, ADR-0008

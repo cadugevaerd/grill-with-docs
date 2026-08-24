@@ -1,7 +1,7 @@
 # FASE-002 — Materialização pelo init
 
 - phase: FASE-002
-- state: planned
+- state: superseded
 - roadmap: ROADMAP.md#FASE-002
 - context-refs: goal.md, GWD
 - ADRs: ADR-0003

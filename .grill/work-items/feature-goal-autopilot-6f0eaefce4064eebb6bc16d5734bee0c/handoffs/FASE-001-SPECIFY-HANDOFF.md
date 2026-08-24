@@ -1,7 +1,7 @@
 # FASE-001 — Contrato do goal.md
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: goal.md, goal loop, ponto de interação, ciclo v4, GWD
 - ADRs: ADR-0001, ADR-0002, ADR-0004, ADR-0005, ADR-0006, ADR-0007

@@ -1,5 +1,5 @@
 {
-  "active_phase": "FASE-001",
+  "active_phase": null,
   "audit_verdict": "GO",
   "backlog_skipped": true,
   "capability": {
@@ -239,11 +239,11 @@
     "max_questions_per_run": 25,
     "max_scope_growth_streak": 3
   },
-  "milestone_status": "in-progress",
+  "milestone_status": "completed",
   "second_pass": {
     "new_material_dqs": 0
   },
-  "status": "ready",
+  "status": "complete",
   "version": "1.2.0",
   "work_id": "feature-goal-autopilot-6f0eaefce4064eebb6bc16d5734bee0c",
   "workflow": {
