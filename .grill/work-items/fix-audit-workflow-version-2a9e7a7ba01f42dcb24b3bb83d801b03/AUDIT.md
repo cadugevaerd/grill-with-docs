@@ -19,6 +19,14 @@ Motivo da recriação: a emenda da Constituição para 2.2.0 mudou o hash de `54
 
 Lacuna registrada: **emendar a Constituição com um work item em andamento não tem caminho de recuperação.** A recriação funciona porque este ciclo é plan-only e todos os artefatos são portáveis; um work item com estado executável em curso não teria essa saída.
 
+## Reescopo de 2026-08-23, pós-5.0.0
+
+O plugin foi publicado na 5.0.0 e `origin/main` avançou três commits entre a auditoria `GO` deste bundle e a entrada em `implement-parallel`. O branch foi mergeado e o escopo reduzido ao que permanece verdadeiro no código novo — decisão registrada em DQ-0006, R-0006 e `docs/adr/ADR-0003.md`, não por edição silenciosa.
+
+Artefatos reescopados: `ROADMAP.md`, `PLAN-CONTEXT.md`, o handoff de FASE-001, e no ciclo externo `spec.md` (de 10 para 9 FR, de 4 para 3 user stories), `plan.md` (de 4 para 3 fases), `data-model.md` (de V-1..V-5 para V-1..V-4), `tasks.md` (de 32 para 29 tarefas) e o Execution DAG (de 17 para 13 nós).
+
+**Consequência a registrar**: os checkpoints de `specify`, `plan`, `checklist`, `tasks`, `analyze` e `partition` foram fechados contra os artefatos anteriores ao reescopo, e seus hashes de evidência não correspondem mais aos arquivos. `checkpoint` recusa re-registrar etapa já `complete` com `STATE-DIVERGENCE`, e o core não expõe verbo para emendar evidência de etapa fechada. As alternativas seriam manter o plano descrevendo um código que não existe mais, ou recriar o bundle pela segunda vez nesta sessão. Nenhuma das duas é melhor do que declarar a divergência aqui.
+
 ## Divergências de evidência registradas
 
 - **`specify` e `tasks` carregaram hash de evidência obsoleto no bundle anterior.** `spec.md` foi emendado depois do checkpoint (FR-002 reescrito, edge case e SC-007 acrescentados, resolvendo a contradição CHK015) e `tasks.md` foi emendado duas vezes depois do seu (correção de formato em 4 tarefas; remediação D1/U1/G1/G2/U2 do `analyze`; saneamento de tokens de caminho na `partition`). Os checkpoints deste bundle são refeitos contra os arquivos **finais**, então a divergência não se propaga para cá.

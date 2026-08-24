@@ -1,10 +1,10 @@
 {
   "deferred_to_leader": [
     "T002",
-    "T012",
-    "T027"
+    "T021",
+    "T024"
   ],
-  "dispatchable_tasks": 29,
+  "dispatchable_tasks": 26,
   "feature": "024-workflow-version-derivada",
   "max_workers": 3,
   "nodes": [
@@ -34,8 +34,7 @@
       "phase": 2,
       "scope": "DECLARED",
       "task_ids": [
-        "T003",
-        "T008"
+        "T003"
       ]
     },
     {
@@ -44,8 +43,7 @@
       "phase": 2,
       "scope": "DECLARED",
       "task_ids": [
-        "T004",
-        "T009"
+        "T004"
       ]
     },
     {
@@ -54,7 +52,11 @@
       "phase": 3,
       "scope": "DECLARED",
       "task_ids": [
-        "T010"
+        "T012",
+        "T013",
+        "T014",
+        "T016",
+        "T017"
       ]
     },
     {
@@ -63,7 +65,19 @@
       "phase": 3,
       "scope": "DECLARED",
       "task_ids": [
-        "T011"
+        "T008",
+        "T009",
+        "T010"
+      ]
+    },
+    {
+      "id": "p03-c",
+      "parallel": true,
+      "phase": 3,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T011",
+        "T015"
       ]
     },
     {
@@ -72,28 +86,9 @@
       "phase": 4,
       "scope": "DECLARED",
       "task_ids": [
-        "T016",
-        "T017",
-        "T018"
-      ]
-    },
-    {
-      "id": "p04-b",
-      "parallel": true,
-      "phase": 4,
-      "scope": "DECLARED",
-      "task_ids": [
-        "T013",
-        "T014"
-      ]
-    },
-    {
-      "id": "p04-c",
-      "parallel": true,
-      "phase": 4,
-      "scope": "DECLARED",
-      "task_ids": [
-        "T015"
+        "T018",
+        "T019",
+        "T020"
       ]
     },
     {
@@ -102,9 +97,7 @@
       "phase": 5,
       "scope": "DECLARED",
       "task_ids": [
-        "T020",
-        "T021",
-        "T023"
+        "T022"
       ]
     },
     {
@@ -113,16 +106,7 @@
       "phase": 5,
       "scope": "DECLARED",
       "task_ids": [
-        "T019"
-      ]
-    },
-    {
-      "id": "p05-c",
-      "parallel": true,
-      "phase": 5,
-      "scope": "DECLARED",
-      "task_ids": [
-        "T022"
+        "T023"
       ]
     },
     {
@@ -131,8 +115,8 @@
       "phase": 6,
       "scope": "DECLARED",
       "task_ids": [
-        "T024",
-        "T025"
+        "T025",
+        "T029"
       ]
     },
     {
@@ -141,36 +125,17 @@
       "phase": 6,
       "scope": "DECLARED",
       "task_ids": [
-        "T026"
+        "T028"
       ]
     },
     {
-      "id": "p07-a",
-      "parallel": true,
-      "phase": 7,
-      "scope": "DECLARED",
-      "task_ids": [
-        "T028",
-        "T032"
-      ]
-    },
-    {
-      "id": "p07-b",
-      "parallel": true,
-      "phase": 7,
-      "scope": "DECLARED",
-      "task_ids": [
-        "T031"
-      ]
-    },
-    {
-      "id": "p07-serial",
+      "id": "p06-serial",
       "parallel": false,
-      "phase": 7,
+      "phase": 6,
       "scope": "FEATURE_WIDE",
       "task_ids": [
-        "T029",
-        "T030"
+        "T026",
+        "T027"
       ]
     }
   ],
@@ -192,55 +157,46 @@
       "phase": 2,
       "reasons": [],
       "requested_groups": 3,
-      "tasks": 7,
+      "tasks": 5,
       "title": "Foundational (Blocking Prerequisites)",
       "unmapped_tasks": 0
     },
     {
-      "achieved_groups": 2,
+      "achieved_groups": 3,
       "phase": 3,
-      "reasons": [
-        "EVIDENCE_BOUNDARY_TASKS",
-        "CONFLICT_GROUPS_BELOW_LIMIT"
-      ],
+      "reasons": [],
       "requested_groups": 3,
-      "tasks": 2,
-      "title": "User Story 4 — Work items já publicados não mudam de veredito (Priority: P1) 🎯 MVP",
+      "tasks": 10,
+      "title": "User Story 1 — Repositório que preserva uma declaração anterior (Priority: P1) 🎯 MVP",
       "unmapped_tasks": 0
     },
     {
-      "achieved_groups": 3,
+      "achieved_groups": 1,
       "phase": 4,
-      "reasons": [],
-      "requested_groups": 3,
-      "tasks": 6,
-      "title": "User Story 1 — Registro verdadeiro sobre a declaração corrente (Priority: P1)",
-      "unmapped_tasks": 0
-    },
-    {
-      "achieved_groups": 3,
-      "phase": 5,
-      "reasons": [],
-      "requested_groups": 3,
-      "tasks": 5,
-      "title": "User Story 2 — Repositório que preserva uma declaração anterior (Priority: P1)",
-      "unmapped_tasks": 0
-    },
-    {
-      "achieved_groups": 2,
-      "phase": 6,
       "reasons": [
         "EVIDENCE_BOUNDARY_TASKS",
         "CONFLICT_GROUPS_BELOW_LIMIT"
       ],
       "requested_groups": 3,
       "tasks": 3,
-      "title": "User Story 3 — Declaração ausente ou ambígua recusada na origem (Priority: P2)",
+      "title": "User Story 2 — Declaração ausente ou ambígua recusada na origem (Priority: P2)",
       "unmapped_tasks": 0
     },
     {
       "achieved_groups": 2,
-      "phase": 7,
+      "phase": 5,
+      "reasons": [
+        "EVIDENCE_BOUNDARY_TASKS",
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "User Story 3 — Work items já publicados não mudam de veredito (Priority: P1)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 6,
       "reasons": [
         "CONFLICT_GROUPS_BELOW_LIMIT",
         "UNMAPPED_TASKS"
@@ -253,10 +209,10 @@
   ],
   "requested_groups": 3,
   "schema": "grill-partition-report/v1",
-  "tasks": 32,
+  "tasks": 29,
   "unmapped_task_ids": [
-    "T029",
-    "T030"
+    "T026",
+    "T027"
   ],
   "verdict": "PARTITION-DEGRADED"
 }

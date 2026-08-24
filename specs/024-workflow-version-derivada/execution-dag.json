@@ -18,6 +18,7 @@
         "p01-a"
       ],
       "files": [
+        "plugin/skills/grill-with-docs/scripts/audit_decisions.py",
         "specs/024-workflow-version-derivada/implement/p02-a.tasks.json",
         "tests/validate_workflow_v3_contract.py"
       ],
@@ -30,7 +31,6 @@
         "p01-a"
       ],
       "files": [
-        "plugin/skills/grill-with-docs/scripts/audit_decisions.py",
         "specs/024-workflow-version-derivada/implement/p02-b.tasks.json",
         "tests/fixtures"
       ],
@@ -44,8 +44,7 @@
       ],
       "files": [
         "plugin/skills/grill-with-docs/scripts/ensure_workflow.py",
-        "specs/024-workflow-version-derivada/implement/p02-c.tasks.json",
-        "tests/validate_contract.py"
+        "specs/024-workflow-version-derivada/implement/p02-c.tasks.json"
       ],
       "id": "p02-c",
       "parallel": true,
@@ -58,8 +57,8 @@
         "p02-c"
       ],
       "files": [
-        "specs/024-workflow-version-derivada/baseline-fleet.txt",
-        "specs/024-workflow-version-derivada/implement/p03-a.tasks.json"
+        "specs/024-workflow-version-derivada/implement/p03-a.tasks.json",
+        "tests/validate_workspace_contract.py"
       ],
       "id": "p03-a",
       "parallel": true,
@@ -72,8 +71,9 @@
         "p02-c"
       ],
       "files": [
-        "specs/024-workflow-version-derivada/implement/p03-b.tasks.json",
-        "tests/validate_contract.py"
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/024-workflow-version-derivada/contracts/cli.md",
+        "specs/024-workflow-version-derivada/implement/p03-b.tasks.json"
       ],
       "id": "p03-b",
       "parallel": true,
@@ -81,8 +81,24 @@
     },
     {
       "depends_on": [
+        "p02-a",
+        "p02-b",
+        "p02-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/assets/state.template.json",
+        "specs/024-workflow-version-derivada/implement/p03-c.tasks.json",
+        "tests/validate_status_contract.py"
+      ],
+      "id": "p03-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
         "p03-a",
-        "p03-b"
+        "p03-b",
+        "p03-c"
       ],
       "files": [
         "specs/024-workflow-version-derivada/implement/p04-a.tasks.json",
@@ -94,40 +110,11 @@
     },
     {
       "depends_on": [
-        "p03-a",
-        "p03-b"
+        "p04-a"
       ],
       "files": [
-        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
-        "specs/024-workflow-version-derivada/contracts/cli.md",
-        "specs/024-workflow-version-derivada/implement/p04-b.tasks.json"
-      ],
-      "id": "p04-b",
-      "parallel": true,
-      "tier": "medium"
-    },
-    {
-      "depends_on": [
-        "p03-a",
-        "p03-b"
-      ],
-      "files": [
-        "plugin/skills/grill-with-docs/assets/state.template.json",
-        "specs/024-workflow-version-derivada/implement/p04-c.tasks.json"
-      ],
-      "id": "p04-c",
-      "parallel": true,
-      "tier": "medium"
-    },
-    {
-      "depends_on": [
-        "p04-a",
-        "p04-b",
-        "p04-c"
-      ],
-      "files": [
-        "specs/024-workflow-version-derivada/implement/p05-a.tasks.json",
-        "tests/validate_workspace_contract.py"
+        "specs/024-workflow-version-derivada/baseline-fleet.txt",
+        "specs/024-workflow-version-derivada/implement/p05-a.tasks.json"
       ],
       "id": "p05-a",
       "parallel": true,
@@ -135,13 +122,11 @@
     },
     {
       "depends_on": [
-        "p04-a",
-        "p04-b",
-        "p04-c"
+        "p04-a"
       ],
       "files": [
-        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
-        "specs/024-workflow-version-derivada/implement/p05-b.tasks.json"
+        "specs/024-workflow-version-derivada/implement/p05-b.tasks.json",
+        "tests/validate_status_contract.py"
       ],
       "id": "p05-b",
       "parallel": true,
@@ -149,27 +134,18 @@
     },
     {
       "depends_on": [
-        "p04-a",
-        "p04-b",
-        "p04-c"
-      ],
-      "files": [
-        "specs/024-workflow-version-derivada/implement/p05-c.tasks.json",
-        "tests/validate_status_contract.py"
-      ],
-      "id": "p05-c",
-      "parallel": true,
-      "tier": "medium"
-    },
-    {
-      "depends_on": [
         "p05-a",
-        "p05-b",
-        "p05-c"
+        "p05-b"
       ],
       "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
         "specs/024-workflow-version-derivada/implement/p06-a.tasks.json",
-        "tests/validate_workspace_contract.py"
+        "tests/validate_distribution.py"
       ],
       "id": "p06-a",
       "parallel": true,
@@ -178,12 +154,11 @@
     {
       "depends_on": [
         "p05-a",
-        "p05-b",
-        "p05-c"
+        "p05-b"
       ],
       "files": [
-        "specs/024-workflow-version-derivada/contracts/cli.md",
-        "specs/024-workflow-version-derivada/implement/p06-b.tasks.json"
+        "specs/024-workflow-version-derivada/implement/p06-b.tasks.json",
+        "tests/run_validators.py"
       ],
       "id": "p06-b",
       "parallel": true,
@@ -200,38 +175,6 @@
         "plugin/.claude-plugin/plugin.json",
         "plugin/.codex-plugin/plugin.json",
         "plugin/skills/grill-with-docs/SKILL.md",
-        "plugin/skills/grill-with-docs/references/session-protocol.md",
-        "specs/024-workflow-version-derivada/implement/p07-a.tasks.json",
-        "tests/validate_distribution.py"
-      ],
-      "id": "p07-a",
-      "parallel": true,
-      "tier": "medium"
-    },
-    {
-      "depends_on": [
-        "p06-a",
-        "p06-b"
-      ],
-      "files": [
-        "specs/024-workflow-version-derivada/implement/p07-b.tasks.json",
-        "tests/run_validators.py"
-      ],
-      "id": "p07-b",
-      "parallel": true,
-      "tier": "medium"
-    },
-    {
-      "depends_on": [
-        "p07-a",
-        "p07-b"
-      ],
-      "files": [
-        ".agents/plugins/marketplace.json",
-        ".claude-plugin/marketplace.json",
-        "plugin/.claude-plugin/plugin.json",
-        "plugin/.codex-plugin/plugin.json",
-        "plugin/skills/grill-with-docs/SKILL.md",
         "plugin/skills/grill-with-docs/assets/state.template.json",
         "plugin/skills/grill-with-docs/references/session-protocol.md",
         "plugin/skills/grill-with-docs/scripts/audit_decisions.py",
@@ -240,16 +183,15 @@
         "specs/024-workflow-version-derivada/baseline-fleet.txt",
         "specs/024-workflow-version-derivada/baseline.md",
         "specs/024-workflow-version-derivada/contracts/cli.md",
-        "specs/024-workflow-version-derivada/implement/p07-serial.tasks.json",
+        "specs/024-workflow-version-derivada/implement/p06-serial.tasks.json",
         "tests/fixtures",
         "tests/run_validators.py",
-        "tests/validate_contract.py",
         "tests/validate_distribution.py",
         "tests/validate_status_contract.py",
         "tests/validate_workflow_v3_contract.py",
         "tests/validate_workspace_contract.py"
       ],
-      "id": "p07-serial",
+      "id": "p06-serial",
       "parallel": false,
       "tier": "medium"
     }

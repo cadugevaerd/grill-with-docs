@@ -50,4 +50,14 @@
 - depends-on: DQ-0001
 - final-ref: docs/adr/ADR-0001.md
 
+## DQ-0006 — O que resta do escopo depois da 5.0.0?
+- phase: FASE-001
+- fingerprint: escopo-restante-apos-renomeacao-workflow-schema
+- impact: high
+- state: resolved
+- context-refs: campo derivado, campo constante, par writer/reader, marcador de workflow
+- artifacts: docs/adr/ADR-0003.md, ROADMAP.md, PLAN-CONTEXT.md, handoffs/FASE-001-SPECIFY-HANDOFF.md
+- depends-on: DQ-0001, DQ-0002
+- final-ref: docs/adr/ADR-0003.md
+
 > Estados: open | resolved | deferred | split | blocked | out-of-scope. Não duplique fingerprints abertos.

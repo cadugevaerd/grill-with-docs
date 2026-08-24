@@ -1,12 +1,14 @@
 # Implementation Plan: Versão de workflow derivada do documento
 
-**Branch**: `fix/audit` | **Date**: 2026-08-22 | **Spec**: [spec.md](./spec.md)
+**Branch**: `fix/audit` | **Date**: 2026-08-23 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/024-workflow-version-derivada/spec.md`
 
 ## Summary
 
-Dois campos do `state.json` que descrevem o `WORKFLOW.md` são literais fixos em vez de valores lidos do documento, e o gate correspondente da auditoria compara contra o mesmo literal — writer e reader concordam sempre, então nada é verificado, e só o valor verdadeiro reprova. A correção resolve a declaração do documento uma vez, na criação, e a usa como origem dos dois campos; a auditoria passa a validar por pertencimento ao conjunto de versões aceitas em vez de igualdade a uma versão específica. A resolução é estrita — exatamente uma declaração reconhecida — e a criação recusa fail-closed quando ela não resolve.
+O campo do `state.json` que declara qual sequência de etapas o work item fala é um literal congelado no asset, idêntico em todo bundle criado, e nunca é lido do `WORKFLOW.md` que ele descreve. A projeção de status julga cada bundle por esse campo, então um repositório que preserva um documento anterior nasce declarando a sequência corrente e é julgado por etapas que o documento dele não contém. A correção resolve a declaração do documento uma vez, na criação, e a usa como origem do campo; a resolução é estrita — exatamente uma declaração reconhecida — e a criação recusa fail-closed quando ela não resolve.
+
+O escopo foi reduzido depois da 5.0.0, que encerrou por redefinição o caso irmão deste defeito e corrigiu o gate da camada executável. Ver ADR-0003.
 
 ## Technical Context
 
@@ -24,9 +26,9 @@ Dois campos do `state.json` que descrevem o `WORKFLOW.md` são literais fixos em
 
 **Performance Goals**: N/A. A resolução é uma regex sobre um documento já lido em memória na criação; custo desprezível e fora de qualquer laço.
 
-**Constraints**: sem rede em teste; sem `specify`, `node` ou `backlogctl` reais; nenhum work item já publicado pode mudar de veredito; `audit_decisions.py` permanece stdlib puro; `managed_version` permanece com semântica first-match para seus 7 chamadores.
+**Constraints**: sem rede em teste; sem `specify`, `node` ou `backlogctl` reais; nenhum work item já publicado pode mudar de veredito; `audit_decisions.py` não é alterado e permanece stdlib puro; `managed_version` permanece com semântica first-match para seus chamadores.
 
-**Scale/Scope**: 4 arquivos de produção, 3 validadores estendidos. 9 work items neste repositório servem de frota de regressão.
+**Scale/Scope**: 3 arquivos de produção, 3 validadores estendidos. Os work items deste repositório servem de frota de regressão.
 
 ## Constitution Check
 
@@ -93,18 +95,17 @@ tests/
 
 Ordem obrigatória: cada fase depende da anterior.
 
-1. **Detector estrito.** `sole_managed_version` em `ensure_workflow.py`, com teste da matriz R5 e teste de paridade contra a verificação de `audit_decisions`. Nada mais consome a função ainda — a fase é verificável sozinha. (FR-006, V-4)
-2. **Reader.** `audit_decisions.py:801` troca o literal por pertencimento a `ACCEPTED_WORKFLOW_MARKERS`. Antes do writer, de propósito: nesta ordem a frota é validada contra o reader novo enquanto os bundles ainda carimbam `"v2"`, que é o cenário de regressão de US4. (FR-003, FR-007, V-2)
-3. **Writer.** `state_template` resolve o marcador, aplica o mapa de derivação de [data-model.md](./data-model.md) aos dois campos e recusa `WORKFLOW-MARKER-UNRESOLVED` antes de qualquer escrita. `state.template.json` deixa de ser fonte final de `workflow_version`. Cobre os dois chamadores (`init` e `migrate`) por construção. (FR-001, FR-002, FR-004, FR-005, FR-008, V-1)
-4. **Distribuição.** Incremento SemVer nos oito pontos travados por `validate_distribution.py`. (FR-010)
+1. **Detector estrito.** `sole_managed_version` em `ensure_workflow.py`, com teste da matriz R5 e teste de paridade contra a verificação de marcador que o auditor já faz. Nada mais consome a função ainda — a fase é verificável sozinha. (FR-005, V-3)
+2. **Writer.** `state_template` resolve o marcador, aplica o mapa de derivação de [data-model.md](./data-model.md) ao campo de sequência e recusa `WORKFLOW-MARKER-UNRESOLVED` **antes de qualquer escrita**. A recusa precede a derivação dentro da própria fase: separá-las abriria janela em que o writer grava sem saber o que fazer com declaração não resolvível. Cobre os dois chamadores, `init` e `migrate`, por construção. (FR-001, FR-002, FR-003, FR-004, FR-007, V-1)
+3. **Distribuição.** Incremento SemVer nos pontos travados por `validate_distribution.py`. (FR-009)
 
-**Por que reader antes de writer**: invertido, os bundles novos passariam a carimbar `v4` contra um reader que ainda exige `v2`, e toda criação reprovaria entre as duas fases. Na ordem acima nenhum estado intermediário reprova nada que hoje aprova.
+A fase que trocava o literal da auditoria por pertencimento **saiu do plano**: o campo que ela tocava foi redefinido fora deste trabalho e o finding correspondente deixou de existir. Com ela sai também a inversão reader-antes-de-writer, que existia só para proteger a frota durante a janela entre as duas mudanças. A invariância da frota continua exigida (FR-006) e continua sendo caso de teste.
 
 ## Riscos
 
 | Risco | Mitigação |
 |---|---|
-| Mudar `managed_version` por engano quebra a materialização (`ensure_workflow.py:335`, `:473` dependem do `or VERSION`) | Função nova ao lado; teste que fixa a semântica first-match da original |
-| Regex duplicada em dois arquivos diverge no futuro | Teste de paridade sobre a matriz completa é o SSOT da regra (ADR-0002) |
+| Mudar `managed_version` por engano quebra a materialização, que depende do `or VERSION` | Função nova ao lado; teste que fixa a semântica first-match da original |
+| Regex de marcador existe no detector e no auditor e pode divergir | Teste de paridade sobre a matriz completa é o SSOT da regra (ADR-0002) |
 | Fixture derivada da própria regex esconde erro de parsing | FR-009: documento real materializado pelo `ensure_workflow`; precedente de bug de parsing que sobreviveu a mais de mil testes por esse motivo |
-| `SEQUENCE_BY_VERSION` duplicada (R8) diverge ao ganhar entrada v2 no futuro | Achado registrado; entrada v2 é work item próprio e precisa entrar nos dois lugares |
+| Entrada `v2` futura em `SEQUENCE_BY_VERSION` | A 5.0.0 unificou a tabela no SSOT `grill_core.workflow_versions`, então R8 deixou de valer; uma entrada v2 agora entra num lugar só, e continua sendo work item próprio |
