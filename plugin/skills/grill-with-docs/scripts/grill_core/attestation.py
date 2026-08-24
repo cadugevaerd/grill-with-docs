@@ -34,13 +34,14 @@ only :func:`judge_checkpoint_attestation` at a V3 completion boundary.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 # --------------------------------------------------------------------------
 # sibling loader -- no import-time dependency on step_skills.py (mirrors
@@ -746,6 +747,88 @@ def _validate_human_authorization(value: Any, step_id: str) -> Mapping[str, Any]
     _text(value["content_sha256"], SHA256_RE, "HUMAN_AUTHORIZATION_INVALID", field="content_sha256")
     return value
 
+
+
+# ---------------------------------------------------------------------------
+# Emission
+#
+# The core has always known how to *judge* a chain and never how to *mint* one,
+# so every step of the cycle was unreachable by checkpoint once the gate that
+# demands a chain started firing.  Closing that gap is what this section does.
+#
+# What it mints is exactly what specs/010 scoped: structural correlation.  A
+# receipt minted here proves an artefact existed and was read at emission time,
+# and that altering it afterwards breaks the correlation.  It does not prove the
+# registered skill ran.  Saying otherwise in a docstring would be the same
+# over-claim the whole mechanism exists to prevent.
+# ---------------------------------------------------------------------------
+
+
+class EmissionError(AttestationError):
+    """A chain could not be minted from truthful inputs.
+
+    Deliberately a subclass: a caller that already handles ``AttestationError``
+    keeps failing closed on emission problems rather than letting one through
+    as an unrelated exception type.
+    """
+
+
+#: Emission refusals are their own code. They are not ``BLOCKED_CAPABILITY``
+#: (the capability may be perfectly resolvable) nor ``UNATTESTED_STEP_OUTPUT``
+#: (nothing was attested -- minting is what failed).
+EMISSION_REFUSED = "EMISSION_REFUSED"
+
+
+def _emit_fail(reason: str, **detail: Any) -> EmissionError:
+    return EmissionError(EMISSION_REFUSED, reason, **detail)
+
+
+def execution_class(step_id: str, workflow_version: str, versions: Any) -> str:
+    """Return ``leader-allowed`` or ``worker-required`` for one step.
+
+    A step absent from the table fails closed naming the missing decision: a
+    step added to a sequence without a class here must not inherit a permissive
+    default from its neighbour (ADR-0203).
+    """
+    table = versions.EXECUTION_CLASS_BY_VERSION.get(workflow_version)
+    if table is None:
+        raise _emit_fail("EXECUTION_CLASS_VERSION_UNKNOWN", workflow_version=workflow_version)
+    klass = table.get(step_id)
+    if klass is None:
+        raise _emit_fail("EXECUTION_CLASS_UNDECLARED", step_id=step_id, workflow_version=workflow_version)
+    if klass not in versions.EXECUTION_CLASSES:
+        raise _emit_fail("EXECUTION_CLASS_INVALID", step_id=step_id, value=klass)
+    return klass
+
+
+def require_leader_allowed(step_id: str, workflow_version: str, versions: Any) -> None:
+    """Refuse to mint a leader-executed chain for a worker-required step.
+
+    ``implement-parallel``'s worktree isolation and closed file grant *are* its
+    safety mechanism.  A leader receipt for it would attest an isolation that
+    never happened, which is worse than no receipt at all.
+    """
+    if execution_class(step_id, workflow_version, versions) == "worker-required":
+        raise _emit_fail("WORKER_REQUIRED_STEP", step_id=step_id, workflow_version=workflow_version)
+
+
+def artefact_digest(read_bytes: Callable[[str], bytes], path: str) -> tuple[str, int]:
+    """Read the declared artefact and return ``(digest, size)``.
+
+    ``read_bytes`` is the caller's already-safe boundary -- the CLI passes the
+    no-follow descriptor reader it uses everywhere else, so this module keeps
+    doing no I/O of its own.  An unreadable or absent artefact is a named
+    refusal; it is never a chain minted with an empty digest (ADR-0202).
+    """
+    if not isinstance(path, str) or not path.strip():
+        raise _emit_fail("ARTEFACT_PATH_INVALID", path=path)
+    try:
+        raw = read_bytes(path)
+    except Exception as exc:  # the caller's boundary decides what is unsafe
+        raise _emit_fail("ARTEFACT_UNREADABLE", path=path, error=type(exc).__name__) from exc
+    if not isinstance(raw, (bytes, bytearray)):
+        raise _emit_fail("ARTEFACT_UNREADABLE", path=path, problem="reader returned non-bytes")
+    return "sha256:" + hashlib.sha256(bytes(raw)).hexdigest(), len(raw)
 
 def judge_checkpoint_attestation(
     bundle: Mapping[str, Any],

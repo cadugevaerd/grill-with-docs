@@ -1,5 +1,34 @@
 # Changelog
 
+## 5.1.0
+
+- O núcleo passa a saber **cunhar** uma cadeia de atestação, não apenas julgá-la.
+  Desde que o gate de atestação foi corrigido para valer na frontier ativa,
+  `checkpoint --state complete` exige a cadeia canônica; o núcleo validava essa
+  cadeia e não a produzia, e nenhuma outra parte do sistema a produzia — o ciclo
+  de onze etapas ficou inalcançável em qualquer projeto na frontier ativa.
+- `workflow_versions.EXECUTION_CLASS_BY_VERSION` declara, por versão e por
+  etapa, quem pode executá-la: `worker-required` ou `leader-allowed`.
+  `implement-parallel` é `worker-required` porque o worktree isolado e o grant
+  de arquivos **são** o seu mecanismo de segurança — um receipt de leader para
+  ela atestaria um isolamento que não houve. As tabelas são literais congelados,
+  nunca derivados das sequências: uma reordenação não pode mudar em silêncio
+  quem executa o quê, e uma etapa nova sem classe declarada falha fechado
+  nomeando a decisão que falta.
+- `attestation.execution_class`, `require_leader_allowed` e `artefact_digest`
+  compõem a emissão. A âncora do `step-output` é o digest do artefato declarado,
+  lido pela fronteira segura que o chamador já usa — o módulo não faz I/O
+  próprio. Artefato ausente, ilegível, com caminho vazio, ou leitor devolvendo
+  algo que não são bytes: recusa nomeada, nunca cadeia cunhada com digest vazio.
+- `EmissionError` é subclasse de `AttestationError`, para que um chamador que já
+  falha fechado em atestação continue falhando fechado na emissão.
+
+  O que uma cadeia cunhada aqui prova, dito sem eufemismo: que o artefato
+  existia e foi lido no momento da emissão, e que alterá-lo depois quebra a
+  correlação. **Não** prova que a skill registrada rodou. Proveniência
+  criptográfica e defesa contra executor malicioso seguem fora de escopo, como
+  `specs/010-execution-attestation` sempre declarou.
+
 ## 5.0.0
 
 BREAKING: v3 deixa de ser superfície de execução. `EXECUTABLE_VERSIONS` passa a
