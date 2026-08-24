@@ -844,6 +844,26 @@ _INVOCATION_STATUS_FOR_RESULT = {
 }
 
 
+
+def leader_lease(run_id: str, step_id: str) -> tuple[str, int]:
+    """Derive the conducting session's lease for one step.
+
+    Mirrors how a worker lease is minted in ``gauntlet_runs``: the identifier is
+    derived from the run plus the executor's identity, and the fencing token
+    starts at one.  There is no global counter to consult, and inventing one
+    here would be a second source of truth for the same thing.
+
+    Uniqueness therefore comes from the pair. Two leader executions of the same
+    step in the same run are the same logical executor -- exactly as two workers
+    with the same node id in the same run would be -- so they share a lease by
+    construction rather than by accident.
+    """
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise _emit_fail("LEASE_RUN_INVALID", run_id=run_id)
+    if not isinstance(step_id, str) or not step_id.strip():
+        raise _emit_fail("LEASE_STEP_INVALID", step_id=step_id)
+    return f"lease-{run_id}-leader-{step_id}", 1
+
 def mint_chain(
     *,
     resolution: Mapping[str, Any],

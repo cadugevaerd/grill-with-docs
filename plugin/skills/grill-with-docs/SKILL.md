@@ -173,6 +173,35 @@ python3 "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/grill-with-docs/scripts/gr
 
 O JSON `grill-status/v1` continua sendo o formato padrão da CLI para automações. O Markdown omite somente work items coerentemente fechados. Se não houver pendência, o stdout é exatamente `all good`; caso contrário, é a tabela `Item | Status | Pendência` produzida pelo core.
 
+## Atestação: o que um receipt prova, e o que não prova
+
+Concluir uma etapa exige a cadeia `skill-resolution → dispatch-intent →
+skill-invocation → step-output`. O núcleo agora **cunha** essa cadeia, além de
+julgá-la: até a versão 5.1.0 ele só sabia julgar, e nada no sistema sabia
+produzir — o ciclo inteiro era inalcançável por checkpoint.
+
+**O que a cadeia prova.** Que o artefato declarado existia, que foi lido no
+momento da emissão, e que alterá-lo depois quebra a correlação.
+
+**O que ela não prova.** Que a skill registrada foi executada. Quem conduz a
+etapa pode produzir o artefato por outro meio e declará-lo; a cadeia não
+distingue. Isso não é lacuna a corrigir: proveniência criptográfica e defesa
+contra executor malicioso estão declaradas fora de escopo desde o desenho
+original. A garantia é estrutural por opção, e descrevê-la como mais do que é
+seria a sobre-afirmação que o mecanismo existe para impedir.
+
+**Quem pode atestar o quê.** Cada etapa tem classe de execução declarada por
+versão, em tabela congelada ao lado da ordem canônica:
+
+| Classe | Etapas | Por quê |
+|---|---|---|
+| `worker-required` | `implement-parallel` | O worktree isolado e o grant fechado de arquivos **são** o mecanismo de segurança; um receipt de leader atestaria um isolamento que não houve. |
+| `leader-allowed` | as demais dez | Não têm worker por natureza. A sessão condutora se declara executora, com lease derivado do par run/etapa e `wave_index` zero, que significa "fora de onda". |
+
+Etapa sem classe declarada é recusa nomeada, nunca default permissivo. Uma
+etapa nova exige duas decisões explícitas — posição na sequência e classe — e
+falha fechado até ter as duas.
+
 ## Auditoria read-only
 
 ```text

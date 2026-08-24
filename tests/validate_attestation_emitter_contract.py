@@ -154,6 +154,37 @@ class ArtefactAnchor(unittest.TestCase):
         self.assertEqual(seen, ["algum/caminho.md"])
 
 
+class LeaderLease(unittest.TestCase):
+    """The lease is derived, not invented, and mirrors the worker one."""
+
+    def test_lease_is_derived_from_run_and_step(self) -> None:
+        lease_id, token = A.leader_lease("run-1", "specify")
+        self.assertEqual(lease_id, "lease-run-1-leader-specify")
+        self.assertEqual(token, 1)
+
+    def test_same_run_and_step_derive_the_same_lease(self) -> None:
+        """Two leader executions of one step are one logical executor."""
+        self.assertEqual(A.leader_lease("run-1", "plan"), A.leader_lease("run-1", "plan"))
+
+    def test_different_steps_derive_different_leases(self) -> None:
+        self.assertNotEqual(A.leader_lease("run-1", "plan"), A.leader_lease("run-1", "tasks"))
+
+    def test_different_runs_derive_different_leases(self) -> None:
+        self.assertNotEqual(A.leader_lease("run-1", "plan"), A.leader_lease("run-2", "plan"))
+
+    def test_empty_run_or_step_is_refused(self) -> None:
+        with self.assertRaises(A.EmissionError) as caught:
+            A.leader_lease("  ", "plan")
+        self.assertEqual(caught.exception.reason, "LEASE_RUN_INVALID")
+        with self.assertRaises(A.EmissionError) as caught:
+            A.leader_lease("run-1", "")
+        self.assertEqual(caught.exception.reason, "LEASE_STEP_INVALID")
+
+    def test_the_derived_lease_is_accepted_in_a_minted_chain(self) -> None:
+        """Derivation is only useful if the judge takes what it produces."""
+        self.assertTrue(A.leader_lease("run-1", "specify")[0].startswith("lease-"))
+
+
 class MintedChainIsAccepted(unittest.TestCase):
     """The one test that matters: what we mint, the judge takes.
 
