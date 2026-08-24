@@ -4,7 +4,7 @@
 - state: ready-for-specify
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: cadeia de atestação, emissor, leader, executor da etapa, evidência estrutural, artefato da etapa, lease
-- ADRs: ADR-0201, ADR-0202, ADR-0203
+- ADRs: ADR-0201, ADR-0202, ADR-0203, ADR-0204
 - BLs: none
 
 ## WHAT

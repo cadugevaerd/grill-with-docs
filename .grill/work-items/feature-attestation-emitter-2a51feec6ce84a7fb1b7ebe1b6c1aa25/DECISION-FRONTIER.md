@@ -30,4 +30,14 @@
 - depends-on: DQ-0201
 - final-ref: ADR-0203
 
+## DQ-0204 — Como fechar as etapas de quem entrega o próprio emissor?
+- phase: FASE-001
+- fingerprint: bootstrap-da-primeira-entrega
+- impact: high
+- state: resolved
+- context-refs: cadeia de atestação, emissor, artefato da etapa
+- artifacts: ADR-0204
+- depends-on: DQ-0202
+- final-ref: ADR-0204
+
 > Estados: open | resolved | deferred | split | blocked | out-of-scope. Não duplique fingerprints abertos.
