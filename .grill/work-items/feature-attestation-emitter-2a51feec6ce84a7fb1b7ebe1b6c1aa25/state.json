@@ -13,8 +13,17 @@
     "state": "present"
   },
   "development": {
-    "audit": [],
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "Bootstrap ADR-0204: a fundação do emissor foi implementada antes de specify, o que é desvio do protocolo e está registrado como tal. O código existe e está travado por teste; specify, plan e tasks precisam ser regularizados com o código como evidência antes de qualquer complete.",
+        "state": "in-progress",
+        "step": "specify"
+      }
+    ],
     "current_step": "specify",
+    "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
     "schema": "grill-development/v2",
     "sequence": [
@@ -39,7 +48,7 @@
       "plan": "pending",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
+      "specify": "in-progress",
       "tasks": "pending",
       "verify": "pending"
     },
