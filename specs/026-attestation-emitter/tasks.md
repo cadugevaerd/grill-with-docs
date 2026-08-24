@@ -63,7 +63,7 @@ selar o vazio (ADR-0204).
 - [X] T010 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a montagem do `step-output`, ancorado no digest de `artefact_digest` e correlacionado ao receipt de invocação (FR-009, FR-010)
 - [X] T011 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a função que reúne os elos no bundle que `judge_checkpoint_attestation` aceita, consumindo `step_skills.resolve_workflow_skill` para o elo de resolução em vez de reimplementá-lo (FR-009)
 - [X] T012 [US1] Obter concessão de execução para o leader em `plugin/skills/grill-with-docs/scripts/grill_core/store.py`, pelo mesmo mecanismo que já concede a worker, sem inventar campo novo (FR-007, FR-008)
-- [ ] T013 [US1] Acrescentar o verbo de emissão em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, passando `safe_read_regular_fd` como fronteira de leitura e recusando antes de qualquer escrita quando a classe não permitir (FR-011, FR-016)
+- [X] T013 [US1] Acrescentar o verbo de emissão em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, passando `safe_read_regular_fd` como fronteira de leitura e recusando antes de qualquer escrita quando a classe não permitir (FR-011, FR-016)
 - [X] T014 [US2] Estender `tests/validate_attestation_emitter_contract.py` para travar que o bundle montado é aceito por `judge_checkpoint_attestation` e que o verbo recusa etapa `worker-required` (FR-018, SC-001, SC-004)
 - [X] T015 [US3] Documentar em `plugin/skills/grill-with-docs/SKILL.md` o que a cadeia prova e o que não prova, lado a lado, sem eufemismo (FR-017, SC-008)
 
@@ -75,9 +75,9 @@ selar o vazio (ADR-0204).
 
 **Purpose**: Usar o emissor para fechar as etapas deste próprio work item.
 
-- [ ] T016 Emitir a cadeia para `specify` deste work item, ancorada em `specs/026-attestation-emitter/spec.md`, e concluir a etapa por checkpoint
-- [ ] T017 Emitir a cadeia para `plan`, ancorada em `specs/026-attestation-emitter/plan.md`, e concluir a etapa
-- [ ] T018 Emitir a cadeia para `tasks`, ancorada em `specs/026-attestation-emitter/tasks.md`, e concluir a etapa
+- [X] T016 Emitir a cadeia para `specify` deste work item, ancorada em `specs/026-attestation-emitter/spec.md`, e concluir a etapa por checkpoint
+- [X] T017 Emitir a cadeia para `plan`, ancorada em `specs/026-attestation-emitter/plan.md`, e concluir a etapa
+- [X] T018 Emitir a cadeia para `tasks`, ancorada em `specs/026-attestation-emitter/tasks.md`, e concluir a etapa
 - [ ] T019 Registrar em `.grill/work-items/feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25/` que o fechamento foi retroativo e por quê, para que a auditoria encontre a razão sem reconstruí-la
 
 ---

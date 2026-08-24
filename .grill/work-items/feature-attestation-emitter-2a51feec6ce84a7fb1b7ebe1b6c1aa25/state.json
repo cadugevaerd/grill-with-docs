@@ -13,6 +13,41 @@
     "state": "present"
   },
   "development": {
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-8037ebe3096cd2c4b0a81da2c3df06b082897e6f20ec71cf98bf2491dc2277e8",
+      "registry_sha256": "sha256:e3f69871406205b77725b41bf0de0b24d9dbd661c004d502f0ddb49f22209ec1",
+      "run_id": "leader-feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25",
+      "runtime": "claude"
+    },
+    "attested_outputs": {
+      "checklist": {
+        "output_sha256": "sha256:7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
+      "plan": {
+        "output_sha256": "sha256:ab0ca227fc05ac9148b907eddab900d0dca17d7320ba4414859890d40f87c624",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
+      "specify": {
+        "output_sha256": "sha256:0d4279051c4038c8b76fbc66b102dfdbbf6a6ab05df1df461eaef26bc50e8fb9",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:9d27185f993515d14aad1f49d41c584f79373ea13658691ef845782c4b9838d2",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "step_id": "tasks"
+      }
+    },
     "audit": [
       {
         "evidence": [],
@@ -20,9 +55,78 @@
         "reason": "Bootstrap ADR-0204: a fundação do emissor foi implementada antes de specify, o que é desvio do protocolo e está registrado como tal. O código existe e está travado por teste; specify, plan e tasks precisam ser regularizados com o código como evidência antes de qualquer complete.",
         "state": "in-progress",
         "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/spec.md",
+            "sha256": "0d4279051c4038c8b76fbc66b102dfdbbf6a6ab05df1df461eaef26bc50e8fb9"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/plan.md",
+            "sha256": "ab0ca227fc05ac9148b907eddab900d0dca17d7320ba4414859890d40f87c624"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/checklists/requirements.md",
+            "sha256": "7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "9d27185f993515d14aad1f49d41c584f79373ea13658691ef845782c4b9838d2"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
       }
     ],
-    "current_step": "specify",
+    "current_step": "analyze",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -41,15 +145,15 @@
     ],
     "steps": {
       "analyze": "pending",
-      "checklist": "pending",
+      "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
-      "plan": "pending",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
-      "specify": "in-progress",
-      "tasks": "pending",
+      "specify": "complete",
+      "tasks": "complete",
       "verify": "pending"
     },
     "workflow_version": "v4"
