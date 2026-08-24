@@ -1,0 +1,67 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "GO",
+  "backlog_skipped": true,
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+    "state": "present"
+  },
+  "development": {
+    "audit": [],
+    "current_step": "specify",
+    "renamed_from": {},
+    "schema": "grill-development/v2",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "partition",
+      "implement-parallel",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "analyze": "pending",
+      "checklist": "pending",
+      "converge": "pending",
+      "implement-parallel": "pending",
+      "partition": "pending",
+      "plan": "pending",
+      "review": "pending",
+      "ship": "pending",
+      "specify": "pending",
+      "tasks": "pending",
+      "verify": "pending"
+    },
+    "workflow_version": "v4"
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "ready",
+  "version": "1.2.0",
+  "work_id": "feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "schema": "v2",
+    "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0"
+  }
+}
