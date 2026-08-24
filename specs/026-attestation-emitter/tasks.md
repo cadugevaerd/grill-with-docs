@@ -58,13 +58,13 @@ selar o vazio (ADR-0204).
 
 **Purpose**: Produzir os quatro elos correlacionados e expor o caminho na linha de comando.
 
-- [ ] T008 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a montagem do `dispatch-intent`, consumindo `step_skills.sha256_jcs` para os digests de correlação e a identidade do projeto e do work item para os campos de contexto (FR-009)
-- [ ] T009 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a montagem de `invocation_started` e `invocation_terminal`, correlacionados ao dispatch pelo `skill_invocation_key` (FR-009)
-- [ ] T010 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a montagem do `step-output`, ancorado no digest de `artefact_digest` e correlacionado ao receipt de invocação (FR-009, FR-010)
-- [ ] T011 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a função que reúne os elos no bundle que `judge_checkpoint_attestation` aceita, consumindo `step_skills.resolve_workflow_skill` para o elo de resolução em vez de reimplementá-lo (FR-009)
+- [X] T008 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a montagem do `dispatch-intent`, consumindo `step_skills.sha256_jcs` para os digests de correlação e a identidade do projeto e do work item para os campos de contexto (FR-009)
+- [X] T009 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a montagem de `invocation_started` e `invocation_terminal`, correlacionados ao dispatch pelo `skill_invocation_key` (FR-009)
+- [X] T010 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a montagem do `step-output`, ancorado no digest de `artefact_digest` e correlacionado ao receipt de invocação (FR-009, FR-010)
+- [X] T011 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a função que reúne os elos no bundle que `judge_checkpoint_attestation` aceita, consumindo `step_skills.resolve_workflow_skill` para o elo de resolução em vez de reimplementá-lo (FR-009)
 - [ ] T012 [US1] Obter concessão de execução para o leader em `plugin/skills/grill-with-docs/scripts/grill_core/store.py`, pelo mesmo mecanismo que já concede a worker, sem inventar campo novo (FR-007, FR-008)
 - [ ] T013 [US1] Acrescentar o verbo de emissão em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, passando `safe_read_regular_fd` como fronteira de leitura e recusando antes de qualquer escrita quando a classe não permitir (FR-011, FR-016)
-- [ ] T014 [US2] Estender `tests/validate_attestation_emitter_contract.py` para travar que o bundle montado é aceito por `judge_checkpoint_attestation` e que o verbo recusa etapa `worker-required` (FR-018, SC-001, SC-004)
+- [X] T014 [US2] Estender `tests/validate_attestation_emitter_contract.py` para travar que o bundle montado é aceito por `judge_checkpoint_attestation` e que o verbo recusa etapa `worker-required` (FR-018, SC-001, SC-004)
 - [ ] T015 [US3] Documentar em `plugin/skills/grill-with-docs/SKILL.md` o que a cadeia prova e o que não prova, lado a lado, sem eufemismo (FR-017, SC-008)
 
 **Checkpoint**: uma etapa `leader-allowed` conclui por checkpoint sem campo inventado.

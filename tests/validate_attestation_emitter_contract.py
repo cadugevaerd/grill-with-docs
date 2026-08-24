@@ -154,5 +154,93 @@ class ArtefactAnchor(unittest.TestCase):
         self.assertEqual(seen, ["algum/caminho.md"])
 
 
+class MintedChainIsAccepted(unittest.TestCase):
+    """The one test that matters: what we mint, the judge takes.
+
+    Everything else in this file guards the edges. This guards the point.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        import hashlib
+        import importlib.util
+        from grill_core import step_skills as ss
+        from grill_core import store
+
+        spec = importlib.util.spec_from_file_location(
+            "attestation_fixture", REPO / "tests/validate_attestation_contract.py")
+        fixture = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(fixture)
+        except SystemExit:  # the fixture module runs unittest.main under __main__
+            pass
+        cls.fx = fixture
+        cls.ss = ss
+        cls.project_id = store.project_identity(REPO)["project_id"]
+        cls.resolution = ss.resolve_workflow_skill(
+            "specify", "claude", fixture.REGISTRY_SHA256,
+            registry=fixture.registry_bytes(), catalog=fixture.catalog())
+        cls.artefact = b"conteudo do artefato da etapa\n"
+        cls.artefact_sha256 = "sha256:" + hashlib.sha256(cls.artefact).hexdigest()
+
+    def chain(self, **overrides):
+        kw = dict(
+            resolution=self.resolution, project_id=self.project_id,
+            work_item_id="wi-1", work_item_revision=3, run_id="run-1",
+            step_id="specify", attempt_id="att-1",
+            recovery_generation_id=self.fx.rg("g1"), plan_revision=1, wave_index=0,
+            worktree_id="wt-coordinator", worktree_head=self.fx.head("h1"),
+            worker_lease_id="lease-leader-1", worker_fencing_token=1,
+            dispatcher_lease_id="dispatch-leader-1", dispatcher_epoch=1,
+            artefact_path="specs/026-attestation-emitter/spec.md",
+            artefact_sha256=self.artefact_sha256,
+            logical_plan_sha256=self.ss.sha256_jcs({"plan": "logical"}),
+            executable_plan_sha256=self.ss.sha256_jcs({"plan": "executable"}),
+            input_fingerprint=self.ss.sha256_jcs({"inputs": []}),
+            catalog=self.fx.catalog(),
+        )
+        kw.update(overrides)
+        return A.mint_chain(**kw)
+
+    def test_the_judge_accepts_a_minted_chain(self) -> None:
+        verdict = A.judge_checkpoint_attestation(
+            self.chain(), project_id=self.project_id, work_item_id="wi-1", step_id="specify")
+        self.assertEqual(verdict["campaign"]["project_id"], self.project_id)
+        self.assertEqual(verdict["campaign"]["run_id"], "run-1")
+
+    def test_the_step_output_is_anchored_on_the_artefact(self) -> None:
+        """The anchor is not a second, separate digest -- it IS the artefact's."""
+        chain = self.chain()
+        self.assertEqual(chain["step_output"]["output_sha256"], self.artefact_sha256)
+        self.assertEqual(
+            chain["step_output"]["evidence_refs"],
+            [{"path": "specs/026-attestation-emitter/spec.md", "sha256": self.artefact_sha256}])
+
+    def test_a_different_artefact_mints_a_different_chain(self) -> None:
+        import hashlib
+        other = "sha256:" + hashlib.sha256(b"outro conteudo\n").hexdigest()
+        self.assertNotEqual(
+            self.chain()["step_output"]["content_sha256"],
+            self.chain(artefact_sha256=other)["step_output"]["content_sha256"])
+
+    def test_an_incomplete_resolution_is_refused_naming_the_field(self) -> None:
+        broken = {k: v for k, v in self.resolution.items() if k != "adapter"}
+        with self.assertRaises(A.EmissionError) as caught:
+            self.chain(resolution=broken)
+        self.assertEqual(caught.exception.reason, "RESOLUTION_INCOMPLETE")
+        self.assertEqual(caught.exception.detail["field"], "adapter")
+
+    def test_a_result_with_no_invocation_counterpart_is_refused(self) -> None:
+        """UNKNOWN is a valid step result and no invocation status at all."""
+        with self.assertRaises(A.EmissionError) as caught:
+            self.chain(result="UNKNOWN")
+        self.assertEqual(caught.exception.reason, "STEP_RESULT_UNKNOWN")
+
+    def test_a_non_digest_artefact_hash_is_refused(self) -> None:
+        with self.assertRaises(Exception) as caught:
+            self.chain(artefact_sha256="not-a-digest")
+        self.assertIn("INVALID_DIGEST", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -830,6 +830,209 @@ def artefact_digest(read_bytes: Callable[[str], bytes], path: str) -> tuple[str,
         raise _emit_fail("ARTEFACT_UNREADABLE", path=path, problem="reader returned non-bytes")
     return "sha256:" + hashlib.sha256(bytes(raw)).hexdigest(), len(raw)
 
+
+#: Which terminal invocation status accompanies each step result. The two
+#: vocabularies overlap on the three terminal values but are not the same set:
+#: ``STEP_OUTPUT_RESULTS`` also admits ``UNKNOWN``, which no invocation status
+#: matches. Kept as an explicit map rather than passing the result straight
+#: through, so that a result with no counterpart refuses instead of minting an
+#: invocation whose status is not a status.
+_INVOCATION_STATUS_FOR_RESULT = {
+    "COMPLETED": "COMPLETED",
+    "FAILED": "FAILED",
+    "BLOCKED": "BLOCKED",
+}
+
+
+def mint_chain(
+    *,
+    resolution: Mapping[str, Any],
+    project_id: str,
+    work_item_id: str,
+    work_item_revision: int,
+    run_id: str,
+    step_id: str,
+    attempt_id: str,
+    recovery_generation_id: str,
+    plan_revision: int,
+    wave_index: int,
+    worktree_id: str,
+    worktree_head: str,
+    worker_lease_id: str,
+    worker_fencing_token: int,
+    dispatcher_lease_id: str,
+    dispatcher_epoch: int,
+    artefact_path: str,
+    artefact_sha256: str,
+    logical_plan_sha256: str,
+    executable_plan_sha256: str,
+    input_fingerprint: str,
+    dependency_outputs: Iterable[Mapping[str, Any]] = (),
+    execution_round: int = 1,
+    result: str = "COMPLETED",
+    catalog: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Mint the four correlated links plus the catalog, ready for the checkpoint.
+
+    Every caller-supplied value must already be true of the world: the digests
+    are computed here, but what they are computed *over* is the caller's
+    responsibility.  ``artefact_sha256`` in particular is expected to come from
+    :func:`artefact_digest`, which reads the file through the caller's safe
+    boundary -- this function does no I/O and cannot verify that the artefact
+    exists.
+
+    What the returned chain proves is what specs/010 scoped: correlation. It
+    says an artefact with this digest was named for this step, under this
+    resolution of the registered skill. It does not say the skill ran.
+    """
+    ss = _step_skills()
+    if not isinstance(resolution, Mapping):
+        raise _emit_fail("RESOLUTION_INVALID", problem="not an object")
+    for field in ("skill_resolution_sha256", "adapter", "runtime", "skill_id",
+                  "skill_version", "skill_content_sha256", "registry_sha256", "entrypoint"):
+        if field not in resolution:
+            raise _emit_fail("RESOLUTION_INCOMPLETE", field=field)
+    _text(artefact_sha256, SHA256_RE, "INVALID_DIGEST", field="artefact_sha256")
+
+    runtime = resolution["runtime"]
+    adapter = resolution["adapter"]
+    resolution_sha = resolution["skill_resolution_sha256"]
+
+    # The dispatch payload of a leader-executed step is the declaration itself:
+    # who executes what, where, anchored on which artefact.  Hashing that is
+    # truthful; inventing a payload digest would not be.
+    dispatch_payload_sha256 = ss.sha256_jcs({
+        "step_id": step_id,
+        "artefact_path": artefact_path,
+        "artefact_sha256": artefact_sha256,
+        "worktree_id": worktree_id,
+        "worktree_head": worktree_head,
+        "worker_lease_id": worker_lease_id,
+    })
+
+    dkey = dispatch_key(
+        project_id, work_item_id, run_id, step_id, recovery_generation_id, plan_revision,
+        wave_index, executable_plan_sha256, resolution_sha, worktree_id, worktree_head,
+        runtime, adapter, dispatch_payload_sha256,
+    )
+    ikey = ss.skill_invocation_key(
+        project_id, work_item_id, run_id, step_id, recovery_generation_id, plan_revision,
+        resolution_sha, dkey,
+    )
+
+    dispatch_body: dict[str, Any] = {
+        "schema": DISPATCH_INTENT_SCHEMA,
+        "dispatch_key": dkey,
+        "project_id": project_id,
+        "work_item_id": work_item_id,
+        "run_id": run_id,
+        "attempt_id": attempt_id,
+        "step_id": step_id,
+        "execution_mode": ss.EXECUTION_MODE,
+        "skill_resolution_sha256": resolution_sha,
+        "skill_invocation_key": ikey,
+        "logical_plan_sha256": logical_plan_sha256,
+        "executable_plan_sha256": executable_plan_sha256,
+        "recovery_generation_id": recovery_generation_id,
+        "plan_revision": plan_revision,
+        "wave_index": wave_index,
+        "worktree_id": worktree_id,
+        "worktree_head": worktree_head,
+        "runtime": runtime,
+        "adapter": adapter,
+        "dispatch_payload_sha256": dispatch_payload_sha256,
+        "dispatcher_epoch": dispatcher_epoch,
+        "dispatcher_lease_id": dispatcher_lease_id,
+        "work_item_revision": work_item_revision,
+        "worker_lease_id": worker_lease_id,
+        "worker_fencing_token": worker_fencing_token,
+        "status": "STARTED",
+        "runtime_handle": None,
+    }
+    dispatch_body["content_sha256"] = ss.sha256_jcs(dispatch_body)
+
+    def _invocation(status: str, output_manifest_sha256: str) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "schema": ss.INVOCATION_SCHEMA,
+            "skill_invocation_key": ikey,
+            "project_id": project_id,
+            "work_item_id": work_item_id,
+            "run_id": run_id,
+            "step_id": step_id,
+            "skill_id": resolution["skill_id"],
+            "skill_version": resolution["skill_version"],
+            "skill_content_sha256": resolution["skill_content_sha256"],
+            "registry_sha256": resolution["registry_sha256"],
+            "skill_resolution_sha256": resolution_sha,
+            "runtime": runtime,
+            "adapter": adapter,
+            "entrypoint": resolution["entrypoint"],
+            "dispatch_key": dkey,
+            "attempt_id": attempt_id,
+            "recovery_generation_id": recovery_generation_id,
+            "plan_revision": plan_revision,
+            "input_fingerprint": input_fingerprint,
+            "started_receipt_ref": f"receipts/skill-invocation/{step_id}-{attempt_id}.started.json",
+            "status": status,
+            "output_manifest_sha256": output_manifest_sha256,
+        }
+        body["content_sha256"] = ss.sha256_jcs(body)
+        return body
+
+    # STARTED has no output yet; its manifest digest is over the empty manifest,
+    # not over a placeholder string. The terminal one is over the real artefact.
+    # Two vocabularies, deliberately not merged: an invocation is COMPLETED or
+    # FAILED (did the call finish?), a step output SUCCEEDED or FAILED (did the
+    # step achieve its result?).  Collapsing them would let a completed call
+    # that produced a failed step read as success.
+    invocation_status = _INVOCATION_STATUS_FOR_RESULT.get(result)
+    if invocation_status is None:
+        raise _emit_fail("STEP_RESULT_UNKNOWN", result=result)
+    invocation_started = _invocation("STARTED", ss.sha256_jcs([]))
+    invocation_terminal = _invocation(invocation_status, ss.sha256_jcs([
+        {"path": artefact_path, "sha256": artefact_sha256},
+    ]))
+
+    exec_id = step_execution_id(
+        recovery_generation_id, plan_revision, wave_index, step_id, execution_round, input_fingerprint,
+    )
+    step_output_body: dict[str, Any] = {
+        "schema": STEP_OUTPUT_SCHEMA,
+        "recovery_generation_id": recovery_generation_id,
+        "plan_revision": plan_revision,
+        "wave_index": wave_index,
+        "step_id": step_id,
+        "skill_invocation_receipt_ref": f"receipts/skill-invocation/{step_id}-{attempt_id}.terminal.json",
+        "skill_invocation_receipt_sha256": receipt_sha256(invocation_terminal),
+        "execution_round": execution_round,
+        "step_execution_id": exec_id,
+        "supersedes_step_execution_id": None,
+        "attempt_id": attempt_id,
+        "supersedes_attempt_id": None,
+        "worker_lease_id": worker_lease_id,
+        "worker_fencing_token": worker_fencing_token,
+        "input_fingerprint": input_fingerprint,
+        "dependency_outputs": [dict(item) for item in dependency_outputs],
+        # The artefact digest IS the step output digest. There is no second,
+        # separate notion of "the output" to hash -- that is the whole point of
+        # anchoring on a declared artefact (ADR-0202).
+        "output_sha256": artefact_sha256,
+        "evidence_refs": [{"path": artefact_path, "sha256": artefact_sha256}],
+        "result": result,
+    }
+    step_output_body["content_sha256"] = ss.sha256_jcs(step_output_body)
+
+    bundle: dict[str, Any] = {
+        "schema": CHECKPOINT_ATTESTATION_SCHEMA,
+        "resolution": dict(resolution),
+        "dispatch_intent": dispatch_body,
+        "invocation_started": invocation_started,
+        "invocation_terminal": invocation_terminal,
+        "step_output": step_output_body,
+        "catalog": dict(catalog) if catalog is not None else resolution.get("catalog"),
+    }
+    return bundle
+
 def judge_checkpoint_attestation(
     bundle: Mapping[str, Any],
     *,
