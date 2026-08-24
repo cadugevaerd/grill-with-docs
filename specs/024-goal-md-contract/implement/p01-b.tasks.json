@@ -1,0 +1,15 @@
+{
+  "work_id": "feature-goal-autopilot-6f0eaefce4064eebb6bc16d5734bee0c",
+  "run_id": "run-99993c87098e6033d36cbdf1",
+  "wave_id": "wave-0001",
+  "node_id": "p01-b",
+  "tasks": ["T003"],
+  "produced": [
+    "specs/024-goal-md-contract/contracts/essential-substrings.md"
+  ],
+  "summary": "Tupla ESSENTIAL do goal.md definida como literal congelado de 13 substrings, cobrindo os 8 blocos de data-model.md §Documento (marcador, título, 2 trilhas, 2 templates, contrato de parada, pontos de interação, delegação, orientação). Nenhuma entrada deriva de workflow_v3.ESSENTIAL, workflow_v4.ESSENTIAL ou ensure_workflow.ESSENTIAL.",
+  "findings": [
+    "GOAL.template.md (T002) ainda não existe neste worktree — a tupla foi definida a partir de data-model.md, stop-signal.md e goal-objective-templates.md, e fixa 5 literais novos (título e cabeçalhos de Trilha pré-ciclo/ciclo v4/Delegação/Orientação) que T002 precisa reproduzir; T028 (Fase 7) reconcilia divergência.",
+    "Ponto obrigatório da trilha ciclo-v4 foi ancorado no id HOLD-V4-01, não na palavra solta 'ship', porque 'ship' é substring de palavras comuns (leadership, relationship) e daria falso positivo."
+  ]
+}
