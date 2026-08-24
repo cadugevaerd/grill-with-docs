@@ -468,7 +468,7 @@ class WorkflowWiring(unittest.TestCase):
 
     def test_constitution_requires_a_semver_bump_for_distributed_changes(self) -> None:
         text = self.CONSTITUTION.read_text(encoding="utf-8")
-        self.assertIn("- version: 2.1.0", text)
+        self.assertIn("- version: 2.2.0", text)
         self.assertIn("### Bump obrigatório do plugin", text)
         self.assertIn("`plugin/**` MUST incrementar a versão SemVer", text)
         self.assertIn("antes da tag de publicação", text)
@@ -480,6 +480,15 @@ class WorkflowWiring(unittest.TestCase):
         self.assertIn("MUST ter release correspondente", text)
         self.assertIn("criada pelo pipeline no merge para `main`", text)
         self.assertIn("tag sem release é publicação incompleta", text)
+
+    def test_constitution_forbids_deciding_by_an_embedded_version_literal(self) -> None:
+        """Literal de versão embutido concorda consigo mesmo e não verifica nada."""
+        text = self.CONSTITUTION.read_text(encoding="utf-8")
+        self.assertIn("### Versão resolvida, nunca embutida", text)
+        self.assertIn("MUST resolver a versão a partir da declaração do próprio artefato", text)
+        self.assertIn("MUST ser derivado desse artefato no momento da escrita", text)
+        self.assertIn("MUST enumerar", text)
+        self.assertIn("Ponto de despacho não enumerado MUST bloquear", text)
 
     def test_constitution_binds_orca_worker_tier_to_the_nature_of_the_work(self) -> None:
         """Worker despachado sem par modelo/esforço declarado é o default do runtime."""
