@@ -3,7 +3,7 @@
 ## FASE-001 — Emissor da cadeia de atestação
 - phase: FASE-001
 - ADRs: ADR-0201, ADR-0202, ADR-0203, ADR-0204
-- BLs: BL-0201
+- BLs: BL-0201, BL-0202
 - delivery-units: DU-001, DU-002
 - development-type: platform-devops
 
