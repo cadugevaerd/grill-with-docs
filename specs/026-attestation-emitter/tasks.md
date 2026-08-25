@@ -78,15 +78,15 @@ selar o vazio (ADR-0204).
 - [X] T016 Emitir a cadeia para `specify` deste work item, ancorada em `specs/026-attestation-emitter/spec.md`, e concluir a etapa por checkpoint
 - [X] T017 Emitir a cadeia para `plan`, ancorada em `specs/026-attestation-emitter/plan.md`, e concluir a etapa
 - [X] T018 Emitir a cadeia para `tasks`, ancorada em `specs/026-attestation-emitter/tasks.md`, e concluir a etapa
-- [ ] T019 Registrar em `.grill/work-items/feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25/` que o fechamento foi retroativo e por quê, para que a auditoria encontre a razão sem reconstruí-la
+- [X] T019 Registrar em `.grill/work-items/feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25/` que o fechamento foi retroativo e por quê, para que a auditoria encontre a razão sem reconstruí-la
 
 ---
 
 ## Phase 4: Fechamento
 
-- [ ] T020 Rodar `tests/run_validators.py` e confirmar exit `0`
-- [ ] T021 Percorrer os 20 requisitos de `specs/026-attestation-emitter/spec.md` e confirmar cobertura, registrando qualquer FR órfão
-- [ ] T022 Atualizar a baseline de testes em `CLAUDE.md`
+- [X] T020 Rodar `tests/run_validators.py` e confirmar exit `0`
+- [X] T021 Percorrer os 20 requisitos de `specs/026-attestation-emitter/spec.md` e confirmar cobertura, registrando qualquer FR órfão
+- [X] T022 Atualizar a baseline de testes em `CLAUDE.md`
 
 ---
 

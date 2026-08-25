@@ -28,6 +28,9 @@ if str(SCRIPTS) not in sys.path:
 from grill_core import attestation as A  # noqa: E402
 from grill_core import workflow_versions as WV  # noqa: E402
 
+#: The work item this contract exercises the CLI against; it exists in-tree.
+WORK_ID = "feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25"
+
 
 def read_bytes_of(path: str) -> bytes:
     return Path(path).read_bytes()
@@ -271,6 +274,50 @@ class MintedChainIsAccepted(unittest.TestCase):
         with self.assertRaises(Exception) as caught:
             self.chain(artefact_sha256="not-a-digest")
         self.assertIn("INVALID_DIGEST", str(caught.exception))
+
+
+class CliRefusesBeforeReading(unittest.TestCase):
+    """The verb must refuse a worker-required step before touching the artefact.
+
+    Order matters here: hashing first and refusing second would mean the command
+    read a file it had already decided it had no business attesting.
+    """
+
+    def setUp(self) -> None:
+        import subprocess
+        self.run = subprocess.run
+
+    def _attest(self, step: str, artifact: str, out: str):
+        import json
+        import subprocess
+        proc = subprocess.run(
+            [sys.executable, str(REPO / "plugin/skills/grill-with-docs/scripts/grill_workspace.py"),
+             "attest", str(REPO), "--work-id", WORK_ID, "--step", step,
+             "--artifact", artifact, "--out", out],
+            capture_output=True, text=True)
+        try:
+            return proc.returncode, json.loads(proc.stdout or proc.stderr or "{}")
+        except json.JSONDecodeError:
+            return proc.returncode, {"raw": (proc.stdout or proc.stderr)[:400]}
+
+    def test_worker_required_step_is_refused_by_the_verb(self) -> None:
+        code, payload = self._attest(
+            "implement-parallel", "specs/026-attestation-emitter/spec.md",
+            ".grill/attestations/should-not-exist.json")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(payload.get("code"), "WORKER_REQUIRED_STEP")
+        self.assertEqual(payload.get("step_id"), "implement-parallel")
+        self.assertFalse(
+            (REPO / ".grill/attestations/should-not-exist.json").exists(),
+            "a refused emission must not leave a bundle behind")
+
+    def test_absent_artefact_is_refused_by_the_verb(self) -> None:
+        code, payload = self._attest(
+            "analyze", "specs/026-attestation-emitter/nao-existe.md",
+            ".grill/attestations/should-not-exist-either.json")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(payload.get("code"), "ARTEFACT_UNREADABLE")
+        self.assertFalse((REPO / ".grill/attestations/should-not-exist-either.json").exists())
 
 
 if __name__ == "__main__":
