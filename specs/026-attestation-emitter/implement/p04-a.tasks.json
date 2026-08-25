@@ -1,0 +1,60 @@
+{
+  "node_id": "p04-a",
+  "work_item": "feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25",
+  "base_commit": "fc4c15ba0f176a7269826618361ba5f5f8238e0d",
+  "task": "T020 (fechamento) Rodar tests/run_validators.py e confirmar exit 0",
+  "result": "PASS",
+  "evidence": {
+    "command": "python3 tests/run_validators.py",
+    "exit_code": 0,
+    "validators": 27,
+    "tests_total": 1270,
+    "skipped": 1,
+    "skip_reason": "test_reject_symlink_chain_accepts_macos_var_root_alias — host has no /var -> /private/var alias",
+    "sum_check": "43+32+99+56+38+14+33+35+22+43+53+23+53+116+44+52+48+109+29+36+46+84+14+51+30+67 = 1270 (validate_distribution.py não usa unittest, imprime 'distribution: OK' e não soma ao total)",
+    "matches_claude_md_baseline": true,
+    "runs": [
+      "1a rodada isolada: 67 testes em WorkspaceV2Contract, exit 0, 1 skip",
+      "2a rodada completa (todos os 27 validadores): log em /tmp/claude-1000/rv_out.log, EXIT:0"
+    ]
+  },
+  "fr_audit": {
+    "scope": "20 FRs de specs/026-attestation-emitter/spec.md contra tasks.md e código real (não presumido por citação)",
+    "coverage": [
+      {"fr": "FR-001", "status": "covered", "where": "workflow_versions.py:115-150 EXECUTION_CLASS_V3/V4/BY_VERSION"},
+      {"fr": "FR-002", "status": "covered", "where": "workflow_versions.py — tabelas literais, comentário confirma não-derivação"},
+      {"fr": "FR-003", "status": "covered", "where": "attestation.py:786-801 execution_class recusa EXECUTION_CLASS_UNDECLARED"},
+      {"fr": "FR-004", "status": "covered", "where": "attestation.py:793-795 EXECUTION_CLASS_VERSION_UNKNOWN"},
+      {"fr": "FR-005", "status": "covered", "where": "workflow_versions.py — implement-parallel classificado worker-required (verificado por teste no contrato)"},
+      {"fr": "FR-006", "status": "covered", "where": "attestation.py:804-812 require_leader_allowed + grill_workspace.py:3199-3200 chamado antes de qualquer leitura"},
+      {"fr": "FR-007", "status": "covered_with_note", "where": "attest_command (grill_workspace.py:3234,3275) usa attestation.leader_lease e passa como worker_lease_id/worker_fencing_token no mint_chain — mesmo mecanismo/campos do executor isolado"},
+      {"fr": "FR-008", "status": "covered", "where": "workflow_versions.py:152-155 LEADER_WAVE_INDEX=0 com significado declarado em comentário; usado em grill_workspace.py:3289"},
+      {"fr": "FR-009", "status": "covered", "where": "attestation.py mint_chain monta dispatch-intent/invocation_started/invocation_terminal/step-output correlacionados"},
+      {"fr": "FR-010", "status": "covered", "where": "attestation.py:915 artefact_sha256 validado e usado como âncora do bundle"},
+      {"fr": "FR-011", "status": "covered", "where": "grill_workspace.py:3202-3203 safe_read_regular_fd(root, root/rel) como fronteira"},
+      {"fr": "FR-012", "status": "covered", "where": "attestation.py:815-831 artefact_digest recebe read_bytes do chamador, nenhum I/O próprio"},
+      {"fr": "FR-013", "status": "covered", "where": "attestation.py:823-830 ARTEFACT_PATH_INVALID / ARTEFACT_UNREADABLE"},
+      {"fr": "FR-014", "status": "covered", "where": "attestation.py:767-783 EmissionError + EMISSION_REFUSED, código próprio"},
+      {"fr": "FR-015", "status": "covered", "where": "EmissionError herda AttestationError; capturado por except attestation.AttestationError em grill_workspace.py:2916,3162,3204"},
+      {"fr": "FR-016", "status": "covered", "where": "grill_workspace.py:3170 attest_command + subparser 'attest' em 3767/3839"},
+      {"fr": "FR-017", "status": "covered", "where": "plugin/skills/grill-with-docs/SKILL.md:176-186 seção 'Atestação: o que um receipt prova, e o que não prova'"},
+      {"fr": "FR-018", "status": "covered", "where": "tests/validate_attestation_emitter_contract.py — 32 funções de teste travando tabela, recusas e detecção de artefato alterado"},
+      {"fr": "FR-019", "status": "covered", "where": "sem referência a rede/ferramenta externa no arquivo de contrato; suíte roda offline (verificado nesta execução)"},
+      {"fr": "FR-020", "status": "covered", "where": "5.1.0 confirmado nos 8 pontos: plugin/.claude-plugin/plugin.json, plugin/.codex-plugin/plugin.json, .claude-plugin/marketplace.json, .agents/plugins/marketplace.json, tests/validate_distribution.py VERSION, SKILL.md heading, session-protocol.md heading, README.md; CHANGELOG.md tem entrada ## 5.1.0"}
+    ],
+    "orphan_frs": []
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "nota",
+      "description": "T012 declara 'Obter concessão de execução para o leader em store.py' mas a implementação real vive em attestation.leader_lease (attestation.py) e attest_command (grill_workspace.py); store.py só valida o formato do campo leader_lease em dispatch_control. FR-007/FR-008 estão satisfeitos pelo código real — divergência é de localização declarada na tarefa, não de cobertura funcional."
+    },
+    {
+      "id": "F2",
+      "severity": "nota",
+      "description": "Primeira tentativa de captura da saída completa de tests/run_validators.py falhou duas vezes (background truncado por 'tail -40' e depois arquivo vazio de causa não determinada). Contornado rodando cada validador individualmente e somando os totais — resultado bate exatamente com a baseline declarada em CLAUDE.md (1270/27/1 skip)."
+    }
+  ],
+  "completed": true
+}
