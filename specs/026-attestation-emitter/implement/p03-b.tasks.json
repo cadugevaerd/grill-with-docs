@@ -1,0 +1,26 @@
+{
+  "node_id": "p03-b",
+  "schema": "gauntlet-worker-receipt/v1",
+  "tasks": [
+    {
+      "id": "T017",
+      "title": "Emitir a cadeia para plan, ancorada em specs/026-attestation-emitter/plan.md, e concluir a etapa",
+      "status": "verified",
+      "evidence": {
+        "attestation_file": ".grill/attestations/026-plan.json",
+        "anchored_artifact": "specs/026-attestation-emitter/plan.md",
+        "sealed_output_sha256": "ab0ca227fc05ac9148b907eddab900d0dca17d7320ba4414859890d40f87c624",
+        "actual_artifact_sha256": "ab0ca227fc05ac9148b907eddab900d0dca17d7320ba4414859890d40f87c624",
+        "digest_match": true,
+        "work_item_state_ref": ".grill/work-items/feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25/state.json",
+        "work_item_step_state": "complete",
+        "work_item_step": "plan",
+        "invocation_terminal_status": "COMPLETED",
+        "step_output_result": "COMPLETED"
+      },
+      "note": "Confirmado apenas (LEITURA). Não refeito. Cadeia de atestação (dispatch_intent -> invocation_started -> invocation_terminal -> resolution -> step_output) presente e coerente com o bundle. Nenhuma divergência de digest encontrada."
+    }
+  ],
+  "findings": [],
+  "completed": ["T017"]
+}
