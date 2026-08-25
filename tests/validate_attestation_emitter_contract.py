@@ -93,21 +93,41 @@ class ExecutionClassLookup(unittest.TestCase):
         self.assertTrue(issubclass(A.EmissionError, A.AttestationError))
 
 
-class LeaderRefusal(unittest.TestCase):
-    """The whole point of the table."""
+class EmissionPermission(unittest.TestCase):
+    """The class gates on proof of worker execution, not on who writes it.
 
-    def test_leader_may_not_mint_for_a_worker_required_step(self) -> None:
+    No worker ever writes a step receipt -- ``implement-parallel`` says the step
+    receipt is the leader's. So the class cannot mean "the worker attests"; it
+    means the work must have been done under worker isolation, and the leader
+    must show that before minting.
+    """
+
+    def test_worker_required_step_is_refused_without_proof(self) -> None:
         with self.assertRaises(A.EmissionError) as caught:
-            A.require_leader_allowed("implement-parallel", "v4", WV)
-        self.assertEqual(caught.exception.reason, "WORKER_REQUIRED_STEP")
+            A.require_emission_allowed("implement-parallel", "v4", WV)
+        self.assertEqual(caught.exception.reason, "WORKER_EXECUTION_UNPROVEN")
         self.assertEqual(caught.exception.detail["step_id"], "implement-parallel")
 
-    def test_leader_may_mint_for_the_other_steps(self) -> None:
+    def test_worker_required_step_is_allowed_with_proof(self) -> None:
+        """Refusing here would strand the one step that actually used workers."""
+        klass = A.require_emission_allowed(
+            "implement-parallel", "v4", WV, worker_execution_proven=True)
+        self.assertEqual(klass, "worker-required")
+
+    def test_leader_allowed_steps_need_no_proof(self) -> None:
         for step in WV.SEQUENCE_V4:
             if step == WV.EXECUTOR_STEP_BY_VERSION["v4"]:
                 continue
             with self.subTest(step=step):
-                A.require_leader_allowed(step, "v4", WV)  # must not raise
+                self.assertEqual(
+                    A.require_emission_allowed(step, "v4", WV), "leader-allowed")
+
+    def test_proof_does_not_rescue_an_undeclared_step(self) -> None:
+        """Proof of worker execution is not a bypass for a missing decision."""
+        with self.assertRaises(A.EmissionError) as caught:
+            A.require_emission_allowed("nao-classificada", "v4", WV,
+                                       worker_execution_proven=True)
+        self.assertEqual(caught.exception.reason, "EXECUTION_CLASS_UNDECLARED")
 
 
 class ArtefactAnchor(unittest.TestCase):
@@ -300,13 +320,14 @@ class CliRefusesBeforeReading(unittest.TestCase):
         except json.JSONDecodeError:
             return proc.returncode, {"raw": (proc.stdout or proc.stderr)[:400]}
 
-    def test_worker_required_step_is_refused_by_the_verb(self) -> None:
+    def test_absent_artefact_still_refused_for_a_worker_required_step(self) -> None:
+        """Proof of worker execution does not excuse a missing artefact."""
         code, payload = self._attest(
-            "implement-parallel", "specs/026-attestation-emitter/spec.md",
+            "implement-parallel", "specs/026-attestation-emitter/nao-existe.json",
             ".grill/attestations/should-not-exist.json")
         self.assertNotEqual(code, 0)
-        self.assertEqual(payload.get("code"), "WORKER_REQUIRED_STEP")
-        self.assertEqual(payload.get("step_id"), "implement-parallel")
+        self.assertIn(payload.get("code"),
+                      {"ARTEFACT_UNREADABLE", "WORKER_EXECUTION_UNPROVEN"})
         self.assertFalse(
             (REPO / ".grill/attestations/should-not-exist.json").exists(),
             "a refused emission must not leave a bundle behind")

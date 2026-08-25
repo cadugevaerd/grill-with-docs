@@ -801,15 +801,39 @@ def execution_class(step_id: str, workflow_version: str, versions: Any) -> str:
     return klass
 
 
-def require_leader_allowed(step_id: str, workflow_version: str, versions: Any) -> None:
-    """Refuse to mint a leader-executed chain for a worker-required step.
+def require_emission_allowed(
+    step_id: str,
+    workflow_version: str,
+    versions: Any,
+    *,
+    worker_execution_proven: bool = False,
+) -> str:
+    """Decide whether a chain may be minted for this step, and say why not.
 
-    ``implement-parallel``'s worktree isolation and closed file grant *are* its
-    safety mechanism.  A leader receipt for it would attest an isolation that
-    never happened, which is worse than no receipt at all.
+    ``worker-required`` never meant "the worker writes the receipt" -- no worker
+    ever writes a step receipt. ``implement-parallel`` is explicit that the step
+    receipt belongs to the leader and that no worker checkpoints a step. What
+    the class means is that the *work* must have been done by dispatched
+    workers, because their worktree isolation and closed file grant are the
+    step's safety mechanism.
+
+    So the leader may mint for such a step, but only against proof that workers
+    actually ran: converged waves covering the DAG. Without that proof the
+    receipt would attest an isolation that never happened, which is worse than
+    no receipt at all. With it, refusing would strand the one step that did use
+    workers -- which is exactly what the earlier unconditional refusal did.
+
+    Returns the class, so a caller can record which rule it satisfied.
     """
-    if execution_class(step_id, workflow_version, versions) == "worker-required":
-        raise _emit_fail("WORKER_REQUIRED_STEP", step_id=step_id, workflow_version=workflow_version)
+    klass = execution_class(step_id, workflow_version, versions)
+    if klass == "worker-required" and not worker_execution_proven:
+        raise _emit_fail(
+            "WORKER_EXECUTION_UNPROVEN",
+            step_id=step_id,
+            workflow_version=workflow_version,
+            needed="converged waves covering the execution DAG",
+        )
+    return klass
 
 
 def artefact_digest(read_bytes: Callable[[str], bytes], path: str) -> tuple[str, int]:

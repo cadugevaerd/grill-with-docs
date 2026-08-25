@@ -3167,6 +3167,32 @@ def verify_checkpoint_attestation(
 
 
 
+
+def _converged_waves_exist(root: Path, work_id: str) -> bool:
+    """Whether any run of this work item has a converged wave.
+
+    Read from the durable run state, never from a caller-supplied flag: the
+    whole point of ``worker-required`` is that the leader cannot simply declare
+    that workers ran.
+
+    Absent run state is not an error here -- a work item that never activated
+    the Gauntlet has no converged wave, which is exactly the answer ``False``
+    conveys.
+    """
+    try:
+        gauntlet_runs = grill_core_module("gauntlet_runs")
+        runs = gauntlet_runs._read_runs(root, work_id, absent_ok=True)
+    except Exception:
+        return False
+    for run in (runs or {}).values():
+        if not isinstance(run, dict):
+            continue
+        for wave in (run.get("waves") or {}).values():
+            if isinstance(wave, dict) and wave.get("converged") is True:
+                return True
+    return False
+
+
 def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Mint the attestation chain for one leader-executed step.
 
@@ -3194,10 +3220,19 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if workflow_version is None:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-UNTRACKED", args.work_id)
 
+    # A ``worker-required`` step may be attested by the leader -- the step
+    # receipt is always the leader's -- but only against proof that dispatched
+    # workers actually did the work. That proof is converged waves on the run,
+    # read from durable state rather than declared by the caller: a flag the
+    # operator sets would be the self-certification the class exists to prevent.
+    worker_execution_proven = _converged_waves_exist(root, args.work_id)
     try:
-        # Refuse before reading anything: a step whose isolation is its safety
-        # mechanism must not even get as far as hashing an artefact.
-        attestation.require_leader_allowed(args.step, workflow_version, versions)
+        # Refuse before reading anything: without the proof, a step whose
+        # isolation is its safety mechanism must not even get as far as hashing
+        # an artefact.
+        execution_class = attestation.require_emission_allowed(
+            args.step, workflow_version, versions,
+            worker_execution_proven=worker_execution_proven)
         artefact_sha256, artefact_size = attestation.artefact_digest(
             lambda rel: safe_read_regular_fd(root, root / rel), args.artifact,
         )
@@ -3312,7 +3347,8 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         "verdict": "ATTESTED",
         "work_id": args.work_id,
         "step": args.step,
-        "execution_class": "leader-allowed",
+        "execution_class": execution_class,
+        "worker_execution_proven": worker_execution_proven,
         "artifact": args.artifact,
         "artifact_sha256": artefact_sha256,
         "artifact_bytes": artefact_size,

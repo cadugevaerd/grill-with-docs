@@ -35,6 +35,12 @@
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
       },
+      "implement-parallel": {
+        "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "step_id": "implement-parallel"
+      },
       "partition": {
         "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
         "provenance": "current-generation",
@@ -188,9 +194,28 @@
         "reason": "BL-0202: a classe worker-required recusa emissao do leader, mas a skill implement-parallel determina que o receipt da etapa e do leader e que nenhum worker faz checkpoint de etapa. As quatro waves foram declaradas, despachadas a workers reais e convergidas; a etapa nao pode ser concluida ate a regra virar condicional a haver waves convergidas.",
         "state": "blocked",
         "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "implement-parallel"
       }
     ],
-    "current_step": "implement-parallel",
+    "current_step": "converge",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -211,7 +236,7 @@
       "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
-      "implement-parallel": "blocked",
+      "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
       "review": "pending",
