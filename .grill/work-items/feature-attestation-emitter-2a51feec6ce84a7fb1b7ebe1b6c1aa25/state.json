@@ -35,6 +35,12 @@
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
       },
+      "partition": {
+        "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "step_id": "partition"
+      },
       "plan": {
         "output_sha256": "sha256:ab0ca227fc05ac9148b907eddab900d0dca17d7320ba4414859890d40f87c624",
         "provenance": "current-generation",
@@ -149,9 +155,28 @@
         "reason": "",
         "state": "complete",
         "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "partition"
       }
     ],
-    "current_step": "partition",
+    "current_step": "implement-parallel",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -173,7 +198,7 @@
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
-      "partition": "pending",
+      "partition": "complete",
       "plan": "complete",
       "review": "pending",
       "ship": "pending",
