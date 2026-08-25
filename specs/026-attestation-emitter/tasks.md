@@ -47,7 +47,7 @@ selar o vazio (ADR-0204).
 - [X] T003 [US2] Implementar `require_leader_allowed` em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py`, recusando cunhagem de leader para etapa `worker-required` (FR-006)
 - [X] T004 [US1] Implementar `artefact_digest` em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py`, recebendo a fronteira de leitura do chamador e recusando caminho inválido, artefato ilegível e leitor que não devolva bytes (FR-010, FR-012, FR-013)
 - [X] T005 Declarar `EmissionError` e `EMISSION_REFUSED` em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py`, com `EmissionError` herdando de `AttestationError` (FR-014, FR-015)
-- [X] T006 Escrever `tests/validate_attestation_emitter_contract.py` travando a totalidade da tabela, a coincidência com a etapa que despacha workers, as recusas e a detecção de artefato alterado (FR-018, FR-019, SC-002, SC-003, SC-005)
+- [X] T006 Escrever `tests/validate_attestation_emitter_contract.py` travando a totalidade da tabela, a coincidência com a etapa que despacha workers, as recusas e a detecção de artefato alterado (FR-018, FR-019, SC-002, SC-003, SC-005, SC-007)
 - [X] T007 Bump 5.0.0 → 5.1.0 nos oito pontos travados por `tests/validate_distribution.py` e entrada no `CHANGELOG.md` (FR-020)
 
 **Checkpoint**: entregue. Suíte em 1256 testes, 27 validadores, exit 0; bump gate `BUMPED` contra `origin/main`.
@@ -64,7 +64,7 @@ selar o vazio (ADR-0204).
 - [X] T011 [US1] Implementar em `plugin/skills/grill-with-docs/scripts/grill_core/attestation.py` a função que reúne os elos no bundle que `judge_checkpoint_attestation` aceita, consumindo `step_skills.resolve_workflow_skill` para o elo de resolução em vez de reimplementá-lo (FR-009)
 - [X] T012 [US1] Obter concessão de execução para o leader em `plugin/skills/grill-with-docs/scripts/grill_core/store.py`, pelo mesmo mecanismo que já concede a worker, sem inventar campo novo (FR-007, FR-008)
 - [X] T013 [US1] Acrescentar o verbo de emissão em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, passando `safe_read_regular_fd` como fronteira de leitura e recusando antes de qualquer escrita quando a classe não permitir (FR-011, FR-016)
-- [X] T014 [US2] Estender `tests/validate_attestation_emitter_contract.py` para travar que o bundle montado é aceito por `judge_checkpoint_attestation` e que o verbo recusa etapa `worker-required` (FR-018, SC-001, SC-004)
+- [X] T014 [US2] Estender `tests/validate_attestation_emitter_contract.py` para travar que o bundle montado é aceito por `judge_checkpoint_attestation` e que o verbo recusa etapa `worker-required` sem deixar bundle para trás (FR-018, SC-001, SC-004, SC-006)
 - [X] T015 [US3] Documentar em `plugin/skills/grill-with-docs/SKILL.md` o que a cadeia prova e o que não prova, lado a lado, sem eufemismo (FR-017, SC-008)
 
 **Checkpoint**: uma etapa `leader-allowed` conclui por checkpoint sem campo inventado.
@@ -75,18 +75,18 @@ selar o vazio (ADR-0204).
 
 **Purpose**: Usar o emissor para fechar as etapas deste próprio work item.
 
-- [X] T016 Emitir a cadeia para `specify` deste work item, ancorada em `specs/026-attestation-emitter/spec.md`, e concluir a etapa por checkpoint
-- [X] T017 Emitir a cadeia para `plan`, ancorada em `specs/026-attestation-emitter/plan.md`, e concluir a etapa
-- [X] T018 Emitir a cadeia para `tasks`, ancorada em `specs/026-attestation-emitter/tasks.md`, e concluir a etapa
-- [X] T019 Registrar em `.grill/work-items/feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25/` que o fechamento foi retroativo e por quê, para que a auditoria encontre a razão sem reconstruí-la
+- [X] T016 (bootstrap ADR-0204) Emitir a cadeia para `specify` deste work item, ancorada em `specs/026-attestation-emitter/spec.md`, e concluir a etapa por checkpoint
+- [X] T017 (bootstrap ADR-0204) Emitir a cadeia para `plan`, ancorada em `specs/026-attestation-emitter/plan.md`, e concluir a etapa
+- [X] T018 (bootstrap ADR-0204) Emitir a cadeia para `tasks`, ancorada em `specs/026-attestation-emitter/tasks.md`, e concluir a etapa
+- [X] T019 (bootstrap ADR-0204) Registrar em `.grill/work-items/feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25/` que o fechamento foi retroativo e por quê, para que a auditoria encontre a razão sem reconstruí-la
 
 ---
 
 ## Phase 4: Fechamento
 
-- [X] T020 Rodar `tests/run_validators.py` e confirmar exit `0`
-- [X] T021 Percorrer os 20 requisitos de `specs/026-attestation-emitter/spec.md` e confirmar cobertura, registrando qualquer FR órfão
-- [X] T022 Atualizar a baseline de testes em `CLAUDE.md`
+- [X] T020 (fechamento) Rodar `tests/run_validators.py` e confirmar exit `0`
+- [X] T021 (fechamento) Percorrer os 20 requisitos de `specs/026-attestation-emitter/spec.md` e confirmar cobertura, registrando qualquer FR órfão
+- [X] T022 (fechamento) Atualizar a baseline de testes em `CLAUDE.md`
 
 ---
 
