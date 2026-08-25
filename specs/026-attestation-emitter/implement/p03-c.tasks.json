@@ -1,0 +1,35 @@
+{
+  "node_id": "p03-c",
+  "schema": "grill-implement-receipt/v1",
+  "mode": "verify-bootstrap-closure",
+  "tasks": {
+    "T018": {
+      "title": "Emitir a cadeia para `tasks`, ancorada em specs/026-attestation-emitter/tasks.md, e concluir a etapa",
+      "result": "DIVERGENCE",
+      "evidence": {
+        "attestation_file": ".grill/attestations/026-tasks.json",
+        "attestation_exists": true,
+        "anchor_path": "specs/026-attestation-emitter/tasks.md",
+        "sealed_output_sha256": "9d27185f993515d14aad1f49d41c584f79373ea13658691ef845782c4b9838d2",
+        "sealed_at_commit": "4961233edb252dc6f9867ce94bc95a8ccffb0be1",
+        "current_file_sha256": "7ce58a101d61d214895db26b49b1853456ccca5044a3cd72c848d68406b6ee59",
+        "digest_match": false,
+        "work_item_state_json": ".grill/work-items/feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25/state.json",
+        "work_item_step_tasks": "complete",
+        "work_item_evidence_sha256": "9d27185f993515d14aad1f49d41c584f79373ea13658691ef845782c4b9838d2"
+      }
+    }
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "task": "T018",
+      "summary": "output_sha256 selado na cadeia de atestação (.grill/attestations/026-tasks.json, step_output.output_sha256) e no state.json do work item não corresponde aos bytes atuais de specs/026-attestation-emitter/tasks.md.",
+      "sealed_digest": "9d27185f993515d14aad1f49d41c584f79373ea13658691ef845782c4b9838d2",
+      "current_digest": "7ce58a101d61d214895db26b49b1853456ccca5044a3cd72c848d68406b6ee59",
+      "cause": "commit fc4c15b (\"docs(026-attestation-emitter): fechar as lacunas de rastreabilidade do analyze\") editou tasks.md após a cadeia ter sido selada no commit 4961233 (worktree_head do dispatch_intent), sem re-emitir a atestação.",
+      "recommendation": "re-emitir a cadeia de atestação para o step `tasks` com o novo digest antes de considerar a etapa fechada, ou reverter/justificar a edição pós-selagem."
+    }
+  ],
+  "completed": ["T018"]
+}
