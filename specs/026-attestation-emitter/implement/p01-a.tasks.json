@@ -1,0 +1,64 @@
+{
+  "node_id": "p01-a",
+  "task_ids": ["T002", "T003", "T004", "T005"],
+  "verification_mode": "audit-only-bootstrap",
+  "note": "Tarefas ja implementadas no base commit deste worktree (ADR-0204). Este no verifica e atesta, nao reimplementa.",
+  "tasks": [
+    {
+      "id": "T002",
+      "description": "Implementar execution_class em attestation.py, com recusa nomeada para etapa nao declarada, versao desconhecida e valor fora do conjunto (FR-003, FR-004)",
+      "result": "PASS",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py:786-801 -- def execution_class(step_id, workflow_version, versions)",
+        "attestation.py:794-795 -- versao desconhecida: raise _emit_fail(\"EXECUTION_CLASS_VERSION_UNKNOWN\", ...)",
+        "attestation.py:797-798 -- etapa nao declarada: raise _emit_fail(\"EXECUTION_CLASS_UNDECLARED\", ...)",
+        "attestation.py:799-800 -- valor fora do conjunto: raise _emit_fail(\"EXECUTION_CLASS_INVALID\", ...)",
+        "tests/validate_attestation_emitter_contract.py:74-89 -- ExecutionClassLookup.test_leader_allowed_step_resolves, test_worker_required_step_resolves, test_undeclared_step_fails_closed_naming_the_step, test_unknown_version_fails_closed"
+      ]
+    },
+    {
+      "id": "T003",
+      "description": "Implementar require_leader_allowed em attestation.py, recusando cunhagem de leader para etapa worker-required (FR-006)",
+      "result": "PASS",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py:804-812 -- def require_leader_allowed(step_id, workflow_version, versions)",
+        "attestation.py:811-812 -- raise _emit_fail(\"WORKER_REQUIRED_STEP\", ...) quando execution_class == worker-required",
+        "tests/validate_attestation_emitter_contract.py:96-110 -- LeaderRefusal.test_leader_may_not_mint_for_a_worker_required_step, test_leader_may_mint_for_the_other_steps"
+      ]
+    },
+    {
+      "id": "T004",
+      "description": "Implementar artefact_digest em attestation.py, recebendo a fronteira de leitura do chamador e recusando caminho invalido, artefato ilegivel e leitor que nao devolva bytes (FR-010, FR-012, FR-013)",
+      "result": "PASS",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py:815-831 -- def artefact_digest(read_bytes, path)",
+        "attestation.py:823-824 -- caminho invalido: raise _emit_fail(\"ARTEFACT_PATH_INVALID\", ...)",
+        "attestation.py:825-828 -- artefato ilegivel: raise _emit_fail(\"ARTEFACT_UNREADABLE\", ...) sobre excecao do read_bytes do chamador",
+        "attestation.py:829-830 -- leitor sem bytes: raise _emit_fail(\"ARTEFACT_UNREADABLE\", ..., problem=\"reader returned non-bytes\")",
+        "tests/validate_attestation_emitter_contract.py:113-157 -- ArtefactAnchor.test_digest_matches_the_bytes_on_disk, test_changing_the_artefact_changes_the_digest, test_absent_artefact_is_a_named_refusal, test_empty_path_is_refused_before_any_read, test_reader_returning_non_bytes_is_refused, test_emission_does_no_io_of_its_own"
+      ]
+    },
+    {
+      "id": "T005",
+      "description": "Declarar EmissionError e EMISSION_REFUSED em attestation.py, com EmissionError herdando de AttestationError (FR-014, FR-015)",
+      "result": "PASS",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py:767-773 -- class EmissionError(AttestationError)",
+        "attestation.py:779 -- EMISSION_REFUSED = \"EMISSION_REFUSED\"",
+        "tests/validate_attestation_emitter_contract.py:91-93 -- ExecutionClassLookup.test_emission_error_is_an_attestation_error: assertTrue(issubclass(A.EmissionError, A.AttestationError))"
+      ]
+    }
+  ],
+  "findings": [],
+  "suite": {
+    "command": "python3 tests/run_validators.py",
+    "exit_code": 0,
+    "validators_run": 27,
+    "total_tests": 1270,
+    "skipped": 1,
+    "failed": 0,
+    "errors": 0,
+    "status": "OK"
+  },
+  "completed": ["T002", "T003", "T004", "T005"]
+}
