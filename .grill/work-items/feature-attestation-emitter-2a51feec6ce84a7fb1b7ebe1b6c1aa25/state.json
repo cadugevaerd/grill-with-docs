@@ -29,10 +29,10 @@
       "implement-parallel": "se-c1151ec85bc615b040e5560a558fc0bd667dd4ff045f86c7d144970e999ead5e",
       "partition": "se-fafb3b87ae40c86d91fbb9d696f77d5dc8e9f8d67ab776f7e4fdbe8f60e418eb",
       "plan": "se-27e5f0a31d4374f1e6c854304455d39461dd79080c14161630abfea91e34bfde",
-      "review": "se-737158b9e6792f8335ab85bbe62a763879dd2d5211384511ea27c656895cc1e9",
+      "review": "se-cd3985620598e65a7e215cf8448ce22602c98848b26ded5dff1795f52fbd9387",
       "specify": "se-d60cacdf705fd15778db16f717081d2cd4d540d64d1f8ae4bdf4a3d5f2cfca1d",
       "tasks": "se-ecd5753a939c949b17f6cebbd5df310224a90cd9cf0d4927d1ed86b69a6c768f",
-      "verify": "se-f033c71e7012a236918d5a90b0aeb1bf04f11c4a4ac87a809d0a10fb22d5d4d4"
+      "verify": "se-fe0e05b4652eb2a07a80010ee203dffb8166a1eca8b180343bac4146f916b8f0"
     },
     "attested_outputs": {
       "analyze": {
@@ -72,9 +72,9 @@
         "step_id": "plan"
       },
       "review": {
-        "output_sha256": "sha256:2cbad852a91fdff014d7da2e24b52303cff0acf8b6ec97214572a95a9b48e225",
+        "output_sha256": "sha256:5d7365683e5b16518afbe9436de017a367e44a77eafbc7101b5903e1c286557b",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
         "step_id": "review"
       },
       "specify": {
@@ -90,9 +90,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:ebe5e862e3bc22c712357aabcf4826de3cd6eaa03b2a56c7163648822d2b5232",
+        "output_sha256": "sha256:004ff66cbc6d8ee0a05cbbb2cb1f3fb9ece78794e8ba8727799f020b4ebff30f",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-4.terminal.json",
         "step_id": "verify"
       }
     },
@@ -963,12 +963,39 @@
         "state": "complete",
         "step": "converge",
         "supersedes": ".grill/attestations/026-converge-r3.json"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/verify.md",
+            "sha256": "004ff66cbc6d8ee0a05cbbb2cb1f3fb9ece78794e8ba8727799f020b4ebff30f"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "quarta rodada de verify apos FR-028: 1303 testes exit 0, distribution OK",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/026-verify-r3.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/review.md",
+            "sha256": "5d7365683e5b16518afbe9436de017a367e44a77eafbc7101b5903e1c286557b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "quarta rodada de review: APPROVE, cobrindo tambem FR-028; um Nit novo sobre content_sha256 da autorizacao",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/attestations/026-review.json"
       }
     ],
-    "chain_stale": [
-      "verify",
-      "review"
-    ],
+    "chain_stale": [],
     "current_step": "ship",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
@@ -1324,6 +1351,20 @@
           "superseded_by_step_execution_id": "se-27e5f0a31d4374f1e6c854304455d39461dd79080c14161630abfea91e34bfde"
         }
       ],
+      "review": [
+        {
+          "attempt_id": "review-1",
+          "attestation": ".grill/attestations/026-review.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:2cbad852a91fdff014d7da2e24b52303cff0acf8b6ec97214572a95a9b48e225",
+          "provenance": "current-generation",
+          "reason": "quarta rodada de review: APPROVE, cobrindo tambem FR-028; um Nit novo sobre content_sha256 da autorizacao",
+          "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+          "step_execution_id": "se-737158b9e6792f8335ab85bbe62a763879dd2d5211384511ea27c656895cc1e9",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-cd3985620598e65a7e215cf8448ce22602c98848b26ded5dff1795f52fbd9387"
+        }
+      ],
       "specify": [
         {
           "attempt_id": "specify-1",
@@ -1448,6 +1489,18 @@
           "step_execution_id": "se-04a6bce0023cffc2f03817bc4fce56a7f2731c26a46c03ebaa3d9fb377dcc9db",
           "step_id": "verify",
           "superseded_by_step_execution_id": "se-f033c71e7012a236918d5a90b0aeb1bf04f11c4a4ac87a809d0a10fb22d5d4d4"
+        },
+        {
+          "attempt_id": "verify-3",
+          "attestation": ".grill/attestations/026-verify-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:ebe5e862e3bc22c712357aabcf4826de3cd6eaa03b2a56c7163648822d2b5232",
+          "provenance": "current-generation",
+          "reason": "quarta rodada de verify apos FR-028: 1303 testes exit 0, distribution OK",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-3.terminal.json",
+          "step_execution_id": "se-f033c71e7012a236918d5a90b0aeb1bf04f11c4a4ac87a809d0a10fb22d5d4d4",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-fe0e05b4652eb2a07a80010ee203dffb8166a1eca8b180343bac4146f916b8f0"
         }
       ]
     },

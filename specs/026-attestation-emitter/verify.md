@@ -1,29 +1,29 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree 0127089e64cdb59ced08016a8464adc504ea2fc012e498b40a703d678e741089 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2
+Source fingerprint: tree 415b3f088e8556ac3640face2b6128a8e8a0208ef8fcfbe728ea6593fd98d8f2 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98
 Converge: CONVERGED
 
 Feature: `specs/026-attestation-emitter`
 Work item: `feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25`
 
-Terceira rodada. A primeira terminou em `REQUEST CHANGES` no review, com três
-achados Important; as três correções foram aplicadas e o ciclo voltou ao
-converge, que rodou mais quatro vezes (Phases 9–11, T035–T039) até a nona
-passada devolver `converged`.
+Quarta rodada. A primeira terminou em `REQUEST CHANGES` com três achados
+Important, todos corrigidos. A segunda foi invalidada por mim, ao corrigir um
+comentário enganoso em `verify_supersession` durante a própria revisão. A
+terceira foi invalidada por uma lacuna descoberta ao chegar em `ship`: `attest`
+não sabia anexar a autorização humana, e `ship` é a única etapa que a exige —
+um bundle de `ship` jamais seria aceito. Era a mesma classe de defeito que este
+work item existe para fechar, encontrada na última etapa possível.
 
-A segunda rodada foi invalidada por mim: durante o review corrigi um comentário
-enganoso em `verify_supersession`, o que moveu a fonte e tornou o relatório
-anterior obsoleto. A décima passada do converge confirmou que o diff de código
-fora de comentários é vazio desde a nona, e este relatório reexecuta o gate
-sobre a árvore resultante. A regra é que mudança de fonte invalida o relatório;
-ela não abre exceção para mudança pequena, e não deveria.
+FR-028 e SC-012 declaram a regra, `attest --authorization` a implementa, e o
+converge rodou até a décima segunda passada devolver `converged`. Este relatório
+reexecuta o gate sobre a árvore resultante.
 
 ### Operational Gates
 
 | Gate | Command | Result | Evidence | Validator |
 |---|---|---|---|---|
-| tests | `python3 tests/run_validators.py` | PASS | 1298 testes em 27 validadores, exit 0, 1 skip dependente de ambiente em `validate_workspace_contract.py` | sequential |
+| tests | `python3 tests/run_validators.py` | PASS | 1303 testes em 27 validadores, exit 0, 1 skip dependente de ambiente em `validate_workspace_contract.py` | sequential |
 | distribution | `python3 tests/validate_distribution.py` | PASS | `distribution: OK` — 5.2.0 idêntico nos oito pontos travados | sequential |
 | build | — | SKIPPED | Biblioteca padrão Python, sem etapa de build | — |
 | lint / typecheck / format | — | SKIPPED | Sem gate configurado; a suíte de validadores é o gate canônico | — |
@@ -46,18 +46,20 @@ ela não abre exceção para mudança pequena, e não deveria.
 
 ### Executable Scenarios
 
-`quickstart.md` declara oito cenários; todos têm teste nomeado. Os dois
-acrescentados nesta rodada:
+`quickstart.md` declara nove cenários; todos têm teste nomeado. Os acrescentados
+desde a primeira rodada:
 
 | Cenário | Onde |
 |---|---|
 | 7 estendido — registro que difere do aceito só na execução | `validate_v3_wiring_contract.py::test_a_supersession_needs_the_execution_that_was_accepted` |
 | 8 — virada de fase recusada com pendência | `test_a_phase_is_not_turned_over_a_stale_chain`, `test_a_phase_turns_once_the_stale_chain_is_cleared` |
+| 9 — publicação exige autorização humana | `validate_attestation_emitter_contract.py::HumanAuthorization` (5 testes) |
 
 A cadeia de atestação do work item é evidência executável adicional: as oito
 etapas fechadas foram re-atestadas em cascata e cada receipt casa com os bytes
-correntes do seu artefato. `development.chain_stale` contém apenas `verify`,
-que é esta etapa, e esvazia ao ser fechada.
+correntes do seu artefato. `development.chain_stale` contém apenas `verify`
+e `review`, as duas etapas que este ciclo ainda vai reemitir, e esvazia ao serem
+fechadas.
 
 ### Failures / Blockers
 

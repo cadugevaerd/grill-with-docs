@@ -1,16 +1,17 @@
 ## Review Report
 
 Verdict: APPROVE
-Source fingerprint: tree 0127089e64cdb59ced08016a8464adc504ea2fc012e498b40a703d678e741089 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2
+Source fingerprint: tree 415b3f088e8556ac3640face2b6128a8e8a0208ef8fcfbe728ea6593fd98d8f2 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98
 
-Casa exatamente com Converge (décima passada, `converged`) e Verify (`PASS`,
-terceira rodada). A primeira rodada de review devolveu `REQUEST CHANGES` com
-três achados Important, e os três estão corrigidos e travados por teste.
+Casa exatamente com Converge (décima segunda passada, `converged`) e Verify
+(`PASS`, quarta rodada). A primeira rodada devolveu `REQUEST CHANGES` com três
+achados Important, e os três estão corrigidos e travados por teste.
 
-Esta é a segunda rodada, reemitida: durante ela corrigi um comentário enganoso
-em `verify_supersession`, o que moveu a fonte e obrigou converge e verify a
-rodarem de novo antes de o veredito valer. O achado está registrado abaixo, em
-Readability.
+Duas rodadas foram invalidadas antes desta: uma por eu ter corrigido um
+comentário enganoso durante a própria revisão, outra pela lacuna da autorização
+humana, descoberta ao chegar em `ship`. Esta revisão cobre também esse escopo
+novo — `mint_chain(human_authorization=...)`, `attest --authorization`, FR-028,
+SC-012 e os cinco testes de `HumanAuthorization`.
 
 ### Test Quality
 
@@ -62,7 +63,15 @@ caminho por onde a decisão já viajava.
 
 ### Security
 
-O ponto que motivou a rodada está fechado. A prova de que o bundle substituído é
+**Autorização humana.** A entrega nova acerta o ponto principal: o documento é
+**carregado**, nunca produzido. Cunhá-lo tornaria "um humano aprovou"
+indistinguível de "quem queria a aprovação disse que sim", e o comentário no
+código diz exatamente isso. O escopo é validado contra a etapa sendo cunhada, e
+a recusa `HUMAN_AUTHORIZATION_REQUIRED` acontece antes de qualquer escrita —
+emitir um bundle que nunca poderia ser aceito é só uma forma mais lenta de
+falhar.
+
+O ponto que motivou a primeira rodada está fechado. A prova de que o bundle substituído é
 o aceito passou a cobrir a identidade da execução, e o teste demonstra o ataque
 concreto que antes passava: duas cadeias da mesma etapa e do mesmo artefato,
 diferindo só no índice de onda, com digest e receipt ref idênticos.
@@ -89,6 +98,15 @@ Nenhum pendente. Os três da rodada anterior estão corrigidos:
    que escrever o relatório e fechar a etapa deixaram `tree` e `work` imóveis.
 
 ### Nits (não bloqueiam)
+
+- **`content_sha256` da autorização nunca é conferido contra o `receipt_ref`.**
+  `_validate_human_authorization` exige que seja um digest bem-formado e para
+  aí; nada compara com os bytes do documento que ele diz resumir. É código
+  pré-existente, não introduzido por este diff, e não é fronteira de privilégio
+  — quem pode escrever o JSON pode escrever o `.md` também. Mas é um campo que
+  **parece** vincular e não vincula, e a emissão passou a depender dele. Vale um
+  BL depois do ship, não um bloqueio agora: conferir o digest transformaria
+  deriva silenciosa do documento de justificativa em recusa nomeada.
 
 - Este relatório teve de ser reemitido porque o conserto do comentário mudou a
   fonte no meio da revisão. Um review que corrige o que encontra deixa de ser
