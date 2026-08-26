@@ -99,12 +99,12 @@ specs/026-attestation-emitter/
 plugin/skills/grill-with-docs/scripts/
 ├── grill_core/
 │   ├── workflow_versions.py   # ENTREGUE: EXECUTION_CLASS_*, LEADER_WAVE_INDEX
-│   ├── attestation.py         # ENTREGUE: execution_class, require_leader_allowed,
-│   │                          #           artefact_digest, EmissionError
-│   │                          # FALTA:    montagem dos quatro elos
-│   ├── step_skills.py         # consumido: resolve_workflow_skill, sha256_jcs
+│   ├── attestation.py         # ENTREGUE: execution_class, require_emission_allowed,
+│   │                          #           artefact_digest, EmissionError, leader_lease,
+│   │                          #           mint_chain, supersede_step_execution
+│   ├── step_skills.py         # consumido: resolve_shipped_workflow_skills, sha256_jcs
 │   └── store.py               # consumido: concessão de lease
-└── grill_workspace.py         # FALTA: verbo de emissão na CLI
+└── grill_workspace.py         # ENTREGUE: verbo attest, supersessão no checkpoint
 
 tests/
 └── validate_attestation_emitter_contract.py   # ENTREGUE: 18 testes

@@ -21,9 +21,24 @@ impedir.
 
 ```text
 execution_class(step_id, workflow_version, versions) -> "leader-allowed" | "worker-required"
-require_leader_allowed(step_id, workflow_version, versions) -> None
+require_emission_allowed(step_id, workflow_version, versions, *,
+                         worker_execution_proven=False) -> "leader-allowed" | "worker-required"
 artefact_digest(read_bytes, path) -> (digest, size)
+mint_chain(...) -> bundle
+leader_lease(run_id, step_id) -> (lease_id, fencing_token)
+supersede_step_execution(store, superseded, successor) -> "RECORDED"
 ```
+
+`require_emission_allowed` devolve a classe satisfeita, e não `None`: quem cunha
+registra qual regra atendeu. `worker-required` **não** significa "o worker
+escreve o receipt" — nenhum worker escreve receipt de etapa. Significa que o
+*trabalho* foi feito por workers despachados, e o leader só emite contra prova
+disso, lida do estado durável da run e nunca declarada por quem pede
+(BL-0202 / ADR-0203).
+
+`supersede_step_execution` autoriza a cadeia sucessora quando o artefato de uma
+etapa fechada muda por motivo legítimo: o receipt anterior nunca é reescrito, o
+sucessor nomeia o que substitui e avança a ronda (BL-0201 / ADR-0205).
 
 `versions` é injetado, não importado: `attestation.py` não pode depender em tempo
 de import de outro módulo do núcleo, e o chamador já tem o módulo carregado.
@@ -38,18 +53,36 @@ de import de outro módulo do núcleo, e o chamador já tem o módulo carregado.
 | `EXECUTION_CLASS_VERSION_UNKNOWN` | versão de ciclo sem tabela |
 | `EXECUTION_CLASS_UNDECLARED` | etapa sem classe na tabela da versão |
 | `EXECUTION_CLASS_INVALID` | valor fora do conjunto fechado |
-| `WORKER_REQUIRED_STEP` | leader tentando cunhar para etapa que exige worker |
+| `WORKER_EXECUTION_UNPROVEN` | etapa `worker-required` sem wave convergida que prove o despacho |
 | `ARTEFACT_PATH_INVALID` | caminho vazio, só espaços, ou não-texto |
 | `ARTEFACT_UNREADABLE` | ausente, ilegível, ou leitor devolvendo não-bytes |
+| `SUPERSEDE_LINK_INCOMPLETE` | uma retro-referência sem a outra |
+| `SUPERSEDE_ROUND_NOT_ADVANCED` | sucessor em ronda 1, ou ronda não maior que a substituída |
+| `SUPERSEDE_NOT_LINKED` | sucessor que não nomeia a execução que substitui |
+| `SUPERSEDE_ATTEMPT_NOT_LINKED` | sucessor que nomeia a tentativa errada |
+| `SUPERSEDE_STEP_MISMATCH` | os dois receipts não descrevem a mesma etapa |
+| `SUPERSEDE_WITHOUT_CHANGE` | nem o artefato nem o predecessor mudaram |
 
-Todas carregam `code = EMISSION_REFUSED` e detalhe nomeando o caso.
+As de emissão carregam `code = EMISSION_REFUSED` e detalhe nomeando o caso; as de
+supersessão vêm de `STATE_DIVERGENCE` ou `UNATTESTED_STEP_OUTPUT`, conforme o
+elo que falhou.
 
-## Superfície por fazer
+## Superfície de linha de comando
 
 ```text
-mint_chain(...) -> bundle          # os quatro elos, correlacionados
-grill_workspace.py attest ...      # o verbo de linha de comando
+attest ROOT --work-id ID --step STEP --artifact PATH --out BUNDLE [--supersedes ANTERIOR]
+checkpoint ROOT --work-id ID --step STEP --state complete --evidence PATH \
+    --attestation BUNDLE [--supersedes-attestation ANTERIOR --reason "por quê"]
 ```
 
-O verbo precisa aceitar: work item, etapa, caminho do artefato, e o executor
-declarado. Precisa recusar antes de qualquer escrita quando a classe não permite.
+Cunhar e aceitar permanecem separados: um comando que fizesse os dois tornaria
+"a cadeia foi aceita" indistinguível de "a cadeia foi escrita por quem queria
+que fosse aceita".
+
+O verbo recusa antes de qualquer leitura quando a classe não permite. Na
+aceitação de uma supersessão, o bundle substituído precisa ser **aquele que o
+work item aceitou** — provado contra o par (`output_sha256`, `receipt_ref`)
+gravado no estado —, e não apenas um bundle bem-formado da mesma etapa
+(`SUPERSEDE-BUNDLE-NOT-RECORDED`). As etapas a jusante entram em
+`development.chain_stale`, e `ship` recusa com `CHAIN-STALE` enquanto a lista
+não esvaziar.

@@ -3597,6 +3597,10 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             # Shipping is where the chain stops being an internal record and
             # starts being the claim made to everyone downstream. A step still
             # resting on a replaced predecessor cannot be part of that claim.
+            #
+            # Checked before the run gates: a stale chain says the record itself
+            # is unreliable, which decides the question ahead of anything the
+            # record might report about execution.
             if args.step == "ship" and development.get("chain_stale"):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHAIN-STALE",
                                  ", ".join(development["chain_stale"]))

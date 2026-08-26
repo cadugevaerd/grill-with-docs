@@ -109,6 +109,12 @@ está declarado em texto, sem eufemismo.
 - **FR-018**: A suíte de testes MUST travar a totalidade da tabela de classes, a recusa de etapa não classificada, a recusa para etapa que exige executor isolado, e a detecção de artefato alterado.
 - **FR-019**: O teste MUST rodar sem rede e sem exigir ferramenta externa instalada.
 - **FR-020**: A versão publicada MUST refletir a mudança em todos os pontos onde a distribuição a exige.
+- **FR-021**: Um artefato de etapa já registrada que precise mudar por motivo legítimo MUST ter caminho de correção; o registro anterior MUST NOT ser reescrito nem removido.
+- **FR-022**: O registro sucessor MUST nomear qual registro substitui e MUST avançar a contagem de tentativas, de modo que a auditoria leia um histórico e não uma contradição.
+- **FR-023**: Uma correção MUST exigir mudança real — no artefato, ou no registro do predecessor sobre o qual a etapa repousa; um sucessor que não mude nenhum dos dois MUST ser recusado.
+- **FR-024**: Aceitar uma correção MUST exigir que o registro substituído seja aquele que o item de trabalho de fato aceitou, provado contra o que o estado gravou na aceitação, e não apenas um registro bem-formado da mesma etapa.
+- **FR-025**: Substituir o registro de uma etapa MUST marcar como pendentes de nova emissão todas as etapas posteriores que já haviam selado o registro substituído.
+- **FR-026**: A publicação MUST ser recusada enquanto existir etapa pendente de nova emissão.
 
 ### Key Entities
 
@@ -117,6 +123,8 @@ está declarado em texto, sem eufemismo.
 - **Âncora**: o resumo criptográfico do artefato produzido pela etapa, selado no registro.
 - **Concessão de execução**: identificador e contador que autorizam alguém a executar, já emitidos hoje para executores isolados.
 - **Recusa de emissão**: desfecho nomeado quando a cadeia não pode ser produzida a partir de entradas verdadeiras.
+- **Cadeia sucessora**: o registro que substitui outro da mesma etapa, nomeando-o, quando o artefato mudou por motivo legítimo.
+- **Pendência de nova emissão**: a lista das etapas cujo registro selou um predecessor que foi substituído — não erradas, e sim inverificáveis até serem emitidas de novo.
 
 ## Success Criteria *(mandatory)*
 
@@ -130,6 +138,8 @@ está declarado em texto, sem eufemismo.
 - **SC-006**: Artefato ausente, ilegível, com caminho vazio ou leitura inválida produz recusa nomeada, e nunca registro emitido.
 - **SC-007**: A suíte completa passa sem rede e sem ferramenta externa nas plataformas e versões de linguagem que a integração cobre.
 - **SC-008**: Quem lê a documentação do mecanismo encontra, no mesmo lugar, o que o registro prova e o que ele não prova.
+- **SC-009**: Depois de corrigir o artefato de uma etapa registrada, a verificação da correlação volta a passar, e o registro anterior continua legível com a razão declarada da substituição.
+- **SC-010**: Apresentar um registro bem-formado da mesma etapa, que não seja o aceito pelo item de trabalho, é recusado em 100% das tentativas de substituição.
 
 ## Assumptions
 

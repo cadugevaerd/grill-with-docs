@@ -120,3 +120,14 @@ sequenciais por escreverem o mesmo arquivo e por encadeamento de digests.
 Fase 2 é o MVP real: sem ela nada fecha. Fase 3 é o que prova que a Fase 2
 funciona — se o emissor não conseguir fechar as próprias etapas, ele não serve
 para nenhuma outra.
+
+---
+
+## Phase 5: Convergence
+
+**Origem**: entrega da cadeia sucessora (BL-0201 / ADR-0205) e renomeação de `require_leader_allowed` (BL-0202 / ADR-0203).
+
+- [X] T023 Atualizar `specs/026-attestation-emitter/contracts/emission.md` e o mapa de arquivos de `specs/026-attestation-emitter/plan.md` para a assinatura real `require_emission_allowed(step_id, workflow_version, versions, *, worker_execution_proven=False) -> str`, hoje documentada como `require_leader_allowed(...) -> None` per plan: contrato de emissão (contradicts)
+- [X] T024 Travar em `tests/validate_v3_wiring_contract.py` — que é onde vive o harness de projeto temporário do `checkpoint`, e não em `validate_attestation_emitter_contract.py` como esta tarefa dizia — a recusa `SUPERSEDE-BUNDLE-NOT-RECORDED` do verbo `checkpoint --supersedes-attestation` — um bundle bem-formado da mesma etapa que não seja o aceito pelo work item não pode passar per FR-018 (partial)
+- [X] T025 Travar em `tests/validate_v3_wiring_contract.py`, pelo mesmo motivo de T024, a recusa `CHAIN-STALE` de `ship` enquanto `development.chain_stale` não estiver vazia per FR-018 (partial)
+- [X] T026 Declarar em `specs/026-attestation-emitter/spec.md` os requisitos da cadeia sucessora — hoje entregue sem FR que a cubra, com governança apenas em BL-0201/ADR-0205 — ou registrar por que ela fica fora do escopo desta spec per spec.md (unrequested)
