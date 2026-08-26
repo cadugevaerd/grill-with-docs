@@ -174,3 +174,9 @@ para nenhuma outra.
 
 - [X] T038 Corrigir em `plugin/skills/grill-with-docs/SKILL.md` a afirmação de que só `ship` recusa com a lista não vazia; desde FR-027 a virada de fase também recusa, e é na documentação que o operador procura per FR-017, SC-008, FR-027 (contradicts)
 - [X] T039 Acrescentar a `specs/026-attestation-emitter/quickstart.md` o cenário de SC-011 (virada de fase recusada com pendência, registro de etapas intacto) e estender o cenário 7 para o caso que SC-010 passou a exigir: registro que difere do aceito só na execução per plan: quickstart, SC-010, SC-011 (partial)
+
+---
+
+## Phase 12: Convergence
+
+- [X] T040 Declarar em `specs/026-attestation-emitter/data-model.md` a autorização humana como elo condicional da Cadeia — hoje o arquivo não a menciona uma única vez, embora `ship` a obrigue e a emissão recuse sem ela per plan: data-model, FR-028 (partial)

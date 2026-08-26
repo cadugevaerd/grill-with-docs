@@ -68,11 +68,25 @@ Os quatro elos mais o catálogo, na forma que `judge_checkpoint_attestation` exi
 | `invocation_started` / `invocation_terminal` | montados a partir do dispatch e do desfecho real | entregue |
 | `step_output` | montado, ancorado no digest do artefato | entregue |
 | `catalog` | o catálogo confiável que a resolução usou | consumir |
+| `human_authorization` | **carregado** de um `human-authorization/v1`; presente só quando a resolução da etapa o exige | consumir |
 
 **Correlação**: `dispatch_key`, `skill_invocation_key`,
 `skill_resolution_sha256`, `logical_plan_sha256`, `executable_plan_sha256` e
 `content_sha256` são digests JCS calculados por `step_skills.sha256_jcs`, nunca
 valores livres.
+
+**Autorização humana**: `ship` é a única etapa cuja resolução declara
+`human_authorization_required`. O documento é **carregado**, nunca produzido
+pela emissão: ele existe antes da cadeia, e cunhá-lo tornaria "um humano
+aprovou" indistinguível de "quem queria a aprovação disse que sim". É validado
+na entrada — escopo igual à etapa, decisão `APPROVED` —, então autorização
+malformada é recusada na emissão em vez de sobreviver num bundle que só o juiz
+rejeita depois. Etapa que a exige e não a apresenta é
+`HUMAN_AUTHORIZATION_REQUIRED`, antes de qualquer escrita.
+
+A autorização permite **invocar** a skill registrada; nunca a substitui nem
+autoriza side effect direto. `judge_step_output` a aceita e não a inspeciona,
+justamente porque uma autorização válida não muda se a cadeia está atestada.
 
 **Estado**: entregue, em `mint_chain`.
 
