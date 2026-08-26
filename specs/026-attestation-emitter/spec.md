@@ -115,7 +115,8 @@ está declarado em texto, sem eufemismo.
 - **FR-024**: Aceitar uma correção MUST exigir que o registro substituído seja aquele que o item de trabalho de fato aceitou, provado contra o que o estado gravou na aceitação, e não apenas um registro bem-formado da mesma etapa.
 - **FR-025**: Substituir o registro de uma etapa MUST marcar como pendentes de nova emissão todas as etapas posteriores que já haviam selado o registro substituído.
 - **FR-026**: A publicação MUST ser recusada enquanto existir etapa pendente de nova emissão.
-- **FR-027**: Encerrar uma fase MUST ser recusado enquanto existir etapa pendente de nova emissão. Encerrar não resolve a pendência: o registro de etapas reinicia e a lista não, de modo que a fase seguinte seria recusada na publicação por pendência que não é dela.
+- **FR-027**: Encerrar uma fase MUST ser recusado enquanto existir etapa pendente de nova emissão.
+- **FR-028**: A etapa que exige autorização humana MUST ter sua emissão recusada quando a autorização não é apresentada, e o documento de autorização MUST ser carregado verbatim, nunca produzido pela emissão. Encerrar não resolve a pendência: o registro de etapas reinicia e a lista não, de modo que a fase seguinte seria recusada na publicação por pendência que não é dela.
 
 ### Key Entities
 
@@ -142,6 +143,7 @@ está declarado em texto, sem eufemismo.
 - **SC-009**: Depois de corrigir o artefato de uma etapa registrada, a verificação da correlação volta a passar, e o registro anterior continua legível com a razão declarada da substituição.
 - **SC-010**: Apresentar um registro bem-formado da mesma etapa, que não seja o aceito pelo item de trabalho, é recusado em 100% das tentativas de substituição — inclusive quando difere do aceito apenas na execução que o produziu, e não no artefato nem na referência do receipt.
 - **SC-011**: Encerrar uma fase com pendência de nova emissão é recusado em 100% das tentativas, e o registro de etapas permanece intacto.
+- **SC-012**: Emitir a cadeia da etapa de publicação sem autorização, com autorização de outra etapa, ou com autorização não aprovada é recusado em 100% das tentativas.
 
 ## Assumptions
 

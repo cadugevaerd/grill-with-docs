@@ -234,6 +234,18 @@ Virar a fase não resolveria a pendência, sobreviveria a ela: a matriz de etapa
 reinicia e a lista não, e a fase seguinte seria recusada no `ship` por pendência
 que não é dela.
 
+**`ship` exige autorização humana.** É a única etapa que exige, e a emissão
+recusa sem ela com `HUMAN_AUTHORIZATION_REQUIRED`:
+
+```text
+attest ROOT --work-id ID --step ship --artifact PATH --out BUNDLE \
+  --authorization .grill/attestations/<doc>.json
+```
+
+O documento é carregado, nunca produzido pela emissão — ele existe antes da
+cadeia. A autorização permite **invocar** a skill registrada; nunca a substitui
+nem autoriza side effect direto.
+
 O bundle substituído é provado contra três valores gravados na aceitação —
 `output_sha256`, `receipt_ref` e o `step_execution_id` de
 `development.attested_executions[step]`. Os dois primeiros não dependem da

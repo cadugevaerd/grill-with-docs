@@ -39,11 +39,17 @@
   emissão. A virada reseta a matriz e não o ledger, então a fase seguinte seria
   recusada no `ship` por receipts que já não são dela; deixar cadeia
   inverificável para trás é o que o ledger existe para impedir.
+- `attest --authorization` anexa o `human-authorization/v1` à cadeia. Sem isso
+  o emissor cunhava para dez etapas e não para a décima primeira: `ship` é a
+  única que exige autorização, e um bundle sem ela nunca seria aceito. O
+  documento é carregado, nunca produzido — cunhá-lo tornaria "um humano
+  aprovou" indistinguível de "quem queria a aprovação disse que sim".
 - Recusas nomeadas novas: `SUPERSEDE_LINK_INCOMPLETE`,
   `SUPERSEDE_ROUND_NOT_ADVANCED`, `SUPERSEDE_NOT_LINKED`,
   `SUPERSEDE_ATTEMPT_NOT_LINKED`, `SUPERSEDE_STEP_MISMATCH`,
   `SUPERSEDE_WITHOUT_CHANGE`, `SUPERSEDE-BUNDLE-NOT-RECORDED`,
-  `SUPERSEDE-STEP-NOT-COMPLETE`, `CHAIN-STALE`.
+  `SUPERSEDE-STEP-NOT-COMPLETE`, `CHAIN-STALE`,
+  `HUMAN_AUTHORIZATION_REQUIRED`.
 
 ## 5.1.0
 

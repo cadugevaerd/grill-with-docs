@@ -917,6 +917,7 @@ def mint_chain(
     catalog: Mapping[str, Any] | None = None,
     supersedes_step_execution_id: str | None = None,
     supersedes_attempt_id: str | None = None,
+    human_authorization: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Mint the four correlated links plus the catalog, ready for the checkpoint.
 
@@ -1097,6 +1098,21 @@ def mint_chain(
         "step_output": step_output_body,
         "catalog": dict(catalog) if catalog is not None else resolution.get("catalog"),
     }
+    # Carried, never manufactured. The authorization is a human artefact that
+    # exists before the chain does; minting it here would make "a human
+    # approved" indistinguishable from "the thing that wanted approval said so".
+    # It is validated on the way in so a malformed one is refused at emission
+    # rather than surviving into a bundle that only the judge rejects later.
+    #
+    # A step that requires it and does not carry it is refused: `ship` is the
+    # one step whose resolution demands authorization, and a bundle minted
+    # without it could never be accepted, so emitting one is only a slower way
+    # of failing.
+    if human_authorization is not None:
+        _validate_human_authorization(human_authorization, step_id)
+        bundle["human_authorization"] = dict(human_authorization)
+    elif resolution.get("human_authorization_required"):
+        raise _emit_fail("HUMAN_AUTHORIZATION_REQUIRED", step_id=step_id)
     return bundle
 
 def judge_checkpoint_attestation(

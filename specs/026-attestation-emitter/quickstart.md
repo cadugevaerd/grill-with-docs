@@ -147,3 +147,19 @@ recusada no `ship` por pendência que não é dela.
 Travado por `test_a_phase_is_not_turned_over_a_stale_chain` e
 `test_a_phase_turns_once_the_stale_chain_is_cleared`, que também prova que a
 recusa destrava sozinha quando a lista esvazia.
+
+## Cenário 9 — Publicação exige autorização humana (SC-012)
+
+Pedir a emissão da etapa de publicação sem `--authorization`:
+
+Esperado: `EmissionError`, razão `HUMAN_AUTHORIZATION_REQUIRED`, detalhe
+nomeando a etapa, e nenhum bundle escrito.
+
+Com autorização de outra etapa: `HUMAN_AUTHORIZATION_SCOPE`. Com decisão que não
+seja `APPROVED`: `HUMAN_AUTHORIZATION_NOT_APPROVED`.
+
+**Falha**: cunhar a autorização em vez de carregá-la. Tornaria "um humano
+aprovou" indistinguível de "quem queria a aprovação disse que sim".
+
+Travado por `HumanAuthorization` em
+`tests/validate_attestation_emitter_contract.py`.

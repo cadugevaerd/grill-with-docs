@@ -471,6 +471,66 @@ class Supersession(unittest.TestCase):
         self.assertEqual(A.supersede_step_execution({}, first, second), "RECORDED")
 
 
+class HumanAuthorization(unittest.TestCase):
+    """`ship` is the one step whose chain cannot be minted without a human.
+
+    Without this the emitter closed ten steps of eleven, which is the same shape
+    of gap it was built to remove: a step unreachable by checkpoint.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        MintedChainIsAccepted.setUpClass.__func__(cls)
+
+    def chain(self, **overrides):
+        return MintedChainIsAccepted.chain(self, **overrides)
+
+    def authorization(self, **overrides):
+        value = {
+            "schema": "human-authorization/v1",
+            "scope": "ship",
+            "decision": "APPROVED",
+            "authorized_by": "carlosaraujo",
+            "receipt_ref": ".grill/attestations/ship-authorization.md",
+            "content_sha256": "sha256:" + "d" * 64,
+        }
+        value.update(overrides)
+        return value
+
+    def test_a_step_that_requires_authorization_refuses_without_one(self) -> None:
+        resolution = dict(self.resolution, human_authorization_required=True)
+        with self.assertRaises(A.EmissionError) as caught:
+            self.chain(resolution=resolution, step_id="ship")
+        self.assertEqual(caught.exception.reason, "HUMAN_AUTHORIZATION_REQUIRED")
+        self.assertEqual(caught.exception.detail["step_id"], "ship")
+
+    def test_the_authorization_is_carried_verbatim(self) -> None:
+        """Carried, never manufactured: the emitter does not approve anything."""
+        resolution = dict(self.resolution, human_authorization_required=True)
+        authorization = self.authorization()
+        bundle = self.chain(resolution=resolution, step_id="ship",
+                            human_authorization=authorization)
+        self.assertEqual(bundle["human_authorization"], authorization)
+
+    def test_an_authorization_for_another_step_is_refused(self) -> None:
+        resolution = dict(self.resolution, human_authorization_required=True)
+        with self.assertRaises(A.AttestationError) as caught:
+            self.chain(resolution=resolution, step_id="ship",
+                       human_authorization=self.authorization(scope="review"))
+        self.assertEqual(caught.exception.reason, "HUMAN_AUTHORIZATION_SCOPE")
+
+    def test_a_refused_authorization_is_not_minted_as_approval(self) -> None:
+        resolution = dict(self.resolution, human_authorization_required=True)
+        with self.assertRaises(A.AttestationError) as caught:
+            self.chain(resolution=resolution, step_id="ship",
+                       human_authorization=self.authorization(decision="REJECTED"))
+        self.assertEqual(caught.exception.reason, "HUMAN_AUTHORIZATION_NOT_APPROVED")
+
+    def test_a_step_that_needs_no_authorization_mints_without_the_key(self) -> None:
+        """Absent is the honest default -- not an empty placeholder."""
+        self.assertNotIn("human_authorization", self.chain())
+
+
 class StaleChainLedger(unittest.TestCase):
     """Superseding a step must not relocate the divergence one step downstream.
 

@@ -62,6 +62,7 @@ de import de outro módulo do núcleo, e o chamador já tem o módulo carregado.
 | `SUPERSEDE_ATTEMPT_NOT_LINKED` | sucessor que nomeia a tentativa errada |
 | `SUPERSEDE_STEP_MISMATCH` | os dois receipts não descrevem a mesma etapa |
 | `SUPERSEDE_WITHOUT_CHANGE` | nem o artefato nem o predecessor mudaram |
+| `HUMAN_AUTHORIZATION_REQUIRED` | etapa que exige autorização humana emitida sem ela |
 
 As de emissão carregam `code = EMISSION_REFUSED` e detalhe nomeando o caso; as de
 supersessão vêm de `STATE_DIVERGENCE` ou `UNATTESTED_STEP_OUTPUT`, conforme o
@@ -70,7 +71,8 @@ elo que falhou.
 ## Superfície de linha de comando
 
 ```text
-attest ROOT --work-id ID --step STEP --artifact PATH --out BUNDLE [--supersedes ANTERIOR]
+attest ROOT --work-id ID --step STEP --artifact PATH --out BUNDLE \
+    [--supersedes ANTERIOR] [--authorization AUTORIZACAO]
 checkpoint ROOT --work-id ID --step STEP --state complete --evidence PATH \
     --attestation BUNDLE [--supersedes-attestation ANTERIOR --reason "por quê"]
 ```
@@ -78,6 +80,13 @@ checkpoint ROOT --work-id ID --step STEP --state complete --evidence PATH \
 Cunhar e aceitar permanecem separados: um comando que fizesse os dois tornaria
 "a cadeia foi aceita" indistinguível de "a cadeia foi escrita por quem queria
 que fosse aceita".
+
+`--authorization` aponta um `human-authorization/v1`, exigido por `ship` e por
+nenhuma outra etapa. O documento é **carregado**, nunca produzido: ele existe
+antes da cadeia, e cunhá-lo aqui tornaria "um humano aprovou" indistinguível de
+"quem queria a aprovação disse que sim". É validado na entrada — escopo da etapa
+e decisão `APPROVED` —, então autorização malformada é recusada na emissão em
+vez de sobreviver num bundle que só o juiz rejeita depois.
 
 O verbo recusa antes de qualquer leitura quando a classe não permite. Na
 aceitação de uma supersessão, o bundle substituído precisa ser **aquele que o

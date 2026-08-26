@@ -3381,6 +3381,14 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                          str(error), extra={"work_id": args.work_id, "step": args.step}) from error
     resolution = resolutions[0]
 
+    # The authorization is read, not minted: it is a human artefact that exists
+    # before the chain. `ship` is the only step whose resolution demands one,
+    # and without this the emitter could mint for ten steps and not the
+    # eleventh -- the same shape of gap the emitter itself was built to close.
+    human_authorization = None
+    if args.authorization:
+        human_authorization = load_checkpoint_attestation(root, args.authorization)
+
     run_id = args.run_id or f"leader-{args.work_id}"
     lease_id, fencing_token = attestation.leader_lease(run_id, args.step)
     head = git_optional(root, "rev-parse", "HEAD")
@@ -3474,6 +3482,7 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         execution_round=execution_round,
         supersedes_step_execution_id=supersedes_step_execution_id,
         supersedes_attempt_id=supersedes_attempt_id,
+        human_authorization=human_authorization,
     )
 
     target = Path(args.out)
@@ -3490,6 +3499,7 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         "worker_execution_proven": worker_execution_proven,
         "execution_round": execution_round,
         "supersedes": args.supersedes,
+        "authorization": args.authorization,
         "artifact": args.artifact,
         "artifact_sha256": artefact_sha256,
         "artifact_bytes": artefact_size,
@@ -3993,6 +4003,8 @@ def build_parser() -> JsonParser:
     attest_parser.add_argument("--runtime", default="claude")
     attest_parser.add_argument("--supersedes", default=None,
                                help="project-relative path to the accepted bundle this one replaces")
+    attest_parser.add_argument("--authorization", default=None,
+                               help="project-relative path to the human-authorization/v1 document (required by ship)")
 
     checkpoint_parser = subparsers.add_parser("checkpoint")
     checkpoint_parser.add_argument("root")
