@@ -11,6 +11,9 @@ lives in exactly one place; see ``SingleSourceOfTruth`` below (SC-006).
 """
 from __future__ import annotations
 
+import contextlib
+import hashlib
+import io
 import json
 import os
 import re
@@ -149,6 +152,98 @@ class CollisionBranch(GoalRootBase):
         self.assertIsNone(second.reason)
         self.assertEqual(target.read_bytes(), created_bytes)
         self.assertEqual([p.name for p in self.root.iterdir() if p.name != ".git"], ["goal.md"])
+
+
+class PreservedBranch(GoalRootBase):
+    """The three named PRESERVED reasons, each proved byte-intact (FR-003, FR-006, FR-007).
+
+    Review finding I1. The behaviour was observed by hand while building the
+    feature, but observation in a scratch directory is not a regression test:
+    nothing in the repository would reject a refactor that turned PRESERVED
+    back into an overwrite, and `init` would start destroying human work with
+    the suite still green. SC-002 is the criterion whose cost of being wrong
+    is unrecoverable, so it gets assertions, not a memory of a terminal.
+    """
+
+    def preserved(self, body: bytes) -> tuple[object, str, list[str]]:
+        target = self.root / "goal.md"
+        target.write_bytes(body)
+        before = hashlib.sha256(body).hexdigest()
+
+        result = ensure_goal.resolve_goal(self.root)
+
+        after = hashlib.sha256(target.read_bytes()).hexdigest()
+        self.assertEqual(before, after, "PRESERVED must leave the bytes untouched")
+        entries = sorted(q.name for q in self.root.iterdir() if q.name != ".git")
+        # No backup, no copy, no rename: exactly the file that was already there.
+        self.assertEqual(entries, ["goal.md"])
+        return result, after, entries
+
+    def test_human_document_is_preserved_byte_intact(self) -> None:
+        result, _, _ = self.preserved(b"meus objetivos do trimestre\n- crescer\n")
+        self.assertEqual(result.status, "PRESERVED")
+        self.assertEqual(result.reason, "human document")
+
+    def test_empty_document_is_preserved_not_treated_as_absent(self) -> None:
+        # Edge case: existing-but-empty is divergent, so it is preserved.
+        # Treating it as absent would reopen the exception FR-002 denies.
+        result, _, _ = self.preserved(b"")
+        self.assertEqual(result.status, "PRESERVED")
+        self.assertEqual((self.root / "goal.md").stat().st_size, 0)
+
+    def test_other_version_marker_is_a_managed_version_mismatch(self) -> None:
+        body = "<!-- grill-with-docs-goal:v2 -->\nconteudo de outra versao\n".encode("utf-8")
+        result, _, _ = self.preserved(body)
+        self.assertEqual(result.status, "PRESERVED")
+        self.assertEqual(result.reason, "managed version mismatch")
+
+    def test_v1_marker_failing_the_contract_is_an_incompatible_goal(self) -> None:
+        # Correct marker on the first line, but the required parts are gone.
+        body = f"<!-- {MARKER} -->\nfaltando tudo\n".encode("utf-8")
+        result, _, _ = self.preserved(body)
+        self.assertEqual(result.status, "PRESERVED")
+        self.assertEqual(result.reason, "incompatible goal")
+
+
+class BlockedBranch(GoalRootBase):
+    """Refusals happen before any write, and never touch what they refuse."""
+
+    def test_symlink_target_is_blocked_and_the_pointee_is_untouched(self) -> None:
+        outside = Path(self.t.name).resolve() / "pointee.txt"
+        outside.write_bytes(b"segredo\n")
+        try:
+            (self.root / "goal.md").symlink_to(outside)
+        except (OSError, NotImplementedError) as error:  # pragma: no cover
+            self.skipTest(f"symlinks unavailable on this platform: {error}")
+
+        result = ensure_goal.resolve_goal(self.root)
+
+        self.assertEqual(result.status, "BLOCKED")
+        self.assertEqual(result.reason, "unsafe target")
+        # The refusal must not have followed the link and written through it.
+        self.assertEqual(outside.read_bytes(), b"segredo\n")
+
+    def test_invalid_utf8_document_is_blocked_and_left_alone(self) -> None:
+        # contracts/materialization-cli.md: UnicodeError -> BLOCKED,
+        # "invalid UTF-8 goal". Named refusal, never silent progress.
+        body = b"\xff\xfe not utf-8 at all\n"
+        target = self.root / "goal.md"
+        target.write_bytes(body)
+
+        result = ensure_goal.resolve_goal(self.root)
+
+        self.assertEqual(result.status, "BLOCKED")
+        self.assertEqual(result.reason, "invalid UTF-8 goal")
+        self.assertEqual(target.read_bytes(), body)
+
+    def test_cli_exit_code_is_two_for_a_blocked_root(self) -> None:
+        # T013's exit contract, on the refusal side: 2, not 0.
+        (self.root / "goal.md").mkdir()
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            code = ensure_goal.ensure(str(self.root))
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(stream.getvalue())["status"], "BLOCKED")
 
 
 class SingleSourceOfTruth(unittest.TestCase):
