@@ -1,68 +1,74 @@
 ## Review Report
 
-Verdict: REQUEST CHANGES
-Source fingerprint: tree a6c7f79dc2b862b04d909fe79f57bb732553e1dfa4bffb29422c605ae9863547 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5
+Verdict: APPROVE
+Source fingerprint: tree 028ee4d5d29f187031fcbaab684ba93d4abb04f12cfba3d2a39c838d47cc917c / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2
 
-**Não casa com o fingerprint do Verify** (`tree b4d0abfed96c…`). A causa não é
-mudança no que foi revisado, e está descrita em **Important #3** — é achado, não
-apenas obstáculo. As três correções abaixo mudam a fonte de qualquer modo, então
-converge/verify precisam rodar de novo depois delas.
-
-Escopo revisado: `grill_core/attestation.py` (`mint_chain` com `supersedes_*`,
-`supersede_step_execution`), `grill_workspace.py` (`attest --supersedes`,
-`checkpoint --supersedes-attestation`, `verify_supersession`,
-`mark_chain_stale`, gate `CHAIN-STALE`), os dois validadores, ADR-0205, bump.
+Casa exatamente com Converge (nona passada, `converged`) e Verify (`PASS`).
+Segunda rodada: a primeira devolveu `REQUEST CHANGES` com três achados
+Important, e os três estão corrigidos e travados por teste.
 
 ### Test Quality
 
-Boa. As três barreiras têm teste, o round-trip real `attest → checkpoint` roda
-num projeto temporário de verdade (não em mock), e
-`test_a_supersession_needs_the_bundle_this_item_actually_accepted` inclui a
-asserção de que a fixture de fato difere — sem ela o teste passaria por acidente.
-A consolidação da Phase 6 removeu a duplicação sem perder cobertura.
+Cobertura sólida e adversarial onde importa. Cada barreira nova tem um teste que
+prova a barreira **e** um que prova que ela destrava na própria condição —
+`test_a_phase_turns_once_the_stale_chain_is_cleared` e
+`test_ship_is_not_blocked_once_the_stale_ledger_is_empty` existem porque um gate
+que não destrava é tão defeituoso quanto um que não trava.
 
-Uma lacuna: a cascata de `chain_stale` só é testada em unidade
-(`StaleChainLedger`), nunca pelo CLI. Nenhum teste prova que superseder uma
-etapa do meio marca as posteriores no `state.json` real. É observável — a
-cascata deste work item exercitou o caminho oito vezes — mas não travado.
+`test_a_supersession_needs_the_execution_that_was_accepted` assere primeiro que
+a fixture de fato difere só na execução. Sem isso passaria por acidente, que é o
+modo silencioso de um teste de segurança falhar.
+
+O round-trip `attest → checkpoint` roda num projeto temporário real, não em
+mock, e verifica o histórico gravado — âncora, execução, razão e a execução que
+substituiu.
 
 ### Runtime Correctness
 
-O núcleo está correto no que se propõe. `supersede_step_execution` valida os dois
-receipts antes de comparar, então nenhum campo forjado sobrevive à comparação —
-foi o que derrubou duas asserções ingênuas durante a implementação, e é o
-comportamento certo.
+As três correções fazem o que dizem, verificado no estado deste work item: nove
+etapas aceitas, nove execuções pinadas, nenhuma no caminho de fallback.
 
-A regra de mudança olhar o par (artefato, predecessor) está certa e é sutil: só o
-artefato proibiria a re-atestação a jusante, que re-atesta com bytes idênticos.
+A degradação para receipts anteriores ao campo é explícita e limitada — cai no
+par, e toda aceitação nova pina. Não é buraco deixado aberto, é migração sem
+migração de dados.
 
-Dois defeitos reais abaixo.
+O gate `CHAIN-STALE` na virada de fase está no lugar certo do fluxo: depois da
+idempotência e de `PHASE-INCOMPLETE`, antes de qualquer escrita, e o teste
+confirma que a recusa não reinicia a matriz.
 
 ### Readability
 
-Clara. As docstrings dizem por que, não o quê, e `require_emission_allowed`
-explica o erro que corrigiu em vez de escondê-lo. `verify_supersession` tem dez
-parâmetros — no limite, mas cada um é usado e nomeado.
+Boa. Um defeito encontrado e corrigido nesta revisão: o comentário acima da
+verificação do par ainda dizia que ele "é a única coisa aqui que quem chama não
+consegue restatar" — falso depois da correção, e falso justamente sobre a
+propriedade de segurança da função, seis linhas acima do código que prova o
+contrário. Reescrito para dizer que nenhuma das duas metades basta sozinha e
+por quê.
 
 ### Architecture
 
-Direção de dependência correta: `supersede_step_execution` é puro e não conhece
+Fronteira preservada: `supersede_step_execution` continua puro e sem conhecer
 sequência nem estado; quem mantém o ledger é o CLI, que é quem sabe a ordem. A
-docstring declara essa fronteira explicitamente em vez de deixá-la implícita.
+correção #1 respeitou isso — o pino da execução é estado, e ficou no CLI.
 
-Cunhar e aceitar continuam separados, e a supersessão respeita isso.
+`verify_checkpoint_attestation` passou a devolver `step_execution_id` junto do
+veredito em vez de o chamador reabrir o bundle. É a informação viajando pelo
+caminho por onde a decisão já viajava.
 
 ### Security
 
-O ponto sensível é **Important #1**: a prova de que o bundle substituído é o
-aceito não pina a identidade da execução.
+O ponto que motivou a rodada está fechado. A prova de que o bundle substituído é
+o aceito passou a cobrir a identidade da execução, e o teste demonstra o ataque
+concreto que antes passava: duas cadeias da mesma etapa e do mesmo artefato,
+diferindo só no índice de onda, com digest e receipt ref idênticos.
+
+Continua valendo — e está declarado em SKILL.md e no contrato — que a cadeia
+prova correlação estrutural, não que a skill registrada rodou. Proveniência
+criptográfica segue fora de escopo por decisão, não por omissão.
 
 ### Performance
 
-Sem preocupação. `_converged_waves_exist` percorre runs e waves a cada `attest` —
-custo trivial. `verify_supersession` lê o bundle sucessor duas vezes (uma dentro
-de `verify_checkpoint_attestation`, outra direto); é I/O de um arquivo pequeno,
-mas é leitura duplicada sem motivo.
+Sem preocupação. Nada no caminho quente; as leituras são de arquivos pequenos.
 
 ### Critical Issues
 
@@ -70,65 +76,36 @@ Nenhum.
 
 ### Important Issues
 
-**#1 — A ligação com o bundle substituído não pina a identidade da execução**
-`grill_workspace.py`, `verify_supersession`: a prova de que o bundle é "aquele
-que o work item aceitou" compara `step_id`, `output_sha256` e
-`skill_invocation_receipt_ref` contra o que o estado gravou. Nenhum dos três
-depende de `step_execution_id`.
+Nenhum pendente. Os três da rodada anterior estão corrigidos:
 
-Verificado: dois `build_chain` para a mesma etapa e o mesmo artefato, diferindo
-apenas em `wave_index`, produzem `output_sha256` e `receipt_ref` **idênticos** e
-`step_execution_id` **diferentes** (`se-26c78b33317f…` vs `se-b0780e7224c8…`).
-Um bundle assim passa na verificação.
+1. A ligação com o bundle substituído pina a execução (`attested_executions`).
+2. A virada de fase recusa com `CHAIN-STALE`.
+3. `.grill/attestations/**` saiu do fingerprint — verificável nesta rodada, em
+   que escrever o relatório e fechar a etapa deixaram `tree` e `work` imóveis.
 
-Consequência: `superseded_outputs[step]` grava um `step_execution_id` que nunca
-foi o receipt corrente, e o sucessor é ligado a essa execução fantasma. Não
-derruba o gate — o sucessor ainda precisa julgar válido e ancorar no artefato —
-mas corrompe exatamente a trilha de auditoria que a feature existe para tornar
-confiável. FR-024 pede que o registro substituído seja "aquele que o item de
-trabalho de fato aceitou"; a identidade da execução é parte disso.
+### Nits (não bloqueiam)
 
-*Correção*: gravar `development.attested_executions[step] = step_execution_id` na
-aceitação e compará-lo em `verify_supersession`. Para itens cujo estado é
-anterior ao campo, cair de volta no par atual — degradação declarada, e toda
-aceitação nova passa a pinar.
-
-**#2 — `phase-turn` não limpa `chain_stale`**
-`grill_workspace.py`, `phase_turn_command`: a virada de fase reescreve `steps`,
-`current_step` e `execution_branch`, e não toca em `chain_stale`. Uma fase virada
-com o ledger não vazio carrega para a fase seguinte uma lista que nomeia etapas
-de receipts que já não valem para ela, e `ship` da fase nova recusa com
-`CHAIN-STALE` sobre pendência que não é dela. Como `phase-turn` é o caminho
-normal entre fases deste repositório, é alcançável sem nada de anormal.
-
-*Correção*: decidir e implementar o que a virada faz com o ledger — limpá-lo
-junto com a matriz, ou recusar a virada enquanto não estiver vazio. A segunda é
-mais severa e provavelmente mais correta: virar fase deixando cadeia
-inverificável para trás é o que o ledger existe para impedir.
-
-**#3 — `.grill/attestations/**` fora de `fingerprint_exclude`**
-`.specify/extensions/verify-review-ship/verify-review-ship-config.yml:4-9`
-exclui `state.json` e `ROUND-LOG.jsonl` do work item, e não os bundles de
-atestação. Sob o protocolo grill, fechar uma etapa de gate escreve um bundle em
-`.grill/attestations/`, que conta como fonte revisada — então **fechar `verify`
-invalida o relatório do próprio `verify`**, e o mesmo aconteceria com `review`.
-É um laço: rodar de novo produz um bundle novo e volta a invalidar.
-
-Esta entrega torna o problema rotineiro (27 bundles no diff), então é achado
-dela. O `state.json` já está excluído pelo mesmo raciocínio; o bundle ficou de
-fora.
-
-*Correção*: acrescentar `.grill/attestations/**` a `converge.fingerprint_exclude`.
-Um receipt de gate é evidência **sobre** a revisão, não conteúdo revisado — a
-mesma razão pela qual `verify.md` está excluído.
+- `attestation.supersede_step_execution({}, prior, successor)` passa um store
+  descartável: a imutabilidade que `record_step_execution` garante vale só
+  dentro daquela chamada. Na prática o guarda durável é o trio verificado e o
+  histórico append-only, e a função está sendo usada como validador. Funciona,
+  mas o parâmetro sugere uma persistência que ali não existe.
+- `phase_turn_command` checa idempotência (matriz inteira em `pending`) antes do
+  gate de `chain_stale`. Um item que tenha virado a fase **antes** de o gate
+  existir, com o ledger sujo, ainda devolveria `REUSED` em silêncio. Borda
+  legada; não alcançável por fluxo normal daqui em diante.
+- `payload["chain_stale"]` é atribuído depois de `audit.append(payload)`, então
+  o registro de auditoria recebe o campo por referência. É o que se quer — a
+  trilha grava a cascata —, mas depende de aliasing em vez de dizê-lo.
 
 ### Constitution References (only for discovered conflicts)
 
-**Rastreabilidade** ("receipts e gates MUST ser rastreáveis ao work item e ao
-commit"): Important #1 conflita — uma trilha que pode nomear uma execução que
-nunca existiu não é rastreável no sentido que a cláusula exige.
+Nenhum conflito. O de **Rastreabilidade** citado na rodada anterior está
+resolvido: a trilha não pode mais nomear uma execução que nunca existiu.
 
 ### Final Recommendation
 
-- REQUEST CHANGES: corrigir #1, #2 e #3, rodar `/speckit.converge`, depois
-  verify e review de novo.
+- APPROVE: run `/speckit.verify-review-ship.ship`
+
+`ship` continua sendo parada obrigatória com autorização humana explícita: ele
+faz merge, push direto para `main` e dispara a publicação nos marketplaces.

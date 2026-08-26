@@ -3239,8 +3239,11 @@ def verify_supersession(
     if not isinstance(prior_output, dict):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-INVALID", superseded_path)
     # Being a valid bundle for this step is not enough: it has to be the bundle
-    # this work item accepted. The pair the state recorded at acceptance is what
-    # proves that, and it is the only thing here that a caller cannot restate.
+    # this work item accepted. What proves that is what the state recorded at
+    # acceptance -- the digest and receipt ref here, and the execution id
+    # checked right below. Neither half is sufficient alone: the digest pair
+    # does not pin which execution produced the receipt, and the execution id
+    # is absent for receipts accepted before the field existed.
     if (prior_output.get("step_id") != step_id
             or prior_output.get("output_sha256") != recorded.get("output_sha256")
             or prior_output.get("skill_invocation_receipt_ref") != recorded.get("receipt_ref")):
