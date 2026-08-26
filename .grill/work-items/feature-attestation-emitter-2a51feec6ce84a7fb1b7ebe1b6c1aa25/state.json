@@ -22,53 +22,63 @@
       "run_id": "leader-feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25",
       "runtime": "claude"
     },
+    "attested_executions": {
+      "analyze": "se-1357ee224d335f5bc872240fd860d334ba81d63720343c0cebccd835b1e82948",
+      "checklist": "se-2332cf57493ae5ee5408ada0770cf60ff9bff14558143502a6a9775b22b07735",
+      "converge": "se-c7dbf8d85715f60b222f4a37138f4b05f059580b5807811984752ca15aad2e6f",
+      "implement-parallel": "se-2ca317ef89c5fd3797c6476ab62d64129c274be8badf25894cbe988c307eb07b",
+      "partition": "se-9367c769f3872ef21d9e561a444815a62097ef7ad8873f8eab4cfe28d84b8257",
+      "plan": "se-aa97935657191f7373745590cf06f0a21c332d051148aa834c4efb36b4b10037",
+      "specify": "se-72fd3bd19e7188c72214131b441296ddf407038a577966d8e54b9c028baa816e",
+      "tasks": "se-c941023a49a5e992e44f40e48761051636ff1403862d97479bd6739022554516"
+    },
     "attested_outputs": {
       "analyze": {
-        "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
+        "output_sha256": "sha256:6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/analyze-analyze-4.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-5.terminal.json",
         "step_id": "analyze"
       },
       "checklist": {
         "output_sha256": "sha256:7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-4.terminal.json",
         "step_id": "checklist"
       },
       "converge": {
-        "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
+        "output_sha256": "sha256:6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/converge-converge-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-3.terminal.json",
         "step_id": "converge"
       },
       "implement-parallel": {
         "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-4.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-5.terminal.json",
         "step_id": "implement-parallel"
       },
       "partition": {
         "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/partition-partition-4.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-5.terminal.json",
         "step_id": "partition"
       },
       "plan": {
         "output_sha256": "sha256:84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/plan-plan-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-4.terminal.json",
         "step_id": "plan"
       },
       "specify": {
-        "output_sha256": "sha256:a8cf278b600ae69b479e0511c36f6065c20504b463c5ac43ed17de5b94949c83",
+        "output_sha256": "sha256:a674f1ff4d7b8b06188f3f351cfc243bbe7532e51f7e1274d814b6d3e4598247",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-3.terminal.json",
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
+        "output_sha256": "sha256:6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-4.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-5.terminal.json",
         "step_id": "tasks"
       },
       "verify": {
@@ -585,9 +595,167 @@
         "reason": "abrindo review apos verify PASS",
         "state": "in-progress",
         "step": "review"
+      },
+      {
+        "chain_stale": [
+          "plan",
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/spec.md",
+            "sha256": "a674f1ff4d7b8b06188f3f351cfc243bbe7532e51f7e1274d814b6d3e4598247"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/026-specify-r2.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/plan.md",
+            "sha256": "84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/026-plan-r3.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/checklists/requirements.md",
+            "sha256": "7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/026-checklist-r3.json"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/026-tasks-r4.json"
+      },
+      {
+        "chain_stale": [
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/026-analyze-r4.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/026-partition-r4.json"
+      },
+      {
+        "chain_stale": [
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/026-implement-r4.json"
+      },
+      {
+        "chain_stale": [
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/026-converge-r2.json"
       }
     ],
-    "chain_stale": [],
+    "chain_stale": [
+      "verify"
+    ],
     "current_step": "review",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
@@ -655,6 +823,18 @@
           "step_execution_id": "se-80509915ad26015d08970514f78a766e85d4f0aae6269305ff211b6baa4042ba",
           "step_id": "analyze",
           "superseded_by_step_execution_id": "se-0ab8f6ea170df6cef25cab457d9efdb261c6bf8d26bd483c2226deceb6890f65"
+        },
+        {
+          "attempt_id": "analyze-4",
+          "attestation": ".grill/attestations/026-analyze-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-4.terminal.json",
+          "step_execution_id": "se-0ab8f6ea170df6cef25cab457d9efdb261c6bf8d26bd483c2226deceb6890f65",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-1357ee224d335f5bc872240fd860d334ba81d63720343c0cebccd835b1e82948"
         }
       ],
       "checklist": [
@@ -681,6 +861,18 @@
           "step_execution_id": "se-19382a281ed87bac38eccfcfade90760c9f5d15826d8ce5100ec153a3a2480d5",
           "step_id": "checklist",
           "superseded_by_step_execution_id": "se-db2c9d24cb82da0f7ee790d8249462774db04843e3a66fd15126a9c0aa2adc81"
+        },
+        {
+          "attempt_id": "checklist-3",
+          "attestation": ".grill/attestations/026-checklist-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
+          "step_execution_id": "se-db2c9d24cb82da0f7ee790d8249462774db04843e3a66fd15126a9c0aa2adc81",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-2332cf57493ae5ee5408ada0770cf60ff9bff14558143502a6a9775b22b07735"
         }
       ],
       "converge": [
@@ -695,6 +887,18 @@
           "step_execution_id": "se-0e34dea2e3fe4686cf5d5d49efabaae1b08bc2a4f30425452f8a189501810e15",
           "step_id": "converge",
           "superseded_by_step_execution_id": "se-b64ee031e7e9d0bd2a8f6ed47c265f7db57718b80e8650264ec393ac55c43d03"
+        },
+        {
+          "attempt_id": "converge-2",
+          "attestation": ".grill/attestations/026-converge-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-2.terminal.json",
+          "step_execution_id": "se-b64ee031e7e9d0bd2a8f6ed47c265f7db57718b80e8650264ec393ac55c43d03",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-c7dbf8d85715f60b222f4a37138f4b05f059580b5807811984752ca15aad2e6f"
         }
       ],
       "implement-parallel": [
@@ -733,6 +937,18 @@
           "step_execution_id": "se-98da96f4cc628ba361f2db7510bc936177431e41c97dee6386d5f59b9000f33e",
           "step_id": "implement-parallel",
           "superseded_by_step_execution_id": "se-73f139ab4763d140c3b9dbf710dd970b913e931c6900d594c5fe6264bd2a55be"
+        },
+        {
+          "attempt_id": "implement-parallel-4",
+          "attestation": ".grill/attestations/026-implement-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-4.terminal.json",
+          "step_execution_id": "se-73f139ab4763d140c3b9dbf710dd970b913e931c6900d594c5fe6264bd2a55be",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-2ca317ef89c5fd3797c6476ab62d64129c274be8badf25894cbe988c307eb07b"
         }
       ],
       "partition": [
@@ -771,6 +987,18 @@
           "step_execution_id": "se-7048703ee2f505579e8eaded6654da5f0f49690c47b2c49a07b8bfc75717651d",
           "step_id": "partition",
           "superseded_by_step_execution_id": "se-d10152c27a55346ce9de87b3339f3b74b0dd6d2ec16d94caba5eb43fc514bd60"
+        },
+        {
+          "attempt_id": "partition-4",
+          "attestation": ".grill/attestations/026-partition-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-4.terminal.json",
+          "step_execution_id": "se-d10152c27a55346ce9de87b3339f3b74b0dd6d2ec16d94caba5eb43fc514bd60",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-9367c769f3872ef21d9e561a444815a62097ef7ad8873f8eab4cfe28d84b8257"
         }
       ],
       "plan": [
@@ -797,6 +1025,18 @@
           "step_execution_id": "se-8db81cdb15f7e133d1dc0f3172df6770f4fff9c82e33b1fe749948076271e36c",
           "step_id": "plan",
           "superseded_by_step_execution_id": "se-cfb5309e368141309628eab8be782a4d667aea0d5a58f0203aff6160c2c6f853"
+        },
+        {
+          "attempt_id": "plan-3",
+          "attestation": ".grill/attestations/026-plan-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-3.terminal.json",
+          "step_execution_id": "se-cfb5309e368141309628eab8be782a4d667aea0d5a58f0203aff6160c2c6f853",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-aa97935657191f7373745590cf06f0a21c332d051148aa834c4efb36b4b10037"
         }
       ],
       "specify": [
@@ -811,6 +1051,18 @@
           "step_execution_id": "se-0ab2cd5da5f72d53b58fc850f3a0fdf5dac4bc7ac7f9b1ef5cace4e9eb08bdb9",
           "step_id": "specify",
           "superseded_by_step_execution_id": "se-329b4bc57f61b0d08be712331a1b857bd32bec2d1dcef08d00a887ea4663678e"
+        },
+        {
+          "attempt_id": "specify-2",
+          "attestation": ".grill/attestations/026-specify-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:a8cf278b600ae69b479e0511c36f6065c20504b463c5ac43ed17de5b94949c83",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
+          "step_execution_id": "se-329b4bc57f61b0d08be712331a1b857bd32bec2d1dcef08d00a887ea4663678e",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-72fd3bd19e7188c72214131b441296ddf407038a577966d8e54b9c028baa816e"
         }
       ],
       "tasks": [
@@ -849,6 +1101,18 @@
           "step_execution_id": "se-075788f460c74058dd5fd8bf29127d5ee5d496e437acb422ae958f99ada4e2d9",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-ee2af9dcfd1d2295e3582ef8602585c0e73f319289ba69e666be68e2005ca499"
+        },
+        {
+          "attempt_id": "tasks-4",
+          "attestation": ".grill/attestations/026-tasks-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-4.terminal.json",
+          "step_execution_id": "se-ee2af9dcfd1d2295e3582ef8602585c0e73f319289ba69e666be68e2005ca499",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-c941023a49a5e992e44f40e48761051636ff1403862d97479bd6739022554516"
         }
       ]
     },
