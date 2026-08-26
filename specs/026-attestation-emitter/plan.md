@@ -25,7 +25,7 @@ montagem dos quatro elos e a superfície de linha de comando.
 **Language/Version**: Python >=3.10, somente biblioteca padrão.
 
 **Primary Dependencies**: Nenhuma externa. Internamente a emissão consome
-`step_skills.resolve_workflow_skill` (que já produz `skill-resolution/v1`) e
+`step_skills.resolve_shipped_workflow_skills` (que já produz `skill-resolution/v1`) e
 `step_skills.sha256_jcs` (canonicalização JCS já implementada).
 
 **Storage**: Bundle serializado em arquivo, lido por `load_checkpoint_attestation`.

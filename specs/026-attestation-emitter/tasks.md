@@ -131,3 +131,26 @@ para nenhuma outra.
 - [X] T024 Travar em `tests/validate_v3_wiring_contract.py` — que é onde vive o harness de projeto temporário do `checkpoint`, e não em `validate_attestation_emitter_contract.py` como esta tarefa dizia — a recusa `SUPERSEDE-BUNDLE-NOT-RECORDED` do verbo `checkpoint --supersedes-attestation` — um bundle bem-formado da mesma etapa que não seja o aceito pelo work item não pode passar per FR-018 (partial)
 - [X] T025 Travar em `tests/validate_v3_wiring_contract.py`, pelo mesmo motivo de T024, a recusa `CHAIN-STALE` de `ship` enquanto `development.chain_stale` não estiver vazia per FR-018 (partial)
 - [X] T026 Declarar em `specs/026-attestation-emitter/spec.md` os requisitos da cadeia sucessora — hoje entregue sem FR que a cubra, com governança apenas em BL-0201/ADR-0205 — ou registrar por que ela fica fora do escopo desta spec per spec.md (unrequested)
+
+---
+
+## Phase 6: Convergence
+
+- [X] T027 Travar em `tests/validate_v3_wiring_contract.py` que aceitar uma supersessão grava o registro anterior em `development.superseded_outputs[step]` com a razão declarada e o `step_execution_id` que passou a substituí-lo — hoje só o nível de store está coberto per FR-021, SC-009 (partial)
+- [X] T028 Consolidar em `tests/validate_v3_wiring_contract.py` os dois conjuntos duplicados de teste das barreiras de supersessão (`_bogus_receipt`/`_bundle`, `SUPERSEDE-BUNDLE-NOT-RECORDED`, step-não-fechado, `CHAIN-STALE`), mantendo de cada um a asserção que o outro não tem per tasks: T024, T025 (unrequested)
+
+---
+
+## Phase 7: Convergence
+
+- [X] T029 Acrescentar a `specs/026-attestation-emitter/quickstart.md` os cenários executáveis de SC-009 (corrigir artefato de etapa fechada e a correlação voltar a passar, com o registro anterior legível e a razão declarada) e SC-010 (registro bem-formado que não é o aceito é recusado) per plan: quickstart como guia de validação (partial)
+- [X] T030 Declarar em `specs/026-attestation-emitter/data-model.md` as entidades **Cadeia sucessora** e **Pendência de nova emissão**, que a spec já lista em Key Entities e o modelo não modela per plan: data-model (partial)
+
+---
+
+## Phase 8: Convergence
+
+- [X] T031 Corrigir em `specs/026-attestation-emitter/data-model.md` a recusa da entidade Executor, hoje `WORKER_REQUIRED_STEP` — código inexistente que contradiz a lista da entidade Recusa de emissão no mesmo arquivo — para `WORKER_EXECUTION_UNPROVEN` e a condição real per plan: data-model (contradicts)
+- [X] T032 Corrigir em `specs/026-attestation-emitter/data-model.md` o estado da entidade Executor, que declara a montagem dos campos como não entregue quando `mint_chain` e `leader_lease` estão entregues e atestados per plan: data-model (contradicts)
+- [X] T033 Nomear em `specs/026-attestation-emitter/data-model.md` e `specs/026-attestation-emitter/plan.md` o resolvedor do caminho de produção, `resolve_shipped_workflow_skills`, no lugar de `resolve_workflow_skill` per plan: data-model (contradicts)
+- [X] T034 Declarar o `**Estado**` da entidade Cadeia em `specs/026-attestation-emitter/data-model.md`, hoje a única das sete sem ele per plan: data-model (partial)

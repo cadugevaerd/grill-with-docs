@@ -24,39 +24,39 @@
     },
     "attested_outputs": {
       "analyze": {
-        "output_sha256": "sha256:fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96",
+        "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/analyze-analyze-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-4.terminal.json",
         "step_id": "analyze"
       },
       "checklist": {
         "output_sha256": "sha256:7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/checklist-checklist-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
         "step_id": "checklist"
       },
       "converge": {
-        "output_sha256": "sha256:fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96",
+        "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-2.terminal.json",
         "step_id": "converge"
       },
       "implement-parallel": {
         "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-4.terminal.json",
         "step_id": "implement-parallel"
       },
       "partition": {
         "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/partition-partition-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-4.terminal.json",
         "step_id": "partition"
       },
       "plan": {
-        "output_sha256": "sha256:32542c5681af1b954a3492f45dcdd749d712510e7113d090e168816bcb3c8d6d",
+        "output_sha256": "sha256:84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-3.terminal.json",
         "step_id": "plan"
       },
       "specify": {
@@ -66,9 +66,9 @@
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96",
+        "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-4.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -428,6 +428,138 @@
         "reason": "converge: 4 findings apendados na Phase 5 e todos executados; cadeia re-atestada em cascata e casando com os bytes correntes",
         "state": "complete",
         "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "abrindo verify apos converge fechado",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/plan.md",
+            "sha256": "84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/026-plan-r2.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/checklists/requirements.md",
+            "sha256": "7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/026-checklist-r2.json"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/026-tasks-r3.json"
+      },
+      {
+        "chain_stale": [
+          "partition",
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/026-analyze-r3.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/026-partition-r3.json"
+      },
+      {
+        "chain_stale": [
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/026-implement-r3.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/026-converge.json"
       }
     ],
     "chain_stale": [],
@@ -459,7 +591,7 @@
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "in-progress"
     },
     "superseded_outputs": {
       "analyze": [
@@ -486,6 +618,18 @@
           "step_execution_id": "se-718591883c21f2acb85bac74ea5f837ef8688807f20c08fac465a0da854b3ecf",
           "step_id": "analyze",
           "superseded_by_step_execution_id": "se-80509915ad26015d08970514f78a766e85d4f0aae6269305ff211b6baa4042ba"
+        },
+        {
+          "attempt_id": "analyze-3",
+          "attestation": ".grill/attestations/026-analyze-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-3.terminal.json",
+          "step_execution_id": "se-80509915ad26015d08970514f78a766e85d4f0aae6269305ff211b6baa4042ba",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-0ab8f6ea170df6cef25cab457d9efdb261c6bf8d26bd483c2226deceb6890f65"
         }
       ],
       "checklist": [
@@ -500,6 +644,32 @@
           "step_execution_id": "se-7358ad6dd8bf882c5edfa03f109c13e1ebf765992d05d6ef5ef8454fcee65ce0",
           "step_id": "checklist",
           "superseded_by_step_execution_id": "se-19382a281ed87bac38eccfcfade90760c9f5d15826d8ce5100ec153a3a2480d5"
+        },
+        {
+          "attempt_id": "checklist-2",
+          "attestation": ".grill/attestations/026-checklist-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-2.terminal.json",
+          "step_execution_id": "se-19382a281ed87bac38eccfcfade90760c9f5d15826d8ce5100ec153a3a2480d5",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-db2c9d24cb82da0f7ee790d8249462774db04843e3a66fd15126a9c0aa2adc81"
+        }
+      ],
+      "converge": [
+        {
+          "attempt_id": "converge-1",
+          "attestation": ".grill/attestations/026-converge.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+          "step_execution_id": "se-0e34dea2e3fe4686cf5d5d49efabaae1b08bc2a4f30425452f8a189501810e15",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-b64ee031e7e9d0bd2a8f6ed47c265f7db57718b80e8650264ec393ac55c43d03"
         }
       ],
       "implement-parallel": [
@@ -526,6 +696,18 @@
           "step_execution_id": "se-a59308174f2eeae34d98cbebae09243d44c55240c2a383480d058dd560711dec",
           "step_id": "implement-parallel",
           "superseded_by_step_execution_id": "se-98da96f4cc628ba361f2db7510bc936177431e41c97dee6386d5f59b9000f33e"
+        },
+        {
+          "attempt_id": "implement-parallel-3",
+          "attestation": ".grill/attestations/026-implement-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-3.terminal.json",
+          "step_execution_id": "se-98da96f4cc628ba361f2db7510bc936177431e41c97dee6386d5f59b9000f33e",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-73f139ab4763d140c3b9dbf710dd970b913e931c6900d594c5fe6264bd2a55be"
         }
       ],
       "partition": [
@@ -552,6 +734,18 @@
           "step_execution_id": "se-21b36d36d2ff9b12c67c43c70f902c175b6f2a905ccb5093a386add7a1a516d7",
           "step_id": "partition",
           "superseded_by_step_execution_id": "se-7048703ee2f505579e8eaded6654da5f0f49690c47b2c49a07b8bfc75717651d"
+        },
+        {
+          "attempt_id": "partition-3",
+          "attestation": ".grill/attestations/026-partition-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-3.terminal.json",
+          "step_execution_id": "se-7048703ee2f505579e8eaded6654da5f0f49690c47b2c49a07b8bfc75717651d",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-d10152c27a55346ce9de87b3339f3b74b0dd6d2ec16d94caba5eb43fc514bd60"
         }
       ],
       "plan": [
@@ -566,6 +760,18 @@
           "step_execution_id": "se-c78953aa072ca5f0ac8429330bb05e153ed3b3b991ca20dadf26415f51e4ab33",
           "step_id": "plan",
           "superseded_by_step_execution_id": "se-8db81cdb15f7e133d1dc0f3172df6770f4fff9c82e33b1fe749948076271e36c"
+        },
+        {
+          "attempt_id": "plan-2",
+          "attestation": ".grill/attestations/026-plan-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:32542c5681af1b954a3492f45dcdd749d712510e7113d090e168816bcb3c8d6d",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
+          "step_execution_id": "se-8db81cdb15f7e133d1dc0f3172df6770f4fff9c82e33b1fe749948076271e36c",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-cfb5309e368141309628eab8be782a4d667aea0d5a58f0203aff6160c2c6f853"
         }
       ],
       "specify": [
@@ -606,6 +812,18 @@
           "step_execution_id": "se-d4631af29268934be441f3f0219ad401c449d8891a4d88b1ebbaa72807d933fc",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-075788f460c74058dd5fd8bf29127d5ee5d496e437acb422ae958f99ada4e2d9"
+        },
+        {
+          "attempt_id": "tasks-3",
+          "attestation": ".grill/attestations/026-tasks-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-3.terminal.json",
+          "step_execution_id": "se-075788f460c74058dd5fd8bf29127d5ee5d496e437acb422ae958f99ada4e2d9",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-ee2af9dcfd1d2295e3582ef8602585c0e73f319289ba69e666be68e2005ca499"
         }
       ]
     },
