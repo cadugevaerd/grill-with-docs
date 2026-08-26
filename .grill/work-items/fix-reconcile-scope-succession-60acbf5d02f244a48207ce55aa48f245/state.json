@@ -23,19 +23,20 @@
       "runtime": "claude"
     },
     "attested_executions": {
-      "analyze": "se-13931aa072b6ef098e7ef58cea5268646b388f12cb6b4a12c0c7f0b0117c2983",
+      "analyze": "se-f7ba6ed5dfb6c8d3c196432e249908ec25a41701998d4b2b5fb785f4a07d626c",
       "checklist": "se-dc876e77daee5d28b6f1ce265d7b29d483802d5431cd34eea0abbf5941122961",
-      "implement-parallel": "se-28933333003e21e678e85fef570782561bfe85c055bf7b752d2f10134d34a416",
-      "partition": "se-745453c75541e3dbaf3088082f4cb11f37736079e52ddb66261a7e2c2c16b003",
+      "converge": "se-42f3a91b60e334ccf207f66a22a2f86fb72919352cce5cb58dac59ed2d1433d7",
+      "implement-parallel": "se-371831aa160655748b677b843265b61501fc429c145f3bdae25f676032e90425",
+      "partition": "se-a20077098d3ace8aaabc03b9b6eea6379be52c28bb0f301a7baa622a671eafc2",
       "plan": "se-cf78ecb0ec80629bba927f5999f47064e8849bf8a810755b87555fe64368060d",
       "specify": "se-e7a926f8b6661101ab6facf9b7aa8d2c3d2685f42f62c0fd733feef501b3e73c",
-      "tasks": "se-a9618128bf1b62e001a918b807b96185c30a078039178064058b280a6cfd1994"
+      "tasks": "se-8a488eedd9e4e6a6bccb7cfcef7b2b0690c0deb415ed0fad754b72c65fa02e66"
     },
     "attested_outputs": {
       "analyze": {
         "output_sha256": "sha256:cd922ccb8ed2ee19693831c7512de3b2fcf2dea8f5d010cf9262f51918e53175",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-2.terminal.json",
         "step_id": "analyze"
       },
       "checklist": {
@@ -44,16 +45,22 @@
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
         "step_id": "checklist"
       },
-      "implement-parallel": {
-        "output_sha256": "sha256:0506c5a170091830f3558c6e202977ed77439246877d55c8d3d8978ec7215639",
+      "converge": {
+        "output_sha256": "sha256:fb440b73d3784db6877322bfd708dbaeaa2943c9d45fd4cf8f9018b224e9f261",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-2.terminal.json",
+        "step_id": "converge"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:fb440b73d3784db6877322bfd708dbaeaa2943c9d45fd4cf8f9018b224e9f261",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-2.terminal.json",
         "step_id": "implement-parallel"
       },
       "partition": {
         "output_sha256": "sha256:3f34519e69bf68ad38cc5841883db638c19b784baf7ed24c81841bb5c558664e",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-2.terminal.json",
         "step_id": "partition"
       },
       "plan": {
@@ -69,9 +76,9 @@
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:5dacc654495ad53709743355c80de026ba915a9b008cf92517f7e31f663954c1",
+        "output_sha256": "sha256:fb440b73d3784db6877322bfd708dbaeaa2943c9d45fd4cf8f9018b224e9f261",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-3.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -291,14 +298,113 @@
         "reason": "",
         "state": "complete",
         "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/tasks.md",
+            "sha256": "fb440b73d3784db6877322bfd708dbaeaa2943c9d45fd4cf8f9018b224e9f261"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/tasks.md",
+            "sha256": "fb440b73d3784db6877322bfd708dbaeaa2943c9d45fd4cf8f9018b224e9f261"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "tasks.md reescrito por gauntlet-tasks-reconcile e pela Phase 4 do converge; re-selagem contra o artefato corrente",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/tasks-r2.json"
+      },
+      {
+        "chain_stale": [
+          "partition",
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/analysis.md",
+            "sha256": "cd922ccb8ed2ee19693831c7512de3b2fcf2dea8f5d010cf9262f51918e53175"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "re-selagem por cascata: predecessor tasks foi sucedido apos gauntlet-tasks-reconcile e a Phase 4 do converge",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/analyze.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/execution-dag.json",
+            "sha256": "3f34519e69bf68ad38cc5841883db638c19b784baf7ed24c81841bb5c558664e"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "re-selagem por cascata: predecessor tasks foi sucedido apos gauntlet-tasks-reconcile e a Phase 4 do converge",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/partition.json"
+      },
+      {
+        "chain_stale": [
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/tasks.md",
+            "sha256": "fb440b73d3784db6877322bfd708dbaeaa2943c9d45fd4cf8f9018b224e9f261"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "re-selagem por cascata: predecessor tasks foi sucedido apos gauntlet-tasks-reconcile e a Phase 4 do converge",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/implement-parallel.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/tasks.md",
+            "sha256": "fb440b73d3784db6877322bfd708dbaeaa2943c9d45fd4cf8f9018b224e9f261"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "re-selagem por cascata: predecessor tasks foi sucedido apos gauntlet-tasks-reconcile e a Phase 4 do converge",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/converge.json"
       }
     ],
-    "chain_stale": [
-      "tasks",
-      "analyze",
-      "partition"
-    ],
-    "current_step": "converge",
+    "chain_stale": [],
+    "current_step": "verify",
     "execution_branch": "fix/reconcile-scope-succession",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -318,7 +424,7 @@
     "steps": {
       "analyze": "complete",
       "checklist": "complete",
-      "converge": "pending",
+      "converge": "complete",
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
@@ -329,6 +435,20 @@
       "verify": "pending"
     },
     "superseded_outputs": {
+      "analyze": [
+        {
+          "attempt_id": "analyze-1",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/analyze.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:cd922ccb8ed2ee19693831c7512de3b2fcf2dea8f5d010cf9262f51918e53175",
+          "provenance": "current-generation",
+          "reason": "re-selagem por cascata: predecessor tasks foi sucedido apos gauntlet-tasks-reconcile e a Phase 4 do converge",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+          "step_execution_id": "se-13931aa072b6ef098e7ef58cea5268646b388f12cb6b4a12c0c7f0b0117c2983",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-f7ba6ed5dfb6c8d3c196432e249908ec25a41701998d4b2b5fb785f4a07d626c"
+        }
+      ],
       "checklist": [
         {
           "attempt_id": "checklist-1",
@@ -353,6 +473,48 @@
           "step_execution_id": "se-0d4583e90461047345dd5f0bcb3886f430f247099a95ee4c55246c074275621c",
           "step_id": "checklist",
           "superseded_by_step_execution_id": "se-dc876e77daee5d28b6f1ce265d7b29d483802d5431cd34eea0abbf5941122961"
+        }
+      ],
+      "converge": [
+        {
+          "attempt_id": "converge-1",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/converge.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:fb440b73d3784db6877322bfd708dbaeaa2943c9d45fd4cf8f9018b224e9f261",
+          "provenance": "current-generation",
+          "reason": "re-selagem por cascata: predecessor tasks foi sucedido apos gauntlet-tasks-reconcile e a Phase 4 do converge",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+          "step_execution_id": "se-ffcaba5fa97084fdec1c6412dcb79010e88419d70ff1cbd29f639ab41a3c3ab0",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-42f3a91b60e334ccf207f66a22a2f86fb72919352cce5cb58dac59ed2d1433d7"
+        }
+      ],
+      "implement-parallel": [
+        {
+          "attempt_id": "implement-parallel-1",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/implement-parallel.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:0506c5a170091830f3558c6e202977ed77439246877d55c8d3d8978ec7215639",
+          "provenance": "current-generation",
+          "reason": "re-selagem por cascata: predecessor tasks foi sucedido apos gauntlet-tasks-reconcile e a Phase 4 do converge",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+          "step_execution_id": "se-28933333003e21e678e85fef570782561bfe85c055bf7b752d2f10134d34a416",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-371831aa160655748b677b843265b61501fc429c145f3bdae25f676032e90425"
+        }
+      ],
+      "partition": [
+        {
+          "attempt_id": "partition-1",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/partition.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:3f34519e69bf68ad38cc5841883db638c19b784baf7ed24c81841bb5c558664e",
+          "provenance": "current-generation",
+          "reason": "re-selagem por cascata: predecessor tasks foi sucedido apos gauntlet-tasks-reconcile e a Phase 4 do converge",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+          "step_execution_id": "se-745453c75541e3dbaf3088082f4cb11f37736079e52ddb66261a7e2c2c16b003",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-a20077098d3ace8aaabc03b9b6eea6379be52c28bb0f301a7baa622a671eafc2"
         }
       ],
       "plan": [
@@ -395,6 +557,18 @@
           "step_execution_id": "se-237852fec391ba74869877745d3be47b97b6829e945689a274088d3da63f0925",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-a9618128bf1b62e001a918b807b96185c30a078039178064058b280a6cfd1994"
+        },
+        {
+          "attempt_id": "tasks-2",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/tasks-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:5dacc654495ad53709743355c80de026ba915a9b008cf92517f7e31f663954c1",
+          "provenance": "current-generation",
+          "reason": "tasks.md reescrito por gauntlet-tasks-reconcile e pela Phase 4 do converge; re-selagem contra o artefato corrente",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
+          "step_execution_id": "se-a9618128bf1b62e001a918b807b96185c30a078039178064058b280a6cfd1994",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-8a488eedd9e4e6a6bccb7cfcef7b2b0690c0deb415ed0fad754b72c65fa02e66"
         }
       ]
     },
