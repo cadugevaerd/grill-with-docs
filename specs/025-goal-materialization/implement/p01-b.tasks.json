@@ -1,0 +1,21 @@
+{
+  "node_id": "p01-b",
+  "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
+  "run_id": "run-aab4cf5224dbb4cbf563ba17",
+  "wave_id": "wave-0001",
+  "tasks": [
+    {
+      "id": "T002",
+      "status": "completed",
+      "type": "verification",
+      "description": "Confirmar que plugin/skills/grill-with-docs/assets/GOAL.template.md existe, carrega <!-- grill-with-docs-goal:v1 --> na primeira linha e não será alterado por nenhuma tarefa desta entrega",
+      "evidence": {
+        "file": "plugin/skills/grill-with-docs/assets/GOAL.template.md",
+        "exists": true,
+        "first_line": "<!-- grill-with-docs-goal:v1 -->",
+        "sha256": "af97e2899ddd6668c5fc80eef153cd94b7d88ea92235650370572770e5b291d1",
+        "modified": false
+      }
+    }
+  ]
+}
