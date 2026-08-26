@@ -1,0 +1,33 @@
+{
+  "node_id": "p05-a",
+  "feature": "025-goal-materialization",
+  "run": "aab4cf5224dbb4cbf563ba17",
+  "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
+  "tasks_completed": ["T024", "T025", "T025b", "T026", "T027", "T028", "T028b", "T029", "T030", "T031", "T031b"],
+  "files_written": [
+    "tests/validate_goal_document_contract.py"
+  ],
+  "files_not_touched": [
+    "plugin/skills/grill-with-docs/assets/GOAL.template.md"
+  ],
+  "result": "durable",
+  "notes": "GOAL.template.md was NOT edited. T002 already asserted it must not change in this delivery, and it already carries the marker on the first line and satisfies compatible() as-is -- verified before writing any test, not assumed. Wrote tests/validate_goal_document_contract.py as a single unittest module, stdlib only, following the shape of tests/validate_workflow_contract.py / validate_workflow_v3_contract.py. It imports ESSENTIAL, MARKER, compatible and managed_version from grill_core.goal_document (scripts/ pushed onto sys.path, mirroring ensure_goal.py's own documented import contract) and never redeclares any of them (T024). resolve_goal/atomic_create are exercised directly via `import ensure_goal` for T028b/T030, since those need the GoalResult tuple, not just the CLI's JSON line. Two implementation gotchas found and fixed while writing the suite: (1) T026's per-item removal used str.replace(item, '', 1) at first, which silently passed for 'GOAL-HOLD:' and 'PLAN_ONLY_STOP' because those substrings repeat more than once in the template -- removing only the first occurrence left the item still present, so compatible() stayed True and the regression would have gone undetected; fixed by removing every occurrence (replace(item, '') with no count). (2) T029's SSOT scan initially excluded any path containing '.git' in its parts to skip repository-internal files, but this worktree itself lives under <repo>/.git/grill/wt-.../, so an absolute-path '.git' check discarded every single file, including grill_core/goal_document.py, and the test always found zero hits; fixed by checking '.git' only in the path *relative to the scanned base* (plugin/ or tests/), which is what SC-006 actually means by 'exactly one file in the source tree'.",
+  "verification": {
+    "validate_goal_document_contract.py": "python3 tests/validate_goal_document_contract.py -v -> Ran 12 tests in 0.229s, OK, exit 0",
+    "tests_by_task": {
+      "T024": "module-level import of ESSENTIAL/MARKER/compatible/managed_version from grill_core.goal_document; no local redeclaration anywhere in the file",
+      "T025": "Template.test_template_carries_the_marker_on_the_first_line_and_is_compatible",
+      "T025b": "ManagedVersionFirstLineOnly.test_marker_outside_the_first_line_is_not_managed (+ sibling test_marker_on_the_first_line_is_managed as a positive control)",
+      "T026": "EssentialCoverage.test_removing_each_essential_item_fails_and_names_it (subTest per item, 11 subTests)",
+      "T027": "OrderAndExtraContent.test_reordered_essential_items_still_pass + test_extra_content_still_passes",
+      "T028": "EmptyDocument.test_empty_and_whitespace_only_documents_fail",
+      "T028b": "DirectoryOccupiesTarget.test_directory_at_target_is_blocked_with_a_named_reason_and_untouched",
+      "T029": "SingleSourceOfTruth.test_essential_is_declared_in_exactly_one_source_file (textual scan over plugin/ and tests/)",
+      "T030": "CollisionBranch.test_os_link_collision_branch_is_a_structural_guarantee_not_a_process_race (direct atomic_create() re-invocation + a second resolve_goal())",
+      "T031": "ExternalToolBoundary.test_this_validator_only_ever_shells_out_to_python_and_git (allowlists subprocess.run's first argument to sys.executable/'git' only); no network, no uv/specify/node/backlogctl anywhere in the file",
+      "T031b": "WorkItemSealBoundary.test_work_item_json_never_carries_a_goal_block (real `grill_workspace.py init --skip-backlog` run, asserts WORK-ITEM.json has no 'goal' key while state.json does)"
+    },
+    "run_validators_note": "Ran the full tests/run_validators.py locally once (all validators, ~1300+ tests) before this note was written and it completed clean through this validator; the leader independently re-ran validate_goal_document_contract.py standalone (12 tests, exit 0) and is running the full suite on their side, so it is not re-run here again.",
+    "not_touched": "tasks.md, .grill/, .specify/reports/, and GOAL.template.md were not written. No path outside tests/validate_goal_document_contract.py and this sidecar was modified."
+  }
+}
