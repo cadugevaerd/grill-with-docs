@@ -1,0 +1,36 @@
+{
+  "worker": "p01-a",
+  "tasks": {
+    "T001": {
+      "status": "done",
+      "summary": "Predicado puro de autorizacao adicionado ao lado de scopes_overlap em plugin/skills/grill-with-docs/scripts/grill_workspace.py (linhas 1634-1637).",
+      "signature": "def overlap_authorized(left: str, right: str, dependencies: dict[str, list[str]]) -> bool",
+      "evidence": "right in dependencies.get(left, []) or left in dependencies.get(right, []); nenhum fechamento transitivo calculado."
+    },
+    "T002": {
+      "status": "done",
+      "summary": "validate_reconciliation consultado com overlap_authorized(left, right, dependencies) antes do laco duplo de paths; pula (continue) o par ja autorizado, suprimindo apenas SCOPE-OVERLAP. Reaproveita o mapa 'dependencies' ja construido nas linhas ~1744-1749 (nenhuma reconstrucao).",
+      "evidence": "diff em validate_reconciliation, laco 'for index, left in enumerate(ordered): for right in ordered[index+1:]: if overlap_authorized(...): continue'"
+    },
+    "T003": {
+      "status": "done",
+      "summary": "Em reconcile_command, a leitura/validacao de depends-on-work do target foi movida para antes do laco de sobreposicao. E construido direct_dependencies = {args.work_id: sorted(set(dependencies))} quando o schema e valido, ou {} (conjunto vazio, nao autoriza nada) quando malformado (mantendo o DEPENDENCY-SCHEMA existente). O laco de SCOPE-OVERLAP contra cada prior_id de existing.items() agora e condicionado a 'not overlap_authorized(args.work_id, prior_id, direct_dependencies)'. ADR-CONFLICT permanece fora do gate de autorizacao, nunca dispensado por dependencia.",
+      "evidence": "diff em reconcile_command; DEPENDENCY-SCHEMA/DEPENDENCY-SELF/DEPENDENCY-NOT-RECONCILED emitidos exatamente como antes, apenas reordenados para antes do laco de overlap."
+    }
+  },
+  "tests": {
+    "command": "python3 tests/validate_workspace_contract.py",
+    "result": "OK",
+    "ran": 67,
+    "skipped": 1,
+    "skip_reason": "test_reject_symlink_chain_accepts_macos_var_root_alias: host has no /var -> /private/var alias (pre-existente, dependente de ambiente)"
+  },
+  "syntax_check": "python3 -c \"import ast; ast.parse(open('plugin/skills/grill-with-docs/scripts/grill_workspace.py').read())\" -> OK",
+  "notes": "Nenhum novo import, nenhuma mudanca de schema de recibo/output, apenas stdlib. Codigo em plugin/skills/grill-with-docs/scripts/grill_workspace.py.",
+  "completed": [
+    "T001",
+    "T002",
+    "T003"
+  ],
+  "completed_index_note": "Indice `completed` acrescentado pelo leader apos o merge, transcrevendo literalmente o status por tarefa que este worker ja declarava neste mesmo arquivo. O brief oficial nao fixa o schema que gauntlet-tasks-reconcile le (document['completed']), entao cada worker gravou um formato proprio. Nenhuma afirmacao nova foi introduzida."
+}

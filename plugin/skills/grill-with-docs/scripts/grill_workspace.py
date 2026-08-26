@@ -1631,6 +1631,12 @@ def scopes_overlap(left: str, right: str) -> bool:
     return left == right or left.startswith(right + "/") or right.startswith(left + "/")
 
 
+def overlap_authorized(left: str, right: str, dependencies: dict[str, list[str]]) -> bool:
+    # Only a direct declared dependency authorizes reusing scope; never a
+    # transitive one. A -> B -> C does not let A reuse C without A -> C too.
+    return right in dependencies.get(left, []) or left in dependencies.get(right, [])
+
+
 def scan_qualified_ids(bundle: ItemBundle) -> set[str]:
     ids: set[str] = set()
     for path, data in bundle.files.items():
@@ -1774,6 +1780,8 @@ def validate_reconciliation(root: Path, bundles: list[ItemBundle]) -> tuple[dict
     ordered = sorted(scopes)
     for index, left in enumerate(ordered):
         for right in ordered[index + 1 :]:
+            if overlap_authorized(left, right, dependencies):
+                continue
             for left_path in scopes[left]:
                 for right_path in scopes[right]:
                     if scopes_overlap(left_path, right_path):
@@ -1995,25 +2003,28 @@ def reconcile_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         if not existing and global_dir.is_dir() and any((global_dir / name).is_file() for name in ("ROADMAP.md", "AUDIT.md")):
             return {"verdict": "BLOCKED", "code": "GLOBAL-BASELINE-UNVERIFIED", "work_id": args.work_id}, EXIT_BLOCKED
         conflicts: list[str] = []
-        for prior_id, receipt in sorted(existing.items()):
-            if prior_id == args.work_id:
-                continue
-            for left in scope:
-                for right in receipt.get("scope", []):
-                    if isinstance(right, str) and scopes_overlap(left, right):
-                        conflicts.append(f"SCOPE-OVERLAP:{args.work_id}:{left}<->{prior_id}:{right}")
-            for reference in target.metadata.get("conflicts-with-adrs", []):
-                if isinstance(reference, str) and reference in receipt.get("qualified_ids", []):
-                    conflicts.append(f"ADR-CONFLICT:{args.work_id}->{reference}")
         dependencies = target.metadata.get("depends-on-work", [])
         if not isinstance(dependencies, list) or not all(isinstance(value, str) for value in dependencies):
             conflicts.append(f"DEPENDENCY-SCHEMA:{args.work_id}")
+            direct_dependencies: dict[str, list[str]] = {}
         else:
+            direct_dependencies = {args.work_id: sorted(set(dependencies))}
             for dependency in sorted(set(dependencies)):
                 if dependency == args.work_id:
                     conflicts.append(f"DEPENDENCY-SELF:{args.work_id}")
                 elif dependency not in existing:
                     conflicts.append(f"DEPENDENCY-NOT-RECONCILED:{args.work_id}->{dependency}")
+        for prior_id, receipt in sorted(existing.items()):
+            if prior_id == args.work_id:
+                continue
+            if not overlap_authorized(args.work_id, prior_id, direct_dependencies):
+                for left in scope:
+                    for right in receipt.get("scope", []):
+                        if isinstance(right, str) and scopes_overlap(left, right):
+                            conflicts.append(f"SCOPE-OVERLAP:{args.work_id}:{left}<->{prior_id}:{right}")
+            for reference in target.metadata.get("conflicts-with-adrs", []):
+                if isinstance(reference, str) and reference in receipt.get("qualified_ids", []):
+                    conflicts.append(f"ADR-CONFLICT:{args.work_id}->{reference}")
         preview = {"verdict": "NO-GO" if conflicts else "PREVIEW", "code": "CONFLICTS" if conflicts else "OK",
                    "work_ids": [args.work_id], "qualified_ids": qualified, "conflicts": sorted(set(conflicts)), "count": 1}
         receipt = receipt_for(target, constitution, scope, qualified)

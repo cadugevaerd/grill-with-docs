@@ -1,0 +1,8 @@
+{
+  "authorized_by": "carlos.araujo@civilmaster.com.br",
+  "content_sha256": "sha256:bac06e14d874345fe0786d30d72adc8957565954c38dcd04e52d85fe79b98743",
+  "decision": "APPROVED",
+  "receipt_ref": "run-dce0a5f093cd802b34084842 | instrucao do usuario nesta sessao: \"implemente e entregue a work-tree de acordo com o WORKFLOW.md\", incluindo a invocacao de ship quando todos os gates permitirem",
+  "schema": "human-authorization/v1",
+  "scope": "ship"
+}
