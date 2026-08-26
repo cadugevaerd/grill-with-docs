@@ -30,7 +30,8 @@
       "partition": "se-a20077098d3ace8aaabc03b9b6eea6379be52c28bb0f301a7baa622a671eafc2",
       "plan": "se-cf78ecb0ec80629bba927f5999f47064e8849bf8a810755b87555fe64368060d",
       "specify": "se-e7a926f8b6661101ab6facf9b7aa8d2c3d2685f42f62c0fd733feef501b3e73c",
-      "tasks": "se-8a488eedd9e4e6a6bccb7cfcef7b2b0690c0deb415ed0fad754b72c65fa02e66"
+      "tasks": "se-8a488eedd9e4e6a6bccb7cfcef7b2b0690c0deb415ed0fad754b72c65fa02e66",
+      "verify": "se-872e231063ba4243028ae9e0fccde118a590fe1283277eb7b70759952fbf7b33"
     },
     "attested_outputs": {
       "analyze": {
@@ -80,6 +81,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/tasks-tasks-3.terminal.json",
         "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:81d573492de85d3e194d483f291892f29f05681443b510b8b777634c4dd913d3",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "step_id": "verify"
       }
     },
     "audit": [
@@ -401,10 +408,29 @@
         "state": "complete",
         "step": "converge",
         "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/converge.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/verify.md",
+            "sha256": "81d573492de85d3e194d483f291892f29f05681443b510b8b777634c4dd913d3"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
       }
     ],
     "chain_stale": [],
-    "current_step": "verify",
+    "current_step": "review",
     "execution_branch": "fix/reconcile-scope-succession",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -432,7 +458,7 @@
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "complete"
     },
     "superseded_outputs": {
       "analyze": [
