@@ -1,5 +1,85 @@
 # Changelog
 
+## 5.2.0
+
+- Corrigir o artefato de uma etapa já atestada passa a ter caminho: a **cadeia
+  sucessora**. Até aqui, editar um artefato depois do selo deixava a cadeia
+  divergente para sempre, e quem auditasse não conseguia distinguir edição
+  legítima de adulteração — que é justamente a distinção que a cadeia existe
+  para sustentar. `checkpoint --state in-progress` sobre etapa `complete`
+  devolvia `INVALID-TRANSITION` e nenhum comando reconciliava (BL-0201).
+- `attest --supersedes <bundle>` cunha o sucessor e `checkpoint
+  --supersedes-attestation <bundle> --reason ...` o aceita. O receipt anterior
+  nunca é reescrito nem removido: o sucessor nomeia o que substitui por
+  `supersedes_step_execution_id` e `supersedes_attempt_id` — campos que o
+  envelope `step-output/v1` já reservava e que eram sempre nulos — e avança
+  `execution_round`. O estado da etapa não se move; muda apenas qual receipt é
+  o corrente (ADR-0205).
+- O bundle substituído precisa ser **aquele que o work item aceitou**, provado
+  contra o par (`output_sha256`, `receipt_ref`) que o estado gravou na
+  aceitação. Um bundle apenas bem-formado da mesma etapa é recusado.
+- Superseder uma etapa não torna as seguintes erradas: torna-as
+  inverificáveis, porque cada uma selou o output que acabou de ser
+  substituído. Elas passam a constar em `development.chain_stale`, e `ship`
+  recusa com `CHAIN-STALE` enquanto a lista não esvaziar. Sem isso a
+  supersessão apenas realocaria a divergência uma etapa adiante.
+- `supersede_step_execution` exige mudança real — no artefato **ou** no
+  predecessor. Uma etapa a jusante re-atesta com o artefato byte-idêntico,
+  porque não refez trabalho algum; exigir artefato novo ali proibiria a própria
+  re-atestação que limpa a lista.
+- A prova de que o registro substituído é o aceito pina também **qual execução**
+  o produziu. O par (`output_sha256`, `receipt_ref`) não bastava: duas cadeias
+  da mesma etapa e do mesmo artefato, diferindo só no índice de onda, carregam
+  digest e `receipt_ref` idênticos sob `step_execution_id` diferentes. Sem isso
+  o histórico podia nomear uma execução que nunca foi o receipt corrente.
+  `development.attested_executions[step]` é gravado em toda aceitação; para
+  receipts aceitos antes do campo existir, a verificação cai no par — degradação
+  declarada, e toda aceitação nova pina.
+- `phase-turn` recusa com `CHAIN-STALE` enquanto houver etapa pendente de nova
+  emissão. A virada reseta a matriz e não o ledger, então a fase seguinte seria
+  recusada no `ship` por receipts que já não são dela; deixar cadeia
+  inverificável para trás é o que o ledger existe para impedir.
+- `attest --authorization` anexa o `human-authorization/v1` à cadeia. Sem isso
+  o emissor cunhava para dez etapas e não para a décima primeira: `ship` é a
+  única que exige autorização, e um bundle sem ela nunca seria aceito. O
+  documento é carregado, nunca produzido — cunhá-lo tornaria "um humano
+  aprovou" indistinguível de "quem queria a aprovação disse que sim".
+- Recusas nomeadas novas: `SUPERSEDE_LINK_INCOMPLETE`,
+  `SUPERSEDE_ROUND_NOT_ADVANCED`, `SUPERSEDE_NOT_LINKED`,
+  `SUPERSEDE_ATTEMPT_NOT_LINKED`, `SUPERSEDE_STEP_MISMATCH`,
+  `SUPERSEDE_WITHOUT_CHANGE`, `SUPERSEDE-BUNDLE-NOT-RECORDED`,
+  `SUPERSEDE-STEP-NOT-COMPLETE`, `CHAIN-STALE`,
+  `HUMAN_AUTHORIZATION_REQUIRED`.
+
+## 5.1.0
+
+- O núcleo passa a saber **cunhar** uma cadeia de atestação, não apenas julgá-la.
+  Desde que o gate de atestação foi corrigido para valer na frontier ativa,
+  `checkpoint --state complete` exige a cadeia canônica; o núcleo validava essa
+  cadeia e não a produzia, e nenhuma outra parte do sistema a produzia — o ciclo
+  de onze etapas ficou inalcançável em qualquer projeto na frontier ativa.
+- `workflow_versions.EXECUTION_CLASS_BY_VERSION` declara, por versão e por
+  etapa, quem pode executá-la: `worker-required` ou `leader-allowed`.
+  `implement-parallel` é `worker-required` porque o worktree isolado e o grant
+  de arquivos **são** o seu mecanismo de segurança — um receipt de leader para
+  ela atestaria um isolamento que não houve. As tabelas são literais congelados,
+  nunca derivados das sequências: uma reordenação não pode mudar em silêncio
+  quem executa o quê, e uma etapa nova sem classe declarada falha fechado
+  nomeando a decisão que falta.
+- `attestation.execution_class`, `require_leader_allowed` e `artefact_digest`
+  compõem a emissão. A âncora do `step-output` é o digest do artefato declarado,
+  lido pela fronteira segura que o chamador já usa — o módulo não faz I/O
+  próprio. Artefato ausente, ilegível, com caminho vazio, ou leitor devolvendo
+  algo que não são bytes: recusa nomeada, nunca cadeia cunhada com digest vazio.
+- `EmissionError` é subclasse de `AttestationError`, para que um chamador que já
+  falha fechado em atestação continue falhando fechado na emissão.
+
+  O que uma cadeia cunhada aqui prova, dito sem eufemismo: que o artefato
+  existia e foi lido no momento da emissão, e que alterá-lo depois quebra a
+  correlação. **Não** prova que a skill registrada rodou. Proveniência
+  criptográfica e defesa contra executor malicioso seguem fora de escopo, como
+  `specs/010-execution-attestation` sempre declarou.
+
 ## 5.0.0
 
 BREAKING: v3 deixa de ser superfície de execução. `EXECUTABLE_VERSIONS` passa a

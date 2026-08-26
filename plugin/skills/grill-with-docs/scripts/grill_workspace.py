@@ -3163,7 +3163,353 @@ def verify_checkpoint_attestation(
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.reason) from exc
     except store.StoreError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.message) from exc
-    return {"path": attestation_path, **verdict}
+    # The execution id travels with the verdict because the state has to record
+    # it: the pair (artefact digest, receipt ref) does not pin *which execution*
+    # produced the accepted receipt, and a later supersession needs exactly that.
+    return {"path": attestation_path,
+            "step_execution_id": bundle["step_output"]["step_execution_id"],
+            **verdict}
+
+
+def mark_chain_stale(development: dict[str, Any], step_id: str) -> list[str]:
+    """Record which already-attested steps now rest on a replaced output.
+
+    Superseding a step does not make the receipts after it wrong -- it makes
+    them unverifiable. Each of them sealed the output of its predecessor, and
+    that output is no longer the current one, so nothing in the chain can say
+    whether the later work still holds under the corrected artefact.
+
+    Naming them is the whole point. Left unnamed, a supersession would quietly
+    relocate the divergence one step downstream instead of resolving it, which
+    is the failure BL-0201 describes. Named, each one is cleared the only
+    honest way: by being attested again against the predecessor that now
+    stands.
+    """
+    sequence = development_sequence(development) or list(SEQUENCE)
+    outputs = development.get("attested_outputs") or {}
+    stale = set(development.get("chain_stale") or [])
+    stale.discard(step_id)
+    if step_id in sequence:
+        for later in sequence[sequence.index(step_id) + 1:]:
+            if later in outputs:
+                stale.add(later)
+    ordered = [step for step in sequence if step in stale]
+    development["chain_stale"] = ordered
+    return ordered
+
+
+def verify_supersession(
+    root: Path,
+    development: dict[str, Any],
+    *,
+    work_id: str,
+    step_id: str,
+    current: str,
+    state: str,
+    reason: str,
+    evidence: list[dict[str, Any]],
+    attestation_path: str | None,
+    superseded_path: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Accept a successor chain for a step whose artefact legitimately changed.
+
+    This is the only path that writes a step's attested output twice, so it is
+    the one place where "the receipt no longer matches the file" can be told
+    from "the file was tampered with". It refuses everything that would blur
+    that: a step that is not closed, a supersession with no stated reason, and
+    above all a prior bundle that is merely well-formed rather than the one
+    this work item actually accepted.
+
+    The step's state never moves. Nothing is being redone -- ``complete`` was
+    and remains true. What changes is which receipt is current for it, and what
+    that receipt says it replaces.
+    """
+    if state != "complete" or current != "complete":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-STEP-NOT-COMPLETE", step_id)
+    if not reason:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "REASON-REQUIRED", step_id)
+    if not evidence:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "EVIDENCE-REQUIRED", step_id)
+    attestation = grill_core_module("attestation")
+    recorded = (development.get("attested_outputs") or {}).get(step_id)
+    if not isinstance(recorded, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-NOTHING-ATTESTED", step_id)
+    prior = load_checkpoint_attestation(root, superseded_path)
+    prior_output = prior.get("step_output") if isinstance(prior, dict) else None
+    if not isinstance(prior_output, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-INVALID", superseded_path)
+    # Being a valid bundle for this step is not enough: it has to be the bundle
+    # this work item accepted. What proves that is what the state recorded at
+    # acceptance -- the digest and receipt ref here, and the execution id
+    # checked right below. Neither half is sufficient alone: the digest pair
+    # does not pin which execution produced the receipt, and the execution id
+    # is absent for receipts accepted before the field existed.
+    if (prior_output.get("step_id") != step_id
+            or prior_output.get("output_sha256") != recorded.get("output_sha256")
+            or prior_output.get("skill_invocation_receipt_ref") != recorded.get("receipt_ref")):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-NOT-RECORDED", step_id)
+    # The pair above does not pin the execution: two chains for the same step and
+    # the same artefact, differing only in wave index, carry an identical digest
+    # and receipt ref under different execution ids. Without this check the
+    # history would name an execution that was never the current receipt, and the
+    # successor would link to it -- corrupting the one trail this mechanism
+    # exists to make trustworthy.
+    #
+    # Absent for a receipt accepted before the field existed; falling back to the
+    # pair there is a declared degradation, not a hole left open: every
+    # acceptance from now on records the execution.
+    recorded_execution = (development.get("attested_executions") or {}).get(step_id)
+    if recorded_execution is not None and prior_output.get("step_execution_id") != recorded_execution:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-NOT-RECORDED", step_id,
+                         extra={"expected_step_execution_id": recorded_execution,
+                                "actual_step_execution_id": prior_output.get("step_execution_id")})
+    verdict = verify_checkpoint_attestation(
+        root, development, work_id=work_id, step_id=step_id, attestation_path=attestation_path,
+    )
+    successor = load_checkpoint_attestation(root, attestation_path)
+    successor_output = successor.get("step_output") if isinstance(successor, dict) else None
+    try:
+        attestation.supersede_step_execution({}, prior_output, successor_output)
+    except attestation.AttestationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.reason) from exc
+    history = {
+        **recorded,
+        "step_execution_id": prior_output.get("step_execution_id"),
+        "attempt_id": prior_output.get("attempt_id"),
+        "execution_round": prior_output.get("execution_round"),
+        "attestation": superseded_path,
+        "reason": reason,
+        "superseded_by_step_execution_id": successor_output.get("step_execution_id"),
+    }
+    return verdict, history
+
+
+def _converged_waves_exist(root: Path, work_id: str) -> bool:
+    """Whether any run of this work item has a converged wave.
+
+    Read from the durable run state, never from a caller-supplied flag: the
+    whole point of ``worker-required`` is that the leader cannot simply declare
+    that workers ran.
+
+    Absent run state is not an error here -- a work item that never activated
+    the Gauntlet has no converged wave, which is exactly the answer ``False``
+    conveys.
+    """
+    try:
+        gauntlet_runs = grill_core_module("gauntlet_runs")
+        runs = gauntlet_runs._read_runs(root, work_id, absent_ok=True)
+    except Exception:
+        return False
+    for run in (runs or {}).values():
+        if not isinstance(run, dict):
+            continue
+        for wave in (run.get("waves") or {}).values():
+            if isinstance(wave, dict) and wave.get("converged") is True:
+                return True
+    return False
+
+
+def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Mint the attestation chain for one leader-executed step.
+
+    The core knew how to judge a chain and not how to mint one, so every step
+    was unreachable by checkpoint once the gate started firing. This is the
+    other half.
+
+    What it writes is a bundle file; it never advances a step by itself. The
+    caller still runs ``checkpoint --state complete --attestation <path>``, and
+    the judge still has to accept it. Minting and advancing stay separate on
+    purpose: a command that did both would make "the chain was accepted"
+    indistinguishable from "the chain was written by the thing that wanted it
+    accepted".
+    """
+    root = project_root(args.root)
+    item = resolve_development_item(root, args.work_id)
+    attestation = grill_core_module("attestation")
+    versions = grill_core_module("workflow_versions")
+    step_skills_module = grill_core_module("step_skills")
+    store = grill_core_module("store")
+
+    _, state = read_development_state(root, item, args.work_id)
+    development = state.get("development") or {}
+    workflow_version = development_workflow_version(development)
+    if workflow_version is None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-UNTRACKED", args.work_id)
+
+    # A ``worker-required`` step may be attested by the leader -- the step
+    # receipt is always the leader's -- but only against proof that dispatched
+    # workers actually did the work. That proof is converged waves on the run,
+    # read from durable state rather than declared by the caller: a flag the
+    # operator sets would be the self-certification the class exists to prevent.
+    worker_execution_proven = _converged_waves_exist(root, args.work_id)
+    try:
+        # Refuse before reading anything: without the proof, a step whose
+        # isolation is its safety mechanism must not even get as far as hashing
+        # an artefact.
+        execution_class = attestation.require_emission_allowed(
+            args.step, workflow_version, versions,
+            worker_execution_proven=worker_execution_proven)
+        artefact_sha256, artefact_size = attestation.artefact_digest(
+            lambda rel: safe_read_regular_fd(root, root / rel), args.artifact,
+        )
+    except attestation.AttestationError as error:
+        raise CliFailure(EXIT_NO_GO, "NO-GO", error.reason,
+                         f"{error.code}: {error.reason}",
+                         extra={"work_id": args.work_id, **error.detail}) from error
+
+    project_id = store.project_identity(root)["project_id"]
+
+    # Compose the shipped asset paths from the versioned SSOT, the same way the
+    # Gauntlet composes them -- not by importing the Gauntlet. Its resolver
+    # bindings are a closed set on purpose, and widening that set to reach a
+    # filename table would trade one duplication for a coupling.
+    assets = Path(__file__).resolve().parent.parent / "assets"
+    try:
+        registry_bytes = (assets / versions.REGISTRY_FILENAME_BY_VERSION[workflow_version]).read_bytes()
+        catalog = step_skills_module.parse_strict(
+            (assets / versions.CATALOG_FILENAME_BY_VERSION[workflow_version]).read_bytes())
+        resolutions, _ = step_skills_module.resolve_shipped_workflow_skills(
+            (args.step,), args.runtime, step_skills_module.registry_sha256(registry_bytes),
+            registry=registry_bytes, catalog=catalog,
+            trusted_catalogs_path=assets / versions.TRUSTED_CATALOGS_FILENAME_BY_VERSION[workflow_version],
+        )
+    except KeyError as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORKFLOW-VERSION-UNKNOWN",
+                         str(workflow_version), extra={"work_id": args.work_id}) from error
+    except Exception as error:  # resolution owns its own refusal vocabulary
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SKILL-RESOLUTION-FAILED",
+                         str(error), extra={"work_id": args.work_id, "step": args.step}) from error
+    resolution = resolutions[0]
+
+    # The authorization is read, not minted: it is a human artefact that exists
+    # before the chain. `ship` is the only step whose resolution demands one,
+    # and without this the emitter could mint for ten steps and not the
+    # eleventh -- the same shape of gap the emitter itself was built to close.
+    human_authorization = None
+    if args.authorization:
+        human_authorization = load_checkpoint_attestation(root, args.authorization)
+
+    run_id = args.run_id or f"leader-{args.work_id}"
+    lease_id, fencing_token = attestation.leader_lease(run_id, args.step)
+    head = git_optional(root, "rev-parse", "HEAD")
+    if not re.fullmatch(r"[0-9a-f]{40}", head):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "BASE-COMMIT-UNAVAILABLE",
+                         "current Git base commit is unavailable", extra={"work_id": args.work_id})
+
+    # Each step must declare the attested output of the one before it: that is
+    # what makes the chain a chain rather than eleven unrelated receipts. The
+    # core already records those outputs in the shape dependency_outputs wants,
+    # so inherit them instead of rebuilding -- a rebuilt copy is one more place
+    # for the two to disagree.
+    # Re-attestation of a step already closed: the successor names what it
+    # replaces and advances the round, so the prior receipt stays readable
+    # instead of being contradicted by bytes that no longer match it (BL-0201).
+    execution_round = 1
+    supersedes_step_execution_id = None
+    supersedes_attempt_id = None
+    if args.supersedes:
+        prior = load_checkpoint_attestation(root, args.supersedes)
+        prior_output = prior.get("step_output") if isinstance(prior, dict) else None
+        if not isinstance(prior_output, dict) or prior_output.get("step_id") != args.step:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-INVALID", args.supersedes,
+                             extra={"work_id": args.work_id, "step": args.step})
+        supersedes_step_execution_id = prior_output.get("step_execution_id")
+        supersedes_attempt_id = prior_output.get("attempt_id")
+        prior_round = prior_output.get("execution_round")
+        if not isinstance(prior_round, int) or isinstance(prior_round, bool) or prior_round < 1:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-INVALID", args.supersedes,
+                             extra={"work_id": args.work_id, "step": args.step})
+        execution_round = prior_round + 1
+
+    sequence = development_sequence(development)
+    attested_outputs = development.get("attested_outputs") or {}
+    index = sequence.index(args.step) if args.step in sequence else 0
+    dependency_outputs = []
+    if index > 0:
+        previous_step = sequence[index - 1]
+        previous_output = attested_outputs.get(previous_step)
+        if not isinstance(previous_output, dict):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREDECESSOR-UNATTESTED",
+                             f"{previous_step} has no attested output to depend on",
+                             extra={"work_id": args.work_id, "step": args.step})
+        dependency_outputs = [previous_output]
+
+    jcs = step_skills_module.sha256_jcs
+    # The campaign binds every checkpoint of one run, and carries the recovery
+    # generation. It must therefore be stable across steps: deriving it from the
+    # step (or from HEAD, which moves with every commit) makes the second
+    # checkpoint of the same run STALE against the first.
+    campaign_identity = {"work_id": args.work_id, "run_id": run_id}
+    identity = {"work_id": args.work_id, "step": args.step, "head": head}
+    # Once the first checkpoint of a run is accepted, its campaign is recorded
+    # and every later checkpoint must match it. Inherit the recorded values
+    # instead of recomputing them: the recorded campaign is the authority, and a
+    # formula that later changes would strand a run that had already started.
+    derived_generation = "rg-" + hashlib.sha256(canonical(campaign_identity)).hexdigest()
+    recorded = development.get("attestation_campaign")
+    if isinstance(recorded, dict):
+        recovery_generation_id = recorded.get("recovery_generation_id", derived_generation)
+        plan_revision = recorded.get("plan_revision", 0)
+        run_id = recorded.get("run_id", run_id)
+        lease_id, fencing_token = attestation.leader_lease(run_id, args.step)
+    else:
+        recovery_generation_id = derived_generation
+        plan_revision = 0
+    bundle = attestation.mint_chain(
+        resolution=resolution,
+        project_id=project_id,
+        work_item_id=args.work_id,
+        work_item_revision=int(state.get("version", "0").split(".")[0]) if isinstance(state.get("version"), str) else 0,
+        run_id=run_id,
+        step_id=args.step,
+        attempt_id=f"{args.step}-{execution_round}",
+        recovery_generation_id=recovery_generation_id,
+        plan_revision=plan_revision,
+        wave_index=versions.LEADER_WAVE_INDEX,
+        worktree_id=f"wt-{args.work_id}",
+        worktree_head=head,
+        worker_lease_id=lease_id,
+        worker_fencing_token=fencing_token,
+        dispatcher_lease_id=lease_id,
+        dispatcher_epoch=1,
+        artefact_path=args.artifact,
+        artefact_sha256=artefact_sha256,
+        logical_plan_sha256=jcs(identity),
+        executable_plan_sha256=jcs({**identity, "artifact": args.artifact}),
+        input_fingerprint=jcs({**identity, "artifact_sha256": artefact_sha256}),
+        dependency_outputs=dependency_outputs,
+        catalog=catalog,
+        execution_round=execution_round,
+        supersedes_step_execution_id=supersedes_step_execution_id,
+        supersedes_attempt_id=supersedes_attempt_id,
+        human_authorization=human_authorization,
+    )
+
+    target = Path(args.out)
+    if target.is_absolute() or any(part in {"", ".", ".."} for part in target.parts):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ATTESTATION-PATH", args.out)
+    full = root / target
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_text(json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        "verdict": "ATTESTED",
+        "work_id": args.work_id,
+        "step": args.step,
+        "execution_class": execution_class,
+        "worker_execution_proven": worker_execution_proven,
+        "execution_round": execution_round,
+        "supersedes": args.supersedes,
+        "authorization": args.authorization,
+        "artifact": args.artifact,
+        "artifact_sha256": artefact_sha256,
+        "artifact_bytes": artefact_size,
+        "attestation": str(target),
+        "next": (
+            f"checkpoint {args.root} --work-id {args.work_id} --step {args.step} --state complete"
+            f" --evidence {args.artifact} --attestation {target}"
+            + (f" --supersedes-attestation {args.supersedes} --reason <why>" if args.supersedes else "")
+        ),
+    }, EXIT_OK
 
 
 def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -3246,13 +3592,26 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         if execution_branch is not None:
             payload["execution_branch"] = execution_branch
         audit = development.setdefault("audit", [])
-        if current == args.state:
+        superseding = bool(getattr(args, "supersedes_attestation", None))
+        if superseding:
+            payload["supersedes"] = args.supersedes_attestation
+        # A supersession is not a transition, so the identical-state guard does
+        # not apply to it: the step was complete before and stays complete.
+        if not superseding and current == args.state:
             if audit and audit[-1] == payload:
                 return {"verdict":"REUSED", "work_id":args.work_id, **payload, "current_step":development.get("current_step")}, EXIT_OK
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STATE-DIVERGENCE", args.step)
         index = sequence.index(args.step)
         attestation_result: dict[str, Any] | None = None
-        if args.state == "in-progress":
+        superseded_output: dict[str, Any] | None = None
+        if superseding:
+            attestation_result, superseded_output = verify_supersession(
+                root, development,
+                work_id=args.work_id, step_id=args.step,
+                current=current, state=args.state, reason=reason, evidence=evidence,
+                attestation_path=args.attestation, superseded_path=args.supersedes_attestation,
+            )
+        elif args.state == "in-progress":
             if current not in {"pending", "blocked"} or any(steps.get(s) != "complete" for s in sequence[:index]):
                 # Uma fase inteiramente concluída não é transição inválida: é fase
                 # encerrada esperando virada. Devolver INVALID-TRANSITION aqui
@@ -3268,6 +3627,16 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-TRANSITION", args.step)
             if args.step == "ship" and not (steps.get("verify") == steps.get("review") == "complete"):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SHIP-GATE", args.step)
+            # Shipping is where the chain stops being an internal record and
+            # starts being the claim made to everyone downstream. A step still
+            # resting on a replaced predecessor cannot be part of that claim.
+            #
+            # Checked before the run gates: a stale chain says the record itself
+            # is unreliable, which decides the question ahead of anything the
+            # record might report about execution.
+            if args.step == "ship" and development.get("chain_stale"):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHAIN-STALE",
+                                 ", ".join(development["chain_stale"]))
             if args.step == "ship":
                 require_converged_runs(root, args.work_id)
             if checkpoint_attestation_required(root):
@@ -3287,6 +3656,11 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         if attestation_result is not None:
             development["attestation_campaign"] = attestation_result["campaign"]
             outputs = development.setdefault("attested_outputs", {})
+            development.setdefault("attested_executions", {})[args.step] = \
+                attestation_result["step_execution_id"]
+            if superseded_output is not None:
+                development.setdefault("superseded_outputs", {}).setdefault(args.step, []).append(superseded_output)
+                payload["chain_stale"] = mark_chain_stale(development, args.step)
             outputs[args.step] = attestation_result["output"]
         development["current_step"] = next((s for s in sequence if steps.get(s) != "complete"), "complete")
         atomic_write(root, path, (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode())
@@ -3335,6 +3709,14 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         pending = [s for s in sequence if steps.get(s) != "complete"]
         if pending:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PHASE-INCOMPLETE", ", ".join(pending))
+        # Turning the phase does not resolve a stale chain, it outlives it: the
+        # matrix resets and the ledger does not, so the next phase would be
+        # refused at ship over receipts that no longer apply to it. Leaving an
+        # unverifiable chain behind is precisely what the ledger exists to stop,
+        # so the turn is refused until the steps it names are attested again.
+        if development.get("chain_stale"):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHAIN-STALE",
+                             ", ".join(development["chain_stale"]))
 
         development["steps"] = {step: "pending" for step in sequence}
         development["current_step"] = sequence[0]
@@ -3609,6 +3991,21 @@ def build_parser() -> JsonParser:
     gauntlet_resume_parser.add_argument("root")
     gauntlet_resume_parser.add_argument("--work-id", required=True)
     gauntlet_resume_parser.add_argument("--run-id")
+    attest_parser = subparsers.add_parser("attest")
+    attest_parser.add_argument("root")
+    attest_parser.add_argument("--work-id", required=True)
+    attest_parser.add_argument("--step", required=True)
+    attest_parser.add_argument("--artifact", required=True,
+                               help="project-relative path to the artefact the step produced")
+    attest_parser.add_argument("--out", required=True,
+                               help="project-relative path to write the attestation bundle to")
+    attest_parser.add_argument("--run-id", default=None)
+    attest_parser.add_argument("--runtime", default="claude")
+    attest_parser.add_argument("--supersedes", default=None,
+                               help="project-relative path to the accepted bundle this one replaces")
+    attest_parser.add_argument("--authorization", default=None,
+                               help="project-relative path to the human-authorization/v1 document (required by ship)")
+
     checkpoint_parser = subparsers.add_parser("checkpoint")
     checkpoint_parser.add_argument("root")
     checkpoint_parser.add_argument("--work-id", required=True)
@@ -3616,6 +4013,8 @@ def build_parser() -> JsonParser:
     checkpoint_parser.add_argument("--state", choices=("in-progress", "complete", "blocked"), required=True)
     checkpoint_parser.add_argument("--evidence", action="append", default=[])
     checkpoint_parser.add_argument("--attestation")
+    checkpoint_parser.add_argument("--supersedes-attestation", default=None,
+                                   help="accept a successor chain for a step already complete")
     checkpoint_parser.add_argument("--reason", default="")
     checkpoint_parser.add_argument("--initialize-legacy", action="store_true")
     checkpoint_parser.add_argument("--from-step")
@@ -3670,6 +4069,7 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-remediate": gauntlet_remediate_command,
             "hotfix": hotfix_command,
             "hotfix-go": hotfix_go_command,
+            "attest": attest_command,
             "checkpoint": checkpoint_command,
             "phase-turn": phase_turn_command,
             "status": status_command,

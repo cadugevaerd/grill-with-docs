@@ -691,6 +691,243 @@ class CheckpointAttestationWiringContract(WiringHarness):
         self.assertEqual(state["development"]["attestation_campaign"]["run_id"], "run-checkpoint")
         self.assertEqual(state["development"]["attested_outputs"]["specify"]["step_id"], "specify")
 
+    # -- supersession: correcting the artefact of a step already closed --------
+
+    def _bundle(self, path: Path, **kw) -> Path:
+        """A perfectly valid chain for the same step, written where asked.
+
+        An attempt to forge a supersession does not look like a broken bundle;
+        it looks exactly like this one. Nothing in the file itself distinguishes
+        the receipt on record from a freshly minted impostor.
+        """
+        project_id = STORE.project_identity(self.root)["project_id"]
+        chain = ATTESTATION_FIXTURES.build_chain(
+            step_id="specify", project_id=project_id, work_item_id="wa", run_id="run-checkpoint", **kw)
+        bundle = {
+            "schema": "checkpoint-attestation/v1",
+            "resolution": chain["resolution"], "dispatch_intent": chain["dispatch_intent"],
+            "invocation_started": chain["invocation_started"], "invocation_terminal": chain["invocation_terminal"],
+            "step_output": chain["step_output"], "catalog": ATTESTATION_FIXTURES.catalog(),
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(bundle, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+        return path
+
+    def _close_specify(self) -> Path:
+        """Drive `specify` to complete against a real accepted receipt."""
+        self._init_item("wa")
+        self._start_specify()
+        (self.root / "evidence.md").write_text("canonical skill completed\n", encoding="utf-8")
+        accepted = self._receipt()
+        process, payload = invoke(
+            "checkpoint", self.root, "--work-id", "wa", "--step", "specify", "--state", "complete",
+            "--evidence", "evidence.md", "--attestation", accepted.relative_to(self.root), "--reason", "done")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "UPDATED"))
+        return accepted
+
+    def test_a_supersession_needs_the_bundle_this_item_actually_accepted(self) -> None:
+        """Well-formed is not enough; it has to be the receipt on record.
+
+        Without this the whole successor chain is forgeable: anyone could mint a
+        fresh valid bundle for the step, present it as "the one being replaced",
+        and the ledger would record a supersession of something that was never
+        the current receipt.
+        """
+        accepted = self._close_specify()
+        before = json.loads((self.root / ".grill/work-items/wa/state.json").read_text(encoding="utf-8"))
+        impostor = self._bundle(self.root / "receipts/impostor.json", generation_label="gen-9")
+        successor = self._bundle(self.root / "receipts/successor.json", generation_label="gen-8")
+        self.assertNotEqual(
+            json.loads(impostor.read_text())["step_output"]["output_sha256"],
+            json.loads(accepted.read_text())["step_output"]["output_sha256"],
+            "the fixture must actually differ, or the test proves nothing")
+        process, payload = invoke(
+            "checkpoint", self.root, "--work-id", "wa", "--step", "specify", "--state", "complete",
+            "--evidence", "evidence.md", "--attestation", successor.relative_to(self.root),
+            "--supersedes-attestation", impostor.relative_to(self.root), "--reason", "forjando")
+        self.assertEqual((process.returncode, payload["code"]), (2, "SUPERSEDE-BUNDLE-NOT-RECORDED"))
+        after = json.loads((self.root / ".grill/work-items/wa/state.json").read_text(encoding="utf-8"))
+        self.assertEqual(after, before, "a refused supersession must not touch the state")
+        self.assertNotIn("superseded_outputs", after["development"])
+
+    def test_a_supersession_needs_the_execution_that_was_accepted(self) -> None:
+        """The digest pair does not pin *which execution* produced the receipt.
+
+        Two chains for the same step and the same artefact, differing only in
+        wave index, carry an identical output digest and receipt ref under
+        different execution ids. Accepting one as "the receipt being replaced"
+        would write an execution that was never current into the history, and
+        link the successor to it -- corrupting the one trail this mechanism
+        exists to make trustworthy.
+        """
+        accepted = self._close_specify()
+        twin = self._bundle(self.root / "receipts/twin.json", wave_index=7)
+        accepted_output = json.loads(accepted.read_text())["step_output"]
+        twin_output = json.loads(twin.read_text())["step_output"]
+        self.assertEqual(twin_output["output_sha256"], accepted_output["output_sha256"])
+        self.assertEqual(twin_output["skill_invocation_receipt_ref"],
+                         accepted_output["skill_invocation_receipt_ref"])
+        self.assertNotEqual(twin_output["step_execution_id"], accepted_output["step_execution_id"],
+                            "the fixture must differ in execution, or the test proves nothing")
+
+        successor = self._bundle(self.root / "receipts/successor.json", generation_label="gen-8")
+        process, payload = invoke(
+            "checkpoint", self.root, "--work-id", "wa", "--step", "specify", "--state", "complete",
+            "--evidence", "evidence.md", "--attestation", successor.relative_to(self.root),
+            "--supersedes-attestation", twin.relative_to(self.root), "--reason", "gemeo")
+        self.assertEqual((process.returncode, payload["code"]), (2, "SUPERSEDE-BUNDLE-NOT-RECORDED"))
+        self.assertEqual(payload["expected_step_execution_id"], accepted_output["step_execution_id"])
+
+    def test_an_accepted_checkpoint_records_which_execution_it_accepted(self) -> None:
+        """Recorded at acceptance, because nothing else can recover it later."""
+        accepted = self._close_specify()
+        development = json.loads(
+            (self.root / ".grill/work-items/wa/state.json").read_text(encoding="utf-8"))["development"]
+        self.assertEqual(development["attested_executions"]["specify"],
+                         json.loads(accepted.read_text())["step_output"]["step_execution_id"])
+
+    def test_a_phase_is_not_turned_over_a_stale_chain(self) -> None:
+        """Turning the phase outlives the ledger instead of resolving it.
+
+        The matrix resets and the ledger does not, so the next phase would be
+        refused at ship over receipts that no longer apply to it. Leaving an
+        unverifiable chain behind is what the ledger exists to stop.
+        """
+        self._init_item("wa")
+        path = self.root / ".grill/work-items/wa/state.json"
+        state = json.loads(path.read_text(encoding="utf-8"))
+        development = state["development"]
+        development["steps"] = {step: "complete" for step in development["sequence"]}
+        development["current_step"] = "complete"
+        development["chain_stale"] = ["analyze"]
+        path.write_text(json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        process, payload = invoke("phase-turn", self.root, "--work-id", "wa", "--reason", "proxima fase")
+        self.assertEqual((process.returncode, payload["code"]), (2, "CHAIN-STALE"))
+        self.assertIn("analyze", payload["error"])
+        after = json.loads(path.read_text(encoding="utf-8"))["development"]
+        self.assertEqual(after["steps"]["specify"], "complete", "a refused turn must not reset the matrix")
+
+    def test_a_phase_turns_once_the_stale_chain_is_cleared(self) -> None:
+        """The refusal must clear on its own condition, not latch."""
+        self._init_item("wa")
+        path = self.root / ".grill/work-items/wa/state.json"
+        state = json.loads(path.read_text(encoding="utf-8"))
+        development = state["development"]
+        development["steps"] = {step: "complete" for step in development["sequence"]}
+        development["current_step"] = "complete"
+        development["chain_stale"] = []
+        path.write_text(json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        process, payload = invoke("phase-turn", self.root, "--work-id", "wa", "--reason", "proxima fase")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "TURNED"), payload)
+
+    def test_a_supersession_is_refused_on_a_step_that_is_not_complete(self) -> None:
+        """Nothing to replace: the step never produced a current receipt."""
+        self._init_item("wa")
+        self._start_specify()
+        (self.root / "evidence.md").write_text("nada fechado ainda\n", encoding="utf-8")
+        receipt = self._receipt()
+        process, payload = invoke(
+            "checkpoint", self.root, "--work-id", "wa", "--step", "specify", "--state", "complete",
+            "--evidence", "evidence.md", "--attestation", receipt.relative_to(self.root),
+            "--supersedes-attestation", receipt.relative_to(self.root), "--reason", "cedo demais")
+        self.assertEqual((process.returncode, payload["code"]), (2, "SUPERSEDE-STEP-NOT-COMPLETE"))
+
+    def test_an_accepted_supersession_records_what_it_replaced_and_why(self) -> None:
+        """The history is the whole point: without it this is just a rewrite.
+
+        The replaced receipt has to remain readable afterwards, carrying the
+        stated reason and the execution that took its place -- otherwise an
+        audit sees a receipt that changed and cannot tell a correction from
+        tampering, which is the distinction the chain exists to sustain.
+        """
+        accepted = self._close_specify()
+        replaced = json.loads(accepted.read_text())["step_output"]
+        corrected = self.root / "corrigido.md"
+        corrected.write_text("artefato corrigido depois do selo\n", encoding="utf-8")
+
+        process, payload = invoke(
+            "attest", self.root, "--work-id", "wa", "--step", "specify",
+            "--artifact", "corrigido.md", "--out", "receipts/specify-r2.json",
+            "--supersedes", accepted.relative_to(self.root))
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "ATTESTED"), payload)
+        self.assertEqual(payload["execution_round"], 2)
+
+        process, payload = invoke(
+            "checkpoint", self.root, "--work-id", "wa", "--step", "specify", "--state", "complete",
+            "--evidence", "corrigido.md", "--attestation", "receipts/specify-r2.json",
+            "--supersedes-attestation", accepted.relative_to(self.root),
+            "--reason", "artefato corrigido apos o selo")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "UPDATED"), payload)
+
+        development = json.loads(
+            (self.root / ".grill/work-items/wa/state.json").read_text(encoding="utf-8"))["development"]
+        history = development["superseded_outputs"]["specify"]
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["output_sha256"], replaced["output_sha256"])
+        self.assertEqual(history[0]["step_execution_id"], replaced["step_execution_id"])
+        self.assertEqual(history[0]["reason"], "artefato corrigido apos o selo")
+        successor = json.loads((self.root / "receipts/specify-r2.json").read_text())["step_output"]
+        self.assertEqual(history[0]["superseded_by_step_execution_id"], successor["step_execution_id"])
+        self.assertEqual(development["attested_outputs"]["specify"]["output_sha256"],
+                         successor["output_sha256"])
+        self.assertEqual(development["steps"]["specify"], "complete",
+                         "a supersession is not a transition: the step never reopened")
+        self.assertTrue(accepted.exists(), "the replaced bundle must survive on disk")
+
+    def test_an_accepted_supersession_needs_a_stated_reason(self) -> None:
+        """An unexplained replacement is the thing this mechanism is against."""
+        accepted = self._close_specify()
+        (self.root / "corrigido.md").write_text("artefato corrigido\n", encoding="utf-8")
+        invoke("attest", self.root, "--work-id", "wa", "--step", "specify",
+               "--artifact", "corrigido.md", "--out", "receipts/specify-r2.json",
+               "--supersedes", accepted.relative_to(self.root))
+        process, payload = invoke(
+            "checkpoint", self.root, "--work-id", "wa", "--step", "specify", "--state", "complete",
+            "--evidence", "corrigido.md", "--attestation", "receipts/specify-r2.json",
+            "--supersedes-attestation", accepted.relative_to(self.root), "--reason", "   ")
+        self.assertEqual((process.returncode, payload["code"]), (2, "REASON-REQUIRED"))
+
+    def _force_ready_to_ship(self, *, chain_stale: list[str]) -> str:
+        """Drive the matrix to the ship boundary directly in the fixture state.
+
+        The gate under test sits at the end of an eleven-step cycle; reaching it
+        by replaying the whole cycle would test the cycle, not the gate.
+        """
+        path = self.root / ".grill/work-items/wa/state.json"
+        state = json.loads(path.read_text(encoding="utf-8"))
+        development = state["development"]
+        sequence = development["sequence"]
+        development["steps"] = {step: "complete" for step in sequence}
+        development["steps"][sequence[-1]] = "in-progress"
+        development["current_step"] = sequence[-1]
+        development["chain_stale"] = chain_stale
+        path.write_text(json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        return sequence[-1]
+
+    def test_ship_refuses_while_a_step_still_rests_on_a_replaced_output(self) -> None:
+        """The stale ledger has to stop the release, or naming it changed nothing."""
+        self._init_item("wa")
+        ship = self._force_ready_to_ship(chain_stale=["analyze", "partition"])
+        (self.root / "evidence.md").write_text("release\n", encoding="utf-8")
+        process, payload = invoke(
+            "checkpoint", self.root, "--work-id", "wa", "--step", ship, "--state", "complete",
+            "--evidence", "evidence.md", "--reason", "ship")
+        self.assertEqual((process.returncode, payload["code"]), (2, "CHAIN-STALE"))
+        # The refusal names what is stale, so the operator knows what to
+        # re-attest instead of having to go looking.
+        self.assertIn("analyze", payload["error"])
+        self.assertIn("partition", payload["error"])
+
+    def test_ship_is_not_blocked_once_the_stale_ledger_is_empty(self) -> None:
+        """The gate must clear on its own condition, not stay latched forever."""
+        self._init_item("wa")
+        ship = self._force_ready_to_ship(chain_stale=[])
+        (self.root / "evidence.md").write_text("release\n", encoding="utf-8")
+        process, payload = invoke(
+            "checkpoint", self.root, "--work-id", "wa", "--step", ship, "--state", "complete",
+            "--evidence", "evidence.md", "--reason", "ship")
+        self.assertNotEqual(payload.get("code"), "CHAIN-STALE")
+
 
 # ---------------------------------------------------------------------------
 # Item 3: ensure_workflow.py recognises v3 alongside v2

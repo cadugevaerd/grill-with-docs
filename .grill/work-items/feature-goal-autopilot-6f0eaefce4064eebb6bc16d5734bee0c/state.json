@@ -1,0 +1,254 @@
+{
+  "active_phase": null,
+  "audit_verdict": "GO",
+  "backlog_skipped": true,
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+    "state": "present"
+  },
+  "development": {
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-goal-md-contract/spec.md",
+            "sha256": "17f50048070fb276d9187e9d5e271254ebd9000418db89e09d89f0849b03c69d"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-goal-md-contract/plan.md",
+            "sha256": "380c6666796e4b5fcc4bd1833e308e80383486396ab460b7aa70e90662925cbc"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-goal-md-contract/checklists/contract.md",
+            "sha256": "037fb278d5bc3523ccf78c28b8b07d93bc7750886c214ffd4fd14e08a3254975"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-goal-md-contract/tasks.md",
+            "sha256": "d4485bd84bea86f4446e8a4db559bd8e131a563bc642b0de3aa0ba58196c9643"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-goal-md-contract/checklists/contract.md",
+            "sha256": "a87a8f4b7a873725c286cf8f378fea3fe29fe6e9c8b10c4f949da3e6ac3402ac"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "DAG emitido e aplicado (PARTITION-DEGRADED, 10 nos, 31 tasks), mas gauntlet-dag-validate exige run-id e gauntlet-init retorna WORKFLOW-INCOMPATIBLE: grill_workspace.py passa workflow_v3 fixo para gauntlet.current_activation, entao o WORKFLOW.md v4 e julgado pela tupla ESSENTIAL v3",
+        "state": "blocked",
+        "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-goal-md-contract/execution-dag.json",
+            "sha256": "b9141caded5d01ff26db1d0b837ae4629445ce0f54cfdd8e8294bfbb5370acba"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": "plugin/skills/grill-with-docs/assets/GOAL.template.md",
+            "sha256": "af97e2899ddd6668c5fc80eef153cd94b7d88ea92235650370572770e5b291d1"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/024-goal-md-contract/tasks.md",
+            "sha256": "e7bb77cedf52bcc48b3952b8ebc7f4e6ad4843b65a533af66d52073b26b161a3"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/verify.md",
+            "sha256": "179f9c69373aa0fd7bd44ae4edb0185186d1f86e6bdeef1361f5b4d4e6c0e028"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      }
+    ],
+    "current_step": "review",
+    "execution_branch": "feature/goal-instruct",
+    "renamed_from": {},
+    "schema": "grill-development/v2",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "partition",
+      "implement-parallel",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "implement-parallel": "complete",
+      "partition": "complete",
+      "plan": "complete",
+      "review": "pending",
+      "ship": "pending",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    },
+    "workflow_version": "v4"
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "completed",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "complete",
+  "version": "1.2.0",
+  "work_id": "feature-goal-autopilot-6f0eaefce4064eebb6bc16d5734bee0c",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0",
+    "version": "v2"
+  }
+}

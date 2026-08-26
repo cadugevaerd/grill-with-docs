@@ -101,6 +101,60 @@ EXECUTOR_STEP_BY_VERSION = {
     "v4": "implement-parallel",
 }
 
+#: Who may execute each step, and therefore what an attestation for it must
+#: prove. ``worker-required`` means the step is only attestable from a
+#: dispatched worker: its worktree isolation and closed file grant *are* the
+#: safety mechanism, so a leader-executed receipt for it would attest an
+#: isolation that never happened. ``leader-allowed`` means the conducting
+#: session may declare itself the executor, taking a lease of its own.
+#:
+#: Frozen literals, never derived from the sequences. Deriving them would let a
+#: reordering silently change who may execute what -- and a step added to a
+#: sequence without a class here must fail closed, naming the missing decision,
+#: rather than inherit a permissive default from its neighbour.
+EXECUTION_CLASS_V3 = {
+    "specify": "leader-allowed",
+    "plan": "leader-allowed",
+    "checklist": "leader-allowed",
+    "tasks": "leader-allowed",
+    "analyze": "leader-allowed",
+    "agent-assign": "leader-allowed",
+    "agent-execute": "worker-required",
+    "converge": "leader-allowed",
+    "verify": "leader-allowed",
+    "review": "leader-allowed",
+    "ship": "leader-allowed",
+}
+
+EXECUTION_CLASS_V4 = {
+    "specify": "leader-allowed",
+    "plan": "leader-allowed",
+    "checklist": "leader-allowed",
+    "tasks": "leader-allowed",
+    "analyze": "leader-allowed",
+    "partition": "leader-allowed",
+    "implement-parallel": "worker-required",
+    "converge": "leader-allowed",
+    "verify": "leader-allowed",
+    "review": "leader-allowed",
+    "ship": "leader-allowed",
+}
+
+EXECUTION_CLASS_BY_VERSION = {
+    "v3": EXECUTION_CLASS_V3,
+    "v4": EXECUTION_CLASS_V4,
+}
+
+#: The two classes, as a closed set. A value outside it is a authoring mistake
+#: in the table above, not something a caller should try to interpret.
+EXECUTION_CLASSES = ("leader-allowed", "worker-required")
+
+#: ``wave_index`` for a leader-executed step. Zero here is semantic -- "outside
+#: any wave" -- not a filler value: a dispatched worker always carries the index
+#: of the wave that declared it, and waves are numbered from one.
+LEADER_WAVE_INDEX = 0
+
+
 SEQUENCE_BY_VERSION = {
     "v3": SEQUENCE_V3,
     "v4": SEQUENCE_V4,

@@ -1,0 +1,8 @@
+{
+  "authorized_by": "carlosaraujo",
+  "content_sha256": "sha256:6b85437fc205e5bdf0be7f9fc4954f86b97cee91a5464594112d4438ebb047bb",
+  "decision": "APPROVED",
+  "receipt_ref": ".grill/attestations/run-99993c87098e6033d36cbdf1-abandon.md",
+  "schema": "human-authorization/v1",
+  "scope": "run-99993c87098e6033d36cbdf1"
+}

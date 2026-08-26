@@ -1,0 +1,175 @@
+{
+  "feature": "026-attestation-emitter",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+        "specs/026-attestation-emitter/implement/p01-a.tasks.json"
+      ],
+      "id": "p01-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/workflow_versions.py",
+        "specs/026-attestation-emitter/implement/p01-b.tasks.json",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p01-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [],
+      "files": [
+        "specs/026-attestation-emitter/implement/p01-c.tasks.json",
+        "tests/validate_attestation_emitter_contract.py"
+      ],
+      "id": "p01-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a",
+        "p01-b",
+        "p01-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+        "specs/026-attestation-emitter/implement/p02-a.tasks.json"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a",
+        "p01-b",
+        "p01-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/store.py",
+        "specs/026-attestation-emitter/implement/p02-b.tasks.json",
+        "tests/validate_attestation_emitter_contract.py"
+      ],
+      "id": "p02-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a",
+        "p01-b",
+        "p01-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/026-attestation-emitter/implement/p02-c.tasks.json"
+      ],
+      "id": "p02-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a",
+        "p02-b",
+        "p02-c"
+      ],
+      "files": [
+        "specs/026-attestation-emitter/implement/p03-a.tasks.json",
+        "specs/026-attestation-emitter/spec.md"
+      ],
+      "id": "p03-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a",
+        "p02-b",
+        "p02-c"
+      ],
+      "files": [
+        "specs/026-attestation-emitter/implement/p03-b.tasks.json",
+        "specs/026-attestation-emitter/plan.md"
+      ],
+      "id": "p03-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a",
+        "p02-b",
+        "p02-c"
+      ],
+      "files": [
+        "specs/026-attestation-emitter/implement/p03-c.tasks.json",
+        "specs/026-attestation-emitter/tasks.md"
+      ],
+      "id": "p03-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a",
+        "p03-b",
+        "p03-c"
+      ],
+      "files": [
+        "specs/026-attestation-emitter/implement/p04-a.tasks.json",
+        "tests/run_validators.py"
+      ],
+      "id": "p04-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a",
+        "p03-b",
+        "p03-c"
+      ],
+      "files": [
+        "specs/026-attestation-emitter/implement/p04-b.tasks.json",
+        "specs/026-attestation-emitter/spec.md"
+      ],
+      "id": "p04-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p04-a",
+        "p04-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/store.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/workflow_versions.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/026-attestation-emitter/implement/p04-serial.tasks.json",
+        "specs/026-attestation-emitter/plan.md",
+        "specs/026-attestation-emitter/spec.md",
+        "specs/026-attestation-emitter/tasks.md",
+        "tests/run_validators.py",
+        "tests/validate_attestation_emitter_contract.py",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p04-serial",
+      "parallel": false,
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v1"
+}

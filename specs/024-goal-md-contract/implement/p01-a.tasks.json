@@ -1,0 +1,134 @@
+{
+  "node_id": "p01-a",
+  "work_id": "feature-goal-autopilot-6f0eaefce4064eebb6bc16d5734bee0c",
+  "run_id": "run-99993c87098e6033d36cbdf1",
+  "wave_id": "wave-0001",
+  "tasks": [
+    "T001",
+    "T002"
+  ],
+  "produced": [
+    {
+      "task": "T001",
+      "path": "specs/024-goal-md-contract/contracts/interaction-points.md",
+      "description": "Par ponto de interacao -> fonte para as duas tabelas de data-model.md, verificado por grep em plugin/skills/grill-with-docs/scripts/ e leitura de .specify/memory/constitution.md e WORKFLOW.md."
+    },
+    {
+      "task": "T002",
+      "path": "plugin/skills/grill-with-docs/assets/GOAL.template.md",
+      "description": "Esqueleto do goal.md: marcador grill-with-docs-goal:v1, titulo H1 e os sete cabecalhos de secao vazios, na ordem de data-model.md Documento."
+    }
+  ],
+  "findings": [
+    "HOLD-PRE-01: fonte declarada em data-model.md ('protocolo GWD') nao e codigo de recusa/clausula/secao de workflow; esta em SKILL.md e session-protocol.md, fora das tres categorias exigidas por T001.",
+    "SAFETY_STOP: so o token existe em grill_core/store.py:159; os limites numericos (2 rodadas, 3 expansoes, 25 perguntas) nao sao verificaveis em scripts/, constitution.md ou WORKFLOW.md.",
+    "HOLD-PRE-03: mecanismo de confianca de catalogo de terceiros pertence ao instalador do Spec Kit, externo ao core; sem codigo em scripts/, sem clausula constitucional, sem secao em WORKFLOW.md.",
+    "HOLD-PRE-04: regra existe so como docstring/comentario em grill_core/triage.py:4-11, nao como codigo de recusa citavel por string literal.",
+    "GRANT-SCOPE-VIOLATION: o codigo de recusa (gauntlet_runs.py:2307) reside em converge_wave (etapa converge), nao em codigo especifico de implement-parallel; a regra de workflow confere, mas a etapa apontada como fonte e imprecisa.",
+    "HOLD-V4-02: existe codigo de recusa proprio INTEGRATION_CONFLICT (gauntlet_runs.py:2318,2321) para esta condicao; pela propria regra de data-model.md (id = codigo quando ha codigo proprio), o id deveria ser INTEGRATION-CONFLICT, nao HOLD-V4-02."
+  ],
+  "verification": {
+    "run_id": "run-6ba0686184781ec3c6482e01",
+    "wave_id": "p01-a",
+    "tasks_verified": [
+      "T001",
+      "T002",
+      "T003"
+    ],
+    "T002_GOAL_template_skeleton": {
+      "result": "PASS_COM_RESSALVA",
+      "marcador_v1_primeira_linha": true,
+      "titulo_h1": "# Objetivo do goal loop — grill-with-docs",
+      "h2_headings_encontrados": [
+        "## Trilhas",
+        "## Templates de objetivo",
+        "## Contrato de parada",
+        "## Pontos de interação",
+        "## Delegação",
+        "## Orientação"
+      ],
+      "h2_headings_count": 6,
+      "achado": "Instrucao do worker pedia 'sete cabecalhos de secao', mas data-model.md secao Documento (linhas 16-25) so define 6 secoes alem de marcador e titulo (trilhas, templates de objetivo, contrato de parada, pontos de interacao, delegacao, orientacao). O arquivo tem 6 H2, consistente com data-model.md; a contagem de 'sete' do enunciado da tarefa e que diverge, nao o artefato."
+    },
+    "T001_interaction_points_id_check": {
+      "result": "DIVERGENCIA_ENCONTRADA",
+      "pre_ciclo_ids_data_model": [
+        "HOLD-PRE-01",
+        "SAFETY_STOP",
+        "BLOCKED-CONSTITUTION",
+        "HOLD-PRE-02",
+        "BACKLOG-REQUIRED",
+        "MISSING-DEPENDENCY",
+        "HOLD-PRE-03",
+        "ROOT-CAUSE-UNPROVEN",
+        "HOLD-PRE-04",
+        "PLAN_ONLY_STOP"
+      ],
+      "pre_ciclo_ids_interaction_points_md": [
+        "HOLD-PRE-01",
+        "SAFETY_STOP",
+        "BLOCKED-CONSTITUTION",
+        "HOLD-PRE-02",
+        "BACKLOG-REQUIRED",
+        "MISSING-DEPENDENCY",
+        "HOLD-PRE-03",
+        "ROOT-CAUSE-UNPROVEN",
+        "HOLD-PRE-04",
+        "PLAN_ONLY_STOP"
+      ],
+      "pre_ciclo_match": true,
+      "ciclo_v4_ids_data_model": [
+        "HOLD-V4-01",
+        "BLOCKED_CAPABILITY",
+        "UNATTESTED_STEP_OUTPUT",
+        "POLICY_VIOLATION/DIRECT_STEP_EXECUTION",
+        "GRANT-SCOPE-VIOLATION",
+        "DIRTY-WORKTREE",
+        "INTEGRATION-CONFLICT",
+        "HOLD-V4-02"
+      ],
+      "ciclo_v4_ids_interaction_points_md": [
+        "HOLD-V4-01",
+        "BLOCKED_CAPABILITY",
+        "UNATTESTED_STEP_OUTPUT",
+        "POLICY_VIOLATION/DIRECT_STEP_EXECUTION",
+        "GRANT-SCOPE-VIOLATION",
+        "DIRTY-WORKTREE",
+        "HOLD-V4-02",
+        "HOLD-V4-03"
+      ],
+      "ciclo_v4_match": false,
+      "achado": "interaction-points.md nao tem linha propria para o id `INTEGRATION-CONFLICT`, que existe como id proprio na tabela ciclo-v4 de data-model.md (condicao: conflito de merge em converge, codigo INTEGRATION_CONFLICT em gauntlet_runs.py). Em vez disso, interaction-points.md funde esse conteudo dentro da linha rotulada `HOLD-V4-02` (com achado no proprio arquivo dizendo que o id deveria ser renomeado para INTEGRATION-CONFLICT) e desloca o conteudo real do `HOLD-V4-02` de data-model.md (fonte: 'tabela de onze etapas do WORKFLOW.md', condicao: retorno when blocked de qualquer etapa) para um id `HOLD-V4-03` que nao existe em nenhuma tabela de data-model.md. Resultado: os ids das duas tabelas de data-model.md e de interaction-points.md nao batem 1:1 na trilha ciclo-v4."
+    },
+    "T003_essential_substrings_presence": {
+      "result": "OK_ESPERADO_ESQUELETO",
+      "tupla_marcador": "ESSENTIAL (13 items, literal congelado) em essential-substrings.md",
+      "presentes_hoje_no_GOAL_template": [
+        "<!-- grill-with-docs-goal:v1 -->",
+        "## Delegação",
+        "## Orientação"
+      ],
+      "ausentes_hoje_no_GOAL_template": [
+        "Loop de objetivo — grill-with-docs",
+        "## Trilha pré-ciclo",
+        "## Trilha ciclo v4",
+        "Template A",
+        "Template B",
+        "ou quando a resposta contiver a linha GOAL-HOLD:",
+        "GOAL-HOLD:",
+        "PLAN_ONLY_STOP",
+        "HOLD-V4-01",
+        "cláusula residual"
+      ],
+      "nota": "GOAL.template.md hoje tem titulo H1 '# Objetivo do goal loop — grill-with-docs', que difere textualmente da substring esperada 'Loop de objetivo — grill-with-docs' (ordem de palavras trocada) — quando a Fase 2 redigir o titulo definitivo, precisa bater com o literal fixado em essential-substrings.md, nao com o texto placeholder atual. Lista de ausentes acima e o alvo de verificacao da proxima fase (T028)."
+    }
+  },
+  "completed": [
+    "T001",
+    "T002",
+    "T003"
+  ],
+  "notes": {
+    "completed_key": "Chave lida por gauntlet-tasks-reconcile. Acrescentada pelo leader: os briefs desta run pediram 'tasks' e o reconciliador lê 'completed', então nada era marcado em tasks.md."
+  }
+}
