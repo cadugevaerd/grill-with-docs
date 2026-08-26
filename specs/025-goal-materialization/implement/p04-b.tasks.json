@@ -1,0 +1,14 @@
+{
+  "node_id": "p04-b",
+  "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
+  "feature": "025-goal-materialization",
+  "run_id": "aab4cf5224dbb4cbf563ba17",
+  "tasks_completed": ["T023"],
+  "files_written": [],
+  "result": {
+    "T023": "No code change required. Verified plugin/skills/grill-with-docs/scripts/grill_workspace.py already satisfies this task in full, landed by an earlier task on this same branch (commit 2684e57, feat(025): T014-T017 ensure_project_goal + state.json goal block, sidecar specs/025-goal-materialization/implement/p03-b.tasks.json T014). In ensure_project_goal(root): `version = _goal_document_version(result.content)`; `if version is not None: block['version'] = version` -- key is absent (not null/empty) when the preserved document carries no grill-with-docs-goal:(vN) marker on its first line, present with that marker's version otherwise. `if result.status == 'PRESERVED': block['reason'] = result.reason` -- propagates whichever reason ensure_goal.py's resolve_goal() set (human document / managed version mismatch / incompatible goal, per contracts/materialization-cli.md and p04-a's ensure_goal.py work) verbatim into the init payload's goal block. Cross-checked against contracts/materialization-cli.md 'Bloco no payload' section (PRESERVED example carries reason+sha256+status, no version; version omitted when no marker) -- matches exactly.",
+    "py_compile": "python3 -m py_compile plugin/skills/grill-with-docs/scripts/grill_workspace.py -> OK",
+    "ensure_goal_py": "Not touched. Owned by sibling worker p04-a in a separate worktree; not visible from here per brief."
+  },
+  "status": "completed"
+}
