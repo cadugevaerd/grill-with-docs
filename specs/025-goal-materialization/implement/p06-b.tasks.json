@@ -1,0 +1,29 @@
+{
+  "node_id": "p06-b",
+  "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
+  "run_id": "aab4cf5224dbb4cbf563ba17",
+  "tasks": [
+    {
+      "id": "T032",
+      "description": "Incrementar a versão MINOR em plugin/.claude-plugin/plugin.json",
+      "status": "completed",
+      "file": "plugin/.claude-plugin/plugin.json",
+      "change": "version 5.2.0 -> 5.3.0"
+    },
+    {
+      "id": "T034",
+      "description": "Incrementar a versão MINOR em .claude-plugin/marketplace.json",
+      "status": "completed",
+      "file": ".claude-plugin/marketplace.json",
+      "change": "version 5.2.0 -> 5.3.0"
+    },
+    {
+      "id": "T038",
+      "description": "Atualizar o heading # Protocolo de sessão vX.Y.Z em plugin/skills/grill-with-docs/references/session-protocol.md",
+      "status": "completed",
+      "file": "plugin/skills/grill-with-docs/references/session-protocol.md",
+      "change": "heading v5.2.0 -> v5.3.0"
+    }
+  ],
+  "notes": "Somente linhas de versão alteradas. Sem reformat, sem reorder de chaves. tests/validate_distribution.py não executado neste worktree (5 dos 8 pontos ficam fora do escopo deste worker)."
+}
