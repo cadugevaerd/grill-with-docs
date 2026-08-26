@@ -1,0 +1,27 @@
+{
+  "node_id": "p04-a",
+  "feature": "025-goal-materialization",
+  "run": "aab4cf5224dbb4cbf563ba17",
+  "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
+  "tasks_completed": ["T018", "T019", "T020", "T021", "T022"],
+  "files_written": [
+    "plugin/skills/grill-with-docs/scripts/ensure_goal.py"
+  ],
+  "result": "durable",
+  "notes": "Extended resolve_goal()'s existing-document branch (left by p03-a as a single placeholder PRESERVED with reason 'not yet classified') into the three named reasons required by FR-003/FR-006: managed_version(text) is None -> 'human document'; managed_version(text) is a non-v1 string -> 'managed version mismatch'; version == VERSION but compatible() is False -> 'incompatible goal'. The branch still returns immediately with no write, no rename and no auxiliary file (T019, FR-007) -- unchanged from p03-a's structure, only the reason classification changed. An existing-but-empty goal.md hits this same branch before the creation path is ever reached (managed_version('') is None, so it classifies as 'human document'), satisfying T020's Edge Case without a special-case check. T021 added one line: target.exists() now also checks target.is_dir() and returns BLOCKED 'unsafe target' before any read, closing the contract table row ('<root>/goal.md existe e e diretorio') that the pre-existing symlink/resolve() check at the top of the function did not cover -- that top check (T017-era code, unchanged) still owns the symlink and outside-root cases. T022 required no code change: the outer except UnicodeError -> BLOCKED 'invalid UTF-8 goal' and except OSError -> BLOCKED f'filesystem-error:{type(error).__name__}' were already in place from p03-a and verified correct by manual exercise below.",
+  "verification": {
+    "compile": "python3 -c \"import ast; ast.parse(open('ensure_goal.py').read())\" -> OK",
+    "manual_exercise": [
+      "throwaway git repos (git init -q + git commit -q --allow-empty) under /tmp, one per case, PYTHONPATH pointed at scripts/ so grill_core.goal_document resolves",
+      "human document: printf 'meus objetivos\\n- crescer\\n' > goal.md -> status PRESERVED, reason 'human document', exit 0, sha256sum -c against a pre-run snapshot: OK (bytes unchanged)",
+      "wrong-version marker: '<!-- grill-with-docs-goal:v9 -->\\nconteudo\\n' > goal.md -> status PRESERVED, reason 'managed version mismatch', version 'v9' in payload, exit 0, bytes unchanged",
+      "v1 marker but incompatible: '<!-- grill-with-docs-goal:v1 -->\\nsem as secoes exigidas\\n' > goal.md -> status PRESERVED, reason 'incompatible goal', version 'v1' in payload, exit 0, bytes unchanged",
+      "empty file: ': > goal.md' -> status PRESERVED, reason 'human document', exit 0, wc -c goal.md still reports 0 bytes (not recreated)",
+      "symlink target: ln -s /tmp/p04a-secret.txt goal.md -> status BLOCKED, reason 'unsafe target', exit 2; target file content ('segredo') unchanged",
+      "directory target: mkdir goal.md -> status BLOCKED, reason 'unsafe target', exit 2 (exercises the new is_dir() check, T021)",
+      "invalid UTF-8: printf '\\xff\\xfe invalid' > goal.md -> status BLOCKED, reason 'invalid UTF-8 goal', exit 2",
+      "filesystem-error: chmod 000 goal.md then --ensure . -> status BLOCKED, reason 'filesystem-error:PermissionError', exit 2 (run as non-root so the mode is actually enforced)"
+    ],
+    "not_touched": "grill_workspace.py (T023, sibling worker p04-b's scope) was not read or edited; tasks.md was not edited; no writes outside the two granted paths."
+  }
+}

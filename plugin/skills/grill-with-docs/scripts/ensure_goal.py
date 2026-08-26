@@ -122,12 +122,12 @@ def resolve_goal(root_argument: str | Path) -> GoalResult:
     carrying the ``v1`` marker with ``compatible() is True`` returns
     ``REUSED`` without writing anything.
 
-    The ``PRESERVED`` branch -- existing document with no marker, with
-    another version's marker, or with a ``v1`` marker that fails
-    ``compatible()`` -- is intentionally left for a later task: the single
-    ``else`` below already returns ``PRESERVED`` so that task only has to
-    refine ``reason`` into its three named cases, not restructure this
-    function's control flow.
+    The ``PRESERVED`` branch -- existing document with no marker (``human
+    document``), with another version's marker (``managed version
+    mismatch``), or with a ``v1`` marker that fails ``compatible()``
+    (``incompatible goal``) -- performs no write, no rename and no auxiliary
+    file of any kind (FR-003, FR-006, FR-007). An existing-but-empty document
+    is classified the same way, never treated as absent (Edge Case).
     """
     candidate = Path(root_argument).expanduser()
     if not candidate.is_dir():
@@ -142,13 +142,24 @@ def resolve_goal(root_argument: str | Path) -> GoalResult:
             return GoalResult("BLOCKED", None, b"", "unsafe target")
 
         if target.exists():
+            if target.is_dir():
+                return GoalResult("BLOCKED", None, b"", "unsafe target")
             content, text = read_regular(target)
             version = goal_document.managed_version(text)
             if version == goal_document.VERSION and goal_document.compatible(text):
                 return GoalResult("REUSED", target, content, None)
-            # A later task extends this branch into three named reasons
-            # (human document / managed version mismatch / incompatible goal).
-            return GoalResult("PRESERVED", target, content, "not yet classified")
+            # Three named PRESERVED reasons (FR-003, FR-006). An empty
+            # document has no marker on its first line, so it falls into
+            # "human document" here -- existing-but-empty is PRESERVED, not
+            # treated as absent (Edge Case), because this branch runs before
+            # the creation path below ever sees the target.
+            if version is None:
+                reason = "human document"
+            elif version != goal_document.VERSION:
+                reason = "managed version mismatch"
+            else:
+                reason = "incompatible goal"
+            return GoalResult("PRESERVED", target, content, reason)
 
         template_content, template_text = read_regular(goal_document.TEMPLATE)
         if (
