@@ -1,10 +1,15 @@
 ## Review Report
 
 Verdict: APPROVE
-Source fingerprint: tree 415b3f088e8556ac3640face2b6128a8e8a0208ef8fcfbe728ea6593fd98d8f2 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98
+Source fingerprint: tree 36fb9fa5ba0f98350a83a6e70e938230afd765393ece9f7ba5e8ec0eb1da08a2 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98
 
-Casa exatamente com Converge (décima segunda passada, `converged`) e Verify
-(`PASS`, quarta rodada). A primeira rodada devolveu `REQUEST CHANGES` com três
+Quinta rodada de revalidação, causada somente pela inclusão tardia do sidecar
+obrigatório `implement/p04-serial.tasks.json` para T022. O delta canônico desde
+a rodada anterior contém apenas esse receipt; código, testes, spec, plan e tasks
+são byte-idênticos.
+
+Casa exatamente com Converge (`CONVERGED`) e Verify (`PASS`, quinta rodada).
+A primeira rodada devolveu `REQUEST CHANGES` com três
 achados Important, e os três estão corrigidos e travados por teste.
 
 Duas rodadas foram invalidadas antes desta: uma por eu ter corrigido um

@@ -1,13 +1,20 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree 415b3f088e8556ac3640face2b6128a8e8a0208ef8fcfbe728ea6593fd98d8f2 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98
+Source fingerprint: tree 36fb9fa5ba0f98350a83a6e70e938230afd765393ece9f7ba5e8ec0eb1da08a2 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98
 Converge: CONVERGED
 
 Feature: `specs/026-attestation-emitter`
 Work item: `feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25`
 
-Quarta rodada. A primeira terminou em `REQUEST CHANGES` com três achados
+Quinta rodada de revalidação. Ela foi necessária somente pela inclusão tardia
+do sidecar obrigatório `implement/p04-serial.tasks.json`, que fecha T022. O
+delta canônico desde a quarta rodada contém apenas esse receipt: `plugin/`,
+`tests/`, `CLAUDE.md`, spec, plan, tasks, data-model, quickstart e contratos
+são byte-idênticos. Estado, attestations e relatório de ship também mudaram,
+mas são evidência excluída do fingerprint por configuração.
+
+A primeira rodada terminou em `REQUEST CHANGES` com três achados
 Important, todos corrigidos. A segunda foi invalidada por mim, ao corrigir um
 comentário enganoso em `verify_supersession` durante a própria revisão. A
 terceira foi invalidada por uma lacuna descoberta ao chegar em `ship`: `attest`
@@ -31,7 +38,10 @@ reexecuta o gate sobre a árvore resultante.
 
 ### Diff Hygiene
 
-- Árvore limpa: `git status --short` vazio.
+- Árvore limpa antes da escrita dos relatórios: `git status --short` vazio.
+- Delta efetivo contra a quarta rodada: somente
+  `specs/026-attestation-emitter/implement/p04-serial.tasks.json`; nenhum delta
+  em código, testes, spec, plan ou tasks.
 - Nenhum arquivo de ambiente, credencial, chave ou token no escopo alterado.
 - Nenhum bundle de atestação órfão: o único caso da rodada anterior
   (`026-specify-r3.json`, escrito pela cunhagem e recusado no checkpoint) já
@@ -57,9 +67,8 @@ desde a primeira rodada:
 
 A cadeia de atestação do work item é evidência executável adicional: as oito
 etapas fechadas foram re-atestadas em cascata e cada receipt casa com os bytes
-correntes do seu artefato. `development.chain_stale` contém apenas `verify`
-e `review`, as duas etapas que este ciclo ainda vai reemitir, e esvazia ao serem
-fechadas.
+correntes do seu artefato. A inclusão tardia do sidecar exige reemitir os gates,
+mas não altera código nem qualquer artefato de intenção.
 
 ### Failures / Blockers
 

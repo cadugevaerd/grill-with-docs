@@ -29,10 +29,10 @@
       "implement-parallel": "se-c1151ec85bc615b040e5560a558fc0bd667dd4ff045f86c7d144970e999ead5e",
       "partition": "se-fafb3b87ae40c86d91fbb9d696f77d5dc8e9f8d67ab776f7e4fdbe8f60e418eb",
       "plan": "se-27e5f0a31d4374f1e6c854304455d39461dd79080c14161630abfea91e34bfde",
-      "review": "se-cd3985620598e65a7e215cf8448ce22602c98848b26ded5dff1795f52fbd9387",
+      "review": "se-edf26a98eed83716204a990b898906cfe397207a228e6ae0d8bd9e7e4834f943",
       "specify": "se-d60cacdf705fd15778db16f717081d2cd4d540d64d1f8ae4bdf4a3d5f2cfca1d",
       "tasks": "se-ecd5753a939c949b17f6cebbd5df310224a90cd9cf0d4927d1ed86b69a6c768f",
-      "verify": "se-fe0e05b4652eb2a07a80010ee203dffb8166a1eca8b180343bac4146f916b8f0"
+      "verify": "se-05b2b67da432ce37cbf6a8fff401fde2e72314bec85f296d05cc35e489d3c7e5"
     },
     "attested_outputs": {
       "analyze": {
@@ -72,9 +72,9 @@
         "step_id": "plan"
       },
       "review": {
-        "output_sha256": "sha256:5d7365683e5b16518afbe9436de017a367e44a77eafbc7101b5903e1c286557b",
+        "output_sha256": "sha256:cc4b3404e389d06196e1df5ea53c6afa79173f823823669516e7478975435a7a",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/review-review-3.terminal.json",
         "step_id": "review"
       },
       "specify": {
@@ -90,9 +90,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:004ff66cbc6d8ee0a05cbbb2cb1f3fb9ece78794e8ba8727799f020b4ebff30f",
+        "output_sha256": "sha256:6ff789c44623ed6963065b670036124b3c056e772a5e54793d8a474682f0a2eb",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-4.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-5.terminal.json",
         "step_id": "verify"
       }
     },
@@ -1000,6 +1000,36 @@
         "reason": "ship autorizado explicitamente pelo usuario nesta sessao",
         "state": "in-progress",
         "step": "ship"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/verify.md",
+            "sha256": "6ff789c44623ed6963065b670036124b3c056e772a5e54793d8a474682f0a2eb"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "quinta rodada: sidecar T022 tardio alterou somente o fingerprint; 1303 testes/27 validadores exit 0",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/026-verify-r4.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/review.md",
+            "sha256": "cc4b3404e389d06196e1df5ea53c6afa79173f823823669516e7478975435a7a"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "quinta rodada Codex: APPROVE; delta material zero, somente sidecar T022",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/attestations/026-review-r2.json"
       }
     ],
     "chain_stale": [],
@@ -1370,6 +1400,18 @@
           "step_execution_id": "se-737158b9e6792f8335ab85bbe62a763879dd2d5211384511ea27c656895cc1e9",
           "step_id": "review",
           "superseded_by_step_execution_id": "se-cd3985620598e65a7e215cf8448ce22602c98848b26ded5dff1795f52fbd9387"
+        },
+        {
+          "attempt_id": "review-2",
+          "attestation": ".grill/attestations/026-review-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:5d7365683e5b16518afbe9436de017a367e44a77eafbc7101b5903e1c286557b",
+          "provenance": "current-generation",
+          "reason": "quinta rodada Codex: APPROVE; delta material zero, somente sidecar T022",
+          "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
+          "step_execution_id": "se-cd3985620598e65a7e215cf8448ce22602c98848b26ded5dff1795f52fbd9387",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-edf26a98eed83716204a990b898906cfe397207a228e6ae0d8bd9e7e4834f943"
         }
       ],
       "specify": [
@@ -1508,6 +1550,18 @@
           "step_execution_id": "se-f033c71e7012a236918d5a90b0aeb1bf04f11c4a4ac87a809d0a10fb22d5d4d4",
           "step_id": "verify",
           "superseded_by_step_execution_id": "se-fe0e05b4652eb2a07a80010ee203dffb8166a1eca8b180343bac4146f916b8f0"
+        },
+        {
+          "attempt_id": "verify-4",
+          "attestation": ".grill/attestations/026-verify-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:004ff66cbc6d8ee0a05cbbb2cb1f3fb9ece78794e8ba8727799f020b4ebff30f",
+          "provenance": "current-generation",
+          "reason": "quinta rodada: sidecar T022 tardio alterou somente o fingerprint; 1303 testes/27 validadores exit 0",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-4.terminal.json",
+          "step_execution_id": "se-fe0e05b4652eb2a07a80010ee203dffb8166a1eca8b180343bac4146f916b8f0",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-05b2b67da432ce37cbf6a8fff401fde2e72314bec85f296d05cc35e489d3c7e5"
         }
       ]
     },
