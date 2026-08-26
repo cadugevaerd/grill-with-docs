@@ -118,5 +118,32 @@ bundle novo e chamá-lo de original.
 
 Travado por `test_a_supersession_needs_the_bundle_this_item_actually_accepted`.
 
+Vale também para o registro que difere do aceito **apenas na execução**: duas
+cadeias da mesma etapa e do mesmo artefato, diferindo só no índice de onda,
+carregam `output_sha256` e `receipt_ref` idênticos sob `step_execution_id`
+diferentes. A verificação compara os três, e o `step_execution_id` vem de
+`development.attested_executions[step]`, gravado na aceitação.
+
+Travado por `test_a_supersession_needs_the_execution_that_was_accepted`.
+
 Sucessor sem razão declarada é `REASON-REQUIRED`; sucessor que não muda nem o
 artefato nem o predecessor é `SUPERSEDE_WITHOUT_CHANGE`.
+
+## Cenário 8 — Virada de fase recusada com pendência (SC-011)
+
+Com `development.chain_stale` não vazia, pedir a virada:
+
+```bash
+python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py \
+  phase-turn . --work-id <ID> --reason "<próxima fase>"
+```
+
+Esperado: recusa `CHAIN-STALE` nomeando as etapas pendentes, e o registro de
+etapas **intacto** — nenhuma volta a `pending`.
+
+**Falha**: virar. A matriz reiniciaria e a lista não, e a fase seguinte seria
+recusada no `ship` por pendência que não é dela.
+
+Travado por `test_a_phase_is_not_turned_over_a_stale_chain` e
+`test_a_phase_turns_once_the_stale_chain_is_cleared`, que também prova que a
+recusa destrava sozinha quando a lista esvazia.

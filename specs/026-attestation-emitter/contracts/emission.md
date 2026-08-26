@@ -81,8 +81,12 @@ que fosse aceita".
 
 O verbo recusa antes de qualquer leitura quando a classe não permite. Na
 aceitação de uma supersessão, o bundle substituído precisa ser **aquele que o
-work item aceitou** — provado contra o par (`output_sha256`, `receipt_ref`)
-gravado no estado —, e não apenas um bundle bem-formado da mesma etapa
-(`SUPERSEDE-BUNDLE-NOT-RECORDED`). As etapas a jusante entram em
-`development.chain_stale`, e `ship` recusa com `CHAIN-STALE` enquanto a lista
-não esvaziar.
+work item aceitou** — provado contra `output_sha256`, `receipt_ref` **e** o
+`step_execution_id` gravado em `development.attested_executions[step]` —, e não
+apenas um bundle bem-formado da mesma etapa (`SUPERSEDE-BUNDLE-NOT-RECORDED`).
+Os dois primeiros não dependem da execução: duas cadeias da mesma etapa e do
+mesmo artefato, diferindo só no índice de onda, os carregam idênticos sob
+execuções distintas.
+
+As etapas a jusante entram em `development.chain_stale`, e tanto `ship` quanto a
+virada de fase recusam com `CHAIN-STALE` enquanto a lista não esvaziar.

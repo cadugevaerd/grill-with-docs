@@ -154,3 +154,23 @@ para nenhuma outra.
 - [X] T032 Corrigir em `specs/026-attestation-emitter/data-model.md` o estado da entidade Executor, que declara a montagem dos campos como não entregue quando `mint_chain` e `leader_lease` estão entregues e atestados per plan: data-model (contradicts)
 - [X] T033 Nomear em `specs/026-attestation-emitter/data-model.md` e `specs/026-attestation-emitter/plan.md` o resolvedor do caminho de produção, `resolve_shipped_workflow_skills`, no lugar de `resolve_workflow_skill` per plan: data-model (contradicts)
 - [X] T034 Declarar o `**Estado**` da entidade Cadeia em `specs/026-attestation-emitter/data-model.md`, hoje a única das sete sem ele per plan: data-model (partial)
+
+---
+
+## Phase 9: Convergence
+
+- [X] T035 Declarar em `specs/026-attestation-emitter/spec.md` a recusa da virada de fase enquanto houver pendência de nova emissão — hoje implementada em `phase_turn_command` e coberta por nenhum FR, já que FR-026 fala de publicação e virada de fase não é publicação — ou registrar por que fica fora do escopo desta spec per spec.md (unrequested)
+
+---
+
+## Phase 10: Convergence
+
+- [X] T036 Corrigir em `specs/026-attestation-emitter/data-model.md` e `specs/026-attestation-emitter/contracts/emission.md` a prova do bundle substituído, hoje descrita como o par (`output_sha256`, `receipt_ref`) quando a verificação compara também o `step_execution_id` gravado em `development.attested_executions` — e o par sozinho era a fraqueza corrigida per plan: data-model, FR-024 (contradicts)
+- [X] T037 Declarar em `specs/026-attestation-emitter/data-model.md` o segundo efeito da Pendência de nova emissão, a recusa da virada de fase, hoje ausente da entidade per plan: data-model, FR-027 (partial)
+
+---
+
+## Phase 11: Convergence
+
+- [X] T038 Corrigir em `plugin/skills/grill-with-docs/SKILL.md` a afirmação de que só `ship` recusa com a lista não vazia; desde FR-027 a virada de fase também recusa, e é na documentação que o operador procura per FR-017, SC-008, FR-027 (contradicts)
+- [X] T039 Acrescentar a `specs/026-attestation-emitter/quickstart.md` o cenário de SC-011 (virada de fase recusada com pendência, registro de etapas intacto) e estender o cenário 7 para o caso que SC-010 passou a exigir: registro que difere do aceito só na execução per plan: quickstart, SC-010, SC-011 (partial)

@@ -225,9 +225,20 @@ que o estado gravou na aceitação.
 
 Superseder uma etapa não torna as seguintes erradas: torna-as inverificáveis,
 porque cada uma selou o output que acabou de ser substituído. Elas entram em
-`development.chain_stale`, e `ship` recusa enquanto a lista não esvaziar. A
-única saída é atestar cada uma de novo, contra o predecessor que agora vale —
-com o artefato byte-idêntico, se o trabalho delas não mudou.
+`development.chain_stale`, e tanto `ship` quanto a **virada de fase** recusam com
+`CHAIN-STALE` enquanto a lista não esvaziar. A única saída é atestar cada uma de
+novo, contra o predecessor que agora vale — com o artefato byte-idêntico, se o
+trabalho delas não mudou.
+
+Virar a fase não resolveria a pendência, sobreviveria a ela: a matriz de etapas
+reinicia e a lista não, e a fase seguinte seria recusada no `ship` por pendência
+que não é dela.
+
+O bundle substituído é provado contra três valores gravados na aceitação —
+`output_sha256`, `receipt_ref` e o `step_execution_id` de
+`development.attested_executions[step]`. Os dois primeiros não dependem da
+execução: duas cadeias da mesma etapa e do mesmo artefato, diferindo só no índice
+de onda, os carregam idênticos.
 
 ## Auditoria read-only
 

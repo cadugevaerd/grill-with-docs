@@ -141,10 +141,19 @@ move nenhum dos dois é no-op fantasiado de correção. Olhar só o artefato
 proibiria a re-atestação de uma etapa a jusante, que re-atesta com o artefato
 byte-idêntico porque não refez trabalho algum.
 
-**Por que o bundle substituído tem de ser o aceito**: provado contra o par
-(`output_sha256`, `receipt_ref`) que o estado gravou na aceitação. Sem isso
-bastaria cunhar um bundle novo e apresentá-lo como o original — toda a cadeia
+**Por que o bundle substituído tem de ser o aceito**: provado contra os três
+valores que o estado gravou na aceitação — `output_sha256`, `receipt_ref` e o
+`step_execution_id` em `development.attested_executions[step]`. Sem nada disso
+bastaria cunhar um bundle novo e apresentá-lo como o original, e toda a cadeia
 sucessora seria forjável.
+
+**Por que o par não bastava**: nem `output_sha256` nem `receipt_ref` dependem da
+execução. Duas cadeias da mesma etapa e do mesmo artefato, diferindo só no índice
+de onda, carregam os dois valores idênticos sob `step_execution_id` diferentes.
+Aceitar uma delas gravaria no histórico uma execução que nunca foi o receipt
+corrente, com o sucessor ligado a ela. Para receipts aceitos antes de o campo
+existir, a verificação cai no par — degradação declarada, e toda aceitação nova
+pina a execução.
 
 **Estado**: entregue.
 
@@ -157,7 +166,7 @@ sucessora seria forjável.
 | lista | `development.chain_stale`, em ordem de sequência |
 | entra | Toda etapa posterior à substituída que já tinha registro atestado |
 | sai | Ao ser atestada de novo, contra o predecessor que agora vale |
-| efeito | `ship` recusa com `CHAIN-STALE` enquanto a lista não estiver vazia |
+| efeito | `ship` e a virada de fase recusam com `CHAIN-STALE` enquanto a lista não estiver vazia |
 
 **O que a pendência afirma**: não que as etapas seguintes estejam erradas — que
 estão **inverificáveis**. Cada uma selou o registro do predecessor, e esse
@@ -166,5 +175,10 @@ posterior ainda vale sob o artefato corrigido.
 
 **Por que existe**: sem nomeá-las, uma substituição apenas realocaria a
 divergência uma etapa adiante, em vez de resolvê-la.
+
+**Por que a virada de fase também recusa**: encerrar a fase não resolve a
+pendência, sobrevive a ela. O registro de etapas reinicia e a lista não, então a
+fase seguinte seria recusada na publicação por pendência que não é dela — e
+deixar cadeia inverificável para trás é o que a lista existe para impedir.
 
 **Estado**: entregue.
