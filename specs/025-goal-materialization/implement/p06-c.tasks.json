@@ -1,0 +1,17 @@
+{
+  "node": "p06-c",
+  "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
+  "run": "aab4cf5224dbb4cbf563ba17",
+  "tasks_completed": ["T033", "T035"],
+  "tasks_deferred": [
+    {
+      "task": "T042",
+      "reason": "Reassigned by leader post-brief. T042 runs tests/run_validators.py and needs the full suite (all worktrees merged, including validate_distribution.py's eight version-place check across p03/p04/p05/p06 nodes). Cannot pass from a single-node worktree. Leader runs it after merge."
+    }
+  ],
+  "notes": "tests/run_validators.py left unchanged: it was granted only because the DAG grouped it with this node, but it globs validate_*.py and needs no edit for p05-a's new validate_goal_document_contract.py to be picked up. No defect found in it.",
+  "changes": [
+    {"file": "plugin/.codex-plugin/plugin.json", "change": "version 5.2.0 -> 5.3.0"},
+    {"file": ".agents/plugins/marketplace.json", "change": "version 5.2.0 -> 5.3.0 (plugins[0].version)"}
+  ]
+}
