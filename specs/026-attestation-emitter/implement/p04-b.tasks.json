@@ -1,0 +1,41 @@
+{
+  "node_id": "p04-b",
+  "task": "T021 (fechamento) Percorrer os 20 requisitos de specs/026-attestation-emitter/spec.md e confirmar cobertura, registrando qualquer FR órfão",
+  "result": "COMPLETE",
+  "evidence": {
+    "test_suite": {
+      "command": "python3 tests/run_validators.py",
+      "exit_code": 0,
+      "validators": 27,
+      "total_tests_summed_from_unittest_ran_lines": 1203,
+      "note": "26 validadores usam unittest e imprimem 'Ran N tests'; validate_distribution.py e script de assert plano, imprime 'distribution: OK' sem contagem discreta. Nenhuma falha, nenhum erro. 1 skip conhecido em validate_workspace_contract.py (test_reject_symlink_chain_accepts_macos_var_root_alias, dependente de ambiente)."
+    },
+    "fr_coverage": [
+      {"fr": "FR-001", "status": "covered", "where": "plugin/skills/grill-with-docs/scripts/grill_core/workflow_versions.py:115-146 (EXECUTION_CLASS_V3, EXECUTION_CLASS_V4, EXECUTION_CLASS_BY_VERSION)"},
+      {"fr": "FR-002", "status": "covered", "where": "workflow_versions.py:110-114 comentário declara literal congelado, nunca derivado das sequências"},
+      {"fr": "FR-003", "status": "covered", "where": "attestation.py:execution_class linha ~797 — EXECUTION_CLASS_UNDECLARED quando step ausente da tabela"},
+      {"fr": "FR-004", "status": "covered", "where": "attestation.py:execution_class linha ~794 — EXECUTION_CLASS_VERSION_UNKNOWN"},
+      {"fr": "FR-005", "status": "covered", "where": "workflow_versions.py — implement-parallel (v4) e agent-execute (v3) = worker-required"},
+      {"fr": "FR-006", "status": "covered", "where": "attestation.py:require_leader_allowed linha ~804-812 — WORKER_REQUIRED_STEP"},
+      {"fr": "FR-007", "status": "covered", "where": "attestation.py:leader_lease linha ~848-865 e grill_workspace.py:attest_command usa attestation.leader_lease para o mesmo mecanismo de concessão"},
+      {"fr": "FR-008", "status": "covered", "where": "workflow_versions.py:152-155 — LEADER_WAVE_INDEX = 0, comentário declara significado 'fora de qualquer onda'"},
+      {"fr": "FR-009", "status": "covered", "where": "attestation.py:mint_chain linha ~867-1054 — monta dispatch_intent, invocation_started/terminal, step_output e catalog"},
+      {"fr": "FR-010", "status": "covered", "where": "attestation.py:mint_chain — output_sha256/evidence_refs ancorados em artefact_sha256 vindo de artefact_digest"},
+      {"fr": "FR-011", "status": "covered", "where": "grill_workspace.py:attest_command linha ~3202 — safe_read_regular_fd(root, root / rel) como fronteira"},
+      {"fr": "FR-012", "status": "covered", "where": "attestation.py:artefact_digest linha ~815-831 — recebe read_bytes: Callable do chamador, não faz I/O próprio"},
+      {"fr": "FR-013", "status": "covered", "where": "attestation.py:artefact_digest — ARTEFACT_PATH_INVALID e ARTEFACT_UNREADABLE (caminho vazio, exceção de leitura, retorno não-bytes)"},
+      {"fr": "FR-014", "status": "covered", "where": "attestation.py:779 EMISSION_REFUSED — código próprio, distinto de BLOCKED_CAPABILITY e UNATTESTED_STEP_OUTPUT (comentário linha 776-778)"},
+      {"fr": "FR-015", "status": "covered", "where": "attestation.py:767-773 — EmissionError(AttestationError) herda, para não escapar como tipo não relacionado"},
+      {"fr": "FR-016", "status": "covered", "where": "grill_workspace.py:3767 add_parser(\"attest\") e attest_command — verbo de CLI"},
+      {"fr": "FR-017", "status": "covered", "where": "plugin/skills/grill-with-docs/SKILL.md:183-191 — 'O que a cadeia prova' e 'O que ela não prova' lado a lado, sem eufemismo"},
+      {"fr": "FR-018", "status": "covered", "where": "tests/validate_attestation_emitter_contract.py — testa tabela completa (linha ~46), coincidência com etapa que despacha workers (linha ~59-66), execution_class undeclared/version-unknown (linha ~78-89), e recusa do verbo attest para worker-required antes de tocar artefato (linha ~280)"},
+      {"fr": "FR-019", "status": "covered", "where": "tests/validate_attestation_emitter_contract.py — imports linha 15-20 são só stdlib (sys, tempfile, unittest, pathlib); nenhuma chamada de rede ou ferramenta externa"},
+      {"fr": "FR-020", "status": "covered", "where": "8 pontos em 5.1.0 confirmados: plugin/.claude-plugin/plugin.json, plugin/.codex-plugin/plugin.json, .claude-plugin/marketplace.json, .agents/plugins/marketplace.json, tests/validate_distribution.py VERSION, SKILL.md heading, references/session-protocol.md heading, README.md heading"}
+    ],
+    "orphan_frs": []
+  },
+  "findings": [
+    "Baseline documentada em CLAUDE.md ('1270 testes em 27 validadores') diverge da contagem atual somada por 'Ran N tests' nos 26 validadores unittest (1203) mais o validador de asserts simples validate_distribution.py (sem contagem discreta, imprime só 'distribution: OK'). Divergência de contagem entre a doc e a soma manual, não falha de teste — nenhum teste falhou, exit 0. Registrado como achado para T022 (atualização de baseline), não bloqueia este nó."
+  ],
+  "completed": true
+}

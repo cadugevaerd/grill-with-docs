@@ -1,0 +1,80 @@
+{
+  "deferred_to_leader": [],
+  "dispatchable_tasks": 31,
+  "feature": "024-goal-md-contract",
+  "max_workers": 1,
+  "nodes": [
+    {
+      "id": "p01-a",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T001",
+        "T002",
+        "T003"
+      ]
+    },
+    {
+      "id": "p02-a",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T004",
+        "T005",
+        "T006",
+        "T007",
+        "T008",
+        "T009",
+        "T010",
+        "T011",
+        "T012",
+        "T013",
+        "T014",
+        "T015",
+        "T016",
+        "T017",
+        "T018",
+        "T019",
+        "T020",
+        "T021",
+        "T022",
+        "T023",
+        "T024",
+        "T025",
+        "T026",
+        "T027",
+        "T028",
+        "T029",
+        "T030",
+        "T031"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "achieved_groups": 1,
+      "phase": 1,
+      "reasons": [],
+      "requested_groups": 1,
+      "tasks": 3,
+      "title": "Setup",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 2,
+      "reasons": [],
+      "requested_groups": 1,
+      "tasks": 28,
+      "title": "Redação do documento (nó único)",
+      "unmapped_tasks": 0
+    }
+  ],
+  "requested_groups": 1,
+  "schema": "grill-partition-report/v1",
+  "tasks": 31,
+  "unmapped_task_ids": [],
+  "verdict": "PARTITION-COMPLETE"
+}

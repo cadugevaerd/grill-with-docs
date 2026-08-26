@@ -1,0 +1,65 @@
+{
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "conflicts-with-adrs": [],
+  "depends-on-work": [],
+  "immutable": {
+    "base_commit": "cb20ddede5fb3dc7ff73d59fd613a30158c3ffd8",
+    "base_ref": "HEAD",
+    "branch": "feature/goal-instruct",
+    "constitution": {
+      "path": ".specify/memory/constitution.md",
+      "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+      "state": "present"
+    },
+    "head": "cb20ddede5fb3dc7ff73d59fd613a30158c3ffd8",
+    "parent_work_id": null,
+    "schema": "grill-work-item/v3",
+    "slug": "goal-autopilot",
+    "source": null,
+    "type": "feature",
+    "work_id": "feature-goal-autopilot-6f0eaefce4064eebb6bc16d5734bee0c",
+    "workflow": {
+      "path": "WORKFLOW.md",
+      "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0"
+    },
+    "worktree_key": "wt-feature-goal-autopilot-6f0eaefce4064eebb6bc16d5734bee0c"
+  },
+  "immutable_sha256": "85cba573270a74796c7580676c27b40a9b3e375ae0cc8004f982199e6829a3ac",
+  "initial_artifacts": {
+    "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
+    "CONSTITUTION-CHECK.md": "70982f65169d6155e958ce6e8f7479ff88cff948d5f70133ccf1d91354ae7ea2",
+    "CONTEXT.md": "046a1d433eab29a57783aae06ea414afc271d25bcc7372290ccde7f00fd97ee7",
+    "DECISION-BACKLOG.md": "0ead85c254fb8b2c6a817a2cebaad3594fe88019041c904ec9176af012f806ab",
+    "DECISION-FRONTIER.md": "3b129d57ccac57b1af5096e1639df58a20190abcef54382e0d948d778b44e0d6",
+    "DELIVERY-MAP.md": "26ce55d35ddb5c916fb1101e760320e51e5b57b205a924e67cbac6a720808d17",
+    "PLAN-CONTEXT.md": "9f43372c57b4ab07edece509be37d7ea7204ccf5300a984e2cc69a6216d82ded",
+    "ROADMAP.md": "9c68e05c6993da8b319d96716b6d9fc90329af9876fdc74699eca4ee8b556734",
+    "ROUND-LOG.jsonl": "fee46cc9873273ad4d3bc6abb41ca3bd30aacbe392b137d8c8b6c97b6aca13e7",
+    "handoffs/FASE-001-SPECIFY-HANDOFF.md": "3cfe46ee546a9c46cf78fd7bf59ca897df07d24431a46ab4b61bf147fe919a58",
+    "state.json": "64b36a00486508965c77162fb6a23fc08919898078b5c24c56029efc6f75b216"
+  },
+  "orchestration": {
+    "schema": "grill-orchestrator/v1"
+  },
+  "schema": "grill-work-item/v3",
+  "scope": {
+    "paths": [
+      "plugin/skills/grill-with-docs/assets/GOAL.template.md",
+      "plugin/skills/grill-with-docs/scripts/ensure_goal.py",
+      "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+      "tests/validate_goal_contract.py",
+      "tests/validate_distribution.py",
+      "plugin/.claude-plugin/plugin.json",
+      "plugin/.codex-plugin/plugin.json",
+      ".claude-plugin/marketplace.json",
+      ".agents/plugins/marketplace.json",
+      "plugin/skills/grill-with-docs/SKILL.md",
+      "plugin/skills/grill-with-docs/references/session-protocol.md",
+      "README.md"
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "node_id": "p02-b",
+  "tasks": {
+    "T012": {
+      "status": "verified",
+      "summary": "leader_lease() deriva lease (lease_id, fencing_token) do par (run_id, step_id), espelhando o mesmo mecanismo de derivação do worker lease em store.py::_validate_gauntlet_worker (par run/worker, fencing_token começa em 1), sem inventar campo novo em dispatch_control.leader_lease nem no schema do worker grant.",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py:848 (def leader_lease)",
+        "tests/validate_attestation_emitter_contract.py:160-188 (class LeaderLease, cobre derivação determinística por par run/step, distinção entre steps e entre runs, refusal de run/step vazio)",
+        "specs/026-attestation-emitter/spec.md:98-99 (FR-007, FR-008 cobertos: mesmo mecanismo de concessão + LEADER_WAVE_INDEX=0 declarado e testado em validate_attestation_emitter_contract.py:68-70)"
+      ],
+      "findings": [
+        "DIVERGÊNCIA (menor): a tarefa T012 no tasks.md nomeia literalmente `plugin/skills/grill-with-docs/scripts/grill_core/store.py` como local de implementação. A função efetivamente implementada (leader_lease) mora em `grill_core/attestation.py`, não em store.py. O próprio commit 4961233 declara 'T012 e T015 da Fase 2' e o docstring da função confirma que ela espelha o mecanismo de store.py (`gauntlet_runs`) em vez de residir nele. Substância da tarefa (mesmo mecanismo, sem campo novo, FR-007/FR-008) está satisfeita; só o caminho de arquivo no texto da tarefa está desatualizado em relação ao código."
+      ]
+    },
+    "T014": {
+      "status": "verified",
+      "summary": "tests/validate_attestation_emitter_contract.py estende a suíte com dois pontos exigidos: (1) o bundle montado por mint_chain é aceito por judge_checkpoint_attestation; (2) o verbo `attest` do CLI recusa etapa worker-required e não deixa bundle no disco.",
+      "evidence": [
+        "tests/validate_attestation_emitter_contract.py:239-244 (MintedChainIsAccepted.test_the_judge_accepts_a_minted_chain — chama A.judge_checkpoint_attestation sobre o bundle de A.mint_chain)",
+        "tests/validate_attestation_emitter_contract.py:303-312 (CliRefusesBeforeReading.test_worker_required_step_is_refused_by_the_verb — invoca grill_workspace.py attest via subprocess com step=implement-parallel, assevera código WORKER_REQUIRED_STEP e assertFalse de que o arquivo de saída não existe)",
+        "specs/026-attestation-emitter/spec.md (FR-018, SC-001, SC-004, SC-006 cobertos pelos dois testes acima e pela classe LeaderRefusal em attestation.py)"
+      ],
+      "findings": []
+    }
+  },
+  "suite": {
+    "command": "python3 tests/run_validators.py",
+    "exit_code": 0,
+    "total_tests": 1270,
+    "validators": 27,
+    "skipped": 1,
+    "note": "Bate com a baseline declarada em CLAUDE.md (1270 testes, 27 validadores, exit 0, 1 skip dependente de ambiente)."
+  },
+  "completed": ["T012", "T014"]
+}

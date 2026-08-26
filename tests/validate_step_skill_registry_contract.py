@@ -1308,6 +1308,11 @@ class Hygiene(Base):
             # FASE-003 (T014): DAG validation and wave/worker declaration are
             # the same closed coordinator-only Gauntlet control surface,
             # proven by the same current-activation admission boundary.
+            # Attestation emission belongs to the same closed surface: it
+            # resolves the registered skill to mint a chain, and refuses -- via
+            # the frozen execution-class table -- to mint a leader receipt for a
+            # step whose worktree isolation is its safety mechanism.
+            "attest": "attest_command",
             "gauntlet-dag-validate": "gauntlet_dag_validate_command",
             "gauntlet-wave-declare": "gauntlet_wave_declare_command",
             "gauntlet-worker-declare": "gauntlet_worker_declare_command",
@@ -1385,10 +1390,16 @@ class Hygiene(Base):
         # boundary; it is the sole additional approved loader.  Keep this
         # narrow so legacy handlers cannot reach Gauntlet/step-skill state
         # through a newly introduced helper.
+        # ``attest_command`` mints the attestation chain, and resolving the
+        # registered skill is the whole reason it exists -- it cannot be a
+        # legacy handler reaching sensitive state through a new helper, which
+        # is what this set exists to prevent. It refuses before reading
+        # anything when the step's execution class forbids a leader receipt.
         permitted_loaders = {
             "gauntlet_init_command",
             "gauntlet_activation_projection",
             "gauntlet_run_admission",
+            "attest_command",
         }
         sensitive_modules = {"gauntlet", "step_skills"}
         observed_loaders = set()

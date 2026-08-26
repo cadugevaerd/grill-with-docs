@@ -34,13 +34,14 @@ only :func:`judge_checkpoint_attestation` at a V3 completion boundary.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 # --------------------------------------------------------------------------
 # sibling loader -- no import-time dependency on step_skills.py (mirrors
@@ -747,6 +748,373 @@ def _validate_human_authorization(value: Any, step_id: str) -> Mapping[str, Any]
     return value
 
 
+
+# ---------------------------------------------------------------------------
+# Emission
+#
+# The core has always known how to *judge* a chain and never how to *mint* one,
+# so every step of the cycle was unreachable by checkpoint once the gate that
+# demands a chain started firing.  Closing that gap is what this section does.
+#
+# What it mints is exactly what specs/010 scoped: structural correlation.  A
+# receipt minted here proves an artefact existed and was read at emission time,
+# and that altering it afterwards breaks the correlation.  It does not prove the
+# registered skill ran.  Saying otherwise in a docstring would be the same
+# over-claim the whole mechanism exists to prevent.
+# ---------------------------------------------------------------------------
+
+
+class EmissionError(AttestationError):
+    """A chain could not be minted from truthful inputs.
+
+    Deliberately a subclass: a caller that already handles ``AttestationError``
+    keeps failing closed on emission problems rather than letting one through
+    as an unrelated exception type.
+    """
+
+
+#: Emission refusals are their own code. They are not ``BLOCKED_CAPABILITY``
+#: (the capability may be perfectly resolvable) nor ``UNATTESTED_STEP_OUTPUT``
+#: (nothing was attested -- minting is what failed).
+EMISSION_REFUSED = "EMISSION_REFUSED"
+
+
+def _emit_fail(reason: str, **detail: Any) -> EmissionError:
+    return EmissionError(EMISSION_REFUSED, reason, **detail)
+
+
+def execution_class(step_id: str, workflow_version: str, versions: Any) -> str:
+    """Return ``leader-allowed`` or ``worker-required`` for one step.
+
+    A step absent from the table fails closed naming the missing decision: a
+    step added to a sequence without a class here must not inherit a permissive
+    default from its neighbour (ADR-0203).
+    """
+    table = versions.EXECUTION_CLASS_BY_VERSION.get(workflow_version)
+    if table is None:
+        raise _emit_fail("EXECUTION_CLASS_VERSION_UNKNOWN", workflow_version=workflow_version)
+    klass = table.get(step_id)
+    if klass is None:
+        raise _emit_fail("EXECUTION_CLASS_UNDECLARED", step_id=step_id, workflow_version=workflow_version)
+    if klass not in versions.EXECUTION_CLASSES:
+        raise _emit_fail("EXECUTION_CLASS_INVALID", step_id=step_id, value=klass)
+    return klass
+
+
+def require_emission_allowed(
+    step_id: str,
+    workflow_version: str,
+    versions: Any,
+    *,
+    worker_execution_proven: bool = False,
+) -> str:
+    """Decide whether a chain may be minted for this step, and say why not.
+
+    ``worker-required`` never meant "the worker writes the receipt" -- no worker
+    ever writes a step receipt. ``implement-parallel`` is explicit that the step
+    receipt belongs to the leader and that no worker checkpoints a step. What
+    the class means is that the *work* must have been done by dispatched
+    workers, because their worktree isolation and closed file grant are the
+    step's safety mechanism.
+
+    So the leader may mint for such a step, but only against proof that workers
+    actually ran: converged waves covering the DAG. Without that proof the
+    receipt would attest an isolation that never happened, which is worse than
+    no receipt at all. With it, refusing would strand the one step that did use
+    workers -- which is exactly what the earlier unconditional refusal did.
+
+    Returns the class, so a caller can record which rule it satisfied.
+    """
+    klass = execution_class(step_id, workflow_version, versions)
+    if klass == "worker-required" and not worker_execution_proven:
+        raise _emit_fail(
+            "WORKER_EXECUTION_UNPROVEN",
+            step_id=step_id,
+            workflow_version=workflow_version,
+            needed="converged waves covering the execution DAG",
+        )
+    return klass
+
+
+def artefact_digest(read_bytes: Callable[[str], bytes], path: str) -> tuple[str, int]:
+    """Read the declared artefact and return ``(digest, size)``.
+
+    ``read_bytes`` is the caller's already-safe boundary -- the CLI passes the
+    no-follow descriptor reader it uses everywhere else, so this module keeps
+    doing no I/O of its own.  An unreadable or absent artefact is a named
+    refusal; it is never a chain minted with an empty digest (ADR-0202).
+    """
+    if not isinstance(path, str) or not path.strip():
+        raise _emit_fail("ARTEFACT_PATH_INVALID", path=path)
+    try:
+        raw = read_bytes(path)
+    except Exception as exc:  # the caller's boundary decides what is unsafe
+        raise _emit_fail("ARTEFACT_UNREADABLE", path=path, error=type(exc).__name__) from exc
+    if not isinstance(raw, (bytes, bytearray)):
+        raise _emit_fail("ARTEFACT_UNREADABLE", path=path, problem="reader returned non-bytes")
+    return "sha256:" + hashlib.sha256(bytes(raw)).hexdigest(), len(raw)
+
+
+#: Which terminal invocation status accompanies each step result. The two
+#: vocabularies overlap on the three terminal values but are not the same set:
+#: ``STEP_OUTPUT_RESULTS`` also admits ``UNKNOWN``, which no invocation status
+#: matches. Kept as an explicit map rather than passing the result straight
+#: through, so that a result with no counterpart refuses instead of minting an
+#: invocation whose status is not a status.
+_INVOCATION_STATUS_FOR_RESULT = {
+    "COMPLETED": "COMPLETED",
+    "FAILED": "FAILED",
+    "BLOCKED": "BLOCKED",
+}
+
+
+
+def leader_lease(run_id: str, step_id: str) -> tuple[str, int]:
+    """Derive the conducting session's lease for one step.
+
+    Mirrors how a worker lease is minted in ``gauntlet_runs``: the identifier is
+    derived from the run plus the executor's identity, and the fencing token
+    starts at one.  There is no global counter to consult, and inventing one
+    here would be a second source of truth for the same thing.
+
+    Uniqueness therefore comes from the pair. Two leader executions of the same
+    step in the same run are the same logical executor -- exactly as two workers
+    with the same node id in the same run would be -- so they share a lease by
+    construction rather than by accident.
+    """
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise _emit_fail("LEASE_RUN_INVALID", run_id=run_id)
+    if not isinstance(step_id, str) or not step_id.strip():
+        raise _emit_fail("LEASE_STEP_INVALID", step_id=step_id)
+    return f"lease-{run_id}-leader-{step_id}", 1
+
+def mint_chain(
+    *,
+    resolution: Mapping[str, Any],
+    project_id: str,
+    work_item_id: str,
+    work_item_revision: int,
+    run_id: str,
+    step_id: str,
+    attempt_id: str,
+    recovery_generation_id: str,
+    plan_revision: int,
+    wave_index: int,
+    worktree_id: str,
+    worktree_head: str,
+    worker_lease_id: str,
+    worker_fencing_token: int,
+    dispatcher_lease_id: str,
+    dispatcher_epoch: int,
+    artefact_path: str,
+    artefact_sha256: str,
+    logical_plan_sha256: str,
+    executable_plan_sha256: str,
+    input_fingerprint: str,
+    dependency_outputs: Iterable[Mapping[str, Any]] = (),
+    execution_round: int = 1,
+    result: str = "COMPLETED",
+    catalog: Mapping[str, Any] | None = None,
+    supersedes_step_execution_id: str | None = None,
+    supersedes_attempt_id: str | None = None,
+    human_authorization: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Mint the four correlated links plus the catalog, ready for the checkpoint.
+
+    Every caller-supplied value must already be true of the world: the digests
+    are computed here, but what they are computed *over* is the caller's
+    responsibility.  ``artefact_sha256`` in particular is expected to come from
+    :func:`artefact_digest`, which reads the file through the caller's safe
+    boundary -- this function does no I/O and cannot verify that the artefact
+    exists.
+
+    What the returned chain proves is what specs/010 scoped: correlation. It
+    says an artefact with this digest was named for this step, under this
+    resolution of the registered skill. It does not say the skill ran.
+    """
+    ss = _step_skills()
+    if not isinstance(resolution, Mapping):
+        raise _emit_fail("RESOLUTION_INVALID", problem="not an object")
+    for field in ("skill_resolution_sha256", "adapter", "runtime", "skill_id",
+                  "skill_version", "skill_content_sha256", "registry_sha256", "entrypoint"):
+        if field not in resolution:
+            raise _emit_fail("RESOLUTION_INCOMPLETE", field=field)
+    _text(artefact_sha256, SHA256_RE, "INVALID_DIGEST", field="artefact_sha256")
+
+    # The two back-references travel together or not at all. One without the
+    # other names half of what it replaces, which is worse than naming nothing:
+    # an auditor would see a supersession and be unable to resolve it.
+    supersedes = (supersedes_step_execution_id, supersedes_attempt_id)
+    if any(value is not None for value in supersedes):
+        if any(value is None for value in supersedes):
+            raise _emit_fail(
+                "SUPERSEDE_LINK_INCOMPLETE",
+                supersedes_step_execution_id=supersedes_step_execution_id,
+                supersedes_attempt_id=supersedes_attempt_id,
+            )
+        _text(supersedes_step_execution_id, STEP_EXECUTION_ID_RE,
+              "SUPERSEDE_LINK_INVALID", field="supersedes_step_execution_id")
+        # Round one is by definition the first: a receipt that claims to replace
+        # something while being the first attempt is minting its own history.
+        if execution_round <= 1:
+            raise _emit_fail("SUPERSEDE_ROUND_NOT_ADVANCED", execution_round=execution_round)
+
+    runtime = resolution["runtime"]
+    adapter = resolution["adapter"]
+    resolution_sha = resolution["skill_resolution_sha256"]
+
+    # The dispatch payload of a leader-executed step is the declaration itself:
+    # who executes what, where, anchored on which artefact.  Hashing that is
+    # truthful; inventing a payload digest would not be.
+    dispatch_payload_sha256 = ss.sha256_jcs({
+        "step_id": step_id,
+        "artefact_path": artefact_path,
+        "artefact_sha256": artefact_sha256,
+        "worktree_id": worktree_id,
+        "worktree_head": worktree_head,
+        "worker_lease_id": worker_lease_id,
+    })
+
+    dkey = dispatch_key(
+        project_id, work_item_id, run_id, step_id, recovery_generation_id, plan_revision,
+        wave_index, executable_plan_sha256, resolution_sha, worktree_id, worktree_head,
+        runtime, adapter, dispatch_payload_sha256,
+    )
+    ikey = ss.skill_invocation_key(
+        project_id, work_item_id, run_id, step_id, recovery_generation_id, plan_revision,
+        resolution_sha, dkey,
+    )
+
+    dispatch_body: dict[str, Any] = {
+        "schema": DISPATCH_INTENT_SCHEMA,
+        "dispatch_key": dkey,
+        "project_id": project_id,
+        "work_item_id": work_item_id,
+        "run_id": run_id,
+        "attempt_id": attempt_id,
+        "step_id": step_id,
+        "execution_mode": ss.EXECUTION_MODE,
+        "skill_resolution_sha256": resolution_sha,
+        "skill_invocation_key": ikey,
+        "logical_plan_sha256": logical_plan_sha256,
+        "executable_plan_sha256": executable_plan_sha256,
+        "recovery_generation_id": recovery_generation_id,
+        "plan_revision": plan_revision,
+        "wave_index": wave_index,
+        "worktree_id": worktree_id,
+        "worktree_head": worktree_head,
+        "runtime": runtime,
+        "adapter": adapter,
+        "dispatch_payload_sha256": dispatch_payload_sha256,
+        "dispatcher_epoch": dispatcher_epoch,
+        "dispatcher_lease_id": dispatcher_lease_id,
+        "work_item_revision": work_item_revision,
+        "worker_lease_id": worker_lease_id,
+        "worker_fencing_token": worker_fencing_token,
+        "status": "STARTED",
+        "runtime_handle": None,
+    }
+    dispatch_body["content_sha256"] = ss.sha256_jcs(dispatch_body)
+
+    def _invocation(status: str, output_manifest_sha256: str) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "schema": ss.INVOCATION_SCHEMA,
+            "skill_invocation_key": ikey,
+            "project_id": project_id,
+            "work_item_id": work_item_id,
+            "run_id": run_id,
+            "step_id": step_id,
+            "skill_id": resolution["skill_id"],
+            "skill_version": resolution["skill_version"],
+            "skill_content_sha256": resolution["skill_content_sha256"],
+            "registry_sha256": resolution["registry_sha256"],
+            "skill_resolution_sha256": resolution_sha,
+            "runtime": runtime,
+            "adapter": adapter,
+            "entrypoint": resolution["entrypoint"],
+            "dispatch_key": dkey,
+            "attempt_id": attempt_id,
+            "recovery_generation_id": recovery_generation_id,
+            "plan_revision": plan_revision,
+            "input_fingerprint": input_fingerprint,
+            "started_receipt_ref": f"receipts/skill-invocation/{step_id}-{attempt_id}.started.json",
+            "status": status,
+            "output_manifest_sha256": output_manifest_sha256,
+        }
+        body["content_sha256"] = ss.sha256_jcs(body)
+        return body
+
+    # STARTED has no output yet; its manifest digest is over the empty manifest,
+    # not over a placeholder string. The terminal one is over the real artefact.
+    # Two vocabularies, deliberately not merged: an invocation reports whether
+    # the call finished, a step output whether the step achieved its result.
+    # They overlap on three terminal values and diverge on a fourth -- a step
+    # output may be UNKNOWN, which no invocation status matches. Collapsing
+    # them would let a completed call that produced a failed step read as
+    # success.
+    invocation_status = _INVOCATION_STATUS_FOR_RESULT.get(result)
+    if invocation_status is None:
+        raise _emit_fail("STEP_RESULT_UNKNOWN", result=result)
+    invocation_started = _invocation("STARTED", ss.sha256_jcs([]))
+    invocation_terminal = _invocation(invocation_status, ss.sha256_jcs([
+        {"path": artefact_path, "sha256": artefact_sha256},
+    ]))
+
+    exec_id = step_execution_id(
+        recovery_generation_id, plan_revision, wave_index, step_id, execution_round, input_fingerprint,
+    )
+    step_output_body: dict[str, Any] = {
+        "schema": STEP_OUTPUT_SCHEMA,
+        "recovery_generation_id": recovery_generation_id,
+        "plan_revision": plan_revision,
+        "wave_index": wave_index,
+        "step_id": step_id,
+        "skill_invocation_receipt_ref": f"receipts/skill-invocation/{step_id}-{attempt_id}.terminal.json",
+        "skill_invocation_receipt_sha256": receipt_sha256(invocation_terminal),
+        "execution_round": execution_round,
+        "step_execution_id": exec_id,
+        "supersedes_step_execution_id": supersedes_step_execution_id,
+        "attempt_id": attempt_id,
+        "supersedes_attempt_id": supersedes_attempt_id,
+        "worker_lease_id": worker_lease_id,
+        "worker_fencing_token": worker_fencing_token,
+        "input_fingerprint": input_fingerprint,
+        "dependency_outputs": [dict(item) for item in dependency_outputs],
+        # The artefact digest IS the step output digest. There is no second,
+        # separate notion of "the output" to hash -- that is the whole point of
+        # anchoring on a declared artefact (ADR-0202).
+        "output_sha256": artefact_sha256,
+        "evidence_refs": [{"path": artefact_path, "sha256": artefact_sha256}],
+        "result": result,
+    }
+    step_output_body["content_sha256"] = ss.sha256_jcs(step_output_body)
+
+    bundle: dict[str, Any] = {
+        "schema": CHECKPOINT_ATTESTATION_SCHEMA,
+        "resolution": dict(resolution),
+        "dispatch_intent": dispatch_body,
+        "invocation_started": invocation_started,
+        "invocation_terminal": invocation_terminal,
+        "step_output": step_output_body,
+        "catalog": dict(catalog) if catalog is not None else resolution.get("catalog"),
+    }
+    # Carried, never manufactured. The authorization is a human artefact that
+    # exists before the chain does; minting it here would make "a human
+    # approved" indistinguishable from "the thing that wanted approval said so".
+    # It is validated on the way in so a malformed one is refused at emission
+    # rather than surviving into a bundle that only the judge rejects later.
+    #
+    # A step that requires it and does not carry it is refused: `ship` is the
+    # one step whose resolution demands authorization, and a bundle minted
+    # without it could never be accepted, so emitting one is only a slower way
+    # of failing.
+    if human_authorization is not None:
+        _validate_human_authorization(human_authorization, step_id)
+        bundle["human_authorization"] = dict(human_authorization)
+    elif resolution.get("human_authorization_required"):
+        raise _emit_fail("HUMAN_AUTHORIZATION_REQUIRED", step_id=step_id)
+    return bundle
+
 def judge_checkpoint_attestation(
     bundle: Mapping[str, Any],
     *,
@@ -885,3 +1253,86 @@ def retry_step_execution(
         )
     record_step_execution(store, failed_step_output)
     return record_step_execution(store, retry_step_output)
+
+
+def supersede_step_execution(
+    store: dict[str, dict[str, Any]],
+    superseded_step_output: Mapping[str, Any],
+    successor_step_output: Mapping[str, Any],
+) -> str:
+    """Authorize re-attestation of a step whose artefact legitimately changed.
+
+    ``retry_step_execution`` already covers the failed case: a ``FAILED``
+    terminal is replaced by a new attempt. The case it never covered is the
+    terminal that *succeeded* and whose artefact was then legitimately
+    corrected. Nothing could reconcile that, so a closed step stayed
+    permanently divergent from the bytes it attested, and an auditor could no
+    longer tell an honest correction from tampering -- which is precisely the
+    distinction the chain exists to sustain (BL-0201).
+
+    The answer takes the shape the envelope already reserved fields for. The
+    prior terminal is never rewritten and never removed; a successor terminal
+    is recorded that names what it replaces. Auditing then reads a history
+    instead of a contradiction: the step's current receipt, and every receipt
+    it supersedes, each still anchored on the bytes it actually saw.
+
+    Superseding is deliberately not free. The successor must attest the same
+    step, advance the round, carry both back-references, and actually differ:
+    a successor identical to what it claims to replace is a no-op dressed as a
+    correction, and is refused rather than silently recorded.
+
+    What this does *not* decide is what happens to the steps downstream, whose
+    own receipts named the output being replaced. That is the caller's ledger
+    to keep, because only the caller knows the sequence; see the CLI's stale
+    chain, which is what stops a superseded predecessor from reaching ``ship``
+    unnoticed.
+    """
+    validate_step_output(superseded_step_output)
+    validate_step_output(successor_step_output)
+    _require(
+        superseded_step_output["step_id"] == successor_step_output["step_id"],
+        "SUPERSEDE_STEP_MISMATCH",
+        superseded=superseded_step_output["step_id"],
+        successor=successor_step_output["step_id"],
+    )
+    if successor_step_output["step_execution_id"] == superseded_step_output["step_execution_id"]:
+        raise _divergence(
+            "SUPERSEDE_REUSES_EXECUTION_ID",
+            step_execution_id=superseded_step_output["step_execution_id"],
+        )
+    if successor_step_output["supersedes_step_execution_id"] != superseded_step_output["step_execution_id"]:
+        raise _unattested(
+            "SUPERSEDE_NOT_LINKED",
+            expected=superseded_step_output["step_execution_id"],
+            actual=successor_step_output["supersedes_step_execution_id"],
+        )
+    if successor_step_output["supersedes_attempt_id"] != superseded_step_output["attempt_id"]:
+        raise _unattested(
+            "SUPERSEDE_ATTEMPT_NOT_LINKED",
+            expected=superseded_step_output["attempt_id"],
+            actual=successor_step_output["supersedes_attempt_id"],
+        )
+    if successor_step_output["execution_round"] <= superseded_step_output["execution_round"]:
+        raise _divergence(
+            "SUPERSEDE_ROUND_NOT_ADVANCED",
+            previous=superseded_step_output["execution_round"],
+            attempted=successor_step_output["execution_round"],
+        )
+    # Not the receipt bytes: two receipts for the same artefact always differ in
+    # bytes, because the round is part of what is hashed. What a correction has
+    # to move is one of the two things a step receipt actually claims -- the
+    # artefact it produced, or the predecessor output it rests on.
+    #
+    # Both matter. A step downstream of a corrected one is re-attested with its
+    # own artefact byte-identical: nothing about its work changed, only which
+    # predecessor now stands. Demanding a new artefact there would forbid the
+    # very re-attestation that clears the stale chain.
+    if (successor_step_output["output_sha256"] == superseded_step_output["output_sha256"]
+            and successor_step_output["dependency_outputs"] == superseded_step_output["dependency_outputs"]):
+        raise _divergence(
+            "SUPERSEDE_WITHOUT_CHANGE",
+            step_execution_id=superseded_step_output["step_execution_id"],
+            output_sha256=superseded_step_output["output_sha256"],
+        )
+    record_step_execution(store, superseded_step_output)
+    return record_step_execution(store, successor_step_output)

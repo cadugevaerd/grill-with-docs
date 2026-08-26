@@ -1,0 +1,177 @@
+{
+  "deferred_to_leader": [
+    "T019"
+  ],
+  "dispatchable_tasks": 21,
+  "feature": "026-attestation-emitter",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "id": "p01-a",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T002",
+        "T003",
+        "T004",
+        "T005"
+      ]
+    },
+    {
+      "id": "p01-b",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T001",
+        "T007"
+      ]
+    },
+    {
+      "id": "p01-c",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T006"
+      ]
+    },
+    {
+      "id": "p02-a",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T008",
+        "T009",
+        "T010",
+        "T011"
+      ]
+    },
+    {
+      "id": "p02-b",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T012",
+        "T014"
+      ]
+    },
+    {
+      "id": "p02-c",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T013",
+        "T015"
+      ]
+    },
+    {
+      "id": "p03-a",
+      "parallel": true,
+      "phase": 3,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T016"
+      ]
+    },
+    {
+      "id": "p03-b",
+      "parallel": true,
+      "phase": 3,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T017"
+      ]
+    },
+    {
+      "id": "p03-c",
+      "parallel": true,
+      "phase": 3,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T018"
+      ]
+    },
+    {
+      "id": "p04-a",
+      "parallel": true,
+      "phase": 4,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T020"
+      ]
+    },
+    {
+      "id": "p04-b",
+      "parallel": true,
+      "phase": 4,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T021"
+      ]
+    },
+    {
+      "id": "p04-serial",
+      "parallel": false,
+      "phase": 4,
+      "scope": "FEATURE_WIDE",
+      "task_ids": [
+        "T022"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "achieved_groups": 3,
+      "phase": 1,
+      "reasons": [],
+      "requested_groups": 3,
+      "tasks": 7,
+      "title": "Fundação — classe de execução e âncora",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 3,
+      "phase": 2,
+      "reasons": [],
+      "requested_groups": 3,
+      "tasks": 8,
+      "title": "Montagem da cadeia",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 3,
+      "phase": 3,
+      "reasons": [
+        "EVIDENCE_BOUNDARY_TASKS"
+      ],
+      "requested_groups": 3,
+      "tasks": 3,
+      "title": "Fechamento do bootstrap",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 4,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT",
+        "UNMAPPED_TASKS"
+      ],
+      "requested_groups": 3,
+      "tasks": 3,
+      "title": "Fechamento",
+      "unmapped_tasks": 1
+    }
+  ],
+  "requested_groups": 3,
+  "schema": "grill-partition-report/v1",
+  "tasks": 22,
+  "unmapped_task_ids": [
+    "T022"
+  ],
+  "verdict": "PARTITION-DEGRADED"
+}

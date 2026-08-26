@@ -1,12 +1,22 @@
 # Gate reports and the two append-only checkpoint files do not alter reviewed
 # implementation. Work Item authorities (handoffs, plans, ADRs) stay included.
 converge:
+  # NAO comente entre os itens da lista abaixo: o coletor de
+  # scripts/source-fingerprint.sh para na primeira linha que nao seja item, e
+  # um comentario no meio descarta em silencio tudo o que vier depois dele.
+  #
+  # `.grill/attestations/**` esta aqui pela mesma razao que `verify.md`: um
+  # bundle de atestacao e evidencia SOBRE a revisao, nao conteudo revisado. Sob
+  # o protocolo grill, fechar uma etapa de gate escreve um bundle ali; conta-lo
+  # como fonte faz `verify` invalidar o proprio relatorio, e rodar de novo so
+  # produz outro bundle. Laco, nao deteccao.
   fingerprint_exclude:
     - ".specify/reports/verify-review-ship/**"
     - "specs/**/verify.md"
     - "specs/**/review.md"
     - ".grill/work-items/**/state.json"
     - ".grill/work-items/**/ROUND-LOG.jsonl"
+    - ".grill/attestations/**"
 
 # Ship. Adaptado a este repositorio, nao copiado do template: o backlog e
 # externo (backlogctl/SGD, sem BACKLOG.md) e os ADRs vivem por work item em

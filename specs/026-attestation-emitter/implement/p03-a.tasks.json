@@ -1,0 +1,29 @@
+{
+  "node_id": "p03-a",
+  "step": "implement-parallel",
+  "mode": "attest-bootstrap-closeout",
+  "results": [
+    {
+      "task_id": "T016",
+      "title": "Emitir cadeia de atestação para specify, ancorada em specs/026-attestation-emitter/spec.md",
+      "status": "verified",
+      "evidence": {
+        "attestation_file": ".grill/attestations/026-specify.json",
+        "attestation_file_exists": true,
+        "anchor_artifact": "specs/026-attestation-emitter/spec.md",
+        "sealed_output_sha256": "0d4279051c4038c8b76fbc66b102dfdbbf6a6ab05df1df461eaef26bc50e8fb9",
+        "computed_sha256": "0d4279051c4038c8b76fbc66b102dfdbbf6a6ab05df1df461eaef26bc50e8fb9",
+        "digest_match": true,
+        "work_item_state_path": ".grill/work-items/feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25/state.json",
+        "work_item_step_specify": "complete",
+        "audit_trail_entry": {
+          "step": "specify",
+          "state": "complete",
+          "evidence_sha256": "0d4279051c4038c8b76fbc66b102dfdbbf6a6ab05df1df461eaef26bc50e8fb9"
+        }
+      }
+    }
+  ],
+  "findings": [],
+  "completed": ["T016"]
+}

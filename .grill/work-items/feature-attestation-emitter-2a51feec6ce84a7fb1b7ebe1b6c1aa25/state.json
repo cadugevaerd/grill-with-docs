@@ -1,0 +1,1608 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "pending",
+  "backlog_skipped": true,
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+    "state": "present"
+  },
+  "development": {
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-8037ebe3096cd2c4b0a81da2c3df06b082897e6f20ec71cf98bf2491dc2277e8",
+      "registry_sha256": "sha256:e3f69871406205b77725b41bf0de0b24d9dbd661c004d502f0ddb49f22209ec1",
+      "run_id": "leader-feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "analyze": "se-7fbc2c828f82c9bdedffcd9bd1725bbab7dfea5077d8ce6c24b2866e6c29e7dd",
+      "checklist": "se-000251bc9b2826df682b59d7380aff7847de80974c1e683b23df35658ee69cd5",
+      "converge": "se-db2d7b98ee4cf71172858f9562a7edb518f150ba5bc21b907e5a5263f63c6e29",
+      "implement-parallel": "se-c1151ec85bc615b040e5560a558fc0bd667dd4ff045f86c7d144970e999ead5e",
+      "partition": "se-fafb3b87ae40c86d91fbb9d696f77d5dc8e9f8d67ab776f7e4fdbe8f60e418eb",
+      "plan": "se-27e5f0a31d4374f1e6c854304455d39461dd79080c14161630abfea91e34bfde",
+      "review": "se-edf26a98eed83716204a990b898906cfe397207a228e6ae0d8bd9e7e4834f943",
+      "ship": "se-ffa06f712ccd97beb721e7cc75a2fda3b013e7220f35d9db423323bd25567fd9",
+      "specify": "se-d60cacdf705fd15778db16f717081d2cd4d540d64d1f8ae4bdf4a3d5f2cfca1d",
+      "tasks": "se-ecd5753a939c949b17f6cebbd5df310224a90cd9cf0d4927d1ed86b69a6c768f",
+      "verify": "se-05b2b67da432ce37cbf6a8fff401fde2e72314bec85f296d05cc35e489d3c7e5"
+    },
+    "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-6.terminal.json",
+        "step_id": "analyze"
+      },
+      "checklist": {
+        "output_sha256": "sha256:7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-5.terminal.json",
+        "step_id": "checklist"
+      },
+      "converge": {
+        "output_sha256": "sha256:662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-4.terminal.json",
+        "step_id": "converge"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-6.terminal.json",
+        "step_id": "implement-parallel"
+      },
+      "partition": {
+        "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-6.terminal.json",
+        "step_id": "partition"
+      },
+      "plan": {
+        "output_sha256": "sha256:84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-5.terminal.json",
+        "step_id": "plan"
+      },
+      "review": {
+        "output_sha256": "sha256:cc4b3404e389d06196e1df5ea53c6afa79173f823823669516e7478975435a7a",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-3.terminal.json",
+        "step_id": "review"
+      },
+      "ship": {
+        "output_sha256": "sha256:7f17355867e476aaec8443ca5267e6d3fdd9a41e7b394f1987d2fcbf71a82b26",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/ship-ship-1.terminal.json",
+        "step_id": "ship"
+      },
+      "specify": {
+        "output_sha256": "sha256:4404a06d1e53187913df78b3da62b220886731afc4d97ca30b848a41c5d97c16",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-4.terminal.json",
+        "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-6.terminal.json",
+        "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:6ff789c44623ed6963065b670036124b3c056e772a5e54793d8a474682f0a2eb",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-5.terminal.json",
+        "step_id": "verify"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "Bootstrap ADR-0204: a fundação do emissor foi implementada antes de specify, o que é desvio do protocolo e está registrado como tal. O código existe e está travado por teste; specify, plan e tasks precisam ser regularizados com o código como evidência antes de qualquer complete.",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/spec.md",
+            "sha256": "0d4279051c4038c8b76fbc66b102dfdbbf6a6ab05df1df461eaef26bc50e8fb9"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/plan.md",
+            "sha256": "ab0ca227fc05ac9148b907eddab900d0dca17d7320ba4414859890d40f87c624"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/checklists/requirements.md",
+            "sha256": "7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "9d27185f993515d14aad1f49d41c584f79373ea13658691ef845782c4b9838d2"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "7ce58a101d61d214895db26b49b1853456ccca5044a3cd72c848d68406b6ee59"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "BL-0202: a classe worker-required recusa emissao do leader, mas a skill implement-parallel determina que o receipt da etapa e do leader e que nenhum worker faz checkpoint de etapa. As quatro waves foram declaradas, despachadas a workers reais e convergidas; a etapa nao pode ser concluida ate a regra virar condicional a haver waves convergidas.",
+        "state": "blocked",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "implement-parallel"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "6965d9e6f0e919152fa4df951799ca405d2162cf5d0b78d0e8dc6593035bc8a5"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "tasks.md corrigido apos o selo: T011 citava resolve_shipped_workflow_skills com o nome errado e as tarefas T020/T021 foram acrescentadas",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/026-tasks.json"
+      },
+      {
+        "chain_stale": [
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "6965d9e6f0e919152fa4df951799ca405d2162cf5d0b78d0e8dc6593035bc8a5"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "re-atestacao apos a supersessao de tasks: a analise passa a repousar sobre o tasks.md corrigido",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/026-analyze.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "re-atestacao apos a supersessao a montante: o artefato nao mudou, mudou o predecessor sobre o qual ele repousa",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/026-partition.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "re-atestacao apos a supersessao a montante: o artefato nao mudou, mudou o predecessor sobre o qual ele repousa",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/026-implement.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "abrindo converge apos BL-0201 resolvido e cadeia reconciliada",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "chain_stale": [
+          "plan",
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/spec.md",
+            "sha256": "a8cf278b600ae69b479e0511c36f6065c20504b463c5ac43ed17de5b94949c83"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/026-specify.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/plan.md",
+            "sha256": "32542c5681af1b954a3492f45dcdd749d712510e7113d090e168816bcb3c8d6d"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/026-plan.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/checklists/requirements.md",
+            "sha256": "7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/026-checklist.json"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/026-tasks-r2.json"
+      },
+      {
+        "chain_stale": [
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/026-analyze-r2.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/026-partition-r2.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/026-implement-r2.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "converge: 4 findings apendados na Phase 5 e todos executados; cadeia re-atestada em cascata e casando com os bytes correntes",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "abrindo verify apos converge fechado",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/plan.md",
+            "sha256": "84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/026-plan-r2.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/checklists/requirements.md",
+            "sha256": "7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/026-checklist-r2.json"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/026-tasks-r3.json"
+      },
+      {
+        "chain_stale": [
+          "partition",
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/026-analyze-r3.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel",
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/026-partition-r3.json"
+      },
+      {
+        "chain_stale": [
+          "converge"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/026-implement-r3.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/026-converge.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/verify.md",
+            "sha256": "ec32d1371838e1f677105e55476cbcf97f1857526e3db8e52a60837ec079ab26"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "verify PASS: 1294 testes em 27 validadores exit 0, distribution OK, higiene com um orfao removido",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "abrindo review apos verify PASS",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "chain_stale": [
+          "plan",
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/spec.md",
+            "sha256": "a674f1ff4d7b8b06188f3f351cfc243bbe7532e51f7e1274d814b6d3e4598247"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/026-specify-r2.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/plan.md",
+            "sha256": "84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/026-plan-r3.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/checklists/requirements.md",
+            "sha256": "7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/026-checklist-r3.json"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/026-tasks-r4.json"
+      },
+      {
+        "chain_stale": [
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/026-analyze-r4.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/026-partition-r4.json"
+      },
+      {
+        "chain_stale": [
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/026-implement-r4.json"
+      },
+      {
+        "chain_stale": [
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/026-converge-r2.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/verify.md",
+            "sha256": "fab3ff771c2a0c41a9e2653822e74951be70e38413531c6f701f5a5d5b1062dd"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "segunda rodada de verify apos as tres correcoes do review: 1298 testes exit 0, distribution OK, fingerprint imovel ao escrever o relatorio",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/026-verify.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/verify.md",
+            "sha256": "ebe5e862e3bc22c712357aabcf4826de3cd6eaa03b2a56c7163648822d2b5232"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "terceira rodada de verify: o conserto do comentario moveu a fonte e invalidou o relatorio anterior; gate reexecutado sobre a arvore resultante",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/026-verify-r2.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/review.md",
+            "sha256": "2cbad852a91fdff014d7da2e24b52303cff0acf8b6ec97214572a95a9b48e225"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "review APPROVE: tres Important da primeira rodada corrigidos e travados por teste, fingerprint casando com converge e verify",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "chain_stale": [
+          "plan",
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify",
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/spec.md",
+            "sha256": "4404a06d1e53187913df78b3da62b220886731afc4d97ca30b848a41c5d97c16"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/026-specify-r4.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify",
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/plan.md",
+            "sha256": "84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/026-plan-r4.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify",
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/checklists/requirements.md",
+            "sha256": "7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/026-checklist-r4.json"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify",
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/026-tasks-r5.json"
+      },
+      {
+        "chain_stale": [
+          "partition",
+          "implement-parallel",
+          "converge",
+          "verify",
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/026-analyze-r5.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel",
+          "converge",
+          "verify",
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/026-partition-r5.json"
+      },
+      {
+        "chain_stale": [
+          "converge",
+          "verify",
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/026-implement-r5.json"
+      },
+      {
+        "chain_stale": [
+          "verify",
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "662848a8fc084e12f4534e60424e6f94754bd94f001741dd23ca7101aa6f9e98"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/026-converge-r3.json"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/verify.md",
+            "sha256": "004ff66cbc6d8ee0a05cbbb2cb1f3fb9ece78794e8ba8727799f020b4ebff30f"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "quarta rodada de verify apos FR-028: 1303 testes exit 0, distribution OK",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/026-verify-r3.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/review.md",
+            "sha256": "5d7365683e5b16518afbe9436de017a367e44a77eafbc7101b5903e1c286557b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "quarta rodada de review: APPROVE, cobrindo tambem FR-028; um Nit novo sobre content_sha256 da autorizacao",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/attestations/026-review.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "ship autorizado explicitamente pelo usuario nesta sessao",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/verify.md",
+            "sha256": "6ff789c44623ed6963065b670036124b3c056e772a5e54793d8a474682f0a2eb"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "quinta rodada: sidecar T022 tardio alterou somente o fingerprint; 1303 testes/27 validadores exit 0",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/026-verify-r4.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/review.md",
+            "sha256": "cc4b3404e389d06196e1df5ea53c6afa79173f823823669516e7478975435a7a"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "quinta rodada Codex: APPROVE; delta material zero, somente sidecar T022",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/attestations/026-review-r2.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/attestations/026-ship-authorization.md",
+            "sha256": "7f17355867e476aaec8443ca5267e6d3fdd9a41e7b394f1987d2fcbf71a82b26"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "ship autorizado: run 12/12 COMPLETE, Codex Verify PASS, Codex Review APPROVE, rollback e monitoracao declarados",
+        "state": "complete",
+        "step": "ship"
+      }
+    ],
+    "chain_stale": [],
+    "current_step": "complete",
+    "execution_branch": "feature/goal-instruct",
+    "renamed_from": {},
+    "schema": "grill-development/v2",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "partition",
+      "implement-parallel",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "implement-parallel": "complete",
+      "partition": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "complete",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    },
+    "superseded_outputs": {
+      "analyze": [
+        {
+          "attempt_id": "analyze-1",
+          "attestation": ".grill/attestations/026-analyze.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:7ce58a101d61d214895db26b49b1853456ccca5044a3cd72c848d68406b6ee59",
+          "provenance": "current-generation",
+          "reason": "re-atestacao apos a supersessao de tasks: a analise passa a repousar sobre o tasks.md corrigido",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+          "step_execution_id": "se-86fe7f5dbe55b0f04789ab7d09e697e17aa1b50a423fe7a91045c083e53e8aef",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-718591883c21f2acb85bac74ea5f837ef8688807f20c08fac465a0da854b3ecf"
+        },
+        {
+          "attempt_id": "analyze-2",
+          "attestation": ".grill/attestations/026-analyze-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:6965d9e6f0e919152fa4df951799ca405d2162cf5d0b78d0e8dc6593035bc8a5",
+          "provenance": "current-generation",
+          "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-2.terminal.json",
+          "step_execution_id": "se-718591883c21f2acb85bac74ea5f837ef8688807f20c08fac465a0da854b3ecf",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-80509915ad26015d08970514f78a766e85d4f0aae6269305ff211b6baa4042ba"
+        },
+        {
+          "attempt_id": "analyze-3",
+          "attestation": ".grill/attestations/026-analyze-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-3.terminal.json",
+          "step_execution_id": "se-80509915ad26015d08970514f78a766e85d4f0aae6269305ff211b6baa4042ba",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-0ab8f6ea170df6cef25cab457d9efdb261c6bf8d26bd483c2226deceb6890f65"
+        },
+        {
+          "attempt_id": "analyze-4",
+          "attestation": ".grill/attestations/026-analyze-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-4.terminal.json",
+          "step_execution_id": "se-0ab8f6ea170df6cef25cab457d9efdb261c6bf8d26bd483c2226deceb6890f65",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-1357ee224d335f5bc872240fd860d334ba81d63720343c0cebccd835b1e82948"
+        },
+        {
+          "attempt_id": "analyze-5",
+          "attestation": ".grill/attestations/026-analyze-r5.json",
+          "execution_round": 5,
+          "output_sha256": "sha256:6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2",
+          "provenance": "current-generation",
+          "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-5.terminal.json",
+          "step_execution_id": "se-1357ee224d335f5bc872240fd860d334ba81d63720343c0cebccd835b1e82948",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-7fbc2c828f82c9bdedffcd9bd1725bbab7dfea5077d8ce6c24b2866e6c29e7dd"
+        }
+      ],
+      "checklist": [
+        {
+          "attempt_id": "checklist-1",
+          "attestation": ".grill/attestations/026-checklist.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81",
+          "provenance": "current-generation",
+          "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+          "step_execution_id": "se-7358ad6dd8bf882c5edfa03f109c13e1ebf765992d05d6ef5ef8454fcee65ce0",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-19382a281ed87bac38eccfcfade90760c9f5d15826d8ce5100ec153a3a2480d5"
+        },
+        {
+          "attempt_id": "checklist-2",
+          "attestation": ".grill/attestations/026-checklist-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-2.terminal.json",
+          "step_execution_id": "se-19382a281ed87bac38eccfcfade90760c9f5d15826d8ce5100ec153a3a2480d5",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-db2c9d24cb82da0f7ee790d8249462774db04843e3a66fd15126a9c0aa2adc81"
+        },
+        {
+          "attempt_id": "checklist-3",
+          "attestation": ".grill/attestations/026-checklist-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
+          "step_execution_id": "se-db2c9d24cb82da0f7ee790d8249462774db04843e3a66fd15126a9c0aa2adc81",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-2332cf57493ae5ee5408ada0770cf60ff9bff14558143502a6a9775b22b07735"
+        },
+        {
+          "attempt_id": "checklist-4",
+          "attestation": ".grill/attestations/026-checklist-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:7eaa4dd021ea06721817c9720805e942d73c5f5fd6ffea544816047dede81c81",
+          "provenance": "current-generation",
+          "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-4.terminal.json",
+          "step_execution_id": "se-2332cf57493ae5ee5408ada0770cf60ff9bff14558143502a6a9775b22b07735",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-000251bc9b2826df682b59d7380aff7847de80974c1e683b23df35658ee69cd5"
+        }
+      ],
+      "converge": [
+        {
+          "attempt_id": "converge-1",
+          "attestation": ".grill/attestations/026-converge.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+          "step_execution_id": "se-0e34dea2e3fe4686cf5d5d49efabaae1b08bc2a4f30425452f8a189501810e15",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-b64ee031e7e9d0bd2a8f6ed47c265f7db57718b80e8650264ec393ac55c43d03"
+        },
+        {
+          "attempt_id": "converge-2",
+          "attestation": ".grill/attestations/026-converge-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-2.terminal.json",
+          "step_execution_id": "se-b64ee031e7e9d0bd2a8f6ed47c265f7db57718b80e8650264ec393ac55c43d03",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-c7dbf8d85715f60b222f4a37138f4b05f059580b5807811984752ca15aad2e6f"
+        },
+        {
+          "attempt_id": "converge-3",
+          "attestation": ".grill/attestations/026-converge-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2",
+          "provenance": "current-generation",
+          "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-3.terminal.json",
+          "step_execution_id": "se-c7dbf8d85715f60b222f4a37138f4b05f059580b5807811984752ca15aad2e6f",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-db2d7b98ee4cf71172858f9562a7edb518f150ba5bc21b907e5a5263f63c6e29"
+        }
+      ],
+      "implement-parallel": [
+        {
+          "attempt_id": "implement-parallel-1",
+          "attestation": ".grill/attestations/026-implement.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "re-atestacao apos a supersessao a montante: o artefato nao mudou, mudou o predecessor sobre o qual ele repousa",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+          "step_execution_id": "se-034d29d857a8c1e84dd71e690102f19ed442b4ff6c828966394b7a835ba016a0",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-a59308174f2eeae34d98cbebae09243d44c55240c2a383480d058dd560711dec"
+        },
+        {
+          "attempt_id": "implement-parallel-2",
+          "attestation": ".grill/attestations/026-implement-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-2.terminal.json",
+          "step_execution_id": "se-a59308174f2eeae34d98cbebae09243d44c55240c2a383480d058dd560711dec",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-98da96f4cc628ba361f2db7510bc936177431e41c97dee6386d5f59b9000f33e"
+        },
+        {
+          "attempt_id": "implement-parallel-3",
+          "attestation": ".grill/attestations/026-implement-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-3.terminal.json",
+          "step_execution_id": "se-98da96f4cc628ba361f2db7510bc936177431e41c97dee6386d5f59b9000f33e",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-73f139ab4763d140c3b9dbf710dd970b913e931c6900d594c5fe6264bd2a55be"
+        },
+        {
+          "attempt_id": "implement-parallel-4",
+          "attestation": ".grill/attestations/026-implement-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-4.terminal.json",
+          "step_execution_id": "se-73f139ab4763d140c3b9dbf710dd970b913e931c6900d594c5fe6264bd2a55be",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-2ca317ef89c5fd3797c6476ab62d64129c274be8badf25894cbe988c307eb07b"
+        },
+        {
+          "attempt_id": "implement-parallel-5",
+          "attestation": ".grill/attestations/026-implement-r5.json",
+          "execution_round": 5,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-5.terminal.json",
+          "step_execution_id": "se-2ca317ef89c5fd3797c6476ab62d64129c274be8badf25894cbe988c307eb07b",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-c1151ec85bc615b040e5560a558fc0bd667dd4ff045f86c7d144970e999ead5e"
+        }
+      ],
+      "partition": [
+        {
+          "attempt_id": "partition-1",
+          "attestation": ".grill/attestations/026-partition.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "re-atestacao apos a supersessao a montante: o artefato nao mudou, mudou o predecessor sobre o qual ele repousa",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+          "step_execution_id": "se-c80d92dc7dd4800cb808de5e594b9774a0e2579ac5d7366415fbc08aac78aad0",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-21b36d36d2ff9b12c67c43c70f902c175b6f2a905ccb5093a386add7a1a516d7"
+        },
+        {
+          "attempt_id": "partition-2",
+          "attestation": ".grill/attestations/026-partition-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-2.terminal.json",
+          "step_execution_id": "se-21b36d36d2ff9b12c67c43c70f902c175b6f2a905ccb5093a386add7a1a516d7",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-7048703ee2f505579e8eaded6654da5f0f49690c47b2c49a07b8bfc75717651d"
+        },
+        {
+          "attempt_id": "partition-3",
+          "attestation": ".grill/attestations/026-partition-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-3.terminal.json",
+          "step_execution_id": "se-7048703ee2f505579e8eaded6654da5f0f49690c47b2c49a07b8bfc75717651d",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-d10152c27a55346ce9de87b3339f3b74b0dd6d2ec16d94caba5eb43fc514bd60"
+        },
+        {
+          "attempt_id": "partition-4",
+          "attestation": ".grill/attestations/026-partition-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-4.terminal.json",
+          "step_execution_id": "se-d10152c27a55346ce9de87b3339f3b74b0dd6d2ec16d94caba5eb43fc514bd60",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-9367c769f3872ef21d9e561a444815a62097ef7ad8873f8eab4cfe28d84b8257"
+        },
+        {
+          "attempt_id": "partition-5",
+          "attestation": ".grill/attestations/026-partition-r5.json",
+          "execution_round": 5,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-5.terminal.json",
+          "step_execution_id": "se-9367c769f3872ef21d9e561a444815a62097ef7ad8873f8eab4cfe28d84b8257",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-fafb3b87ae40c86d91fbb9d696f77d5dc8e9f8d67ab776f7e4fdbe8f60e418eb"
+        }
+      ],
+      "plan": [
+        {
+          "attempt_id": "plan-1",
+          "attestation": ".grill/attestations/026-plan.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:ab0ca227fc05ac9148b907eddab900d0dca17d7320ba4414859890d40f87c624",
+          "provenance": "current-generation",
+          "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+          "step_execution_id": "se-c78953aa072ca5f0ac8429330bb05e153ed3b3b991ca20dadf26415f51e4ab33",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-8db81cdb15f7e133d1dc0f3172df6770f4fff9c82e33b1fe749948076271e36c"
+        },
+        {
+          "attempt_id": "plan-2",
+          "attestation": ".grill/attestations/026-plan-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:32542c5681af1b954a3492f45dcdd749d712510e7113d090e168816bcb3c8d6d",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
+          "step_execution_id": "se-8db81cdb15f7e133d1dc0f3172df6770f4fff9c82e33b1fe749948076271e36c",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-cfb5309e368141309628eab8be782a4d667aea0d5a58f0203aff6160c2c6f853"
+        },
+        {
+          "attempt_id": "plan-3",
+          "attestation": ".grill/attestations/026-plan-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-3.terminal.json",
+          "step_execution_id": "se-cfb5309e368141309628eab8be782a4d667aea0d5a58f0203aff6160c2c6f853",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-aa97935657191f7373745590cf06f0a21c332d051148aa834c4efb36b4b10037"
+        },
+        {
+          "attempt_id": "plan-4",
+          "attestation": ".grill/attestations/026-plan-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:84db952325b9f34dc32d12f6abb4aa84f93e98f01586d269c96f3ea94ccf0c55",
+          "provenance": "current-generation",
+          "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-4.terminal.json",
+          "step_execution_id": "se-aa97935657191f7373745590cf06f0a21c332d051148aa834c4efb36b4b10037",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-27e5f0a31d4374f1e6c854304455d39461dd79080c14161630abfea91e34bfde"
+        }
+      ],
+      "review": [
+        {
+          "attempt_id": "review-1",
+          "attestation": ".grill/attestations/026-review.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:2cbad852a91fdff014d7da2e24b52303cff0acf8b6ec97214572a95a9b48e225",
+          "provenance": "current-generation",
+          "reason": "quarta rodada de review: APPROVE, cobrindo tambem FR-028; um Nit novo sobre content_sha256 da autorizacao",
+          "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+          "step_execution_id": "se-737158b9e6792f8335ab85bbe62a763879dd2d5211384511ea27c656895cc1e9",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-cd3985620598e65a7e215cf8448ce22602c98848b26ded5dff1795f52fbd9387"
+        },
+        {
+          "attempt_id": "review-2",
+          "attestation": ".grill/attestations/026-review-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:5d7365683e5b16518afbe9436de017a367e44a77eafbc7101b5903e1c286557b",
+          "provenance": "current-generation",
+          "reason": "quinta rodada Codex: APPROVE; delta material zero, somente sidecar T022",
+          "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
+          "step_execution_id": "se-cd3985620598e65a7e215cf8448ce22602c98848b26ded5dff1795f52fbd9387",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-edf26a98eed83716204a990b898906cfe397207a228e6ae0d8bd9e7e4834f943"
+        }
+      ],
+      "specify": [
+        {
+          "attempt_id": "specify-1",
+          "attestation": ".grill/attestations/026-specify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:0d4279051c4038c8b76fbc66b102dfdbbf6a6ab05df1df461eaef26bc50e8fb9",
+          "provenance": "current-generation",
+          "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+          "step_execution_id": "se-0ab2cd5da5f72d53b58fc850f3a0fdf5dac4bc7ac7f9b1ef5cace4e9eb08bdb9",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-329b4bc57f61b0d08be712331a1b857bd32bec2d1dcef08d00a887ea4663678e"
+        },
+        {
+          "attempt_id": "specify-2",
+          "attestation": ".grill/attestations/026-specify-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:a8cf278b600ae69b479e0511c36f6065c20504b463c5ac43ed17de5b94949c83",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
+          "step_execution_id": "se-329b4bc57f61b0d08be712331a1b857bd32bec2d1dcef08d00a887ea4663678e",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-72fd3bd19e7188c72214131b441296ddf407038a577966d8e54b9c028baa816e"
+        },
+        {
+          "attempt_id": "specify-3",
+          "attestation": ".grill/attestations/026-specify-r4.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:a674f1ff4d7b8b06188f3f351cfc243bbe7532e51f7e1274d814b6d3e4598247",
+          "provenance": "current-generation",
+          "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-3.terminal.json",
+          "step_execution_id": "se-72fd3bd19e7188c72214131b441296ddf407038a577966d8e54b9c028baa816e",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-d60cacdf705fd15778db16f717081d2cd4d540d64d1f8ae4bdf4a3d5f2cfca1d"
+        }
+      ],
+      "tasks": [
+        {
+          "attempt_id": "tasks-1",
+          "attestation": ".grill/attestations/026-tasks.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:9d27185f993515d14aad1f49d41c584f79373ea13658691ef845782c4b9838d2",
+          "provenance": "current-generation",
+          "reason": "tasks.md corrigido apos o selo: T011 citava resolve_shipped_workflow_skills com o nome errado e as tarefas T020/T021 foram acrescentadas",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+          "step_execution_id": "se-f0a117d4cd199217dc1b036502a5ec4f9059b479425f54316266036005bda314",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-d4631af29268934be441f3f0219ad401c449d8891a4d88b1ebbaa72807d933fc"
+        },
+        {
+          "attempt_id": "tasks-2",
+          "attestation": ".grill/attestations/026-tasks-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:6965d9e6f0e919152fa4df951799ca405d2162cf5d0b78d0e8dc6593035bc8a5",
+          "provenance": "current-generation",
+          "reason": "convergencia da fase 5: spec, plan, contrato de emissao e tasks.md atualizados; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
+          "step_execution_id": "se-d4631af29268934be441f3f0219ad401c449d8891a4d88b1ebbaa72807d933fc",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-075788f460c74058dd5fd8bf29127d5ee5d496e437acb422ae958f99ada4e2d9"
+        },
+        {
+          "attempt_id": "tasks-3",
+          "attestation": ".grill/attestations/026-tasks-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:fef00a3d6d0a07fe0bdd3b7596b48dda81c76e522e8215ddce01ba1ef0c69e96",
+          "provenance": "current-generation",
+          "reason": "convergencia final: passadas 2-5 do converge alteraram spec, plan, data-model, quickstart e tasks; re-atestacao em cascata",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-3.terminal.json",
+          "step_execution_id": "se-075788f460c74058dd5fd8bf29127d5ee5d496e437acb422ae958f99ada4e2d9",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-ee2af9dcfd1d2295e3582ef8602585c0e73f319289ba69e666be68e2005ca499"
+        },
+        {
+          "attempt_id": "tasks-4",
+          "attestation": ".grill/attestations/026-tasks-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5",
+          "provenance": "current-generation",
+          "reason": "passadas 6-9 do converge e as tres correcoes do review alteraram spec, plan, contrato, data-model, quickstart e tasks",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-4.terminal.json",
+          "step_execution_id": "se-ee2af9dcfd1d2295e3582ef8602585c0e73f319289ba69e666be68e2005ca499",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-c941023a49a5e992e44f40e48761051636ff1403862d97479bd6739022554516"
+        },
+        {
+          "attempt_id": "tasks-5",
+          "attestation": ".grill/attestations/026-tasks-r5.json",
+          "execution_round": 5,
+          "output_sha256": "sha256:6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2",
+          "provenance": "current-generation",
+          "reason": "entrega da autorizacao humana no attest (FR-028) e Phase 12: spec, contrato, data-model, quickstart e tasks alterados",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-5.terminal.json",
+          "step_execution_id": "se-c941023a49a5e992e44f40e48761051636ff1403862d97479bd6739022554516",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-ecd5753a939c949b17f6cebbd5df310224a90cd9cf0d4927d1ed86b69a6c768f"
+        }
+      ],
+      "verify": [
+        {
+          "attempt_id": "verify-1",
+          "attestation": ".grill/attestations/026-verify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:ec32d1371838e1f677105e55476cbcf97f1857526e3db8e52a60837ec079ab26",
+          "provenance": "current-generation",
+          "reason": "segunda rodada de verify apos as tres correcoes do review: 1298 testes exit 0, distribution OK, fingerprint imovel ao escrever o relatorio",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+          "step_execution_id": "se-37c58a2005763a0aec7647a5bd070b234c0bc6ce5c1269d62db832773d54bd80",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-04a6bce0023cffc2f03817bc4fce56a7f2731c26a46c03ebaa3d9fb377dcc9db"
+        },
+        {
+          "attempt_id": "verify-2",
+          "attestation": ".grill/attestations/026-verify-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:fab3ff771c2a0c41a9e2653822e74951be70e38413531c6f701f5a5d5b1062dd",
+          "provenance": "current-generation",
+          "reason": "terceira rodada de verify: o conserto do comentario moveu a fonte e invalidou o relatorio anterior; gate reexecutado sobre a arvore resultante",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
+          "step_execution_id": "se-04a6bce0023cffc2f03817bc4fce56a7f2731c26a46c03ebaa3d9fb377dcc9db",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-f033c71e7012a236918d5a90b0aeb1bf04f11c4a4ac87a809d0a10fb22d5d4d4"
+        },
+        {
+          "attempt_id": "verify-3",
+          "attestation": ".grill/attestations/026-verify-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:ebe5e862e3bc22c712357aabcf4826de3cd6eaa03b2a56c7163648822d2b5232",
+          "provenance": "current-generation",
+          "reason": "quarta rodada de verify apos FR-028: 1303 testes exit 0, distribution OK",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-3.terminal.json",
+          "step_execution_id": "se-f033c71e7012a236918d5a90b0aeb1bf04f11c4a4ac87a809d0a10fb22d5d4d4",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-fe0e05b4652eb2a07a80010ee203dffb8166a1eca8b180343bac4146f916b8f0"
+        },
+        {
+          "attempt_id": "verify-4",
+          "attestation": ".grill/attestations/026-verify-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:004ff66cbc6d8ee0a05cbbb2cb1f3fb9ece78794e8ba8727799f020b4ebff30f",
+          "provenance": "current-generation",
+          "reason": "quinta rodada: sidecar T022 tardio alterou somente o fingerprint; 1303 testes/27 validadores exit 0",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-4.terminal.json",
+          "step_execution_id": "se-fe0e05b4652eb2a07a80010ee203dffb8166a1eca8b180343bac4146f916b8f0",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-05b2b67da432ce37cbf6a8fff401fde2e72314bec85f296d05cc35e489d3c7e5"
+        }
+      ]
+    },
+    "workflow_version": "v4"
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "blocked",
+  "version": "1.2.0",
+  "work_id": "feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "schema": "v2",
+    "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0"
+  }
+}

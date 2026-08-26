@@ -1,0 +1,50 @@
+{
+  "node_id": "p02-c",
+  "mode": "verify-only",
+  "tasks": [
+    {
+      "id": "T013",
+      "status": "verified",
+      "summary": "Verbo attest implementado em grill_workspace.py: le artefato via safe_read_regular_fd e recusa antes de qualquer escrita quando a classe de execucao nao permite.",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3170 def attest_command",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3198-3200 comentario + attestation.require_leader_allowed(args.step, workflow_version, versions) antes de qualquer leitura/escrita",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3201-3203 hashing via safe_read_regular_fd(root, root / rel) chamado depois da recusa",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3767-3776 attest_parser = subparsers.add_parser('attest') e argumentos --work-id/--step/--artifact/--out/--run-id/--runtime",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3839 attest_command registrado no dispatch de subcomandos"
+      ],
+      "tests": [
+        "tests/validate_attestation_emitter_contract.py::CliRefusesBeforeReading::test_worker_required_step_is_refused_by_the_verb (linha 303) — invoca a CLI real com step worker-required e confirma WORKER_REQUIRED_STEP sem criar o bundle",
+        "tests/validate_attestation_emitter_contract.py::CliRefusesBeforeReading::test_absent_artefact_is_refused_by_the_verb (linha 314) — artefato ausente e recusado como ARTEFACT_UNREADABLE",
+        "tests/validate_step_skill_registry_contract.py — referencia attest_command na tabela de resolucao de skills (linhas 1315, 1402)"
+      ],
+      "findings": []
+    },
+    {
+      "id": "T015",
+      "status": "verified",
+      "summary": "SKILL.md documenta lado a lado o que a cadeia de atestacao prova e o que nao prova, sem eufemismo, incluindo tabela de classe de execucao por etapa.",
+      "evidence": [
+        "plugin/skills/grill-with-docs/SKILL.md:176 heading 'Atestacao: o que um receipt prova, e o que nao prova'",
+        "plugin/skills/grill-with-docs/SKILL.md:183-184 'O que a cadeia prova.' — existencia do artefato, leitura no momento da emissao, correlacao quebrada por alteracao posterior",
+        "plugin/skills/grill-with-docs/SKILL.md:186-191 'O que ela nao prova.' — nao prova que a skill registrada foi executada; declara fora de escopo proveniencia criptografica e defesa contra executor malicioso, sem suavizar a limitacao",
+        "plugin/skills/grill-with-docs/SKILL.md:193-199 tabela 'Quem pode atestar o que' com classes worker-required/leader-allowed e justificativa"
+      ],
+      "tests": [],
+      "findings": [
+        "T015 e documentacao pura (SKILL.md); nao ha teste automatizado que cubra prosa de doc — comportamento correspondente (recusa por classe) e coberto indiretamente pelos testes de T013 citados acima."
+      ]
+    }
+  ],
+  "test_suite": {
+    "command": "python3 tests/run_validators.py",
+    "exit_code": 0,
+    "total_tests": 1270,
+    "validators": 28,
+    "skipped": 1,
+    "failures": 0,
+    "errors": 0,
+    "notes": "1 skip e o mesmo dependente de ambiente ja documentado no CLAUDE.md (validate_workspace_contract.py, alias /var -> /private/var ausente no host)."
+  },
+  "completed": ["T013", "T015"]
+}

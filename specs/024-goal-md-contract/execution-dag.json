@@ -1,0 +1,43 @@
+{
+  "feature": "024-goal-md-contract",
+  "max_workers": 1,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        ".specify/memory/constitution.md",
+        "plugin/skills/grill-with-docs/assets/GOAL.template.md",
+        "plugin/skills/grill-with-docs/scripts",
+        "specs/024-goal-md-contract/contracts/essential-substrings.md",
+        "specs/024-goal-md-contract/contracts/interaction-points.md",
+        "specs/024-goal-md-contract/data-model.md",
+        "specs/024-goal-md-contract/implement/p01-a.tasks.json"
+      ],
+      "id": "p01-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a"
+      ],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/skills/grill-with-docs/assets/GOAL.template.md",
+        "specs/024-goal-md-contract/checklists/contract.md",
+        "specs/024-goal-md-contract/contracts/essential-substrings.md",
+        "specs/024-goal-md-contract/contracts/goal-objective-templates.md",
+        "specs/024-goal-md-contract/contracts/interaction-points.md",
+        "specs/024-goal-md-contract/contracts/stop-signal.md",
+        "specs/024-goal-md-contract/implement/p02-a.tasks.json",
+        "specs/024-goal-md-contract/spec.md",
+        "specs/024-goal-md-contract/tasks.md",
+        "tests/run_validators.py"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v1"
+}

@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v5.0.0
+# Grill with Docs v5.2.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -172,6 +172,85 @@ python3 "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/grill-with-docs/scripts/gr
 ```
 
 O JSON `grill-status/v1` continua sendo o formato padrão da CLI para automações. O Markdown omite somente work items coerentemente fechados. Se não houver pendência, o stdout é exatamente `all good`; caso contrário, é a tabela `Item | Status | Pendência` produzida pelo core.
+
+## Atestação: o que um receipt prova, e o que não prova
+
+Concluir uma etapa exige a cadeia `skill-resolution → dispatch-intent →
+skill-invocation → step-output`. O núcleo agora **cunha** essa cadeia, além de
+julgá-la: até a versão 5.1.0 ele só sabia julgar, e nada no sistema sabia
+produzir — o ciclo inteiro era inalcançável por checkpoint.
+
+**O que a cadeia prova.** Que o artefato declarado existia, que foi lido no
+momento da emissão, e que alterá-lo depois quebra a correlação.
+
+**O que ela não prova.** Que a skill registrada foi executada. Quem conduz a
+etapa pode produzir o artefato por outro meio e declará-lo; a cadeia não
+distingue. Isso não é lacuna a corrigir: proveniência criptográfica e defesa
+contra executor malicioso estão declaradas fora de escopo desde o desenho
+original. A garantia é estrutural por opção, e descrevê-la como mais do que é
+seria a sobre-afirmação que o mecanismo existe para impedir.
+
+**Quem pode atestar o quê.** Cada etapa tem classe de execução declarada por
+versão, em tabela congelada ao lado da ordem canônica:
+
+| Classe | Etapas | Por quê |
+|---|---|---|
+| `worker-required` | `implement-parallel` | O worktree isolado e o grant fechado de arquivos **são** o mecanismo de segurança; um receipt de leader atestaria um isolamento que não houve. |
+| `leader-allowed` | as demais dez | Não têm worker por natureza. A sessão condutora se declara executora, com lease derivado do par run/etapa e `wave_index` zero, que significa "fora de onda". |
+
+Etapa sem classe declarada é recusa nomeada, nunca default permissivo. Uma
+etapa nova exige duas decisões explícitas — posição na sequência e classe — e
+falha fechado até ter as duas.
+
+`worker-required` **não** quer dizer que o worker escreve o receipt: nenhum
+worker escreve receipt de etapa alguma. Quer dizer que o *trabalho* precisa ter
+sido feito por workers despachados, e o leader só emite contra prova disso —
+waves convergidas lidas do estado durável da run, nunca uma flag de quem pede.
+
+**Quando o artefato de uma etapa fechada precisa mudar.** Ele muda por cadeia
+sucessora, nunca por reescrita (ADR-0205). O receipt anterior não é apagado nem
+alterado: o sucessor **nomeia o que substitui** e avança a ronda.
+
+```text
+attest ROOT --work-id ID --step STEP --artifact PATH --out NOVO \
+  --supersedes ANTERIOR
+checkpoint ROOT --work-id ID --step STEP --state complete --evidence PATH \
+  --attestation NOVO --supersedes-attestation ANTERIOR --reason "por quê"
+```
+
+O estado da etapa não se move — `complete` era verdade e continua sendo. Muda
+apenas qual receipt é o corrente e o que ele declara substituir. O bundle
+anterior precisa ser **aquele que o work item aceitou**, provado contra o par
+que o estado gravou na aceitação.
+
+Superseder uma etapa não torna as seguintes erradas: torna-as inverificáveis,
+porque cada uma selou o output que acabou de ser substituído. Elas entram em
+`development.chain_stale`, e tanto `ship` quanto a **virada de fase** recusam com
+`CHAIN-STALE` enquanto a lista não esvaziar. A única saída é atestar cada uma de
+novo, contra o predecessor que agora vale — com o artefato byte-idêntico, se o
+trabalho delas não mudou.
+
+Virar a fase não resolveria a pendência, sobreviveria a ela: a matriz de etapas
+reinicia e a lista não, e a fase seguinte seria recusada no `ship` por pendência
+que não é dela.
+
+**`ship` exige autorização humana.** É a única etapa que exige, e a emissão
+recusa sem ela com `HUMAN_AUTHORIZATION_REQUIRED`:
+
+```text
+attest ROOT --work-id ID --step ship --artifact PATH --out BUNDLE \
+  --authorization .grill/attestations/<doc>.json
+```
+
+O documento é carregado, nunca produzido pela emissão — ele existe antes da
+cadeia. A autorização permite **invocar** a skill registrada; nunca a substitui
+nem autoriza side effect direto.
+
+O bundle substituído é provado contra três valores gravados na aceitação —
+`output_sha256`, `receipt_ref` e o `step_execution_id` de
+`development.attested_executions[step]`. Os dois primeiros não dependem da
+execução: duas cadeias da mesma etapa e do mesmo artefato, diferindo só no índice
+de onda, os carregam idênticos.
 
 ## Auditoria read-only
 

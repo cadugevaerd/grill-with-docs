@@ -216,10 +216,15 @@ class WorkItemV3Contract(unittest.TestCase):
   data=self.document(); self.assertEqual(M.schema_of(data),M.SCHEMA_V2)
   self.assertEqual(M.validate_metadata(data,WORK_ID)['work_id'],WORK_ID)
  def test_tracked_repository_bundles_stay_readable(self):
+  # What this guards is legibility, not a snapshot of which schema the tracked
+  # bundles happen to carry.  Pinning SCHEMA_V2 was true only while no bundle
+  # had migrated; an authorised `migrate-v3` makes a tracked bundle v3 -- the
+  # Gauntlet refuses to activate on anything else -- and the reader must still
+  # read it.  Both managed schemas are accepted; anything else is not.
   bundles=sorted((REPO/'.grill/work-items').glob('*/WORK-ITEM.json')) if (REPO/'.grill/work-items').is_dir() else []
   for bundle in bundles:
    with self.subTest(bundle=bundle.parent.name):
-    self.assertEqual(M.schema_of(M.read_document(bundle)),M.SCHEMA_V2)
+    self.assertIn(M.schema_of(M.read_document(bundle)),(M.SCHEMA_V2,M.SCHEMA_V3))
     self.assertEqual(M.validate_metadata(M.read_document(bundle),bundle.parent.name)['work_id'],bundle.parent.name)
  def test_unknown_schema_is_rejected(self):
   self.rewrite(lambda d:(d.__setitem__('schema','grill-work-item/v4'),d['immutable'].__setitem__('schema','grill-work-item/v4')))

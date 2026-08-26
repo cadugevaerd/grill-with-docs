@@ -1,0 +1,90 @@
+{
+  "node_id": "p02-a",
+  "tasks": {
+    "T008": {
+      "status": "verified",
+      "summary": "dispatch-intent montado por attestation.mint_chain, consumindo step_skills.sha256_jcs para os digests de correlacao e identidade de projeto/work item para os campos de contexto.",
+      "evidence": [
+        {
+          "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+          "lines": "308-351",
+          "note": "dispatch_key(...) usa ss = _step_skills(); return ss.sha256_jcs(fields) sobre os 14 campos canonicos (linha 351)."
+        },
+        {
+          "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+          "lines": "924-972",
+          "note": "mint_chain monta dispatch_payload_sha256 via ss.sha256_jcs, calcula dkey = dispatch_key(...) e monta dispatch_body com project_id/work_item_id/run_id/step_id como campos de contexto (FR-009)."
+        }
+      ],
+      "test": "tests/validate_attestation_emitter_contract.py::MintedChainIsAccepted (setUpClass usa ss.resolve_workflow_skill; test_the_judge_accepts_a_minted_chain exercita o dispatch-intent minted) e tests/validate_attestation_contract.py::* (validate_dispatch_intent, 43 testes) -- todos ok."
+    },
+    "T009": {
+      "status": "verified",
+      "summary": "invocation_started e invocation_terminal montados por mint_chain, correlacionados ao dispatch pelo mesmo skill_invocation_key (ikey).",
+      "evidence": [
+        {
+          "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+          "lines": "938-941",
+          "note": "ikey = ss.skill_invocation_key(project_id, work_item_id, run_id, step_id, recovery_generation_id, plan_revision, resolution_sha, dkey)."
+        },
+        {
+          "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+          "lines": "974-1014",
+          "note": "closure _invocation(status, output_manifest_sha256) usa o mesmo ikey para STARTED e para o status terminal (COMPLETED/FAILED/BLOCKED, via _INVOCATION_STATUS_FOR_RESULT); STARTED usa manifest da lista vazia, terminal usa manifest do artefato real."
+        }
+      ],
+      "test": "tests/validate_attestation_emitter_contract.py::MintedChainIsAccepted::test_the_judge_accepts_a_minted_chain -- o judge so aceita quando invocation_terminal.skill_invocation_key == invocation_started.skill_invocation_key (checado em _check_invocation_binding, attestation.py:599-604)."
+    },
+    "T010": {
+      "status": "verified",
+      "summary": "step-output montado por mint_chain, ancorado em artefact_digest (artefact_sha256 vira output_sha256/evidence_refs) e correlacionado ao receipt de invocacao via skill_invocation_receipt_sha256 = receipt_sha256(invocation_terminal).",
+      "evidence": [
+        {
+          "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+          "lines": "1016-1043",
+          "note": "step_output_body[\"output_sha256\"] = artefact_sha256 (linha 1039); step_output_body[\"skill_invocation_receipt_sha256\"] = receipt_sha256(invocation_terminal) (linha 1026)."
+        },
+        {
+          "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+          "lines": "815-831",
+          "note": "artefact_digest() le os bytes pelo boundary do chamador e devolve (sha256:.., size); usado como origem de artefact_sha256 (FR-010, ADR-0202: nao ha um segundo digest inventado)."
+        }
+      ],
+      "test": "tests/validate_attestation_emitter_contract.py::MintedChainIsAccepted::test_the_step_output_is_anchored_on_the_artefact e ::test_a_different_artefact_mints_a_different_chain -- ambos ok. ArtefactAnchor (6 testes) cobre artefact_digest isoladamente."
+    },
+    "T011": {
+      "status": "verified",
+      "summary": "mint_chain reune os quatro elos no bundle checkpoint-attestation/v1 que judge_checkpoint_attestation aceita; a resolucao e recebida como parametro (nunca recomputada), preenchida pelo chamador via resolve_shipped_workflow_skills (CLI, grill_workspace.py:3220) ou resolve_workflow_skill (teste, validate_attestation_emitter_contract.py:214) -- ambos wrappers finos de step_skills._resolve_workflow_skill, sem reimplementacao.",
+      "evidence": [
+        {
+          "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+          "lines": "1045-1054",
+          "note": "bundle = {schema: CHECKPOINT_ATTESTATION_SCHEMA, resolution, dispatch_intent, invocation_started, invocation_terminal, step_output, catalog}."
+        },
+        {
+          "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+          "lines": "3220-3231, 3279-3303",
+          "note": "CLI resolve via step_skills_module.resolve_shipped_workflow_skills(...) e passa resolution=resolutions[0] para attestation.mint_chain -- nao reconstroi a resolucao a mao."
+        }
+      ],
+      "test": "tests/validate_attestation_emitter_contract.py::MintedChainIsAccepted::test_the_judge_accepts_a_minted_chain -- chama A.judge_checkpoint_attestation(self.chain(), ...) e afirma verdict[\"campaign\"]; passou. tests/validate_attestation_emitter_contract.py::CliRefusesBeforeReading confirma o verbo `attest` fim-a-fim via subprocess (2 testes, ok)."
+    }
+  },
+  "findings": [
+    {
+      "severity": "info",
+      "task": "T011",
+      "description": "O literal da tarefa cita 'step_skills.resolve_workflow_skill' nominalmente. Em producao (grill_workspace.py) o caminho real usa 'resolve_shipped_workflow_skills', a variante em lote -- ambas delegam ao mesmo '_resolve_workflow_skill' privado, entao nao ha reimplementacao (o requisito de fundo esta cumprido). 'resolve_workflow_skill' e chamado diretamente apenas no fixture de teste (linha 214). Divergencia terminologica, sem impacto funcional -- registrado, nao bloqueia."
+    }
+  ],
+  "suite": {
+    "command": "python3 tests/run_validators.py",
+    "exit_code": 0,
+    "total_tests": 1222,
+    "validators": 26,
+    "skipped": 1,
+    "failures": 0,
+    "errors": 0
+  },
+  "completed": ["T008", "T009", "T010", "T011"]
+}
