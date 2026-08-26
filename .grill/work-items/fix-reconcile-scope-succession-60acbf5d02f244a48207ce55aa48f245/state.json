@@ -13,8 +13,267 @@
     "state": "present"
   },
   "development": {
-    "audit": [],
-    "current_step": "specify",
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-ad0f8da40712915c2008b496afd318fff1c94ef7f313ccbe2f6318e506c2c09a",
+      "registry_sha256": "sha256:e3f69871406205b77725b41bf0de0b24d9dbd661c004d502f0ddb49f22209ec1",
+      "run_id": "run-dce0a5f093cd802b34084842",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "analyze": "se-13931aa072b6ef098e7ef58cea5268646b388f12cb6b4a12c0c7f0b0117c2983",
+      "checklist": "se-dc876e77daee5d28b6f1ce265d7b29d483802d5431cd34eea0abbf5941122961",
+      "partition": "se-745453c75541e3dbaf3088082f4cb11f37736079e52ddb66261a7e2c2c16b003",
+      "plan": "se-cf78ecb0ec80629bba927f5999f47064e8849bf8a810755b87555fe64368060d",
+      "specify": "se-e7a926f8b6661101ab6facf9b7aa8d2c3d2685f42f62c0fd733feef501b3e73c",
+      "tasks": "se-a9618128bf1b62e001a918b807b96185c30a078039178064058b280a6cfd1994"
+    },
+    "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:cd922ccb8ed2ee19693831c7512de3b2fcf2dea8f5d010cf9262f51918e53175",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "step_id": "analyze"
+      },
+      "checklist": {
+        "output_sha256": "sha256:2876b38b14be1843b8560ea7743a489bcbab4c4e23d5e968ba6af81b94dc4ed5",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
+        "step_id": "checklist"
+      },
+      "partition": {
+        "output_sha256": "sha256:3f34519e69bf68ad38cc5841883db638c19b784baf7ed24c81841bb5c558664e",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "step_id": "partition"
+      },
+      "plan": {
+        "output_sha256": "sha256:8b3600406194d4a8b014bcc0a48a727e2a30f7f9c5d0aad89f55f26a8d15e3f2",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
+        "step_id": "plan"
+      },
+      "specify": {
+        "output_sha256": "sha256:29f00cb28dd130a4a3b9639b257a511bbe0dbc98b22987f0694512fae8d2276b",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
+        "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:5dacc654495ad53709743355c80de026ba915a9b008cf92517f7e31f663954c1",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
+        "step_id": "tasks"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/spec.md",
+            "sha256": "ecf95959eab61b2c9fd037d809ecdc230843d25816b254c6d1cf3938d8ef103a"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/plan.md",
+            "sha256": "dd1dbdd9b260b77967d16884b8e726771f3b7b8a9d06e7e7928f917d0bc5a1a9"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/checklists/acceptance.md",
+            "sha256": "fa054afc682c7d2eda6dfce1e18378a4387f87344a06acfcd6c7d660980c27c2"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/tasks.md",
+            "sha256": "3beaa3b024a7cbab0d13042551d400d3da0687c2808c7beace10a4a0eb4c8738"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "chain_stale": [
+          "plan",
+          "checklist",
+          "tasks"
+        ],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/spec.md",
+            "sha256": "29f00cb28dd130a4a3b9639b257a511bbe0dbc98b22987f0694512fae8d2276b"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "analyze F1/F3/F4: mecanismo de recusa por caminho, baseline fixado, dependencia nao satisfeita desdobrada em dois codigos",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/specify.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks"
+        ],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/plan.md",
+            "sha256": "8b3600406194d4a8b014bcc0a48a727e2a30f7f9c5d0aad89f55f26a8d15e3f2"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "analyze F2: artefato de coordenador AUDIT.md declarado na estrutura, com a razao de nao entrar em scope.paths",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/plan.json"
+      },
+      {
+        "chain_stale": [
+          "tasks"
+        ],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/checklists/acceptance.md",
+            "sha256": "fa054afc682c7d2eda6dfce1e18378a4387f87344a06acfcd6c7d660980c27c2"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "re-selagem por cascata: predecessores specify e plan foram sucedidos; conteudo da checklist inalterado",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/checklist.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/tasks.md",
+            "sha256": "5dacc654495ad53709743355c80de026ba915a9b008cf92517f7e31f663954c1"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "analyze F1/F4: T006 passa a nomear DEPENDENCY-MISSING e DEPENDENCY-NOT-RECONCILED por caminho e a nao cobrar ciclo do targeted",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/tasks.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/analysis.md",
+            "sha256": "cd922ccb8ed2ee19693831c7512de3b2fcf2dea8f5d010cf9262f51918e53175"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/execution-dag.json",
+            "sha256": "3f34519e69bf68ad38cc5841883db638c19b784baf7ed24c81841bb5c558664e"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "complete",
+        "step": "partition"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/checklists/acceptance.md",
+            "sha256": "2876b38b14be1843b8560ea7743a489bcbab4c4e23d5e968ba6af81b94dc4ed5"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "preflight implement-parallel: 43/44 aprovados, CHK025 aceito como divida declarada por decisao humana no gate CHECKLIST-INCOMPLETE",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/checklist-r2.json"
+      }
+    ],
+    "chain_stale": [
+      "tasks",
+      "analyze",
+      "partition"
+    ],
+    "current_step": "implement-parallel",
+    "execution_branch": "fix/reconcile-scope-succession",
     "renamed_from": {},
     "schema": "grill-development/v2",
     "sequence": [
@@ -31,17 +290,87 @@
       "ship"
     ],
     "steps": {
-      "analyze": "pending",
-      "checklist": "pending",
+      "analyze": "complete",
+      "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
-      "partition": "pending",
-      "plan": "pending",
+      "partition": "complete",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
-      "tasks": "pending",
+      "specify": "complete",
+      "tasks": "complete",
       "verify": "pending"
+    },
+    "superseded_outputs": {
+      "checklist": [
+        {
+          "attempt_id": "checklist-1",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/checklist.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:fa054afc682c7d2eda6dfce1e18378a4387f87344a06acfcd6c7d660980c27c2",
+          "provenance": "current-generation",
+          "reason": "re-selagem por cascata: predecessores specify e plan foram sucedidos; conteudo da checklist inalterado",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+          "step_execution_id": "se-a7fece1aeff384cf7d3f0e5e3c89265cb7915a63a75a530a36301abf6abfe111",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-0d4583e90461047345dd5f0bcb3886f430f247099a95ee4c55246c074275621c"
+        },
+        {
+          "attempt_id": "checklist-2",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/checklist-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:fa054afc682c7d2eda6dfce1e18378a4387f87344a06acfcd6c7d660980c27c2",
+          "provenance": "current-generation",
+          "reason": "preflight implement-parallel: 43/44 aprovados, CHK025 aceito como divida declarada por decisao humana no gate CHECKLIST-INCOMPLETE",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-2.terminal.json",
+          "step_execution_id": "se-0d4583e90461047345dd5f0bcb3886f430f247099a95ee4c55246c074275621c",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-dc876e77daee5d28b6f1ce265d7b29d483802d5431cd34eea0abbf5941122961"
+        }
+      ],
+      "plan": [
+        {
+          "attempt_id": "plan-1",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/plan.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:dd1dbdd9b260b77967d16884b8e726771f3b7b8a9d06e7e7928f917d0bc5a1a9",
+          "provenance": "current-generation",
+          "reason": "analyze F2: artefato de coordenador AUDIT.md declarado na estrutura, com a razao de nao entrar em scope.paths",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+          "step_execution_id": "se-d130551f77343b5e4f41028b28b0f1012b0e3d25363b16ff5a1381e9371a801e",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-cf78ecb0ec80629bba927f5999f47064e8849bf8a810755b87555fe64368060d"
+        }
+      ],
+      "specify": [
+        {
+          "attempt_id": "specify-1",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/specify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:ecf95959eab61b2c9fd037d809ecdc230843d25816b254c6d1cf3938d8ef103a",
+          "provenance": "current-generation",
+          "reason": "analyze F1/F3/F4: mecanismo de recusa por caminho, baseline fixado, dependencia nao satisfeita desdobrada em dois codigos",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+          "step_execution_id": "se-0e6fb98fc2976c683030d5a2414d9f306bb02e0b164ffdd825084e6c7cc1f2e6",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-e7a926f8b6661101ab6facf9b7aa8d2c3d2685f42f62c0fd733feef501b3e73c"
+        }
+      ],
+      "tasks": [
+        {
+          "attempt_id": "tasks-1",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/tasks.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:3beaa3b024a7cbab0d13042551d400d3da0687c2808c7beace10a4a0eb4c8738",
+          "provenance": "current-generation",
+          "reason": "analyze F1/F4: T006 passa a nomear DEPENDENCY-MISSING e DEPENDENCY-NOT-RECONCILED por caminho e a nao cobrar ciclo do targeted",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+          "step_execution_id": "se-237852fec391ba74869877745d3be47b97b6829e945689a274088d3da63f0925",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-a9618128bf1b62e001a918b807b96185c30a078039178064058b280a6cfd1994"
+        }
+      ]
     },
     "workflow_version": "v4"
   },
