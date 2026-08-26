@@ -1,7 +1,13 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree 1be6f0949d9cd4544f1d35a95af64b85e514cd3344e675b12794958b8466c51e / work ab7dd9bbd876329b4c01d34a230fad981404e18a71524dbf94ddbe97532570ec / plan 2a8962d6a32f9c09f11057aeba8be817cc6cde901c7a6d31e6c2307e820f9f1a   (gate reports excluded)
+Source fingerprint: tree 55fa1f6f65dfcef1f4d2a4da25d22836110c620db0b37b3b3b51046637595bf8 / work c41b9122785e297411ab55bc1ffec26f7eef2ecc8afd69632652c0734cd23324 / plan 2a8962d6a32f9c09f11057aeba8be817cc6cde901c7a6d31e6c2307e820f9f1a   (gate reports excluded)
+
+Reemissão (cadeia sucessora). O primeiro verify passou sobre tree 1be6f094…; o
+review seguinte devolveu REQUEST CHANGES por I1 e a correção acrescentou sete
+casos ao validador do contrato, movendo o tree para 55fa1f6f…. Nenhum caminho de
+execução mudou — a correção é só cobertura — mas uma mudança de fonte invalida o
+relatório, então ele é reemitido em vez de reaproveitado.
 Converge: CONVERGED
 
 Feature: 025-goal-materialization
@@ -17,7 +23,7 @@ fingerprint acima é o mesmo sha256 que o receipt de atestação do converge fix
 |---|---|---|---|---|
 | tests (suíte canônica) | `python3 tests/run_validators.py` | PASS | exit 0, 27 validadores, todos os blocos `OK`. Ver ressalva em Failures | leader |
 | distribution / bump | `python3 tests/validate_distribution.py` | PASS | `distribution: OK`, exit 0. Versão 5.3.0 idêntica nos oito lugares (SC-008, FR-017) | leader |
-| contrato do goal.md | `python3 tests/validate_goal_document_contract.py` | PASS | `Ran 12 tests ... OK` | leader |
+| contrato do goal.md | `python3 tests/validate_goal_document_contract.py` | PASS | `Ran 19 tests ... OK` (eram 12; +7 do fix de I1) | leader |
 | workspace contract (subset do ci.yml) | `python3 tests/validate_workspace_contract.py WorkspaceV2Contract.test_init_isolates_same_slug_and_never_writes_global ...` | PASS | `Ran 3 tests ... OK` | leader |
 | quickstart (Cenários 1–5) | execução manual em `/tmp`, `GRILL_SKIP_DEPENDENCIES=1` | PASS | 5/5, saída registrada no `CHANGELOG.md` 5.3.0 | leader |
 | lint / typecheck / format | — | SKIPPED | O projeto não declara esses gates: `ci.yml` roda apenas `run_validators.py` e o subset acima. Core é stdlib-only, sem linter configurado | leader |
@@ -41,6 +47,18 @@ Os Cenários 1–5 do quickstart têm suporte de teste no validador novo:
 `compatible`/`managed_version`, remoção item-a-item de `ESSENTIAL` nomeando o ausente,
 ordem trocada, conteúdo extra, vazio, destino-diretório, ramo de colisão do `os.link`, e a
 asserção de que `WORK-ITEM.json` não carrega bloco `goal`.
+
+### Cobertura acrescentada após o primeiro verify (review I1)
+
+`resolve_goal` passou a ter teste de regressão para os três `reason` de `PRESERVED`
+(`human document`, `managed version mismatch`, `incompatible goal`), para arquivo vazio,
+para symlink com o alvo verificado intacto, para `invalid UTF-8 goal` e para o exit 2 do CLI.
+Cada caso de `PRESERVED` compara `sha256` antes/depois e exige que a raiz contenha
+exatamente `goal.md` — sem `.bak`, sem cópia, sem rename.
+
+Prova de mutação, não só suíte verde: trocando o ramo `PRESERVED` por uma sobrescrita,
+4 dos novos casos reprovam; restaurado o código, 19/19 `OK`. Antes deste fix, esse mesmo
+defeito passaria despercebido.
 
 ### Failures / Blockers
 
