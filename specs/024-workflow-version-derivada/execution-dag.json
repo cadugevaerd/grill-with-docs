@@ -32,7 +32,13 @@
       ],
       "files": [
         "specs/024-workflow-version-derivada/implement/p02-b.tasks.json",
-        "tests/fixtures"
+        "tests/fixtures/workflow-marker-matrix/duplicate-distinct/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/duplicate-same/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/none/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/unknown-v9/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/v2/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/v3/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/v4/WORKFLOW.md"
       ],
       "id": "p02-b",
       "parallel": true,
@@ -57,7 +63,10 @@
         "p02-c"
       ],
       "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/024-workflow-version-derivada/contracts/cli.md",
         "specs/024-workflow-version-derivada/implement/p03-a.tasks.json",
+        "tests/validate_checkpoint_contract.py",
         "tests/validate_workspace_contract.py"
       ],
       "id": "p03-a",
@@ -71,9 +80,9 @@
         "p02-c"
       ],
       "files": [
-        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
-        "specs/024-workflow-version-derivada/contracts/cli.md",
-        "specs/024-workflow-version-derivada/implement/p03-b.tasks.json"
+        "plugin/skills/grill-with-docs/scripts/grill_status.py",
+        "specs/024-workflow-version-derivada/implement/p03-b.tasks.json",
+        "tests/validate_status_contract.py"
       ],
       "id": "p03-b",
       "parallel": true,
@@ -88,7 +97,8 @@
       "files": [
         "plugin/skills/grill-with-docs/assets/state.template.json",
         "specs/024-workflow-version-derivada/implement/p03-c.tasks.json",
-        "tests/validate_status_contract.py"
+        "tests/validate_gauntlet_converge_contract.py",
+        "tests/validate_gauntlet_scheduler_contract.py"
       ],
       "id": "p03-c",
       "parallel": true,
@@ -102,6 +112,7 @@
       ],
       "files": [
         "specs/024-workflow-version-derivada/implement/p04-a.tasks.json",
+        "tests/fixtures/workflow-marker-matrix/duplicate-same/WORKFLOW.md",
         "tests/validate_workspace_contract.py"
       ],
       "id": "p04-a",
@@ -179,14 +190,24 @@
         "plugin/skills/grill-with-docs/references/session-protocol.md",
         "plugin/skills/grill-with-docs/scripts/audit_decisions.py",
         "plugin/skills/grill-with-docs/scripts/ensure_workflow.py",
+        "plugin/skills/grill-with-docs/scripts/grill_status.py",
         "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
         "specs/024-workflow-version-derivada/baseline-fleet.txt",
         "specs/024-workflow-version-derivada/baseline.md",
         "specs/024-workflow-version-derivada/contracts/cli.md",
         "specs/024-workflow-version-derivada/implement/p06-serial.tasks.json",
-        "tests/fixtures",
+        "tests/fixtures/workflow-marker-matrix/duplicate-distinct/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/duplicate-same/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/none/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/unknown-v9/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/v2/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/v3/WORKFLOW.md",
+        "tests/fixtures/workflow-marker-matrix/v4/WORKFLOW.md",
         "tests/run_validators.py",
+        "tests/validate_checkpoint_contract.py",
         "tests/validate_distribution.py",
+        "tests/validate_gauntlet_converge_contract.py",
+        "tests/validate_gauntlet_scheduler_contract.py",
         "tests/validate_status_contract.py",
         "tests/validate_workflow_v3_contract.py",
         "tests/validate_workspace_contract.py"

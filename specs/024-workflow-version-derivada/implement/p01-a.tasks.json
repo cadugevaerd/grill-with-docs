@@ -1,0 +1,98 @@
+{
+  "node_id": "p01-a",
+  "work_id": "fix-audit-workflow-version-2a9e7a7ba01f42dcb24b3bb83d801b03",
+  "run_id": "run-9dc83b33c8caf359c612ac62",
+  "wave_id": "wave-0001",
+  "tasks": [
+    {
+      "id": "T001",
+      "status": "completed",
+      "summary": "Linha de base da suíte capturada em specs/024-workflow-version-derivada/baseline.md, rodando tests/run_validators.py sob python3 diretamente (sem pipe) a partir da raiz do worktree.",
+      "artifacts": [
+        "specs/024-workflow-version-derivada/baseline.md"
+      ],
+      "result": {
+        "exit_code": 1,
+        "validators_registered": 26,
+        "validators_started": 22,
+        "validators_passed": 21,
+        "validators_failed": 1,
+        "validators_not_reached": 4,
+        "tests_total": 1077,
+        "skips_total": 0,
+        "failing_validator": "validate_work_item_v3_contract.py",
+        "failing_test": "WorkItemV3Contract.test_tracked_repository_bundles_stay_readable",
+        "notes": "tests/run_validators.py é fail-fast; para no primeiro validador com returncode != 0 e propaga esse código. A falha observada é real e reproduzível (confirmada em duas execuções independentes): o bundle rastreado deste próprio work item está gravado com schema grill-work-item/v3, mas o teste espera grill-work-item/v2 para bundles rastreados. T001 só captura e registra a linha de base — não corrige."
+      }
+    },
+    {
+      "id": "T001-reconfirm",
+      "status": "completed",
+      "summary": "Reconfirmação da medição vigente de baseline.md (seção 'Superada em 2026-08-24') contra a base 516370c, nesta run. Não reescreve o registro original de T001, que documenta o estado fail-fast anterior à correção 55e1ec1.",
+      "run_id": "run-d14b5a3163cb94301fa29292",
+      "artifacts": [
+        "specs/024-workflow-version-derivada/baseline.md"
+      ],
+      "result": {
+        "base_commit": "516370c79fd171fa59c15569ed60fc928911a4f9",
+        "exit_code": 0,
+        "validators_registered": 26,
+        "validators_started": 26,
+        "tests_total": 1239,
+        "failures_total": 0,
+        "errors_total": 0,
+        "skips_total": 1,
+        "matches_current_baseline_table": true,
+        "notes": "Suíte excedeu a janela de foreground de 300s e foi movida para background pela harness (não por escolha do worker); output redirecionado a /tmp/suite-p01a-r2.log. Exit code lido diretamente de 'echo exit=$?' capturado no output do comando em background — nunca de um pipe. Contagens (validadores, soma de 'Ran N tests', FAILED/ERROR, OK, skipped=) verificadas de forma independente sobre o log antes do registro."
+      }
+    },
+    {
+      "id": "T001-reopen",
+      "status": "completed",
+      "summary": "Nó reaberto em run nova sem refazer a medição. T001 já estava feita e mergeada na base (2aaad8b), com baseline.md contendo a medição vigente (exit 0, 26 validadores, 1239 testes, 1 skip). Nenhum comando de suíte foi executado neste registro.",
+      "run_id": "run-5f68d0d5860ec88e8e93d60f",
+      "wave_id": "wave-0001",
+      "artifacts": [
+        "specs/024-workflow-version-derivada/baseline.md"
+      ],
+      "result": {
+        "base_commit": "2aaad8b",
+        "measurement_reused": true,
+        "reason": "DAG mudou nesta run: T010 ganhou a derivação de development.sequence e T018-T021 foram reescritas. O gauntlet exige run nova quando o DAG muda, e run nova reabre todos os nós — inclusive os já concluídos e mergeados. Reabertura é apenas administrativa: confirma que baseline.md já existe com a medição vigente e não dispara nova execução de tests/run_validators.py.",
+        "known_state": "Suíte está vermelha nesta base de propósito: validate_checkpoint_contract.py tem ~25 falhas DEVELOPMENT-SCHEMA porque a derivação de development.sequence (T010) ainda não foi implementada em outro nó."
+      }
+    },
+    {
+      "id": "T001-reopen-r4",
+      "status": "completed",
+      "summary": "Nó reaberto pela terceira vez (run-278c62419af02e24557b1efb) sem refazer a medição. T001 já estava feita e mergeada na base (42b5c96), com baseline.md contendo a medição vigente (exit 0, 26 validadores, 1239 testes, 1 skip). Nenhum comando de suíte foi executado neste registro.",
+      "run_id": "run-278c62419af02e24557b1efb",
+      "wave_id": "wave-0001",
+      "artifacts": [
+        "specs/024-workflow-version-derivada/baseline.md"
+      ],
+      "result": {
+        "base_commit": "42b5c96",
+        "measurement_reused": true,
+        "reason": "DAG mudou pela terceira vez nesta run: T030 foi acrescentada (dessalgar a sequência fixada nos testes preexistentes v4, atribuída ao nó p03-a). O gauntlet exige run nova quando o DAG muda, e run nova reabre todos os nós -- inclusive os já concluídos e mergeados. Reabertura é apenas administrativa: confirma que baseline.md já existe com a medição vigente e não dispara nova execução de tests/run_validators.py.",
+        "known_state": "Suíte está vermelha nesta base de propósito: 10 falhas remanescentes (2 em validate_checkpoint_contract.py, 8 nos testes de phase-turn de validate_workspace_contract.py), todas por testes preexistentes que fixam a sequência v4 como literal. A correção é T030, ainda por vir neste nó (p03-a) -- este worker (p01-a) não a executa."
+      }
+    },
+    {
+      "id": "T001-reopen-r5",
+      "status": "completed",
+      "summary": "Nó reaberto pela quarta vez (run-3bc97179f5d1375355d7d102) sem refazer a medição. T001 já estava feita e mergeada na base (a5890fe), com baseline.md contendo a medição vigente (exit 0, 26 validadores, 1239 testes, 1 skip). Nenhum comando de suíte foi executado neste registro.",
+      "run_id": "run-3bc97179f5d1375355d7d102",
+      "wave_id": "wave-0001",
+      "artifacts": [
+        "specs/024-workflow-version-derivada/baseline.md"
+      ],
+      "result": {
+        "base_commit": "a5890fe",
+        "measurement_reused": true,
+        "reason": "DAG mudou pela quarta vez nesta run: T031, T032 e T033 foram acrescentadas. O gauntlet exige run nova quando o DAG muda, e run nova reabre todos os nós -- inclusive os já concluídos e mergeados. Reabertura é apenas administrativa: confirma que baseline.md já existe com a medição vigente e não dispara nova execução de tests/run_validators.py.",
+        "known_state": "Suíte está vermelha nesta base de propósito, com fail-fast em validate_gauntlet_converge_contract.py. A correção é T031-T033, de outros nós, ainda por vir -- este worker (p01-a) não a executa."
+      }
+    }
+  ]
+}

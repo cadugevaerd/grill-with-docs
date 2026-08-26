@@ -29,7 +29,7 @@ Autoridade sobre a versão. Project-wide, um por repositório.
 |---|---|---|---|
 | `schema` | `grill-development/v2` | inalterado | — |
 | `workflow_version` | literal `"v4"` do asset, nunca sobrescrito | derivado do marcador, com a equivalência de R3 | `v3 \| v4` |
-| `sequence` | do asset | inalterado nesta fase | — |
+| `sequence` | do asset, sempre a da versão ativa | derivada junto com `workflow_version`, da mesma resolução | tupla da versão derivada |
 
 Responde: **qual sequência este bundle fala.** Domínio menor que o de `workflow.version` porque `SEQUENCE_BY_VERSION` não tem entrada v2.
 
@@ -60,3 +60,4 @@ Nenhuma. Os campos são gravados uma vez, na criação do bundle, e nenhum coman
 | V-2 | `development.workflow_version` pertence a `SEQUENCE_BY_VERSION` | projeção/checkpoint (já existente) |
 | V-3 | Resolução da criação e verificação da auditoria concordam em toda a matriz | teste de paridade |
 | V-4 | Toda equivalência aplicada na derivação é justificada por identidade comprovada das sequências de etapas envolvidas | criação (SC-007) |
+| V-5 | `workflow_version` e `sequence` do bloco `development` declaram a mesma versão; um bundle que declare uma e liste a outra é inválido | criação |

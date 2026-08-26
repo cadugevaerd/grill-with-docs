@@ -1,0 +1,94 @@
+{
+  "node_id": "p02-a",
+  "wave_id": "wave-0002",
+  "run_id": "run-9dc83b33c8caf359c612ac62",
+  "work_id": "fix-audit-workflow-version-2a9e7a7ba01f42dcb24b3bb83d801b03",
+  "tasks": [
+    {
+      "id": "T005",
+      "title": "Adicionar em tests/validate_workflow_v3_contract.py o teste de matriz de sole_managed_version sobre as sete fixtures de T003",
+      "status": "done",
+      "note": "Classe SoleManagedVersionMatrix (test_matrix) itera as sete fixtures de tests/fixtures/workflow-marker-matrix/<case>/WORKFLOW.md (none, v2, v3, v4, duplicate-same, duplicate-distinct, unknown-v9) e compara com EW.sole_managed_version(text)."
+    },
+    {
+      "id": "T006",
+      "title": "Adicionar em tests/validate_workflow_v3_contract.py o teste que fixa a semantica first-match de managed_version",
+      "status": "done",
+      "note": "Classe ManagedVersionFirstMatch cobre: sem marcador -> None; duplicate-same (v4,v4) -> 'v4'; duplicate-distinct (v3 antes de v4) -> 'v3' (prova que eh first-match via re.search, nao 'maior versao' nem 'ultimo match')."
+    },
+    {
+      "id": "T007",
+      "title": "Adicionar em tests/validate_workflow_v3_contract.py o teste de paridade sole_managed_version vs audit_decisions.py",
+      "status": "done",
+      "note": "Classe MarkerParitySSOT compara, para as sete fixtures, sole_managed_version()+ACCEPTED_WORKFLOW_MARKERS contra um mirror de teste (audit_marker_decision, local a este arquivo) da checagem inline de audit_decisions.py (linhas ~359-368: re.findall + markers[0] in ACCEPTED_WORKFLOW_MARKERS). Docstring da classe declara explicitamente que este teste eh o SSOT no lugar do modulo compartilhado recusado em ADR-0002. audit_decisions.py foi apenas lido (grep de ACCEPTED_WORKFLOW_MARKERS e da regex grill-with-docs-workflow:(v\\d+) com findall), nunca modificado."
+    }
+  ],
+  "files_changed": [
+    "tests/validate_workflow_v3_contract.py"
+  ],
+  "files_read_only": [
+    "plugin/skills/grill-with-docs/scripts/audit_decisions.py"
+  ],
+  "verification": {
+    "py_compile": "python3 -m py_compile tests/validate_workflow_v3_contract.py -> exit 0 (verificado nesta wave)",
+    "full_suite": "NAO executada nesta wave, deliberadamente. sole_managed_version (T004/p02-c) e as fixtures tests/fixtures/workflow-marker-matrix/ (T003/p02-b) sao escritas por outros dois workers em worktrees paralelos e nao existem ainda neste worktree. Os testes escritos aqui (SoleManagedVersionMatrix, ManagedVersionFirstMatch, MarkerParitySSOT) so podem passar em verde depois do converge, quando p02-a, p02-b e p02-c forem integrados.",
+    "depends_on_for_green": [
+      "p02-b",
+      "p02-c"
+    ]
+  },
+  "cross_worker_visibility_note": "Os caminhos exatos das fixtures (tests/fixtures/workflow-marker-matrix/{none,v2,v3,v4,duplicate-same,duplicate-distinct,unknown-v9}/WORKFLOW.md) e a assinatura real de sole_managed_version(text) foram confirmados por leitura read-only (git log/git diff/git show) dos branches locais de p02-b e p02-c, ja commitados no momento em que este worker rodou -- nenhum arquivo dessas branches foi copiado, mesclado ou escrito neste worktree. Nenhum merge foi feito; a integracao permanece responsabilidade do converge/leader.",
+  "grant_scope": {
+    "declared": [
+      "tests/validate_workflow_v3_contract.py",
+      "plugin/skills/grill-with-docs/scripts/audit_decisions.py",
+      "specs/024-workflow-version-derivada/implement/p02-a.tasks.json"
+    ],
+    "audit_decisions.py": "presente no grant apenas porque o extrator pegou o caminho citado no texto de T007; lido para escrever o teste de paridade, nunca modificado."
+  },
+  "T005-T007-reopen": {
+    "run_id": "run-5f68d0d5860ec88e8e93d60f",
+    "wave_id": "wave-0002",
+    "node_id": "p02-a",
+    "reason": "Reabertura de trilha em run nova: DAG mudou (T010 e T018-T021 reescritas), gauntlet exige todos os nos reabertos. T005, T006 e T007 ja estavam feitas e mergeadas na base; nao foram reescritas.",
+    "action": "python3 tests/validate_workflow_v3_contract.py",
+    "result": "OK - Ran 56 tests in 8.236s - 0 failures",
+    "classes_confirmed": [
+      "SoleManagedVersionMatrix",
+      "ManagedVersionFirstMatch",
+      "MarkerParitySSOT"
+    ],
+    "files_touched": [],
+    "note": "Suite completa NAO rodada de proposito: base fica vermelha por ~25 falhas DEVELOPMENT-SCHEMA em validate_checkpoint_contract.py (T010, outro no, ainda pendente). Sem relacao com este validador."
+  },
+  "T005-T007-reopen-r4": {
+    "run_id": "run-278c62419af02e24557b1efb",
+    "wave_id": "wave-0002",
+    "node_id": "p02-a",
+    "reason": "Segunda reabertura de trilha: DAG mudou de novo (T030 acrescentada), gauntlet exige run nova com todos os nos reabertos. T005, T006 e T007 seguem feitas e mergeadas na base; nao foram reescritas.",
+    "action": "python3 tests/validate_workflow_v3_contract.py",
+    "result": "OK - Ran 56 tests in 6.095s - 0 failures",
+    "classes_confirmed": [
+      "SoleManagedVersionMatrix",
+      "ManagedVersionFirstMatch",
+      "MarkerParitySSOT"
+    ],
+    "files_touched": [],
+    "note": "Suite completa NAO rodada de proposito, por instrucao do brief: ha 10 falhas remanescentes noutros validadores (sequencia v4 fixada como literal), a corrigir por T030 no no p03-a. Sem relacao com este validador."
+  },
+  "T005-T007-reopen-r5": {
+    "run_id": "run-3bc97179f5d1375355d7d102",
+    "wave_id": "wave-0002",
+    "node_id": "p02-a",
+    "reason": "Terceira reabertura de trilha: DAG mudou (T031-T033 acrescentadas), gauntlet exige run nova com todos os nos reabertos. T005, T006 e T007 seguem feitas e mergeadas na base; nao foram reescritas.",
+    "action": "python3 tests/validate_workflow_v3_contract.py",
+    "result": "OK - Ran 56 tests in 6.310s - 0 failures",
+    "classes_confirmed": [
+      "SoleManagedVersionMatrix",
+      "ManagedVersionFirstMatch",
+      "MarkerParitySSOT"
+    ],
+    "files_touched": [],
+    "note": "Suite completa NAO rodada de proposito: base fica vermelha por design, fail-fast para em validate_gauntlet_converge_contract.py. Correcoes sao T031-T033, de outros nos. Sem relacao com este validador."
+  }
+}

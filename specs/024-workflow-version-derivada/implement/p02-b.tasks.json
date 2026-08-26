@@ -1,0 +1,143 @@
+{
+  "node_id": "p02-b",
+  "wave_id": "wave-0002",
+  "run_id": "run-9dc83b33c8caf359c612ac62",
+  "work_id": "fix-audit-workflow-version-2a9e7a7ba01f42dcb24b3bb83d801b03",
+  "tasks": [
+    {
+      "id": "T003",
+      "title": "Criar as fixtures da matriz de research.md §R5 em tests/fixtures/",
+      "status": "done",
+      "note": "Fixtures materializadas pelo próprio ensure_workflow/workflow_v3/workflow_v4; nenhum WORKFLOW.md foi digitado à mão. Os quatro casos malformados (none, duplicate-same, duplicate-distinct, unknown-v9) foram derivados por edição mecânica (remover/duplicar/substituir a linha do marcador) sobre o documento v4 real materializado, nunca a partir de texto inventado."
+    }
+  ],
+  "fixtures": [
+    {
+      "case": "1 - sem marcador nenhum",
+      "path": "tests/fixtures/workflow-marker-matrix/none/WORKFLOW.md",
+      "sha256": "5fe897fe6f7423c1e0475c3281235dd703bb4dcf90a58b67341ebaddf8b02473",
+      "markers_found": [],
+      "produced_by": "Derivado do WORKFLOW.md v4 real (materializado por ensure_workflow.py --ensure + grill_core/workflow_v4.py migrate --apply). A primeira linha (`<!-- grill-with-docs-workflow:v4 -->`) foi removida com `tail -n +2`; nenhum outro byte do corpo foi alterado."
+    },
+    {
+      "case": "2 - um marcador v2",
+      "path": "tests/fixtures/workflow-marker-matrix/v2/WORKFLOW.md",
+      "sha256": "a723fc6f24e13345d1d2ef8a35dbe875a4262d16f23a83389927c9fa0eb264d4",
+      "markers_found": [
+        "v2"
+      ],
+      "produced_by": "Materializado diretamente: `python3 plugin/skills/grill-with-docs/scripts/ensure_workflow.py --ensure <ROOT-temporario-git-init>` em repositorio Git vazio, sem WORKFLOW.md previo -> status CREATED, version v2. Copia byte-a-byte do arquivo gerado (diff vazio contra o original)."
+    },
+    {
+      "case": "3 - um marcador v3",
+      "path": "tests/fixtures/workflow-marker-matrix/v3/WORKFLOW.md",
+      "sha256": "a89387dda7a8daeb513d83878640c4ed83cca7b4f3dcef566b991dcf89c6d0b8",
+      "markers_found": [
+        "v3"
+      ],
+      "produced_by": "Materializado via pipeline oficial: ensure_workflow.py --ensure cria v2 em ROOT temporario; grill_core/workflow_v3.py migrate ROOT (preview, captura current_sha256); grill_core/workflow_v3.py migrate ROOT --apply --expected-sha256 <sha> (verdict APPLIED, to_version v3, registry_sha256 pinado ao vivo). Copia byte-a-byte do arquivo resultante (diff vazio)."
+    },
+    {
+      "case": "4 - um marcador v4",
+      "path": "tests/fixtures/workflow-marker-matrix/v4/WORKFLOW.md",
+      "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0",
+      "markers_found": [
+        "v4"
+      ],
+      "produced_by": "Materializado via pipeline oficial: ensure_workflow.py --ensure cria v2 em ROOT temporario; grill_core/workflow_v4.py migrate ROOT (preview, captura sha256); grill_core/workflow_v4.py migrate ROOT --apply --expected-sha256 <sha> (verdict APPLIED, to_version v4, registry_sha256 pinado ao vivo do registry v4). Copia byte-a-byte do arquivo resultante (diff vazio)."
+    },
+    {
+      "case": "5 - dois marcadores iguais (v4 duas vezes)",
+      "path": "tests/fixtures/workflow-marker-matrix/duplicate-same/WORKFLOW.md",
+      "sha256": "40e6a56314f33b7b2161730ab80def9b281eda60bb4de77246bbfa0ad710b828",
+      "markers_found": [
+        "v4",
+        "v4"
+      ],
+      "produced_by": "Derivado do WORKFLOW.md v4 real: a linha 1 (marcador) foi duplicada -- inserida uma segunda copia idêntica logo apos a original, corpo inalterado a partir da linha 2. Nenhum texto novo foi inventado, apenas repeticao mecanica da linha real."
+    },
+    {
+      "case": "6 - dois marcadores distintos (v3 e v4)",
+      "path": "tests/fixtures/workflow-marker-matrix/duplicate-distinct/WORKFLOW.md",
+      "sha256": "8ee63752955cb30ba3a0a296d037d6ec615b64bb396e3f9126ba1e0db59657e3",
+      "markers_found": [
+        "v3",
+        "v4"
+      ],
+      "produced_by": "Derivado do WORKFLOW.md v4 real: a linha-marcador real do v3 materializado (`<!-- grill-with-docs-workflow:v3 -->`) foi inserida antes da linha-marcador v4, corpo do v4 inalterado a partir da linha 2. As duas linhas de marcador sao bytes reais extraidos dos dois documentos materializados, nao texto inventado."
+    },
+    {
+      "case": "7 - um marcador unico porem desconhecido (v9)",
+      "path": "tests/fixtures/workflow-marker-matrix/unknown-v9/WORKFLOW.md",
+      "sha256": "2db07d6bf7eac641dbcea11e6a74b019d5668d97d7e2cb2a8050c0d33eb62311",
+      "markers_found": [
+        "v9"
+      ],
+      "produced_by": "Derivado do WORKFLOW.md v4 real: apenas o token de versao na linha-marcador foi substituido (`workflow:v4` -> `workflow:v9`, via sed restrito a essa unica linha); todo o resto do documento, incluindo o corpo v4 completo, permanece byte-identico ao materializado. `v9` nao pertence a ACCEPTED_WORKFLOW_MARKERS."
+    }
+  ],
+  "provenance_scripts": [
+    "plugin/skills/grill-with-docs/scripts/ensure_workflow.py --ensure <root>",
+    "plugin/skills/grill-with-docs/scripts/grill_core/workflow_v3.py migrate <root> [--apply --expected-sha256 <sha>]",
+    "plugin/skills/grill-with-docs/scripts/grill_core/workflow_v4.py migrate <root> [--apply --expected-sha256 <sha>]"
+  ],
+  "notes": [
+    "Materializacao feita em repositorios Git temporarios sob o scratchpad da sessao (fora da arvore do repositorio), nunca sob tests/fixtures/ diretamente, para nao deixar `.git` real dentro da fixture.",
+    "Confirmado por grep que cada documento real materializado (v2, v3, v4) contem exatamente 1 ocorrencia de `grill-with-docs-workflow:v\\d+` antes de qualquer derivacao.",
+    "Casos 2/3/4 sao copia byte-a-byte do artefato real (diff vazio contra o WORKFLOW.md materializado); casos 1/5/6/7 sao edicao mecanica desse mesmo artefato real (remover, duplicar ou trocar apenas a linha do marcador), nunca texto digitado a mao.",
+    "Nao toquei tasks.md, .grill/ nem .specify/reports/. Nao criei nenhum teste (T004-T007 sao de outro worker, fora deste escopo)."
+  ],
+  "reopen_log": [
+    {
+      "event": "T003-reopen",
+      "run_id": "run-5f68d0d5860ec88e8e93d60f",
+      "wave_id": "wave-0002",
+      "node_id": "p02-b",
+      "detail": "No re-fez fixtures. Reabertura de trilha em run nova (DAG mudou: T010 e T018-T021 reescritas; gauntlet exige todos os nos reabertos). Confirmadas as 7 fixtures existentes em tests/fixtures/workflow-marker-matrix/ com grep -c 'grill-with-docs-workflow:v'.",
+      "marker_counts_observed": {
+        "none": 0,
+        "v2": 1,
+        "v3": 1,
+        "v4": 1,
+        "duplicate-same": 2,
+        "duplicate-distinct": 2,
+        "unknown-v9": 1
+      },
+      "matches_expected": true
+    },
+    {
+      "event": "T003-reopen-r4",
+      "run_id": "run-278c62419af02e24557b1efb",
+      "wave_id": "wave-0002",
+      "node_id": "p02-b",
+      "detail": "Reabertura de trilha em run nova (DAG mudou: T030 acrescentada; gauntlet exige todos os nos reabertos). NAO refiz as fixtures. Confirmadas as 7 fixtures existentes em tests/fixtures/workflow-marker-matrix/ com grep -c 'grill-with-docs-workflow:v'. Base vermelha de proposito (10 falhas preexistentes que fixam a sequencia v4 como literal; correcao e T030 do no p03-a, ainda por vir) -- nao rodei a suite inteira e nao consertei nada.",
+      "marker_counts_observed": {
+        "none": 0,
+        "v2": 1,
+        "v3": 1,
+        "v4": 1,
+        "duplicate-same": 2,
+        "duplicate-distinct": 2,
+        "unknown-v9": 1
+      },
+      "matches_expected": true
+    },
+    {
+      "event": "T003-reopen-r5",
+      "run_id": "run-3bc97179f5d1375355d7d102",
+      "wave_id": "wave-0002",
+      "node_id": "p02-b",
+      "detail": "Reabertura de trilha em run nova (DAG mudou: T031-T033 acrescentadas; gauntlet exige todos os nos reabertos). NAO refiz as fixtures. Confirmadas as 7 fixtures existentes em tests/fixtures/workflow-marker-matrix/ com grep -c 'grill-with-docs-workflow:v'. Base vermelha de proposito, fail-fast para em validate_gauntlet_converge_contract.py; correcoes sao T031-T033 de outros nos -- nao rodei a suite inteira e nao consertei nada.",
+      "marker_counts_observed": {
+        "none": 0,
+        "v2": 1,
+        "v3": 1,
+        "v4": 1,
+        "duplicate-same": 2,
+        "duplicate-distinct": 2,
+        "unknown-v9": 1
+      },
+      "matches_expected": true
+    }
+  ]
+}

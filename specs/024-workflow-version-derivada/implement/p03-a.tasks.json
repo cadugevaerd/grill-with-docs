@@ -1,0 +1,144 @@
+{
+  "node_id": "p03-a",
+  "work_id": "fix-audit-workflow-version-2a9e7a7ba01f42dcb24b3bb83d801b03",
+  "run_id": "run-278c62419af02e24557b1efb",
+  "wave_id": "wave-0003",
+  "tasks": [
+    {
+      "id": "T012",
+      "status": "completed",
+      "summary": "test_init_writes_v3_from_v3_document em tests/validate_workspace_contract.py: init sobre documento tests/fixtures/workflow-marker-matrix/v3/WORKFLOW.md deve gravar development.workflow_version == \"v3\" (FR-001, FR-002, SC-001).",
+      "artifacts": [
+        "tests/validate_workspace_contract.py"
+      ],
+      "result": {
+        "py_compile": "ok",
+        "runtime_this_wave": "ERROR (FileNotFoundError) -- tests/fixtures/workflow-marker-matrix/v3/WORKFLOW.md ainda não existe neste worktree (T003 não está mergeado na minha base) e a derivação em state_template (T008-T010) está sendo escrita em paralelo por p03-b. Esperado nesta wave; verde depende do converge."
+      }
+    },
+    {
+      "id": "T013",
+      "status": "completed",
+      "summary": "test_init_writes_v3_from_v2_document_by_declared_equivalence: init sobre documento v2 deve gravar development.workflow_version == \"v3\" pela equivalência declarada (R3), e development_workflow_version() sobre esse bloco não pode devolver None (V-2).",
+      "artifacts": [
+        "tests/validate_workspace_contract.py"
+      ],
+      "result": {
+        "py_compile": "ok",
+        "runtime_this_wave": "ERROR (FileNotFoundError) -- mesma causa de T012: fixture v2/WORKFLOW.md ausente nesta base + derivação pendente em p03-b."
+      }
+    },
+    {
+      "id": "T014",
+      "status": "completed",
+      "summary": "test_init_workflow_version_tracks_the_document_not_the_asset_literal: exercita v3 e v4 na MESMA bateria (subTest) e exige que os resultados divirjam (assertNotEqual explícito no fim). Distingue derivação de coincidência porque state.template.json semeia workflow_version com o literal \"v4\" (T011) -- um writer que parasse de ler o documento e apenas deixasse a semente intacta ainda passaria num teste que só checa o caso v4 isoladamente. Exigir que o caso v3 também resolva corretamente no mesmo lote é o que pega essa regressão: a semente só pode coincidir com um dos dois casos, nunca com os dois.",
+      "artifacts": [
+        "tests/validate_workspace_contract.py"
+      ],
+      "result": {
+        "py_compile": "ok",
+        "runtime_this_wave": "ERROR (FileNotFoundError) -- mesma causa de T012/T013 para os dois subTest (v3 e v4)."
+      }
+    },
+    {
+      "id": "T016",
+      "status": "completed",
+      "summary": "test_workflow_version_equivalences_are_backed_by_identical_sequences (SC-007): carrega audit_decisions.py e grill_workspace.py de forma independente (dois loaders separados, load_audit_decisions_module novo) e compara as TUPLAS reais -- audit_decisions.WORKFLOW_SEQUENCE_BY_MARKER[marcador] contra grill_workspace.SEQUENCE_BY_VERSION[versão] -- para v2->v3, v3->v3 e v4->v4, em vez de confiar em qualquer mapa que a implementação de state_template use internamente. Uma equivalência nova sem sequência idêntica reprova aqui.",
+      "artifacts": [
+        "tests/validate_workspace_contract.py"
+      ],
+      "result": {
+        "py_compile": "ok",
+        "runtime_this_wave": "PASS -- não depende de T003 nem de T008-T010, só de audit_decisions.WORKFLOW_SEQUENCE_BY_MARKER e grill_workspace.SEQUENCE_BY_VERSION, ambos já presentes nesta base. Confirmado localmente: `python3 -m unittest tests.validate_workspace_contract.WorkspaceV2Contract.test_workflow_version_equivalences_are_backed_by_identical_sequences` -> OK."
+      }
+    },
+    {
+      "id": "T017",
+      "status": "completed",
+      "summary": "test_migrate_writes_the_same_derived_workflow_version_as_init (R1): cria dois repositórios com o mesmo documento (fixture v4), um levado por init e outro por migrate --apply (com CONTEXT.md legado para acionar a rota de migração), e exige que development.workflow_version seja \"v4\" nos dois e que os dois valores sejam iguais entre si -- prova que migrate atravessa o mesmo initial_files -> state_template que init.",
+      "artifacts": [
+        "tests/validate_workspace_contract.py"
+      ],
+      "result": {
+        "py_compile": "ok",
+        "runtime_this_wave": "ERROR (FileNotFoundError) -- mesma causa de T012: fixture v4/WORKFLOW.md ausente nesta base + derivação pendente em p03-b."
+      }
+    },
+    {
+      "id": "T012-T017-reopen",
+      "status": "observed",
+      "run_id": "run-5f68d0d5860ec88e8e93d60f",
+      "summary": "Reabertura de trilha (wave-0003, run-5f68d0d5860ec88e8e93d60f): T012, T013, T014, T016 e T017 já estão mergeadas em tests/validate_workspace_contract.py nesta base. Não reescrevi os testes -- apenas rodei o validador e registrei o resultado exato.",
+      "artifacts": [
+        "tests/validate_workspace_contract.py"
+      ],
+      "result": {
+        "command": "python3 tests/validate_workspace_contract.py",
+        "summary": "Ran 72 tests in 42.368s -- FAILED (failures=10, skipped=1). 61 ok, 10 FAIL, 1 skipped.",
+        "target_tests_T012_T013_T014_T016_T017": "todas as 5 aparecem como 'ok': test_init_writes_v3_from_v3_document (T012), test_init_writes_v3_from_v2_document_by_declared_equivalence (T013), test_init_workflow_version_tracks_the_document_not_the_asset_literal (T014), test_workflow_version_equivalences_are_backed_by_identical_sequences (T016), test_migrate_writes_the_same_derived_workflow_version_as_init (T017). Isso indica que a derivação de development.workflow_version (T008-T010, de p03-b) já convergiu com as fixtures (T003-T007) nesta base local do worktree, no commit 2aaad8b (mensagem: 'fix(024): derivar sequence junto com workflow_version, e reconhecer os dois gates'), em cima de 01e361c ('feat(024): derivar development.workflow_version do marcador do WORKFLOW.md (T008-T010)').",
+        "unrelated_failures_10": [
+          "test_a_finished_phase_names_the_turn_instead_of_invalid_transition -- AssertionError: (2, 'DEVELOPMENT-SCHEMA') != (2, 'INVALID-TRANSITION')",
+          "test_a_genuinely_invalid_transition_still_says_so -- AssertionError: (2, 'DEVELOPMENT-SCHEMA') != (2, 'INVALID-TRANSITION')",
+          "test_a_trail_that_is_not_a_list_is_named_not_a_traceback -- AssertionError: 2 != 0 : {'code': 'DEVELOPMENT-SCHEMA', 'error': 'badtrail', 'verdict': 'BLOCKED'}",
+          "test_phase_turn_is_idempotent_and_writes_nothing_on_reuse -- AssertionError: 2 != 0 : {'code': 'DEVELOPMENT-SCHEMA', 'error': 'reuse', 'verdict': 'BLOCKED'}",
+          "test_phase_turn_refuses_an_unfinished_phase_without_touching_state -- AssertionError: (2, 'DEVELOPMENT-SCHEMA') != (2, 'PHASE-INCOMPLETE')",
+          "test_phase_turn_refuses_to_disturb_the_global_projection -- AssertionError: 2 != 0 : {'code': 'DEVELOPMENT-SCHEMA', 'error': 'guarded', 'verdict': 'BLOCKED'}",
+          "test_phase_turn_rejects_the_wrong_execution_branch_without_writing -- AssertionError: 2 != 0 : {'code': 'DEVELOPMENT-SCHEMA', 'error': 'wrong-turn', 'verdict': 'BLOCKED'}",
+          "test_phase_turn_reopens_the_matrix_and_records_the_reason -- AssertionError: 2 != 0 : {'code': 'DEVELOPMENT-SCHEMA', 'error': 'turning', 'verdict': 'BLOCKED'}",
+          "test_phase_turn_requires_a_reason -- AssertionError: 2 != 0 : {'code': 'DEVELOPMENT-SCHEMA', 'error': 'mute', 'verdict': 'BLOCKED'}",
+          "test_three_phases_leave_three_trails_in_one_work_item -- AssertionError: 2 != 0 : {'code': 'DEVELOPMENT-SCHEMA', 'error': 'three', 'verdict': 'BLOCKED'}"
+        ],
+        "unrelated_failures_note": "Todas as 10 falhas são em _run_full_cycle / testes de phase-turn, todas retornando o código 'DEVELOPMENT-SCHEMA' em vez do código esperado. Não têm relação com T012-T017 nem com development.workflow_version/sequence -- não toquei nessas falhas, não conserto nada fora do meu grant, apenas reporto."
+      }
+    },
+    {
+      "id": "T030",
+      "status": "completed",
+      "run_id": "run-278c62419af02e24557b1efb",
+      "summary": "Dessalgada a sequência de etapas fixada como literal v4 em tests/validate_checkpoint_contract.py (constante STEPS) e nos testes de phase-turn de tests/validate_workspace_contract.py (constante global SEQUENCE = grill_workspace.SEQUENCE, que é sempre a tupla da versão ATIVA/v4). Em ambos os arquivos, a sequência esperada passa a ser lida do que o próprio item declarou em development.sequence (state.json), nunca de um literal de versão. Durante a verificação apareceu um segundo salgamento, desta vez em produção: checkpoint_command() em grill_workspace.py recusava com INVALID-STEP qualquer --step que não estivesse na tupla da versão ATIVA (SEQUENCE=v4), mesmo quando esse step era exatamente o que o item (v3, via equivalência v2->v3 de T009/T010) declarava em development.sequence -- ex.: 'agent-assign' era rejeitado incondicionalmente. Isso contradiz a garantia já documentada em development_workflow_version() ('a bundle written under /v1 keeps checkpointing... against the sequence it was written with') e o próprio propósito documentado (mas não usado em lugar nenhum) de workflow_versions.ALL_STEPS ('every canonical step id across every executable version'). Corrigido trocando o portão estrutural de --step de `SEQUENCE` (só v4) para `ALL_STEPS` (união de v3+v4), mantendo a validação de ORDEM inalterada (ela já lia development['sequence'], o campo específico do item).",
+      "artifacts": [
+        "tests/validate_checkpoint_contract.py",
+        "tests/validate_workspace_contract.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py"
+      ],
+      "result": {
+        "diagnosis_confirmed": "Antes da correção: validate_checkpoint_contract.py com 2 falhas (test_complete_terminal_current_step, test_full_matrix_persists) e validate_workspace_contract.py com 8 falhas nos testes de phase-turn -- exatamente as 10 do brief, todas por chamar checkpoint com passos do vocabulário v4 (partition/implement-parallel) sobre um item que o template padrão (v2 -> v3 por equivalência) declara com agent-assign/agent-execute.",
+        "checkpoint_contract_first_pass": "Depois de trocar STEPS pelo development.sequence do próprio item (self.STEPS, lido em setUp logo após o init): as 2 falhas originais desapareceram, mas surgiu 1 nova falha (test_legacy_explicit_specify_initialization_succeeds_without_inference) porque a rota de inicialização legada (--initialize-legacy) semeia sempre ACTIVE_WORKFLOW_VERSION/SEQUENCE (v4), não a versão do documento -- corrigido lendo state['development']['sequence'] no próprio ponto de asserção, depois da chamada, em vez de reusar self.STEPS (que reflete o item original, não o item legado recriado).",
+        "checkpoint_contract_second_pass": "Ainda restava 1 falha (test_full_matrix_persists / test_complete_terminal_current_step voltando com KeyError/AssertionError em 'agent-assign') -- rastreado até checkpoint_command()'s `if args.step not in SEQUENCE` em grill_workspace.py, que usa a tupla só-v4. Corrigido com o novo `ALL_STEPS` (ver artifacts).",
+        "verification_1_checkpoint_contract": "python3 tests/validate_checkpoint_contract.py -> Ran 38 tests in 29.528s -- OK.",
+        "verification_2_workspace_contract": "python3 tests/validate_workspace_contract.py -> Ran 72 tests in 64.844s -- OK (skipped=1, host sem alias /var->/private/var, esperado).",
+        "verification_3_status_contract_no_regression": "python3 tests/validate_status_contract.py -> FAILED (failures=8) tanto antes quanto depois das minhas mudanças (confirmado com `git stash`/`git stash pop`: baseline sem minhas mudanças = FAILED failures=9; com minhas mudanças = FAILED failures=8, ou seja, MELHOROU em 1, nunca regrediu). As falhas restantes (INVALID-DEVELOPMENT-SEQUENCE / operational_status divergente) são de escopo de T015/T018-T024 (fora do meu grant, tasks.md ainda [ ] para todas), não de T030 -- não toquei nesse arquivo, meu grant não permite.",
+        "verification_4_workflow_v3_contract_no_regression": "python3 tests/validate_workflow_v3_contract.py -> Ran 56 tests in 5.691s -- OK.",
+        "extra_evidence_no_regression": "python3 tests/run_validators.py (suíte completa) para antes E depois das minhas mudanças: interrompe no primeiro validador vermelho em ordem alfabética, validate_gauntlet_converge_contract.py, com FAILED (failures=4) idêntico -- mesmos 4 testes, mesma mensagem ValueError/UNEXPECTED-FAILURE, confirmados via `git stash`/`git stash pop` como pré-existentes e fora do meu grant (tests/validate_gauntlet_converge_contract.py não está nos meus caminhos permitidos)."
+      }
+    },
+    {
+      "id": "T032",
+      "status": "completed",
+      "run_id": "run-3bc97179f5d1375355d7d102",
+      "wave_id": "wave-0003",
+      "summary": "checkpoint --step partition sobre item v3 estourava ValueError não capturado (sequence.index(args.step), grill_workspace.py) e o CLI devolvia UNEXPECTED-FAILURE. args.step já era validado contra ALL_STEPS (união v3+v4, T030) antes de resolver o item -- portanto passa o portão de nome mesmo quando não pertence à sequência QUE ESTE item declara. Adicionado guard explícito em checkpoint_command(), logo após a validação de forma de development.sequence/steps e antes do primeiro uso de sequence.index(): `if args.step not in sequence: raise CliFailure(EXIT_BLOCKED, 'BLOCKED', 'STEP-NOT-IN-SEQUENCE', mensagem)`. Código cunhado direto em SCREAMING-KEBAB (como INVALID-STEP, STATE-DIVERGENCE, DEVELOPMENT-SCHEMA -- já minted assim neste módulo, sem passar por translate_v3_code porque não vem de um erro de módulo grill_core, é minted na própria fronteira CLI). Mensagem inclui a versão declarada e a sequência completa do item (f\"step {args.step!r} is not in the {declared_version} sequence: {', '.join(sequence)}\"); extra={work_id, step, workflow_version, sequence} para consumo estruturado.",
+      "artifacts": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "tests/validate_checkpoint_contract.py"
+      ],
+      "result": {
+        "reproduction_before_fix": "{\"code\":\"UNEXPECTED-FAILURE\",\"error\":\"ValueError\",\"verdict\":\"BLOCKED\"}",
+        "reproduction_after_fix": "{\"code\":\"STEP-NOT-IN-SEQUENCE\",\"error\":\"step 'partition' is not in the v3 sequence: specify, plan, checklist, tasks, analyze, agent-assign, agent-execute, converge, verify, review, ship\",\"sequence\":[\"specify\",\"plan\",\"checklist\",\"tasks\",\"analyze\",\"agent-assign\",\"agent-execute\",\"converge\",\"verify\",\"review\",\"ship\"],\"step\":\"partition\",\"verdict\":\"BLOCKED\",\"work_id\":\"...\",\"workflow_version\":\"v3\"} -- exit 2, reproduzido exatamente com os comandos do brief.",
+        "new_test": "test_step_outside_declared_sequence_is_named em tests/validate_checkpoint_contract.py: chama checkpoint --step partition sobre o item v3 do setUp, confirma (returncode, verdict, code) == (2, 'BLOCKED', 'STEP-NOT-IN-SEQUENCE'), confirma workflow_version=='v3' e sequence==self.STEPS na extra, confirma que a mensagem cita 'v3' e todo passo da sequência declarada, e confirma que state.json e o lock não foram tocados (mesmo padrão das outras BLOCKED sem escrita já presentes no arquivo). Dessalgamento de T030 (self.STEPS lido de development.sequence do próprio item, nunca literal de versão) preservado intacto -- nenhuma linha de T030 revertida.",
+        "verification_1_checkpoint_contract": "python3 tests/validate_checkpoint_contract.py -> Ran 39 tests in 33.871s -- OK.",
+        "verification_2_workspace_contract": "python3 tests/validate_workspace_contract.py -> Ran 72 tests in 98.445s -- OK (skipped=1, host sem alias /var->/private/var, esperado, mesmo skip de sempre)."
+      }
+    }
+  ],
+  "notes": [
+    "Escopo desta wave: apenas T012, T013, T014, T016, T017 em tests/validate_workspace_contract.py. Não editei tasks.md, não escrevi em .grill/ nem .specify/reports/, não fiz checkpoint de etapa.",
+    "python3 -m py_compile tests/validate_workspace_contract.py -> OK (sem erro de sintaxe) para o arquivo completo, depois de todas as edições.",
+    "Verde real desta bateria depende de duas coisas fora do meu grant: (a) T003 (fixtures em tests/fixtures/workflow-marker-matrix/) mergeado nesta linhagem -- na minha base local (516370c) essas fixtures ainda não existem, embora já existam em fix/audit via commit 5e7124f (wave anterior, p02-b) e em c8a2092/40ca787 (T004, T005-T007); (b) a derivação em state_template (T008-T010), que p03-b está implementando em paralelo neste mesmo wave-0003. Isso é o esperado e documentado no brief: tests não passam nesta wave.",
+    "T016 já passa hoje, isoladamente, porque só depende de módulos já estáveis na minha base (audit_decisions.py e grill_workspace.SEQUENCE_BY_VERSION) -- confirmado com unittest direto.",
+    "Helpers novos adicionados: _repo_with_workflow(fixture) (cria repo git com WORKFLOW.md de tests/fixtures/workflow-marker-matrix/<fixture>/), _development(item) (lê state.json e devolve o bloco development), load_audit_decisions_module() (loader independente para audit_decisions.py, no mesmo padrão de load_workspace_module()).",
+    "T012-T017-reopen (run-5f68d0d5860ec88e8e93d60f, wave-0003): reabertura de trilha por DAG novo. Não reescrevi os testes. python3 tests/validate_workspace_contract.py nesta base (commit 2aaad8b) -> Ran 72 tests, FAILED (failures=10, skipped=1). As 5 tarefas do meu escopo (T012, T013, T014, T016, T017) passam (ok). As 10 falhas restantes são de testes de phase-turn/DEVELOPMENT-SCHEMA, fora do meu escopo e não mexidas.",
+    "T030 (run-278c62419af02e24557b1efb, wave-0003): único nó com trabalho novo nesta wave. Escopo: tests/validate_checkpoint_contract.py, tests/validate_workspace_contract.py e, por necessidade comprovada em execução (não hipótese), plugin/skills/grill-with-docs/scripts/grill_workspace.py. Não editei tasks.md (T030 permanece '[ ]', cabe ao leader marcar após o merge), não escrevi em .grill/ nem .specify/reports/, não fiz checkpoint de etapa, não toquei specs/024-workflow-version-derivada/contracts/cli.md. python3 -c \"import ast; ast.parse(...)\" OK nos três arquivos antes de rodar os testes. As quatro verificações exigidas no brief rodaram neste worktree (implementação e testes na mesma árvore) e os resultados exatos estão no result de T030 acima.",
+    "T032 (run-3bc97179f5d1375355d7d102, wave-0003): escopo plugin/skills/grill-with-docs/scripts/grill_workspace.py + tests/validate_checkpoint_contract.py (teste novo acrescentado, sem desfazer o dessalgamento de T030). Não editei tasks.md, não escrevi em .grill/ nem .specify/reports/, não fiz checkpoint de etapa, não toquei specs/024-workflow-version-derivada/contracts/cli.md. Rodei apenas validate_checkpoint_contract.py e validate_workspace_contract.py, como instruído pelo brief (p03-b e p03-c estão corrigindo em paralelo validate_status_contract.py/grill_status.py e validate_gauntlet_converge_contract.py/validate_gauntlet_scheduler_contract.py -- não é meu escopo, não toquei)."
+  ]
+}

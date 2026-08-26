@@ -1,0 +1,122 @@
+{
+  "node_id": "p03-b",
+  "wave_id": "wave-0003",
+  "run_id": "run-5f68d0d5860ec88e8e93d60f",
+  "work_id": "fix-audit-workflow-version-2a9e7a7ba01f42dcb24b3bb83d801b03",
+  "reopens": "run-d14b5a3163cb94301fa29292/p03-b (T008/T009 done and merged there; T010 there only wrote the v2->v3 equivalence for workflow_version, not the sequence derivation -- that gap is what this run fixes)",
+  "tasks": [
+    {
+      "id": "T010",
+      "title": "Derivar development.sequence da mesma resolução que já produz development.workflow_version, usando SEQUENCE_BY_VERSION",
+      "status": "done",
+      "note": "Em state_template() (grill_workspace.py), logo após `value['development']['workflow_version'] = resolved_version` (resolved_version substitui a expressão inline anterior 'v3' if sole == 'v2' else sole, agora nomeada e reaproveitada): `value['development']['sequence'] = list(SEQUENCE_BY_VERSION[resolved_version])`. SEQUENCE_BY_VERSION é o mesmo dicionário module-level que development_sequence() usa no lado do auditor (linha ~2241), então um bundle materializado aqui já concorda por construção com o que o auditor recomputa a partir de workflow_version sozinho -- não há dois caminhos de derivação para o mesmo fato. Comentário adicionado explica por que os dois campos (workflow_version e sequence) têm de derivar juntos: são a mesma informação (qual sequência de etapas este bundle fala), e deixar sequence vindo do asset (sempre a tupla da versão ativa) enquanto workflow_version é derivado produz o estado contraditório que validate_checkpoint_contract.py reprovava como DEVELOPMENT-SCHEMA. O comentário pré-existente que justifica a equivalência v2->v3 (SEQUENCE_BY_VERSION não tem entrada 'v2'; audit_decisions.WORKFLOW_SEQUENCE_BY_MARKER prova que v2 e v3 declaram a mesma tupla de onze etapas) foi mantido intacto."
+    }
+  ],
+  "files_changed": [
+    "plugin/skills/grill-with-docs/scripts/grill_workspace.py"
+  ],
+  "verification": {
+    "1_py_compile": {
+      "command": "python3 -m py_compile plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+      "result": "OK, exit 0"
+    },
+    "2_reproduction": {
+      "v2_document": {
+        "command": "ensure_workflow.py --ensure (materializa v2 por padrão, LD-004) + init --type fix --skip-backlog",
+        "expected": "v3 ['agent-assign', 'agent-execute']",
+        "observed": "v3 ['agent-assign', 'agent-execute']",
+        "match": true
+      },
+      "v4_document": {
+        "command": "cópia de tests/fixtures/workflow-marker-matrix/v4/WORKFLOW.md + init --type fix --skip-backlog",
+        "expected": "v4 ['partition', 'implement-parallel']",
+        "observed": "v4 ['partition', 'implement-parallel']",
+        "match": true
+      }
+    },
+    "3_validate_checkpoint_contract": {
+      "command": "python3 tests/validate_checkpoint_contract.py",
+      "before_fix_baseline": "23 failures + 2 errors = 25 (reproduzido por mim via git stash antes de commitar, confirma o número citado no brief)",
+      "after_fix": "2 failures, 0 errors -- Ran 38 tests, FAILED (failures=2)",
+      "gate_met": false,
+      "root_cause_of_residual_2_failures": "test_full_matrix_persists e test_complete_terminal_current_step iteram STEPS = ['specify',...,'partition','implement-parallel',...] (a tupla v4, literal hardcoded no topo do arquivo, linha 9) contra um work item criado no setUp() a partir de PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.template.md', que declara marcador v2 (confirmado: `grep grill-with-docs-workflow` -> 'v2'). Antes desta correção, workflow_version e sequence eram SEMPRE a tupla v4 (do asset, ignorando o documento) -- por isso os testes passavam por coincidência. Com a derivação correta (este fix), um documento v2 projeta para a sequência v3 (agent-assign/agent-execute, por FR-002/V-5), então o checkpoint 'partition' não pertence mais à sequência do item e checkpoint_command() estoura ValueError não capturado em `sequence.index(args.step)` (grill_workspace.py ~linha 3299), reportado como {'code':'UNEXPECTED-FAILURE','error':'ValueError'} em vez do sucesso que os dois testes exigem. Não é regressão: ambos os testes já estavam na lista de 25 falhas ANTES desta correção (confirmado por bisect via git stash), só que com sintoma DEVELOPMENT-SCHEMA em vez de ValueError. Não é corrigível dentro do grant deste worker: exigiria editar tests/validate_checkpoint_contract.py (explicitamente vedado pelo brief -- 'está CERTO e é a prova de correção') OU mudar o marcador default de plugin/skills/grill-with-docs/assets/WORKFLOW.template.md para v4 (fora do grant, e contradiz o invariante deliberado LD-004 'default bootstrap must not change', documentado em ensure_workflow.py). O arquivo tests/validate_checkpoint_contract.py também aparece no grant do nó p06-serial do mesmo DAG (specs/024-workflow-version-derivada/execution-dag.json), o que sugere que a reconciliação desta fixture pertence a essa etapa serial final, não a p03-b."
+    },
+    "4_validate_workspace_contract": {
+      "command": "python3 tests/validate_workspace_contract.py",
+      "before_fix_baseline": "10 failures, 1 skip (confirmado via git stash)",
+      "after_fix": "8 failures, 1 skip -- Ran 72 tests",
+      "regression_check": "conjunto de falhas após o fix é subconjunto estrito do conjunto antes do fix (mesmos 8 nomes de teste, todos já falhavam antes); 2 testes que falhavam antes (test_a_genuinely_invalid_transition_still_says_so, test_phase_turn_refuses_an_unfinished_phase_without_touching_state) passam a passar. Nenhuma falha nova introduzida. As 8 falhas remanescentes têm a MESMA causa raiz do item 3 acima: helper _run_full_cycle() usa SEQUENCE (module-level, sempre v4) contra itens criados com WORKFLOW_TEMPLATE (v2), num arquivo de teste pré-existente à feature 024 (comentário na própria linha 212-214 do arquivo confirma que essa combinação era 'certa' sob o comportamento antigo).",
+      "gate_met": true,
+      "note": "'não regrediu' confirmado -- é o critério que o brief pediu para este validador, e ele se sustenta."
+    }
+  },
+  "outcome_rationale": "T010 implementado exatamente como descrito no brief e verificado byte-a-byte contra a reprodução prescrita (item 2, ambos os casos batem). Nenhuma regressão introduzida em nenhum dos dois validadores executados (item 4 é estritamente melhor; item 3 vai de 25 para 2 falhas, mesmos 2 testes que já falhavam antes, causa raiz precisamente diagnosticada e fora do grant deste worker). O gate 'tem de sair OK' do item 3 não foi atingido -- reportado com transparência total em vez de forçado; fixture stale em tests/validate_checkpoint_contract.py (STEPS v4 hardcoded contra WORKFLOW.template.md v2, ambos fora do grant) é a causa, não uma falha na implementação de T010.",
+  "grant_scope": {
+    "declared_writable": [
+      "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+      "specs/024-workflow-version-derivada/implement/p03-b.tasks.json"
+    ],
+    "read_only_present_in_brief": [
+      "tests/validate_checkpoint_contract.py -- lido e executado, não editado, exatamente como instruído",
+      "specs/024-workflow-version-derivada/contracts/cli.md -- não tocado"
+    ],
+    "tasks_md": "não editado"
+  },
+  "T011-reopen-r4": {
+    "run_id": "run-278c62419af02e24557b1efb",
+    "wave_id": "wave-0003",
+    "node_id": "p03-b",
+    "task": "T011",
+    "observed": "python3 -c \"import json; d=json.load(open('plugin/skills/grill-with-docs/assets/state.template.json')); print('workflow_version' in d['development'], d['development']['workflow_version'])\" -> True v4",
+    "decision": "confirmed-no-op: chave development.workflow_version mantida em plugin/skills/grill-with-docs/assets/state.template.json; asset NAO editado.",
+    "reason": "Worker anterior verificou que nao existe convencao de comentario (_comment/$comment) nos assets deste diretorio. JSON e estrito e inventar convencao sem precedente arriscaria quebrar o parse de todo `init`. O essencial de T011 -- nao remover a chave -- esta cumprido. Esta reabertura (wave-0003, run-278c62419af02e24557b1efb) confirma a chave ainda presente e MANTEM a decisao de nao editar o asset, para que ela nao se perca numa proxima reabertura.",
+    "asset_edited": false
+  },
+  "T033": {
+    "run_id": "run-3bc97179f5d1375355d7d102",
+    "wave_id": "wave-0003",
+    "node_id": "p03-b",
+    "work_id": "fix-audit-workflow-version-2a9e7a7ba01f42dcb24b3bb83d801b03",
+    "status": "done",
+    "part_1_desalt_eight_tests": {
+      "finding": "None of the eight named tests (test_one_item_top_level_and_item_schema, test_markdown_in_progress_stage_is_named, test_markdown_omits_closed_items_and_reports_pending_stage, test_markdown_terminal_contradiction_is_blocked, test_drift_is_silent_on_the_recorded_branch_however_many_commits, test_both_heads_stay_visible_for_whoever_needs_the_difference, test_specify_checkpoint_binds_phase_branch_and_status_exposes_it, and the T015 test test_status_projects_bundle_created_over_v3_document_by_the_v3_sequence) contains a literal hardcoded v4 step-name tuple. Verified by grep: the only 'partition'/'implement-parallel'/'agent-assign'/'agent-execute' literals in tests/validate_status_contract.py are the deliberate v3 hardcodes the brief said not to touch (_to_v3 helper and the T015 fixture-based test's own v3_sequence local, which already derives correctly). Their assumption of v4 was implicit: they relied on grill_status.py silently judging every bundle against SEQUENCE (v4) regardless of what development.sequence the bundle itself declared. All eight passed unmodified once that silent default was removed and item_payload/classify_item were fixed to project a tracked bundle strictly against its OWN development.sequence.",
+      "action": "Added one documenting comment in tests/validate_status_contract.py, directly above test_one_item_top_level_and_item_schema (the first of the eight), recording this finding so a future reader does not go looking for a literal to remove. No assertion in any of the eight tests was changed.",
+      "lines_explicitly_not_touched": "Deliberate v3 hardcodes building explicit v3 bundles (the _to_v3 helper and the two tests that use it, plus the T015 fixture test's own v3_sequence local) -- left exactly as found."
+    },
+    "part_2_production_fallback": {
+      "target": "plugin/skills/grill-with-docs/scripts/grill_status.py",
+      "removed": "Module-level SEQUENCE = [...] (the v4 tuple, formerly line 24) -- deleted after confirming (grep) it had no remaining reference anywhere in the file once its three call sites were fixed.",
+      "call_sites_fixed": [
+        "item_payload(): the 'legacy-untracked' (dev is None) and 'invalid' (schema check failed) branches formerly set item_sequence = SEQUENCE. Changed to item_sequence = [] -- absence is treated as absence, never as the active version's tuple.",
+        "item_payload(): next_gate computation formerly fell back to \"complete\" whenever len(completed) was not < len(item_sequence); with item_sequence now legitimately empty for the two branches above, that produced a false \"complete\" for an untracked/invalid item. Guarded it: falls back to \"complete\" only when tracking == \"tracked\" (the one case item_sequence is guaranteed non-empty), otherwise \"unknown\".",
+        "classify_item(): the sequence=None default fallback formerly read `sequence = SEQUENCE if sequence is None else sequence`. Changed to `sequence = [] if sequence is None else sequence`, with a docstring paragraph naming the constitutional clause."
+      ],
+      "companion_fix_required_to_actually_pass_the_eight_tests": "Removing the SEQUENCE fallback alone did not make the eight tests pass: a freshly-created item (WORKFLOW.md defaults to v2, which resolves to v3) declares development.sequence correctly as the v3 tuple (agent-assign/agent-execute), but development.steps is still populated straight from assets/state.template.json's raw v4-shaped dict (grill_workspace.py's state_template() only overrides development.workflow_version and development.sequence, never development.steps -- out of this task's grant, in plugin/skills/grill-with-docs/scripts/grill_workspace.py, not grill_status.py). That leaves a consistent, correctly-declared v3 item with a steps dict missing the v3-only keys (agent-assign, agent-execute), which item_payload's own INVALID-DEVELOPMENT-SEQUENCE check (steps.get(s) not in STATES for s in item_sequence) flagged as corruption purely because the key was ABSENT, not because any present value was wrong. Fixed by treating an absent step key, for a step named in the item's OWN already-verified-consistent sequence, as implicitly 'pending' (steps.get(s, \"pending\") in place of steps.get(s), applied uniformly in item_payload's completed/blocked/findings computation and in classify_item's all_steps_complete/in_progress/pending loops). This never marks anything falsely complete (only 'pending' is ever supplied for an absence) and still flags a step that IS present with a disallowed value, or completed out of order, exactly as before.",
+      "sequence_constant_removed": true,
+      "residual_known_gap_out_of_grant": "grill_workspace.py's state_template() not deriving development.steps from the same resolved version as development.sequence/workflow_version is a real production inconsistency, left as-is because grill_workspace.py is not in this task's grant. grill_status.py now tolerates it defensively (absence -> pending) rather than propagating it as a false BLOCKED verdict."
+    },
+    "verification": {
+      "validate_status_contract": {"command": "python3 tests/validate_status_contract.py", "before": "Ran 49 tests, FAILED (failures=8)", "after": "Ran 49 tests, OK"},
+      "validate_workflow_v3_contract": {"command": "python3 tests/validate_workflow_v3_contract.py", "before_and_after": "Ran 56 tests, OK -- no regression"}
+    },
+    "files_changed": [
+      "plugin/skills/grill-with-docs/scripts/grill_status.py",
+      "tests/validate_status_contract.py"
+    ],
+    "grant_scope": {
+      "declared_writable": [
+        "plugin/skills/grill-with-docs/scripts/grill_status.py",
+        "tests/validate_status_contract.py",
+        "specs/024-workflow-version-derivada/implement/p03-b.tasks.json"
+      ],
+      "not_touched": [
+        "tasks.md",
+        ".grill/",
+        ".specify/reports/",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "plugin/skills/grill-with-docs/assets/state.template.json"
+      ]
+    },
+    "outcome_rationale": "Both halves implemented within grant. Part 1's literal search found no hardcode to remove in the eight named tests -- documented rather than fabricated as a diff. Part 2's fix goes one step past the single line the brief named (grill_status.py:160) to the two other SEQUENCE call sites in the same file (item_payload's legacy-untracked/invalid branches) that the brief's own closing instruction ('se SEQUENCE ficar sem uso, remova-a') implied needed fixing too, plus one adjacent defensive fix (steps.get default) required for the eight tests to actually pass, given a real steps/sequence key-mismatch in production data that originates outside this task's grant (grill_workspace.py's state_template). Both required validators pass; only the two specified were run, per instruction."
+  }
+}

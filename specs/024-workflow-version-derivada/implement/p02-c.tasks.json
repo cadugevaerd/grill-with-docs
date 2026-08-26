@@ -1,0 +1,63 @@
+{
+  "node_id": "p02-c",
+  "work_id": "fix-audit-workflow-version-2a9e7a7ba01f42dcb24b3bb83d801b03",
+  "run_id": "run-9dc83b33c8caf359c612ac62",
+  "wave_id": "wave-0002",
+  "tasks": [
+    {
+      "id": "T004",
+      "status": "completed",
+      "description": "Implementar sole_managed_version(text) em plugin/skills/grill-with-docs/scripts/ensure_workflow.py, usando re.findall e devolvendo o marcador apenas quando houver exatamente uma ocorrência — sem tocar managed_version",
+      "files_changed": [
+        "plugin/skills/grill-with-docs/scripts/ensure_workflow.py"
+      ],
+      "notes": "sole_managed_version adicionada logo apos managed_version, sem alterar a funcao existente. Usa re.findall com a mesma regex grill-with-docs-workflow:(v\\d+); retorna markers[0] apenas quando len(markers) == 1, caso contrario None (zero e multiplas ocorrencias colapsam para None). Docstring explica a separacao de managed_version (first-match via re.search, mantida por causa de 7 chamadores internos + workflow_v3.marker_version + testes existentes, ADR-0002).",
+      "import_check": {
+        "command": "python3 -c \"import sys; sys.path.insert(0,'plugin/skills/grill-with-docs/scripts'); import ensure_workflow; print(ensure_workflow.sole_managed_version('<!-- grill-with-docs-workflow:v4 -->'))\"",
+        "result": "v4",
+        "additional_spot_checks": {
+          "zero_markers": null,
+          "two_markers": null,
+          "managed_version_unchanged_first_match": "v3"
+        }
+      }
+    }
+  ],
+  "tests_owned_by_this_node": false,
+  "tests_note": "T005-T007 (testes de sole_managed_version) sao de outro worker nesta wave; nao escritos aqui. Integracao e verificacao da suite acontecem no converge.",
+  "scope_respected": [
+    "plugin/skills/grill-with-docs/scripts/ensure_workflow.py",
+    "specs/024-workflow-version-derivada/implement/p02-c.tasks.json"
+  ],
+  "tasks_md_edited": false,
+  "T004-reopen": {
+    "run_id": "run-5f68d0d5860ec88e8e93d60f",
+    "wave_id": "wave-0002",
+    "reason": "run nova: DAG mudou (T010, T018-T021 reescritas); gauntlet exige reabertura de todos os nos. T004 ja mergeada na base, sem reimplementacao.",
+    "verification_command": "python3 -c \"import sys; sys.path.insert(0,'plugin/skills/grill-with-docs/scripts'); import ensure_workflow as E; print(E.sole_managed_version('<!-- grill-with-docs-workflow:v4 -->')); print(E.sole_managed_version('a grill-with-docs-workflow:v3 b grill-with-docs-workflow:v4')); print(E.managed_version('a grill-with-docs-workflow:v3 b grill-with-docs-workflow:v4'))\"",
+    "observed_output": ["v4", "None", "v3"],
+    "expected_output": ["v4", "None", "v3"],
+    "match": true,
+    "note": "Suite completa nao rodada (base intencionalmente vermelha: ~25 falhas DEVELOPMENT-SCHEMA em validate_checkpoint_contract.py, dependentes de T010 de outro no)."
+  },
+  "T004-reopen-r4": {
+    "run_id": "run-278c62419af02e24557b1efb",
+    "wave_id": "wave-0002",
+    "reason": "run nova: DAG mudou (T030 acrescentada); gauntlet exige reabertura de todos os nos. T004 ja mergeada na base (sole_managed_version existe em ensure_workflow.py, managed_version intocada), sem reimplementacao.",
+    "verification_command": "python3 -c \"import sys; sys.path.insert(0,'plugin/skills/grill-with-docs/scripts'); import ensure_workflow as E; print(E.sole_managed_version('<!-- grill-with-docs-workflow:v4 -->')); print(E.sole_managed_version('a grill-with-docs-workflow:v3 b grill-with-docs-workflow:v4')); print(E.managed_version('a grill-with-docs-workflow:v3 b grill-with-docs-workflow:v4'))\"",
+    "observed_output": ["v4", "None", "v3"],
+    "expected_output": ["v4", "None", "v3"],
+    "match": true,
+    "note": "Suite completa nao rodada por instrucao explicita: base intencionalmente vermelha (10 falhas preexistentes fixando a sequencia v4 como literal; correcao e T030, do no p03-a, ainda por vir). Nenhum arquivo alem deste sidecar foi tocado; ensure_workflow.py permanece intocado nesta reabertura."
+  },
+  "T004-reopen-r5": {
+    "run_id": "run-3bc97179f5d1375355d7d102",
+    "wave_id": "wave-0002",
+    "reason": "run nova: DAG mudou (T031-T033 acrescentadas); gauntlet exige reabertura de todos os nos. T004 ja mergeada na base (sole_managed_version existe em ensure_workflow.py, managed_version intocada), sem reimplementacao.",
+    "verification_command": "python3 -c \"import sys; sys.path.insert(0,'plugin/skills/grill-with-docs/scripts'); import ensure_workflow as E; print(E.sole_managed_version('<!-- grill-with-docs-workflow:v4 -->')); print(E.sole_managed_version('a grill-with-docs-workflow:v3 b grill-with-docs-workflow:v4')); print(E.managed_version('a grill-with-docs-workflow:v3 b grill-with-docs-workflow:v4'))\"",
+    "observed_output": ["v4", "None", "v3"],
+    "expected_output": ["v4", "None", "v3"],
+    "match": true,
+    "note": "Suite completa nao rodada por instrucao explicita: base intencionalmente vermelha, correcoes sao T031-T033 de outros nos. Nenhum arquivo alem deste sidecar foi tocado; ensure_workflow.py permanece intocado nesta reabertura."
+  }
+}

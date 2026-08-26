@@ -4,7 +4,7 @@
     "T021",
     "T024"
   ],
-  "dispatchable_tasks": 26,
+  "dispatchable_tasks": 30,
   "feature": "024-workflow-version-derivada",
   "max_workers": 3,
   "nodes": [
@@ -52,11 +52,16 @@
       "phase": 3,
       "scope": "DECLARED",
       "task_ids": [
+        "T008",
+        "T009",
+        "T010",
         "T012",
         "T013",
         "T014",
         "T016",
-        "T017"
+        "T017",
+        "T030",
+        "T032"
       ]
     },
     {
@@ -65,9 +70,8 @@
       "phase": 3,
       "scope": "DECLARED",
       "task_ids": [
-        "T008",
-        "T009",
-        "T010"
+        "T015",
+        "T033"
       ]
     },
     {
@@ -77,7 +81,7 @@
       "scope": "DECLARED",
       "task_ids": [
         "T011",
-        "T015"
+        "T031"
       ]
     },
     {
@@ -166,7 +170,7 @@
       "phase": 3,
       "reasons": [],
       "requested_groups": 3,
-      "tasks": 10,
+      "tasks": 14,
       "title": "User Story 1 — Repositório que preserva uma declaração anterior (Priority: P1) 🎯 MVP",
       "unmapped_tasks": 0
     },
@@ -209,7 +213,7 @@
   ],
   "requested_groups": 3,
   "schema": "grill-partition-report/v1",
-  "tasks": 29,
+  "tasks": 33,
   "unmapped_task_ids": [
     "T026",
     "T027"
