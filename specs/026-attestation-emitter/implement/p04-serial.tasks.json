@@ -1,0 +1,22 @@
+{
+  "node_id": "p04-serial",
+  "task": "T022 (fechamento) Atualizar a baseline de testes em CLAUDE.md",
+  "result": "PASS",
+  "evidence": {
+    "coordinator_ref": "feature/goal-instruct",
+    "coordinator_head": "640ea2bbd10bc8a723b8e33e6d671ae0b42f58d3",
+    "verification_command": "git show feature/goal-instruct:CLAUDE.md",
+    "baseline": {
+      "tests": 1303,
+      "validators": 27,
+      "exit_code": 0,
+      "skipped": 1,
+      "skip_kind": "dependente de ambiente em validate_workspace_contract.py"
+    },
+    "claude_md_update_commit": "81191725de65767ff17222dd6c6af276769b085c",
+    "claude_md_update_subject": "feat(attestation): attest passa a anexar a autorização humana",
+    "suite_evidence": "O commit que atualiza CLAUDE.md registra no corpo: 'Suíte: 1303 testes em 27 validadores, exit 0.'; o head do coordenador preserva essa baseline e declara 1 skip dependente de ambiente.",
+    "matches_expected_baseline": true
+  },
+  "completed": true
+}
