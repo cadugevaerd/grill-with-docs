@@ -27,6 +27,18 @@
   predecessor. Uma etapa a jusante re-atesta com o artefato byte-idêntico,
   porque não refez trabalho algum; exigir artefato novo ali proibiria a própria
   re-atestação que limpa a lista.
+- A prova de que o registro substituído é o aceito pina também **qual execução**
+  o produziu. O par (`output_sha256`, `receipt_ref`) não bastava: duas cadeias
+  da mesma etapa e do mesmo artefato, diferindo só no índice de onda, carregam
+  digest e `receipt_ref` idênticos sob `step_execution_id` diferentes. Sem isso
+  o histórico podia nomear uma execução que nunca foi o receipt corrente.
+  `development.attested_executions[step]` é gravado em toda aceitação; para
+  receipts aceitos antes do campo existir, a verificação cai no par — degradação
+  declarada, e toda aceitação nova pina.
+- `phase-turn` recusa com `CHAIN-STALE` enquanto houver etapa pendente de nova
+  emissão. A virada reseta a matriz e não o ledger, então a fase seguinte seria
+  recusada no `ship` por receipts que já não são dela; deixar cadeia
+  inverificável para trás é o que o ledger existe para impedir.
 - Recusas nomeadas novas: `SUPERSEDE_LINK_INCOMPLETE`,
   `SUPERSEDE_ROUND_NOT_ADVANCED`, `SUPERSEDE_NOT_LINKED`,
   `SUPERSEDE_ATTEMPT_NOT_LINKED`, `SUPERSEDE_STEP_MISMATCH`,

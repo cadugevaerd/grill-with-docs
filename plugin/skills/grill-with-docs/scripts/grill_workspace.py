@@ -3163,7 +3163,12 @@ def verify_checkpoint_attestation(
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.reason) from exc
     except store.StoreError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.message) from exc
-    return {"path": attestation_path, **verdict}
+    # The execution id travels with the verdict because the state has to record
+    # it: the pair (artefact digest, receipt ref) does not pin *which execution*
+    # produced the accepted receipt, and a later supersession needs exactly that.
+    return {"path": attestation_path,
+            "step_execution_id": bundle["step_output"]["step_execution_id"],
+            **verdict}
 
 
 def mark_chain_stale(development: dict[str, Any], step_id: str) -> list[str]:
@@ -3240,6 +3245,21 @@ def verify_supersession(
             or prior_output.get("output_sha256") != recorded.get("output_sha256")
             or prior_output.get("skill_invocation_receipt_ref") != recorded.get("receipt_ref")):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-NOT-RECORDED", step_id)
+    # The pair above does not pin the execution: two chains for the same step and
+    # the same artefact, differing only in wave index, carry an identical digest
+    # and receipt ref under different execution ids. Without this check the
+    # history would name an execution that was never the current receipt, and the
+    # successor would link to it -- corrupting the one trail this mechanism
+    # exists to make trustworthy.
+    #
+    # Absent for a receipt accepted before the field existed; falling back to the
+    # pair there is a declared degradation, not a hole left open: every
+    # acceptance from now on records the execution.
+    recorded_execution = (development.get("attested_executions") or {}).get(step_id)
+    if recorded_execution is not None and prior_output.get("step_execution_id") != recorded_execution:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-NOT-RECORDED", step_id,
+                         extra={"expected_step_execution_id": recorded_execution,
+                                "actual_step_execution_id": prior_output.get("step_execution_id")})
     verdict = verify_checkpoint_attestation(
         root, development, work_id=work_id, step_id=step_id, attestation_path=attestation_path,
     )
@@ -3623,6 +3643,8 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         if attestation_result is not None:
             development["attestation_campaign"] = attestation_result["campaign"]
             outputs = development.setdefault("attested_outputs", {})
+            development.setdefault("attested_executions", {})[args.step] = \
+                attestation_result["step_execution_id"]
             if superseded_output is not None:
                 development.setdefault("superseded_outputs", {}).setdefault(args.step, []).append(superseded_output)
                 payload["chain_stale"] = mark_chain_stale(development, args.step)
@@ -3674,6 +3696,14 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         pending = [s for s in sequence if steps.get(s) != "complete"]
         if pending:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PHASE-INCOMPLETE", ", ".join(pending))
+        # Turning the phase does not resolve a stale chain, it outlives it: the
+        # matrix resets and the ledger does not, so the next phase would be
+        # refused at ship over receipts that no longer apply to it. Leaving an
+        # unverifiable chain behind is precisely what the ledger exists to stop,
+        # so the turn is refused until the steps it names are attested again.
+        if development.get("chain_stale"):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHAIN-STALE",
+                             ", ".join(development["chain_stale"]))
 
         development["steps"] = {step: "pending" for step in sequence}
         development["current_step"] = sequence[0]
