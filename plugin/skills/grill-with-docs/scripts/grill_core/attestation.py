@@ -915,6 +915,8 @@ def mint_chain(
     execution_round: int = 1,
     result: str = "COMPLETED",
     catalog: Mapping[str, Any] | None = None,
+    supersedes_step_execution_id: str | None = None,
+    supersedes_attempt_id: str | None = None,
 ) -> dict[str, Any]:
     """Mint the four correlated links plus the catalog, ready for the checkpoint.
 
@@ -937,6 +939,24 @@ def mint_chain(
         if field not in resolution:
             raise _emit_fail("RESOLUTION_INCOMPLETE", field=field)
     _text(artefact_sha256, SHA256_RE, "INVALID_DIGEST", field="artefact_sha256")
+
+    # The two back-references travel together or not at all. One without the
+    # other names half of what it replaces, which is worse than naming nothing:
+    # an auditor would see a supersession and be unable to resolve it.
+    supersedes = (supersedes_step_execution_id, supersedes_attempt_id)
+    if any(value is not None for value in supersedes):
+        if any(value is None for value in supersedes):
+            raise _emit_fail(
+                "SUPERSEDE_LINK_INCOMPLETE",
+                supersedes_step_execution_id=supersedes_step_execution_id,
+                supersedes_attempt_id=supersedes_attempt_id,
+            )
+        _text(supersedes_step_execution_id, STEP_EXECUTION_ID_RE,
+              "SUPERSEDE_LINK_INVALID", field="supersedes_step_execution_id")
+        # Round one is by definition the first: a receipt that claims to replace
+        # something while being the first attempt is minting its own history.
+        if execution_round <= 1:
+            raise _emit_fail("SUPERSEDE_ROUND_NOT_ADVANCED", execution_round=execution_round)
 
     runtime = resolution["runtime"]
     adapter = resolution["adapter"]
@@ -1025,10 +1045,12 @@ def mint_chain(
 
     # STARTED has no output yet; its manifest digest is over the empty manifest,
     # not over a placeholder string. The terminal one is over the real artefact.
-    # Two vocabularies, deliberately not merged: an invocation is COMPLETED or
-    # FAILED (did the call finish?), a step output SUCCEEDED or FAILED (did the
-    # step achieve its result?).  Collapsing them would let a completed call
-    # that produced a failed step read as success.
+    # Two vocabularies, deliberately not merged: an invocation reports whether
+    # the call finished, a step output whether the step achieved its result.
+    # They overlap on three terminal values and diverge on a fourth -- a step
+    # output may be UNKNOWN, which no invocation status matches. Collapsing
+    # them would let a completed call that produced a failed step read as
+    # success.
     invocation_status = _INVOCATION_STATUS_FOR_RESULT.get(result)
     if invocation_status is None:
         raise _emit_fail("STEP_RESULT_UNKNOWN", result=result)
@@ -1050,9 +1072,9 @@ def mint_chain(
         "skill_invocation_receipt_sha256": receipt_sha256(invocation_terminal),
         "execution_round": execution_round,
         "step_execution_id": exec_id,
-        "supersedes_step_execution_id": None,
+        "supersedes_step_execution_id": supersedes_step_execution_id,
         "attempt_id": attempt_id,
-        "supersedes_attempt_id": None,
+        "supersedes_attempt_id": supersedes_attempt_id,
         "worker_lease_id": worker_lease_id,
         "worker_fencing_token": worker_fencing_token,
         "input_fingerprint": input_fingerprint,
@@ -1215,3 +1237,86 @@ def retry_step_execution(
         )
     record_step_execution(store, failed_step_output)
     return record_step_execution(store, retry_step_output)
+
+
+def supersede_step_execution(
+    store: dict[str, dict[str, Any]],
+    superseded_step_output: Mapping[str, Any],
+    successor_step_output: Mapping[str, Any],
+) -> str:
+    """Authorize re-attestation of a step whose artefact legitimately changed.
+
+    ``retry_step_execution`` already covers the failed case: a ``FAILED``
+    terminal is replaced by a new attempt. The case it never covered is the
+    terminal that *succeeded* and whose artefact was then legitimately
+    corrected. Nothing could reconcile that, so a closed step stayed
+    permanently divergent from the bytes it attested, and an auditor could no
+    longer tell an honest correction from tampering -- which is precisely the
+    distinction the chain exists to sustain (BL-0201).
+
+    The answer takes the shape the envelope already reserved fields for. The
+    prior terminal is never rewritten and never removed; a successor terminal
+    is recorded that names what it replaces. Auditing then reads a history
+    instead of a contradiction: the step's current receipt, and every receipt
+    it supersedes, each still anchored on the bytes it actually saw.
+
+    Superseding is deliberately not free. The successor must attest the same
+    step, advance the round, carry both back-references, and actually differ:
+    a successor identical to what it claims to replace is a no-op dressed as a
+    correction, and is refused rather than silently recorded.
+
+    What this does *not* decide is what happens to the steps downstream, whose
+    own receipts named the output being replaced. That is the caller's ledger
+    to keep, because only the caller knows the sequence; see the CLI's stale
+    chain, which is what stops a superseded predecessor from reaching ``ship``
+    unnoticed.
+    """
+    validate_step_output(superseded_step_output)
+    validate_step_output(successor_step_output)
+    _require(
+        superseded_step_output["step_id"] == successor_step_output["step_id"],
+        "SUPERSEDE_STEP_MISMATCH",
+        superseded=superseded_step_output["step_id"],
+        successor=successor_step_output["step_id"],
+    )
+    if successor_step_output["step_execution_id"] == superseded_step_output["step_execution_id"]:
+        raise _divergence(
+            "SUPERSEDE_REUSES_EXECUTION_ID",
+            step_execution_id=superseded_step_output["step_execution_id"],
+        )
+    if successor_step_output["supersedes_step_execution_id"] != superseded_step_output["step_execution_id"]:
+        raise _unattested(
+            "SUPERSEDE_NOT_LINKED",
+            expected=superseded_step_output["step_execution_id"],
+            actual=successor_step_output["supersedes_step_execution_id"],
+        )
+    if successor_step_output["supersedes_attempt_id"] != superseded_step_output["attempt_id"]:
+        raise _unattested(
+            "SUPERSEDE_ATTEMPT_NOT_LINKED",
+            expected=superseded_step_output["attempt_id"],
+            actual=successor_step_output["supersedes_attempt_id"],
+        )
+    if successor_step_output["execution_round"] <= superseded_step_output["execution_round"]:
+        raise _divergence(
+            "SUPERSEDE_ROUND_NOT_ADVANCED",
+            previous=superseded_step_output["execution_round"],
+            attempted=successor_step_output["execution_round"],
+        )
+    # Not the receipt bytes: two receipts for the same artefact always differ in
+    # bytes, because the round is part of what is hashed. What a correction has
+    # to move is one of the two things a step receipt actually claims -- the
+    # artefact it produced, or the predecessor output it rests on.
+    #
+    # Both matter. A step downstream of a corrected one is re-attested with its
+    # own artefact byte-identical: nothing about its work changed, only which
+    # predecessor now stands. Demanding a new artefact there would forbid the
+    # very re-attestation that clears the stale chain.
+    if (successor_step_output["output_sha256"] == superseded_step_output["output_sha256"]
+            and successor_step_output["dependency_outputs"] == superseded_step_output["dependency_outputs"]):
+        raise _divergence(
+            "SUPERSEDE_WITHOUT_CHANGE",
+            step_execution_id=superseded_step_output["step_execution_id"],
+            output_sha256=superseded_step_output["output_sha256"],
+        )
+    record_step_execution(store, superseded_step_output)
+    return record_step_execution(store, successor_step_output)

@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v5.1.0
+# Grill with Docs v5.2.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -201,6 +201,33 @@ versão, em tabela congelada ao lado da ordem canônica:
 Etapa sem classe declarada é recusa nomeada, nunca default permissivo. Uma
 etapa nova exige duas decisões explícitas — posição na sequência e classe — e
 falha fechado até ter as duas.
+
+`worker-required` **não** quer dizer que o worker escreve o receipt: nenhum
+worker escreve receipt de etapa alguma. Quer dizer que o *trabalho* precisa ter
+sido feito por workers despachados, e o leader só emite contra prova disso —
+waves convergidas lidas do estado durável da run, nunca uma flag de quem pede.
+
+**Quando o artefato de uma etapa fechada precisa mudar.** Ele muda por cadeia
+sucessora, nunca por reescrita (ADR-0205). O receipt anterior não é apagado nem
+alterado: o sucessor **nomeia o que substitui** e avança a ronda.
+
+```text
+attest ROOT --work-id ID --step STEP --artifact PATH --out NOVO \
+  --supersedes ANTERIOR
+checkpoint ROOT --work-id ID --step STEP --state complete --evidence PATH \
+  --attestation NOVO --supersedes-attestation ANTERIOR --reason "por quê"
+```
+
+O estado da etapa não se move — `complete` era verdade e continua sendo. Muda
+apenas qual receipt é o corrente e o que ele declara substituir. O bundle
+anterior precisa ser **aquele que o work item aceitou**, provado contra o par
+que o estado gravou na aceitação.
+
+Superseder uma etapa não torna as seguintes erradas: torna-as inverificáveis,
+porque cada uma selou o output que acabou de ser substituído. Elas entram em
+`development.chain_stale`, e `ship` recusa enquanto a lista não esvaziar. A
+única saída é atestar cada uma de novo, contra o predecessor que agora vale —
+com o artefato byte-idêntico, se o trabalho delas não mudou.
 
 ## Auditoria read-only
 

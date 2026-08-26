@@ -1,7 +1,7 @@
 # DECISION-BACKLOG
 
 ## BL-0201 — Não há caminho de re-atestação após edição legítima do artefato
-- state: open
+- state: resolved
 - phase: FASE-001
 - owner: carlosaraujo
 - evidence-needed: Decidir qual é a semântica correta quando o artefato de uma etapa já atestada precisa mudar — se a etapa deve poder ser reaberta e re-emitida, se deve existir uma cadeia sucessora que declare o que substitui (o `step_output` já tem `supersedes_step_execution_id` e `supersedes_attempt_id`, hoje sempre nulos), ou se editar artefato de etapa fechada deve simplesmente ser proibido.
@@ -9,6 +9,8 @@
 - evidência: `checkpoint --state in-progress` sobre etapa `complete` devolve `INVALID-TRANSITION`. As cadeias de `tasks` e `analyze` deste work item divergem dos bytes atuais de `tasks.md`, e não há comando que reconcilie.
 - risco: Um artefato que precise de correção depois de atestado deixa a cadeia divergente permanentemente. Quem auditar depois vê divergência sem conseguir distinguir edição legítima de adulteração — que é exatamente a distinção que a cadeia deveria sustentar.
 - gatilho: Já ocorrido, neste work item.
+- resolução: Escolhida a segunda semântica — cadeia sucessora. O receipt anterior nunca é reescrito nem removido; o sucessor nomeia o que substitui por `supersedes_step_execution_id` e `supersedes_attempt_id` e avança `execution_round`. Os campos já estavam reservados no envelope e `retry_step_execution` já usava a mesma forma para o terminal `FAILED`; faltava o caso do terminal que teve sucesso. O estado da etapa não se move: `complete` era verdade e continua sendo, muda apenas qual receipt é o corrente. Superseder uma etapa não torna as seguintes erradas, torna-as inverificáveis, então elas entram em `chain_stale` e `ship` recusa enquanto a lista não esvaziar — sem isso a supersessão só realocaria a divergência uma etapa adiante. Verbos: `attest --supersedes` cunha, `checkpoint --supersedes-attestation` aceita. Aplicado aqui: `tasks`, `analyze`, `partition` e `implement-parallel` re-atestados em ronda 2, e a cadeia voltou a casar com os bytes correntes de `tasks.md`.
+- final-ref: ADR-0205
 
 ## BL-0202 — `worker-required` bloqueia quem deveria emitir o receipt
 - state: resolved

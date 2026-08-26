@@ -1,10 +1,10 @@
 # FASE-001 — Emissor da cadeia de atestação
 
 - phase: FASE-001
-- state: blocked
+- state: ready-for-specify
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: cadeia de atestação, emissor, leader, executor da etapa, evidência estrutural, artefato da etapa, lease
-- ADRs: ADR-0201, ADR-0202, ADR-0203, ADR-0204
+- ADRs: ADR-0201, ADR-0202, ADR-0203, ADR-0204, ADR-0205
 - BLs: BL-0201, BL-0202
 
 ## WHAT

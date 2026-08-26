@@ -341,5 +341,188 @@ class CliRefusesBeforeReading(unittest.TestCase):
         self.assertFalse((REPO / ".grill/attestations/should-not-exist-either.json").exists())
 
 
+class Supersession(unittest.TestCase):
+    """Re-attestation of a step whose artefact legitimately changed (BL-0201).
+
+    Before this existed, a closed step whose artefact was later corrected stayed
+    divergent forever, and an audit could not tell an honest correction from
+    tampering -- the one distinction the chain is for. These tests pin the price
+    of the correction: it must name what it replaces, advance the round, and
+    actually differ.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        MintedChainIsAccepted.setUpClass.__func__(cls)
+
+    def chain(self, **overrides):
+        return MintedChainIsAccepted.chain(self, **overrides)
+
+    def successor(self, **overrides):
+        import hashlib
+        first = self.chain()["step_output"]
+        corrected = "sha256:" + hashlib.sha256(b"artefato corrigido\n").hexdigest()
+        kw = dict(
+            artefact_sha256=corrected,
+            execution_round=2,
+            attempt_id="att-2",
+            supersedes_step_execution_id=first["step_execution_id"],
+            supersedes_attempt_id=first["attempt_id"],
+        )
+        kw.update(overrides)
+        return first, self.chain(**kw)["step_output"]
+
+    def test_a_first_receipt_supersedes_nothing(self) -> None:
+        """Absent links are the honest default, not a placeholder to fill in."""
+        first = self.chain()["step_output"]
+        self.assertIsNone(first["supersedes_step_execution_id"])
+        self.assertIsNone(first["supersedes_attempt_id"])
+        self.assertEqual(first["execution_round"], 1)
+
+    def test_a_successor_carries_both_back_references(self) -> None:
+        first, second = self.successor()
+        self.assertEqual(second["supersedes_step_execution_id"], first["step_execution_id"])
+        self.assertEqual(second["supersedes_attempt_id"], first["attempt_id"])
+        self.assertNotEqual(second["step_execution_id"], first["step_execution_id"])
+
+    def test_half_a_link_is_refused(self) -> None:
+        """Naming a superseded execution without its attempt is unresolvable."""
+        with self.assertRaises(A.EmissionError) as caught:
+            self.chain(execution_round=2, supersedes_step_execution_id="se-" + "a" * 64)
+        self.assertEqual(caught.exception.reason, "SUPERSEDE_LINK_INCOMPLETE")
+
+    def test_a_first_round_may_not_claim_to_supersede(self) -> None:
+        with self.assertRaises(A.EmissionError) as caught:
+            self.chain(supersedes_step_execution_id="se-" + "a" * 64,
+                       supersedes_attempt_id="att-0")
+        self.assertEqual(caught.exception.reason, "SUPERSEDE_ROUND_NOT_ADVANCED")
+
+    def test_the_judge_still_accepts_a_successor_chain(self) -> None:
+        """A supersession is a normal chain plus provenance -- not a bypass."""
+        import hashlib
+        first = self.chain()["step_output"]
+        corrected = "sha256:" + hashlib.sha256(b"artefato corrigido\n").hexdigest()
+        bundle = self.chain(
+            artefact_sha256=corrected, execution_round=2, attempt_id="att-2",
+            supersedes_step_execution_id=first["step_execution_id"],
+            supersedes_attempt_id=first["attempt_id"])
+        verdict = A.judge_checkpoint_attestation(
+            bundle, project_id=self.project_id, work_item_id="wi-1", step_id="specify")
+        self.assertEqual(verdict["output"]["output_sha256"], corrected)
+
+    def test_the_prior_receipt_survives_the_supersession(self) -> None:
+        """Nothing is rewritten: the store holds both, and the old one is intact."""
+        first, second = self.successor()
+        store: dict = {}
+        self.assertEqual(A.supersede_step_execution(store, first, second), "RECORDED")
+        self.assertEqual(store[first["step_execution_id"]], dict(first))
+        self.assertEqual(store[second["step_execution_id"]]["execution_round"], 2)
+
+    def test_an_unlinked_successor_is_refused(self) -> None:
+        first, second = self.successor(supersedes_step_execution_id="se-" + "b" * 64)
+        with self.assertRaises(A.AttestationError) as caught:
+            A.supersede_step_execution({}, first, second)
+        self.assertEqual(caught.exception.reason, "SUPERSEDE_NOT_LINKED")
+
+    def test_a_successor_naming_the_wrong_attempt_is_refused(self) -> None:
+        first, second = self.successor(supersedes_attempt_id="att-outro")
+        with self.assertRaises(A.AttestationError) as caught:
+            A.supersede_step_execution({}, first, second)
+        self.assertEqual(caught.exception.reason, "SUPERSEDE_ATTEMPT_NOT_LINKED")
+
+    def test_superseding_a_step_with_another_step_is_refused(self) -> None:
+        """Both receipts are genuine; they just do not describe the same step."""
+        other = self.chain(step_id="plan")["step_output"]
+        _, second = self.successor()
+        with self.assertRaises(A.AttestationError) as caught:
+            A.supersede_step_execution({}, other, second)
+        self.assertEqual(caught.exception.reason, "SUPERSEDE_STEP_MISMATCH")
+
+    def test_a_supersession_that_changes_nothing_is_refused(self) -> None:
+        """A no-op dressed as a correction would launder an unchanged artefact.
+
+        Two receipts for the same artefact always differ in bytes -- the round
+        is part of what is hashed -- so only the anchor can tell a correction
+        from a re-stamp.
+        """
+        first, second = self.successor(artefact_sha256=self.artefact_sha256)
+        self.assertEqual(second["output_sha256"], first["output_sha256"])
+        self.assertNotEqual(second["content_sha256"], first["content_sha256"])
+        with self.assertRaises(A.AttestationError) as caught:
+            A.supersede_step_execution({}, first, second)
+        self.assertEqual(caught.exception.reason, "SUPERSEDE_WITHOUT_CHANGE")
+
+    def test_a_downstream_step_re_attests_with_an_unchanged_artefact(self) -> None:
+        """Clearing the stale chain must not require inventing a new artefact.
+
+        A step after a corrected one did not redo its work: its artefact is
+        byte-identical and only the predecessor it rests on has moved. That is
+        the ordinary case of clearing the ledger, so it has to be allowed.
+        """
+        predecessor = {
+            "step_id": "specify",
+            "output_sha256": "sha256:" + "c" * 64,
+            "receipt_ref": "receipts/skill-invocation/specify-att-1.terminal.json",
+            "provenance": "current-generation",
+        }
+        first, second = self.successor(
+            artefact_sha256=self.artefact_sha256, dependency_outputs=[predecessor])
+        self.assertEqual(second["output_sha256"], first["output_sha256"])
+        self.assertEqual(A.supersede_step_execution({}, first, second), "RECORDED")
+
+
+class StaleChainLedger(unittest.TestCase):
+    """Superseding a step must not relocate the divergence one step downstream.
+
+    The receipts after the corrected one each sealed the output being replaced.
+    They are not wrong; they are unverifiable, and the ledger has to say so or
+    the supersession only moves the problem.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "grill_workspace_cli",
+            REPO / "plugin/skills/grill-with-docs/scripts/grill_workspace.py")
+        module = importlib.util.module_from_spec(spec)
+        # Registered before executing: the module defines dataclasses, and
+        # @dataclass resolves annotations through sys.modules[cls.__module__].
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        cls.cli = module
+
+    def development(self, attested):
+        return {
+            "sequence": list(WV.SEQUENCE_V4),
+            "attested_outputs": {step: {"step_id": step} for step in attested},
+        }
+
+    def test_only_already_attested_later_steps_go_stale(self) -> None:
+        dev = self.development(["specify", "plan", "tasks", "analyze"])
+        self.assertEqual(self.cli.mark_chain_stale(dev, "plan"), ["tasks", "analyze"])
+
+    def test_the_superseded_step_itself_is_not_stale(self) -> None:
+        dev = self.development(["specify", "plan", "tasks"])
+        self.assertNotIn("plan", self.cli.mark_chain_stale(dev, "plan"))
+
+    def test_stale_is_kept_in_sequence_order(self) -> None:
+        dev = self.development(["specify", "plan", "checklist", "tasks", "analyze"])
+        stale = self.cli.mark_chain_stale(dev, "specify")
+        self.assertEqual(stale, ["plan", "checklist", "tasks", "analyze"])
+
+    def test_re_attesting_a_stale_step_clears_it(self) -> None:
+        """The only honest way out of the ledger is attesting again."""
+        dev = self.development(["specify", "plan", "tasks"])
+        self.cli.mark_chain_stale(dev, "specify")
+        self.assertIn("plan", dev["chain_stale"])
+        self.cli.mark_chain_stale(dev, "plan")
+        self.assertNotIn("plan", dev["chain_stale"])
+
+    def test_superseding_the_last_attested_step_leaves_nothing_stale(self) -> None:
+        dev = self.development(["specify", "plan"])
+        self.assertEqual(self.cli.mark_chain_stale(dev, "plan"), [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

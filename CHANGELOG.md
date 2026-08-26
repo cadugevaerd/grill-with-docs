@@ -1,5 +1,38 @@
 # Changelog
 
+## 5.2.0
+
+- Corrigir o artefato de uma etapa já atestada passa a ter caminho: a **cadeia
+  sucessora**. Até aqui, editar um artefato depois do selo deixava a cadeia
+  divergente para sempre, e quem auditasse não conseguia distinguir edição
+  legítima de adulteração — que é justamente a distinção que a cadeia existe
+  para sustentar. `checkpoint --state in-progress` sobre etapa `complete`
+  devolvia `INVALID-TRANSITION` e nenhum comando reconciliava (BL-0201).
+- `attest --supersedes <bundle>` cunha o sucessor e `checkpoint
+  --supersedes-attestation <bundle> --reason ...` o aceita. O receipt anterior
+  nunca é reescrito nem removido: o sucessor nomeia o que substitui por
+  `supersedes_step_execution_id` e `supersedes_attempt_id` — campos que o
+  envelope `step-output/v1` já reservava e que eram sempre nulos — e avança
+  `execution_round`. O estado da etapa não se move; muda apenas qual receipt é
+  o corrente (ADR-0205).
+- O bundle substituído precisa ser **aquele que o work item aceitou**, provado
+  contra o par (`output_sha256`, `receipt_ref`) que o estado gravou na
+  aceitação. Um bundle apenas bem-formado da mesma etapa é recusado.
+- Superseder uma etapa não torna as seguintes erradas: torna-as
+  inverificáveis, porque cada uma selou o output que acabou de ser
+  substituído. Elas passam a constar em `development.chain_stale`, e `ship`
+  recusa com `CHAIN-STALE` enquanto a lista não esvaziar. Sem isso a
+  supersessão apenas realocaria a divergência uma etapa adiante.
+- `supersede_step_execution` exige mudança real — no artefato **ou** no
+  predecessor. Uma etapa a jusante re-atesta com o artefato byte-idêntico,
+  porque não refez trabalho algum; exigir artefato novo ali proibiria a própria
+  re-atestação que limpa a lista.
+- Recusas nomeadas novas: `SUPERSEDE_LINK_INCOMPLETE`,
+  `SUPERSEDE_ROUND_NOT_ADVANCED`, `SUPERSEDE_NOT_LINKED`,
+  `SUPERSEDE_ATTEMPT_NOT_LINKED`, `SUPERSEDE_STEP_MISMATCH`,
+  `SUPERSEDE_WITHOUT_CHANGE`, `SUPERSEDE-BUNDLE-NOT-RECORDED`,
+  `SUPERSEDE-STEP-NOT-COMPLETE`, `CHAIN-STALE`.
+
 ## 5.1.0
 
 - O núcleo passa a saber **cunhar** uma cadeia de atestação, não apenas julgá-la.

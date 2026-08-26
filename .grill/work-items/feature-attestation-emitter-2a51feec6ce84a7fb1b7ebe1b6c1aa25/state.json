@@ -24,9 +24,9 @@
     },
     "attested_outputs": {
       "analyze": {
-        "output_sha256": "sha256:7ce58a101d61d214895db26b49b1853456ccca5044a3cd72c848d68406b6ee59",
+        "output_sha256": "sha256:6965d9e6f0e919152fa4df951799ca405d2162cf5d0b78d0e8dc6593035bc8a5",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-2.terminal.json",
         "step_id": "analyze"
       },
       "checklist": {
@@ -38,13 +38,13 @@
       "implement-parallel": {
         "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-2.terminal.json",
         "step_id": "implement-parallel"
       },
       "partition": {
         "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-2.terminal.json",
         "step_id": "partition"
       },
       "plan": {
@@ -60,9 +60,9 @@
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:9d27185f993515d14aad1f49d41c584f79373ea13658691ef845782c4b9838d2",
+        "output_sha256": "sha256:6965d9e6f0e919152fa4df951799ca405d2162cf5d0b78d0e8dc6593035bc8a5",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -213,8 +213,74 @@
         "reason": "",
         "state": "complete",
         "step": "implement-parallel"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "6965d9e6f0e919152fa4df951799ca405d2162cf5d0b78d0e8dc6593035bc8a5"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "tasks.md corrigido apos o selo: T011 citava resolve_shipped_workflow_skills com o nome errado e as tarefas T020/T021 foram acrescentadas",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/026-tasks.json"
+      },
+      {
+        "chain_stale": [
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/tasks.md",
+            "sha256": "6965d9e6f0e919152fa4df951799ca405d2162cf5d0b78d0e8dc6593035bc8a5"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "re-atestacao apos a supersessao de tasks: a analise passa a repousar sobre o tasks.md corrigido",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/026-analyze.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "re-atestacao apos a supersessao a montante: o artefato nao mudou, mudou o predecessor sobre o qual ele repousa",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/026-partition.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/execution-dag.json",
+            "sha256": "a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "re-atestacao apos a supersessao a montante: o artefato nao mudou, mudou o predecessor sobre o qual ele repousa",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/026-implement.json"
       }
     ],
+    "chain_stale": [],
     "current_step": "converge",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
@@ -244,6 +310,64 @@
       "specify": "complete",
       "tasks": "complete",
       "verify": "pending"
+    },
+    "superseded_outputs": {
+      "analyze": [
+        {
+          "attempt_id": "analyze-1",
+          "attestation": ".grill/attestations/026-analyze.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:7ce58a101d61d214895db26b49b1853456ccca5044a3cd72c848d68406b6ee59",
+          "provenance": "current-generation",
+          "reason": "re-atestacao apos a supersessao de tasks: a analise passa a repousar sobre o tasks.md corrigido",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+          "step_execution_id": "se-86fe7f5dbe55b0f04789ab7d09e697e17aa1b50a423fe7a91045c083e53e8aef",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-718591883c21f2acb85bac74ea5f837ef8688807f20c08fac465a0da854b3ecf"
+        }
+      ],
+      "implement-parallel": [
+        {
+          "attempt_id": "implement-parallel-1",
+          "attestation": ".grill/attestations/026-implement.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "re-atestacao apos a supersessao a montante: o artefato nao mudou, mudou o predecessor sobre o qual ele repousa",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+          "step_execution_id": "se-034d29d857a8c1e84dd71e690102f19ed442b4ff6c828966394b7a835ba016a0",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-a59308174f2eeae34d98cbebae09243d44c55240c2a383480d058dd560711dec"
+        }
+      ],
+      "partition": [
+        {
+          "attempt_id": "partition-1",
+          "attestation": ".grill/attestations/026-partition.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:a34ac41df4c854d2b14fb22105dea153c9c0a4eb6bbbfc29c098ee761864f18b",
+          "provenance": "current-generation",
+          "reason": "re-atestacao apos a supersessao a montante: o artefato nao mudou, mudou o predecessor sobre o qual ele repousa",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+          "step_execution_id": "se-c80d92dc7dd4800cb808de5e594b9774a0e2579ac5d7366415fbc08aac78aad0",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-21b36d36d2ff9b12c67c43c70f902c175b6f2a905ccb5093a386add7a1a516d7"
+        }
+      ],
+      "tasks": [
+        {
+          "attempt_id": "tasks-1",
+          "attestation": ".grill/attestations/026-tasks.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:9d27185f993515d14aad1f49d41c584f79373ea13658691ef845782c4b9838d2",
+          "provenance": "current-generation",
+          "reason": "tasks.md corrigido apos o selo: T011 citava resolve_shipped_workflow_skills com o nome errado e as tarefas T020/T021 foram acrescentadas",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+          "step_execution_id": "se-f0a117d4cd199217dc1b036502a5ec4f9059b479425f54316266036005bda314",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-d4631af29268934be441f3f0219ad401c449d8891a4d88b1ebbaa72807d933fc"
+        }
+      ]
     },
     "workflow_version": "v4"
   },
