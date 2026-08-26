@@ -113,6 +113,28 @@ def managed_version(text: str) -> str | None:
     return match.group(1) if match else None
 
 
+def sole_managed_version(text: str) -> str | None:
+    """Return the managed-marker version, but only when it is unambiguous.
+
+    ``managed_version`` above answers "what does the first marker say?" via
+    ``re.search`` -- it is first-match and stays that way, because seven
+    internal callers plus ``workflow_v3.marker_version`` plus existing tests
+    depend on its ``or VERSION`` fallback behaviour (ADR-0002: changing it to
+    return ``None`` where it today returns a marker breaks materialization).
+
+    This function answers a different question: "is there exactly one
+    managed-version declaration in this text?" It uses ``re.findall`` to
+    collect every occurrence of the marker and returns the sole match only
+    when precisely one is found. Zero occurrences and multiple occurrences
+    both collapse to ``None`` -- the contract here is uniqueness of the
+    declaration, not recovery of a best-guess value. Callers that need to
+    detect a corrupted or duplicated marker (rather than just read the first
+    one) should use this function instead of ``managed_version``.
+    """
+    markers = re.findall(r"grill-with-docs-workflow:(v\d+)", text)
+    return markers[0] if len(markers) == 1 else None
+
+
 _GRILL_CORE: dict[str, object] = {}
 
 

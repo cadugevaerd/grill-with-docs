@@ -694,6 +694,52 @@ def state_template(root: Path, work_id: str, constitution: dict[str, Any], workf
     # that a v4 document with "version": "v2" here was inconsistent.  Readers
     # accept both spellings, so materialised bundles need no migration.
     value["workflow"] = {**workflow, "schema": "v2"}
+
+    # T008: refuse -- strictly before any write reaches disk -- when
+    # WORKFLOW.md's version declaration is not exactly one accepted marker.
+    # This runs before write_bundle_staging()/rename_child() (both called by
+    # init/migrate only after initial_files() returns), and the lock acquired
+    # ahead of initial_files() is released by the caller's own `finally`
+    # regardless of how this raises, so a refusal here leaves no work-item
+    # directory, staging area, or lock behind (contracts/cli.md).
+    ensure_workflow = sibling("ensure_workflow")
+    audit_decisions = sibling("audit_decisions")
+    text = safe_read(root / "WORKFLOW.md", root=root, utf8=True)
+    assert isinstance(text, str)
+    # Counted independently of sole_managed_version() so the refusal payload
+    # can report the real cardinality (0 or >=2) rather than a bare None --
+    # the same literal audit_decisions.py already keeps for the same reason.
+    markers_found = len(re.findall(r"grill-with-docs-workflow:(v\d+)", text))
+    sole = ensure_workflow.sole_managed_version(text)
+    accepted = list(audit_decisions.ACCEPTED_WORKFLOW_MARKERS)
+    if sole is None or sole not in accepted:
+        raise CliFailure(
+            EXIT_BLOCKED, "BLOCKED", translate_v3_code("WORKFLOW_MARKER_UNRESOLVED"),
+            "WORKFLOW.md does not declare exactly one accepted workflow version",
+            extra={"workflow": {"path": "WORKFLOW.md", "markers_found": markers_found, "accepted": accepted}},
+        )
+
+    # T009/T010: derive development.workflow_version from the resolved
+    # marker. The refusal above already guarantees a unique, accepted
+    # declaration, so `sole` reaching here outside `accepted` is unreachable
+    # by construction -- `None` included.
+    # v2 -> v3 is the one equivalence in this map: SEQUENCE_BY_VERSION carries
+    # no "v2" entry, and audit_decisions.WORKFLOW_SEQUENCE_BY_MARKER proves v2
+    # and v3 declare the identical eleven-step tuple, so a v2 document is safe
+    # to project onto v3 instead of being an unmapped literal (FR-002, R3).
+    resolved_version = "v3" if sole == "v2" else sole
+    value["development"]["workflow_version"] = resolved_version
+    # workflow_version and sequence describe the same fact -- which stage
+    # order this bundle speaks -- so they MUST be derived together from the
+    # same resolution (FR-002, V-5). Leaving `sequence` sourced from the
+    # asset (always the active version's tuple) while `workflow_version` is
+    # derived produces exactly the contradiction validate_checkpoint_contract
+    # rejects as DEVELOPMENT-SCHEMA: a bundle that declares v3 and lists the
+    # v4 steps. SEQUENCE_BY_VERSION is the same table development_sequence()
+    # reads at audit time, so a bundle materialised here already agrees with
+    # what the auditor recomputes from workflow_version alone.
+    value["development"]["sequence"] = list(SEQUENCE_BY_VERSION[resolved_version])
+
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
 
@@ -2179,6 +2225,17 @@ SEQUENCE_BY_VERSION = {
 }
 ACTIVE_DEVELOPMENT_SCHEMA = _workflow_versions.ACTIVE_DEVELOPMENT_SCHEMA
 ACTIVE_WORKFLOW_VERSION = _workflow_versions.ACTIVE_VERSION
+# T030: every canonical step id across every *readable* version (not just the
+# active one) -- ``checkpoint_command``'s structural ``--step`` gate runs
+# before the item is resolved, so it cannot yet know which version's sequence
+# the item declares. Gating it on ``SEQUENCE`` (the active version alone)
+# rejected a legitimately-declared v3 step (e.g. "agent-assign") outright,
+# contradicting ``development_workflow_version``'s own documented guarantee
+# that an older-schema bundle "keeps checkpointing... against the sequence it
+# was written with". ``ALL_STEPS`` is workflow_versions.py's own table built
+# for exactly this cross-version membership check; ordering within the step
+# is still enforced afterwards against the item's own resolved ``sequence``.
+ALL_STEPS = tuple(_workflow_versions.ALL_STEPS)
 
 
 def development_workflow_version(development: object) -> str | None:
@@ -3168,7 +3225,7 @@ def verify_checkpoint_attestation(
 
 def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
-    if args.step not in SEQUENCE:
+    if args.step not in ALL_STEPS:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STEP", args.step)
     item = resolve_development_item(root, args.work_id)
     snapshot_global = global_snapshotter(root)
@@ -3196,6 +3253,25 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         # código nomeado.
         if sequence != development_sequence(development) or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
+        # T032: `--step` is validated against ALL_STEPS (every canonical step id
+        # across every readable version, T030) before the item is resolved, so a
+        # name that is globally valid but simply not part of *this* item's own
+        # declared sequence -- e.g. "partition" against a v3 bundle, whose
+        # sequence carries "agent-assign"/"agent-execute" in its place -- still
+        # reaches here. Left unchecked, `sequence.index(args.step)` a few lines
+        # down raises an uncaught ValueError, which the CLI boundary can only
+        # report as UNEXPECTED-FAILURE: a real, anticipated condition wearing the
+        # mask of a bug. Name it here, before that lookup, and say which
+        # sequence the item declares so the operator knows which steps are
+        # actually valid for it.
+        if args.step not in sequence:
+            declared_version = development_workflow_version(development)
+            raise CliFailure(
+                EXIT_BLOCKED, "BLOCKED", "STEP-NOT-IN-SEQUENCE",
+                f"step {args.step!r} is not in the {declared_version} sequence: {', '.join(sequence)}",
+                extra={"work_id": args.work_id, "step": args.step,
+                       "workflow_version": declared_version, "sequence": sequence},
+            )
         current = steps.get(args.step, "pending")
         evidence = []
         for value in args.evidence:
