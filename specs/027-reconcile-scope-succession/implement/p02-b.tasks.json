@@ -39,5 +39,10 @@
       "plugin/skills/grill-with-docs/SKILL.md heading = # Grill with Docs v5.2.1 (single occurrence)",
       "plugin/skills/grill-with-docs/references/session-protocol.md heading = # Protocolo de sessão v5.2.1 (single occurrence)"
     ]
-  }
+  },
+  "completed": [
+    "T008",
+    "T010"
+  ],
+  "completed_index_note": "Indice `completed` acrescentado pelo leader apos o merge, transcrevendo literalmente o status por tarefa que este worker ja declarava neste mesmo arquivo. O brief oficial nao fixa o schema que gauntlet-tasks-reconcile le (document['completed']), entao cada worker gravou um formato proprio. Nenhuma afirmacao nova foi introduzida."
 }

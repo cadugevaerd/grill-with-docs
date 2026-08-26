@@ -26,5 +26,11 @@
     "skip_reason": "test_reject_symlink_chain_accepts_macos_var_root_alias: host has no /var -> /private/var alias (pre-existente, dependente de ambiente)"
   },
   "syntax_check": "python3 -c \"import ast; ast.parse(open('plugin/skills/grill-with-docs/scripts/grill_workspace.py').read())\" -> OK",
-  "notes": "Nenhum novo import, nenhuma mudanca de schema de recibo/output, apenas stdlib. Codigo em plugin/skills/grill-with-docs/scripts/grill_workspace.py."
+  "notes": "Nenhum novo import, nenhuma mudanca de schema de recibo/output, apenas stdlib. Codigo em plugin/skills/grill-with-docs/scripts/grill_workspace.py.",
+  "completed": [
+    "T001",
+    "T002",
+    "T003"
+  ],
+  "completed_index_note": "Indice `completed` acrescentado pelo leader apos o merge, transcrevendo literalmente o status por tarefa que este worker ja declarava neste mesmo arquivo. O brief oficial nao fixa o schema que gauntlet-tasks-reconcile le (document['completed']), entao cada worker gravou um formato proprio. Nenhuma afirmacao nova foi introduzida."
 }

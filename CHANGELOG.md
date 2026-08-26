@@ -1,5 +1,27 @@
 # Changelog
 
+## 5.2.1
+
+- Um recibo de reconciliação concluído deixa de ser ownership perpétuo dos
+  caminhos que cobriu. Até aqui, qualquer trabalho posterior que declarasse
+  honestamente o mesmo arquivo era recusado com `SCOPE-OVERLAP`, mesmo quando
+  declarava dependência direta do trabalho anterior — a classificação acontecia
+  antes da leitura de `depends-on-work`, nos dois caminhos (SGD-24).
+- A autorização é a mais estreita que dá para rastrear: **somente dependência
+  direta declarada**. No reconcile de alvo único, `depends-on-work` do alvo
+  precisa conter exatamente o `prior_id` do recibo sobreposto; no reconcile
+  completo, um dos dois trabalhos precisa declarar o outro, e a direção
+  identifica o sucessor. Dependência transitiva **não** autoriza: `A → B → C`
+  não deixa A reutilizar o escopo de C sem declarar `A → C` (ADR-0001).
+- Tudo o mais continua fail-closed e nada é dispensado por dependência:
+  ausência de declaração, dependência de terceiro, `DEPENDENCY-SCHEMA`,
+  `DEPENDENCY-MISSING`, `DEPENDENCY-NOT-RECONCILED`, `DEPENDENCY-SELF`,
+  `DEPENDENCY-CYCLE` e `ADR-CONFLICT`. Declaração malformada mapeia para
+  conjunto vazio e não autoriza nada.
+- Sem mudança de schema e sem migração: recibos gravados antes desta versão
+  continuam legíveis como estão. Quem declara a relação é sempre o sucessor, e o
+  recibo anterior não precisa saber quem virá depois.
+
 ## 5.2.0
 
 - Corrigir o artefato de uma etapa já atestada passa a ter caminho: a **cadeia

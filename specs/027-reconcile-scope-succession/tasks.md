@@ -38,9 +38,9 @@ não é contorno, é a única atribuição honesta que a ferramenta permite.
 As três tarefas tocam o mesmo arquivo e formam um grupo de conflito único: são
 serializadas de propósito, não por falta de paralelismo.
 
-- [ ] T001 Implementar em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, ao lado de `scopes_overlap`, o predicado puro de autorização que recebe os dois identificadores e o mapa `work_id → conjunto de dependências diretas` e devolve se o par está autorizado, sem calcular nenhum fechamento transitivo (FR-003, FR-008, Contract §C-005, Data model §Relação)
-- [ ] T002 [US1] Consultar o predicado no laço de sobreposição do caminho completo, em `validate_reconciliation` de `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, suprimindo apenas a anotação `SCOPE-OVERLAP` do par autorizado e reaproveitando o mapa de dependências que a função já constrói (FR-002, FR-004, FR-005, Contract §C-002)
-- [ ] T003 [US1] Mover a leitura e a validação de `depends-on-work` para **antes** do laço de sobreposição em `reconcile_command` de `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, e consultar o predicado contra o `prior_id` de cada recibo; declaração malformada mapeia para conjunto vazio e não autoriza nada (FR-001, FR-006, Contract §C-001, §C-006, Research §R-001)
+- [X] T001 Implementar em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, ao lado de `scopes_overlap`, o predicado puro de autorização que recebe os dois identificadores e o mapa `work_id → conjunto de dependências diretas` e devolve se o par está autorizado, sem calcular nenhum fechamento transitivo (FR-003, FR-008, Contract §C-005, Data model §Relação)
+- [X] T002 [US1] Consultar o predicado no laço de sobreposição do caminho completo, em `validate_reconciliation` de `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, suprimindo apenas a anotação `SCOPE-OVERLAP` do par autorizado e reaproveitando o mapa de dependências que a função já constrói (FR-002, FR-004, FR-005, Contract §C-002)
+- [X] T003 [US1] Mover a leitura e a validação de `depends-on-work` para **antes** do laço de sobreposição em `reconcile_command` de `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, e consultar o predicado contra o `prior_id` de cada recibo; declaração malformada mapeia para conjunto vazio e não autoriza nada (FR-001, FR-006, Contract §C-001, §C-006, Research §R-001)
 
 **Checkpoint**: os dois caminhos compartilham a mesma regra; nenhuma outra
 recusa mudou de linha.
@@ -52,13 +52,13 @@ recusa mudou de linha.
 **Purpose**: Travar o comportamento e sincronizar a versão. Quatro grupos de
 conflito disjuntos — o `partition` empacota em bins paralelos.
 
-- [ ] T004 [P] [US1] Acrescentar em `tests/validate_workspace_contract.py` os casos positivos de sucessão: dependência direta declarada atravessa no caminho targeted e no completo, nas duas direções de declaração (FR-001, FR-002, SC-001, Contract §C-001, §C-002)
-- [ ] T005 [P] [US2] Acrescentar em `tests/validate_workspace_contract.py` os três casos negativos dedicados — ausência de dependência, dependência de terceiro e relação apenas transitiva `A→B→C` — cada um afirmando que a anotação `SCOPE-OVERLAP` permanece (FR-003, FR-004, FR-005, FR-012, SC-002, Contract §C-003, §C-004, §C-005)
-- [ ] T006 [P] [US3] Acrescentar em `tests/validate_workspace_contract.py` os casos de preservação, cada recusa no caminho que a emite: `DEPENDENCY-SCHEMA` sem conceder autorização, `DEPENDENCY-MISSING` no caminho completo, `DEPENDENCY-NOT-RECONCILED` no targeted, `DEPENDENCY-SELF` no targeted, `DEPENDENCY-CYCLE` com par mutuamente declarado **no caminho completo** — o targeted não tem detecção de ciclo e não deve ser cobrado por ela — e `ADR-CONFLICT` com dependência direta presente (FR-006, FR-007, SC-003, Contract §C-006, §C-007, Analyze §F1, §F4)
-- [ ] T007 [P] [US4] Acrescentar em `tests/validate_workspace_contract.py` os casos de invariante: preview não altera nenhum byte com par autorizado, apply autorizado é `APPLIED` seguido de `REUSED` byte-idêntico sem churn de `mtime`, e recibo gravado antes da mudança é lido sem conversão (FR-009, FR-010, SC-004, Contract §C-008, §C-009, §C-010)
-- [ ] T008 [P] Atualizar a constante `VERSION` para `5.2.1` em `tests/validate_distribution.py` (FR-011, SC-005, Contract §C-011)
-- [ ] T009 [P] Atualizar a versão para `5.2.1` nos quatro manifests: `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json` e `.agents/plugins/marketplace.json` (FR-011, SC-005)
-- [ ] T010 [P] Atualizar os headings de versão para `5.2.1` em `plugin/skills/grill-with-docs/SKILL.md` e `plugin/skills/grill-with-docs/references/session-protocol.md`, mantendo exatamente uma ocorrência de cada prefixo (FR-011, SC-005)
+- [X] T004 [P] [US1] Acrescentar em `tests/validate_workspace_contract.py` os casos positivos de sucessão: dependência direta declarada atravessa no caminho targeted e no completo, nas duas direções de declaração (FR-001, FR-002, SC-001, Contract §C-001, §C-002)
+- [X] T005 [P] [US2] Acrescentar em `tests/validate_workspace_contract.py` os três casos negativos dedicados — ausência de dependência, dependência de terceiro e relação apenas transitiva `A→B→C` — cada um afirmando que a anotação `SCOPE-OVERLAP` permanece (FR-003, FR-004, FR-005, FR-012, SC-002, Contract §C-003, §C-004, §C-005)
+- [X] T006 [P] [US3] Acrescentar em `tests/validate_workspace_contract.py` os casos de preservação, cada recusa no caminho que a emite: `DEPENDENCY-SCHEMA` sem conceder autorização, `DEPENDENCY-MISSING` no caminho completo, `DEPENDENCY-NOT-RECONCILED` no targeted, `DEPENDENCY-SELF` no targeted, `DEPENDENCY-CYCLE` com par mutuamente declarado **no caminho completo** — o targeted não tem detecção de ciclo e não deve ser cobrado por ela — e `ADR-CONFLICT` com dependência direta presente (FR-006, FR-007, SC-003, Contract §C-006, §C-007, Analyze §F1, §F4)
+- [X] T007 [P] [US4] Acrescentar em `tests/validate_workspace_contract.py` os casos de invariante: preview não altera nenhum byte com par autorizado, apply autorizado é `APPLIED` seguido de `REUSED` byte-idêntico sem churn de `mtime`, e recibo gravado antes da mudança é lido sem conversão (FR-009, FR-010, SC-004, Contract §C-008, §C-009, §C-010)
+- [X] T008 [P] Atualizar a constante `VERSION` para `5.2.1` em `tests/validate_distribution.py` (FR-011, SC-005, Contract §C-011)
+- [X] T009 [P] Atualizar a versão para `5.2.1` nos quatro manifests: `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json` e `.agents/plugins/marketplace.json` (FR-011, SC-005)
+- [X] T010 [P] Atualizar os headings de versão para `5.2.1` em `plugin/skills/grill-with-docs/SKILL.md` e `plugin/skills/grill-with-docs/references/session-protocol.md`, mantendo exatamente uma ocorrência de cada prefixo (FR-011, SC-005)
 
 **Checkpoint**: `python3 tests/validate_workspace_contract.py` e
 `python3 tests/validate_distribution.py` fecham em exit 0.
@@ -71,7 +71,7 @@ conflito disjuntos — o `partition` empacota em bins paralelos.
 conferência. Tarefa de evidência de coordenador — `partition` a devolve em
 `deferred_to_leader` e nenhum worker a executa.
 
-- [ ] T011 Sincronizar a versão `5.2.1` no heading de README.md e abrir a entrada `## 5.2.1` em CHANGELOG.md, e registrar a conferência dos oito pontos de distribuição em `.grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/AUDIT.md` (FR-011, SC-005, Contract §C-011)
+- [X] T011 Sincronizar a versão `5.2.1` no heading de README.md e abrir a entrada `## 5.2.1` em CHANGELOG.md, e registrar a conferência dos oito pontos de distribuição em `.grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/AUDIT.md` (FR-011, SC-005, Contract §C-011)
 
 **Checkpoint**: os oito pontos concordam; `python3 tests/run_validators.py`
 fecha em exit 0.

@@ -31,5 +31,9 @@
     "failure_line": "assert codex[\"version\"] == claude[\"version\"] == VERSION",
     "reason": "tests/validate_distribution.py VERSION constant (line 8, owned by p02-b) still reads 5.2.0 in this worktree; not in scope for p02-c"
   },
-  "notes": "Only the version value changed in each of the four manifests; key order, indentation and trailing newline preserved. Diff for each file is a single changed line."
+  "notes": "Only the version value changed in each of the four manifests; key order, indentation and trailing newline preserved. Diff for each file is a single changed line.",
+  "completed": [
+    "T009"
+  ],
+  "completed_index_note": "Indice `completed` acrescentado pelo leader apos o merge, transcrevendo literalmente o status por tarefa que este worker ja declarava neste mesmo arquivo. O brief oficial nao fixa o schema que gauntlet-tasks-reconcile le (document['completed']), entao cada worker gravou um formato proprio. Nenhuma afirmacao nova foi introduzida."
 }

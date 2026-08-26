@@ -55,5 +55,12 @@
       "test_reconcile_succession_targeted_apply_is_byte_idempotent_and_reuses_prior_receipt: NO-GO instead of APPLIED on first apply"
     ]
   },
-  "notes": "Worktree base predates both the spec docs commit (8fbdb76) and the fix commit (f853341) visible on the coordinator branch; specs/027-reconcile-scope-succession did not exist in this worktree before this sidecar. Wrote only tests/validate_workspace_contract.py and this sidecar, per granted scope. Did not touch grill_workspace.py, tasks.md, .grill/, or .specify/reports/."
+  "notes": "Worktree base predates both the spec docs commit (8fbdb76) and the fix commit (f853341) visible on the coordinator branch; specs/027-reconcile-scope-succession did not exist in this worktree before this sidecar. Wrote only tests/validate_workspace_contract.py and this sidecar, per granted scope. Did not touch grill_workspace.py, tasks.md, .grill/, or .specify/reports/.",
+  "completed": [
+    "T004",
+    "T005",
+    "T006",
+    "T007"
+  ],
+  "completed_index_note": "Indice `completed` acrescentado pelo leader apos o merge, transcrevendo literalmente o status por tarefa que este worker ja declarava neste mesmo arquivo. O brief oficial nao fixa o schema que gauntlet-tasks-reconcile le (document['completed']), entao cada worker gravou um formato proprio. Nenhuma afirmacao nova foi introduzida."
 }
