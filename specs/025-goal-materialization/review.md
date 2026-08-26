@@ -1,7 +1,11 @@
 ## Review Report
 
-Verdict: REQUEST CHANGES
-Source fingerprint: tree 1be6f0949d9cd4544f1d35a95af64b85e514cd3344e675b12794958b8466c51e / work c41b9122785e297411ab55bc1ffec26f7eef2ecc8afd69632652c0734cd23324 / plan 2a8962d6a32f9c09f11057aeba8be817cc6cde901c7a6d31e6c2307e820f9f1a
+Verdict: APPROVE
+Source fingerprint: tree 55fa1f6f65dfcef1f4d2a4da25d22836110c620db0b37b3b3b51046637595bf8 / work c41b9122785e297411ab55bc1ffec26f7eef2ecc8afd69632652c0734cd23324 / plan 2a8962d6a32f9c09f11057aeba8be817cc6cde901c7a6d31e6c2307e820f9f1a
+
+Segunda passagem. A primeira devolveu `REQUEST CHANGES` por I1 sobre tree
+`1be6f094…`; I1 foi corrigido e o verify reemitido pela cadeia sucessora
+(`execution_round` 2, `chain_stale: []`). Este veredicto é sobre tree `55fa1f6f…`.
 
 Converge: CONVERGED (zero findings, tasks.md inalterado). Verify: PASS.
 
@@ -27,11 +31,16 @@ continuavam presentes; e o scan de SSOT excluía qualquer caminho contendo `.git
 zerava todos os hits quando o worktree vive sob `.git/grill/wt-…`. Registrar isso é o
 oposto de ruído: é a diferença entre cobertura e aparência de cobertura.
 
-**Lacuna (I1)**: `resolve_goal` só é exercitado para `CREATED`, `REUSED` e o `BLOCKED` de
-destino-diretório (linhas 120, 138–148). Sem cobertura automatizada ficam:
-os três `reason` de `PRESERVED` (`human document`, `managed version mismatch`,
-`incompatible goal`), o `BLOCKED` de symlink, `invalid UTF-8 goal` e
-`filesystem-error:<Tipo>`.
+**I1, corrigido nesta rodada.** `resolve_goal` era exercitado apenas para `CREATED`,
+`REUSED` e o `BLOCKED` de destino-diretório. O validador foi de 12 para 19 testes e agora
+cobre os três `reason` de `PRESERVED`, arquivo vazio, symlink com o alvo verificado intacto,
+`invalid UTF-8 goal` e o exit 2 do CLI. Cada caso de `PRESERVED` compara `sha256`
+antes/depois e exige que a raiz contenha exatamente `goal.md`.
+
+O que fecha I1 não é a suíte verde, é a prova de mutação: com o ramo `PRESERVED` trocado por
+uma sobrescrita, 4 dos novos casos reprovam; com o código restaurado, 19/19 `OK`. Isso
+demonstra que os testes mordem o defeito específico que a lacuna deixava passar, em vez de
+apenas acompanhar o comportamento atual.
 
 ### Runtime Correctness
 
@@ -96,7 +105,7 @@ Nenhum.
 
 ### Important Issues
 
-**I1 — `PRESERVED` e os ramos `BLOCKED` não têm teste de regressão.**
+**I1 — RESOLVIDO.** `PRESERVED` e os ramos `BLOCKED` não tinham teste de regressão.
 `tests/validate_goal_document_contract.py` cobre `CREATED`, `REUSED` e o `BLOCKED` de
 diretório, mas não os três `reason` de `PRESERVED`, nem symlink, nem `invalid UTF-8 goal`,
 nem `filesystem-error:<Tipo>`.
@@ -108,11 +117,8 @@ Cenários 3 a 5 e pelo worker p04-a em oito repositórios de `/tmp` — e ambas 
 efêmeras. Nada no repositório reprova se um refactor futuro trocar `PRESERVED` por
 sobrescrita; o `init` passaria a destruir arquivo humano com a suíte verde.
 
-Fix concreto: acrescentar a `tests/validate_goal_document_contract.py` casos que chamem
-`resolve_goal` sobre raiz temporária e assertem, com `sha256` comparado antes/depois:
-documento humano → `PRESERVED`/`human document`; marcador de outra versão →
-`managed version mismatch`; marcador `v1` mutilado → `incompatible goal`; arquivo vazio →
-`PRESERVED` com 0 bytes; symlink → `BLOCKED`/`unsafe target` com o alvo intacto.
+Corrigido em `4083c25`, exatamente nesses termos, e verificado por mutação. O
+comportamento nunca esteve errado — o que faltava era o repositório defendê-lo.
 
 **I2 — `receipts/**` ausente de `converge.fingerprint_exclude`.**
 `.specify/extensions/verify-review-ship/verify-review-ship-config.yml` linhas 13–19 excluem
@@ -132,10 +138,11 @@ verificada executavelmente pelo `verify` (`distribution: OK`, 5.3.0 nos oito lug
 
 ### Final Recommendation
 
-REQUEST CHANGES por I1: corrigir, rodar `/speckit.converge`, depois `verify` e `review` de novo.
+APPROVE: run `/speckit.verify-review-ship.ship`
 
-I1 é um gap de cobertura, não um defeito de comportamento — o comportamento está correto e
-foi observado. Mas a regra desta gate é explícita: mudança de comportamento significativa sem
-teste adequado é `REQUEST CHANGES`, e proteger arquivo humano é a mudança mais significativa
-do diff. O custo do fix é baixo (cinco casos no validador que já existe); o custo de não
-fazer é um refactor futuro apagar trabalho de usuário com a suíte verde.
+I1 está fechado com prova de mutação. I2 permanece aberto e é do repositório, não deste diff:
+`receipts/**` fora de `converge.fingerprint_exclude` faz o componente `work` mudar entre
+gates do mesmo run sem que nada revisado mude. Não bloqueia este ship; deve virar item de
+backlog junto com o flaky de
+`validate_gauntlet_run_contract.py::test_eight_concurrent_eligible_resumes_record_once_and_reuse_without_residue`,
+que o `verify` caracterizou como externo a esta entrega por comparação controlada.
