@@ -70,6 +70,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/tasks-tasks-4.terminal.json",
         "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:ec32d1371838e1f677105e55476cbcf97f1857526e3db8e52a60837ec079ab26",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "step_id": "verify"
       }
     },
     "audit": [
@@ -560,10 +566,29 @@
         "state": "complete",
         "step": "converge",
         "supersedes": ".grill/attestations/026-converge.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/verify.md",
+            "sha256": "ec32d1371838e1f677105e55476cbcf97f1857526e3db8e52a60837ec079ab26"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "verify PASS: 1294 testes em 27 validadores exit 0, distribution OK, higiene com um orfao removido",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "abrindo review apos verify PASS",
+        "state": "in-progress",
+        "step": "review"
       }
     ],
     "chain_stale": [],
-    "current_step": "verify",
+    "current_step": "review",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -587,11 +612,11 @@
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
-      "review": "pending",
+      "review": "in-progress",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "in-progress"
+      "verify": "complete"
     },
     "superseded_outputs": {
       "analyze": [
