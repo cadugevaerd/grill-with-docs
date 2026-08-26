@@ -10,6 +10,17 @@ converge:
   # o protocolo grill, fechar uma etapa de gate escreve um bundle ali; conta-lo
   # como fonte faz `verify` invalidar o proprio relatorio, e rodar de novo so
   # produz outro bundle. Laco, nao deteccao.
+  # `.grill/attestations/**` nunca casou nada: sob o protocolo grill os bundles
+  # ficam em `.grill/work-items/<work_id>/attestations/`, nao na raiz de
+  # `.grill/`. Sem o padrao correto, o laco que o comentario acima descreve
+  # acontecia de fato -- `ship` recusava por STALE-EVIDENCE porque `verify` e
+  # `review` cunharam, cada um, o proprio receipt entre as duas medicoes. A
+  # autorizacao humana de `ship` entra pela mesma razao: e evidencia SOBRE a
+  # entrega, escrita depois que `review` mediu.
+  #
+  # Comentario nenhum pode ficar ENTRE os itens abaixo: o leitor da config para
+  # de coletar na primeira linha nao-vazia que nao e item de lista, entao um
+  # comentario interleaved descarta silenciosamente tudo o que vem depois dele.
   fingerprint_exclude:
     - ".specify/reports/verify-review-ship/**"
     - "specs/**/verify.md"
@@ -17,6 +28,8 @@ converge:
     - ".grill/work-items/**/state.json"
     - ".grill/work-items/**/ROUND-LOG.jsonl"
     - ".grill/attestations/**"
+    - ".grill/work-items/**/attestations/**"
+    - ".grill/work-items/**/SHIP-AUTHORIZATION.json"
 
 # Ship. Adaptado a este repositorio, nao copiado do template: o backlog e
 # externo (backlogctl/SGD, sem BACKLOG.md) e os ADRs vivem por work item em

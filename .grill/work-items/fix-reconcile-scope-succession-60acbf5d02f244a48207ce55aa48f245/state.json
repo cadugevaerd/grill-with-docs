@@ -29,6 +29,7 @@
       "implement-parallel": "se-371831aa160655748b677b843265b61501fc429c145f3bdae25f676032e90425",
       "partition": "se-a20077098d3ace8aaabc03b9b6eea6379be52c28bb0f301a7baa622a671eafc2",
       "plan": "se-cf78ecb0ec80629bba927f5999f47064e8849bf8a810755b87555fe64368060d",
+      "review": "se-755b9ad55b68347cdb49ed6952d213600b765920bfe53bba07ab740c7bd010a0",
       "specify": "se-e7a926f8b6661101ab6facf9b7aa8d2c3d2685f42f62c0fd733feef501b3e73c",
       "tasks": "se-8a488eedd9e4e6a6bccb7cfcef7b2b0690c0deb415ed0fad754b72c65fa02e66",
       "verify": "se-872e231063ba4243028ae9e0fccde118a590fe1283277eb7b70759952fbf7b33"
@@ -69,6 +70,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
         "step_id": "plan"
+      },
+      "review": {
+        "output_sha256": "sha256:51079e71584cdde33499ae1d23c35e746d5ac0a2be68e321604d97db94b7e3fc",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "step_id": "review"
       },
       "specify": {
         "output_sha256": "sha256:29f00cb28dd130a4a3b9639b257a511bbe0dbc98b22987f0694512fae8d2276b",
@@ -427,10 +434,43 @@
         "reason": "",
         "state": "complete",
         "step": "verify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/review.md",
+            "sha256": "51079e71584cdde33499ae1d23c35e746d5ac0a2be68e321604d97db94b7e3fc"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "SHIP Phase A BLOCKED: STALE-EVIDENCE. Fingerprints de verify, review e arvore atual divergem em tree e work; plan identico nos tres. Causa: converge.fingerprint_exclude nao cobre .grill/**, e cada etapa grill cunha receipt ali, entao o hash muda entre dois gates por construcao. Os 11 caminhos do escopo estao byte-identicos desde 7cb6529. Requer decisao humana.",
+        "state": "blocked",
+        "step": "ship"
       }
     ],
     "chain_stale": [],
-    "current_step": "review",
+    "current_step": "ship",
     "execution_branch": "fix/reconcile-scope-succession",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -454,8 +494,8 @@
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
-      "review": "pending",
-      "ship": "pending",
+      "review": "complete",
+      "ship": "blocked",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
