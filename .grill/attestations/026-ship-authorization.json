@@ -1,0 +1,8 @@
+{
+  "authorized_by": "carlosaraujo",
+  "content_sha256": "sha256:e28de0415dc6fbaed75c5529405b12e3fb55d1834991797a3a25ed4adeb09029",
+  "decision": "APPROVED",
+  "receipt_ref": ".grill/attestations/026-ship-authorization.md",
+  "schema": "human-authorization/v1",
+  "scope": "ship"
+}
