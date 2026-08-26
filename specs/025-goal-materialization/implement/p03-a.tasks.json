@@ -3,7 +3,14 @@
   "feature": "025-goal-materialization",
   "run": "aab4cf5224dbb4cbf563ba17",
   "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
-  "tasks_completed": ["T008", "T009", "T010", "T011", "T012", "T013"],
+  "tasks_completed": [
+    "T008",
+    "T009",
+    "T010",
+    "T011",
+    "T012",
+    "T013"
+  ],
   "files_written": [
     "plugin/skills/grill-with-docs/scripts/ensure_goal.py"
   ],
@@ -20,5 +27,13 @@
       "CLI --ensure /tmp (not a Git top-level) -> {\"reason\":\"ROOT must be existing Git top-level\",\"status\":\"BLOCKED\"}, exit 2"
     ],
     "how_ssot_was_reached_locally": "base worktree lacks grill_core/goal_document.py (merged separately by p02-a, not yet in this node's fixed base commit). Exercised against a scratch copy assembled outside both worktrees (leader's plugin/skills/grill-with-docs/ tree with this node's ensure_goal.py laid over it) so relative asset paths (grill_core/goal_document.py -> ../assets/GOAL.template.md) resolved correctly. goal_document.py was never copied into this worktree."
-  }
+  },
+  "completed": [
+    "T008",
+    "T009",
+    "T010",
+    "T011",
+    "T012",
+    "T013"
+  ]
 }

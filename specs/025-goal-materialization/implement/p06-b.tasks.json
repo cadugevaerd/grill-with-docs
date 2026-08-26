@@ -25,5 +25,10 @@
       "change": "heading v5.2.0 -> v5.3.0"
     }
   ],
-  "notes": "Somente linhas de versão alteradas. Sem reformat, sem reorder de chaves. tests/validate_distribution.py não executado neste worktree (5 dos 8 pontos ficam fora do escopo deste worker)."
+  "notes": "Somente linhas de versão alteradas. Sem reformat, sem reorder de chaves. tests/validate_distribution.py não executado neste worktree (5 dos 8 pontos ficam fora do escopo deste worker).",
+  "completed": [
+    "T032",
+    "T034",
+    "T038"
+  ]
 }

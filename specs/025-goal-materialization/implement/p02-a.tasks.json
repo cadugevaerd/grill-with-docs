@@ -3,7 +3,13 @@
   "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
   "feature": "025-goal-materialization",
   "run_id": "aab4cf5224dbb4cbf563ba17",
-  "tasks_completed": ["T003", "T004", "T005", "T006", "T007"],
+  "tasks_completed": [
+    "T003",
+    "T004",
+    "T005",
+    "T006",
+    "T007"
+  ],
   "files_written": [
     "plugin/skills/grill-with-docs/scripts/grill_core/goal_document.py"
   ],
@@ -22,5 +28,12 @@
     "imports_grill_workspace": false,
     "notes": "Worktree base 070bb29 predates GOAL.template.md; contract and final template were read read-only from the leader worktree to author ESSENTIAL and to run the verification checks above. compatible()/managed_version() were exercised against the leader's final GOAL.template.md bytes, not a local copy."
   },
-  "status": "completed"
+  "status": "completed",
+  "completed": [
+    "T003",
+    "T004",
+    "T005",
+    "T006",
+    "T007"
+  ]
 }

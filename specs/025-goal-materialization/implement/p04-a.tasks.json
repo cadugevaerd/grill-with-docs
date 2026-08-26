@@ -3,7 +3,13 @@
   "feature": "025-goal-materialization",
   "run": "aab4cf5224dbb4cbf563ba17",
   "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
-  "tasks_completed": ["T018", "T019", "T020", "T021", "T022"],
+  "tasks_completed": [
+    "T018",
+    "T019",
+    "T020",
+    "T021",
+    "T022"
+  ],
   "files_written": [
     "plugin/skills/grill-with-docs/scripts/ensure_goal.py"
   ],
@@ -23,5 +29,12 @@
       "filesystem-error: chmod 000 goal.md then --ensure . -> status BLOCKED, reason 'filesystem-error:PermissionError', exit 2 (run as non-root so the mode is actually enforced)"
     ],
     "not_touched": "grill_workspace.py (T023, sibling worker p04-b's scope) was not read or edited; tasks.md was not edited; no writes outside the two granted paths."
-  }
+  },
+  "completed": [
+    "T018",
+    "T019",
+    "T020",
+    "T021",
+    "T022"
+  ]
 }

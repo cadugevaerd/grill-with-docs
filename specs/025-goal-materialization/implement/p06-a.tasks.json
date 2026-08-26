@@ -2,12 +2,25 @@
   "node": "p06-a",
   "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
   "run": "aab4cf5224dbb4cbf563ba17",
-  "tasks_completed": ["T036", "T037"],
+  "tasks_completed": [
+    "T036",
+    "T037"
+  ],
   "tasks_deferred": {
     "T041": "leader runs post-merge; validator needs all eight version sites across three worktrees, not visible from this node"
   },
   "changes": [
-    {"file": "tests/validate_distribution.py", "change": "VERSION 5.2.0 -> 5.3.0"},
-    {"file": "plugin/skills/grill-with-docs/SKILL.md", "change": "heading '# Grill with Docs v5.2.0' -> 'v5.3.0'"}
+    {
+      "file": "tests/validate_distribution.py",
+      "change": "VERSION 5.2.0 -> 5.3.0"
+    },
+    {
+      "file": "plugin/skills/grill-with-docs/SKILL.md",
+      "change": "heading '# Grill with Docs v5.2.0' -> 'v5.3.0'"
+    }
+  ],
+  "completed": [
+    "T036",
+    "T037"
   ]
 }

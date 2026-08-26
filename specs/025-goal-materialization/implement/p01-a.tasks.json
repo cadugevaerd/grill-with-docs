@@ -3,7 +3,9 @@
   "run_id": "run-aab4cf5224dbb4cbf563ba17",
   "wave_id": "wave-0001",
   "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
-  "tasks_completed": ["T001"],
+  "tasks_completed": [
+    "T001"
+  ],
   "result": {
     "T001": {
       "source_version": "5.2.0",
@@ -12,5 +14,8 @@
       "bump_type": "MINOR",
       "note": "CHANGELOG.md entry is written by T040 (later node), out of this node's grant."
     }
-  }
+  },
+  "completed": [
+    "T001"
+  ]
 }

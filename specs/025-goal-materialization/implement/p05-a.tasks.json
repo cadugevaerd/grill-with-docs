@@ -3,7 +3,19 @@
   "feature": "025-goal-materialization",
   "run": "aab4cf5224dbb4cbf563ba17",
   "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
-  "tasks_completed": ["T024", "T025", "T025b", "T026", "T027", "T028", "T028b", "T029", "T030", "T031", "T031b"],
+  "tasks_completed": [
+    "T024",
+    "T025",
+    "T025b",
+    "T026",
+    "T027",
+    "T028",
+    "T028b",
+    "T029",
+    "T030",
+    "T031",
+    "T031b"
+  ],
   "files_written": [
     "tests/validate_goal_document_contract.py"
   ],
@@ -29,5 +41,18 @@
     },
     "run_validators_note": "Ran the full tests/run_validators.py locally once (all validators, ~1300+ tests) before this note was written and it completed clean through this validator; the leader independently re-ran validate_goal_document_contract.py standalone (12 tests, exit 0) and is running the full suite on their side, so it is not re-run here again.",
     "not_touched": "tasks.md, .grill/, .specify/reports/, and GOAL.template.md were not written. No path outside tests/validate_goal_document_contract.py and this sidecar was modified."
-  }
+  },
+  "completed": [
+    "T024",
+    "T025",
+    "T025b",
+    "T026",
+    "T027",
+    "T028",
+    "T028b",
+    "T029",
+    "T030",
+    "T031",
+    "T031b"
+  ]
 }
