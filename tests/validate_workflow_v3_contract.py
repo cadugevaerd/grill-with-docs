@@ -6,16 +6,26 @@ WORKFLOW.md v2 already materialised in a consumer repository stays byte-intact
 through detection, preview and the v2 bootstrap.
 """
 from __future__ import annotations
-import hashlib, importlib.util, json, os, shutil, subprocess, sys, tempfile, unittest
+import hashlib, importlib.util, json, os, re, shutil, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
 HERE=Path(__file__).resolve(); REPO=HERE.parents[1]; PLUGIN=REPO/'plugin'
 SKILL=PLUGIN/'skills/grill-with-docs'
 SCRIPTS=PLUGIN/'skills/grill-with-docs/scripts'; ASSETS=PLUGIN/'skills/grill-with-docs/assets'
 MODULE=SCRIPTS/'grill_core/workflow_v3.py'; ENSURE=SCRIPTS/'ensure_workflow.py'; GRILL_WORKSPACE=SCRIPTS/'grill_workspace.py'
+AUDIT_DECISIONS=SCRIPTS/'audit_decisions.py'
 TEMPLATE_V2=ASSETS/'WORKFLOW.template.md'; TEMPLATE_V3=ASSETS/'WORKFLOW.v3.template.md'
 MARK_V2='grill-with-docs-workflow:v2'; MARK_V3='grill-with-docs-workflow:v3'
 STEPS=['specify','plan','checklist','tasks','analyze','agent-assign','agent-execute','converge','verify','review','ship']
+# research.md §R5's seven-case matrix, materialised by T003 -- never hand-typed
+# text -- under tests/fixtures/workflow-marker-matrix/<case>/WORKFLOW.md.
+MATRIX_ROOT=REPO/'tests/fixtures/workflow-marker-matrix'
+MATRIX_CASES=('none','v2','v3','v4','duplicate-same','duplicate-distinct','unknown-v9')
+# Frozen mirror of the marker regex both ensure_workflow.sole_managed_version
+# and audit_decisions.py's inline marker check use, byte for byte. Used only
+# to independently recompute "how many declarations does this document carry"
+# for the parity test below -- never to reimplement either module's decision.
+MARKER_PATTERN=r"grill-with-docs-workflow:(v\d+)"
 # Frozen copy of ensure_workflow.ESSENTIAL. Appending a v3 marker here would mark
 # every already-materialised v2 consumer as "incompatible workflow".
 FROZEN_V2=('## Loop externo','## Ciclo externo de execução','specify','plan','checklist','tasks','analyze','agent-assign','agent-execute','converge','verify','review','ship','PLAN_ONLY_STOP','Spec Kit >=0.11.2','A–E','no PR','hotfix-fast','HOTFIX-GO')
@@ -27,6 +37,7 @@ def load(path,name):
  module=importlib.util.module_from_spec(spec); sys.modules[name]=module; spec.loader.exec_module(module); return module
 
 V3=load(MODULE,'grill_core_workflow_v3_contract'); EW=load(ENSURE,'ensure_workflow_v3_contract')
+AD=load(AUDIT_DECISIONS,'grill_audit_decisions_v3_contract')
 
 def symlink_supported():
  with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
@@ -61,6 +72,18 @@ def v3_text(pin=None):
 def rendered_v3(registry_sha256):
  """What migrate --apply actually writes: the bundled template with the real registry_sha256 baked in."""
  return v3_text(registry_sha256).encode('utf-8')
+def matrix_text(case):
+ """The T003 fixture text for one R5 matrix case (real materialised bytes,
+ mechanically edited per specs/024-workflow-version-derivada/implement/p02-b.tasks.json -- never hand-typed)."""
+ return (MATRIX_ROOT/case/'WORKFLOW.md').read_text(encoding='utf-8')
+def audit_marker_decision(text):
+ """Mirror -- for this test only, not a shared production module (ADR-0002
+ rejected that) -- of the inline marker check audit_decisions.py's audit()
+ performs under ``if workflow and workflow.is_file():``: exactly one marker,
+ and it must be one of ACCEPTED_WORKFLOW_MARKERS. Returns (markers, accepted)."""
+ markers=re.findall(MARKER_PATTERN,text)
+ accepted=len(markers)==1 and markers[0] in AD.ACCEPTED_WORKFLOW_MARKERS
+ return markers,accepted
 
 class Base(unittest.TestCase):
  def setUp(self):
@@ -537,5 +560,89 @@ class SiblingIntegrity(unittest.TestCase):
   self._attack(lambda: (self.skill/'scripts/ensure_workflow.py').write_text('def broken(:\n',encoding='utf-8'))
  def test_missing_ensure_workflow_sibling_still_yields_one_json_document(self):
   self._attack(lambda: (self.skill/'scripts/ensure_workflow.py').unlink())
+
+class SoleManagedVersionMatrix(unittest.TestCase):
+ """T005 (FR-008): sole_managed_version(text) over the seven R5 fixtures from
+ T003 (tests/fixtures/workflow-marker-matrix/<case>/WORKFLOW.md). The
+ contract, per ensure_workflow.sole_managed_version's own docstring: return
+ the marker string if and only if there is exactly one declaration; ``None``
+ for zero occurrences AND for two or more -- unlike managed_version, it does
+ not resolve ambiguity by picking the first match.
+
+ sole_managed_version does not itself judge whether a unique marker is a
+ *recognised* version (that is ACCEPTED_WORKFLOW_MARKERS' job, exercised in
+ MarkerParitySSOT below): the "unknown-v9" case here has exactly one
+ declaration, so sole_managed_version still resolves it to 'v9'.
+ """
+ # (fixture directory, expected sole_managed_version(text))
+ EXPECTED=(
+  ('none',None),
+  ('v2','v2'),
+  ('v3','v3'),
+  ('v4','v4'),
+  ('duplicate-same',None),
+  ('duplicate-distinct',None),
+  ('unknown-v9','v9'),
+ )
+ def test_matrix(self):
+  self.assertEqual(tuple(case for case,_ in self.EXPECTED),MATRIX_CASES,'matrix must cover exactly the seven R5 cases, in the declared order')
+  for case,expected in self.EXPECTED:
+   with self.subTest(case=case):
+    self.assertEqual(EW.sole_managed_version(matrix_text(case)),expected)
+
+class ManagedVersionFirstMatch(unittest.TestCase):
+ """T006: freezes managed_version's first-match semantics (``re.search``,
+ ``None`` with no marker). ADR-0002/sole_managed_version's own docstring:
+ seven internal callers plus workflow_v3.marker_version depend on
+ managed_version's ``or VERSION`` fallback, so a future change that makes it
+ return the last match, the highest version, or ``None`` on ambiguity instead
+ of the first regex hit must fail THIS test rather than silently changing
+ what gets materialised at those call sites.
+ """
+ def test_no_marker_is_none(self):
+  self.assertIsNone(EW.managed_version(matrix_text('none')))
+ def test_two_identical_markers_return_that_marker(self):
+  text=matrix_text('duplicate-same')
+  self.assertEqual(EW.managed_version(text),'v4')
+  self.assertEqual(EW.managed_version(text),re.search(MARKER_PATTERN,text).group(1))
+ def test_two_distinct_markers_return_the_first_one_not_the_highest(self):
+  # duplicate-distinct declares v3 before v4 (research.md R5 + p02-b.tasks.json
+  # provenance). first-match must yield 'v3': a "pick the highest" or
+  # "pick the last" reading would silently return 'v4' here instead.
+  text=matrix_text('duplicate-distinct')
+  self.assertEqual(EW.managed_version(text),'v3')
+  self.assertEqual(EW.managed_version(text),re.search(MARKER_PATTERN,text).group(1))
+
+class MarkerParitySSOT(unittest.TestCase):
+ """T007 (FR-005, V-3, SC-005): for every R5 matrix case, sole_managed_version
+ (paired with ACCEPTED_WORKFLOW_MARKERS membership) and audit_decisions.py's
+ own inline marker check must agree on both how many declarations the
+ document carries and whether it is accepted.
+
+ THIS TEST IS THE SSOT FOR THAT AGREEMENT. ADR-0002 explicitly rejected a
+ shared production module for this rule -- audit_decisions.py must not
+ acquire a load-time dependency on grill_core, and ensure_workflow.py's
+ creation-time gate must not depend on audit_decisions.py either. Nothing in
+ production enforces that the two independent implementations agree; this
+ test is the only thing standing in for that shared module. If it is ever
+ deleted or skipped, the rule silently starts living in two files with
+ nothing checking they still say the same thing.
+ """
+ def test_parity_over_the_seven_r5_cases(self):
+  for case in MATRIX_CASES:
+   with self.subTest(case=case):
+    text=matrix_text(case)
+    sole=EW.sole_managed_version(text)
+    markers,audit_accepted=audit_marker_decision(text)
+    sole_accepted=sole is not None and sole in AD.ACCEPTED_WORKFLOW_MARKERS
+    # Parity 1: quantity of declarations recognised. sole_managed_version and
+    # audit_decisions.py both derive this via re.findall over the identical
+    # pattern; resolving to a value is only possible when that count is 1.
+    self.assertEqual(sole is not None,len(markers)==1,f'{case}: sole_managed_version disagrees with the raw marker count')
+    # Parity 2: accept/reject decision.
+    self.assertEqual(sole_accepted,audit_accepted,f'{case}: sole_managed_version+ACCEPTED_WORKFLOW_MARKERS disagrees with audit_decisions.py')
+    # Parity 3: when both accept, they must agree on the *value*, not just the boolean.
+    if audit_accepted:
+     self.assertEqual(sole,markers[0])
 
 if __name__=='__main__': unittest.main()

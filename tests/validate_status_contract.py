@@ -9,6 +9,10 @@ PLUGIN=Path(__file__).resolve().parents[1]/"plugin"
 WS=PLUGIN/"skills/grill-with-docs/scripts/grill_workspace.py"
 WORKFLOW_TEMPLATE=PLUGIN/"skills/grill-with-docs/assets/WORKFLOW.template.md"
 STATUS=PLUGIN/"skills/grill-with-docs/scripts/grill_status.py"
+# Real v3-marked document from the marker matrix (T003), never typed by hand:
+# used to prove the projection derives development.workflow_version from the
+# document a bundle was actually created over, not from a literal default.
+V3_WORKFLOW_FIXTURE=Path(__file__).resolve().parent/"fixtures/workflow-marker-matrix/v3/WORKFLOW.md"
 
 def cli(script,*args):
     return subprocess.run([sys.executable,str(script),*(str(x) for x in args)],text=True,capture_output=True,env={**os.environ,"PYTHONDONTWRITEBYTECODE":"1"})
@@ -37,6 +41,19 @@ class StatusPublicContract(unittest.TestCase):
         self.assertEqual(x["schema"],"grill-status/v1"); self.assertEqual(x["verdict"],"OK")
         self.assertEqual(x["code"],"EMPTY"); self.assertEqual(x["next_action"],"iniciar")
         self.assertEqual(x["summary"],{"total":0,"in_progress":0,"blocked":0,"completed":0})
+    # T033: the eight tests below (through test_specify_checkpoint_binds_...
+    # and the T015 test) carry no literal v4 step-name tuple to dessalgar --
+    # they call self.item() and assert on findings/returncode/markdown text,
+    # never on a hardcoded sequence. Their assumption of v4 was implicit,
+    # inherited from grill_status.py silently judging every bundle against
+    # SEQUENCE (the v4 constant) regardless of what the bundle itself
+    # declared. Once that fallback was removed and the projection was fixed
+    # to project a "tracked" bundle strictly against its OWN
+    # development.sequence (grill_status.py, item_payload/classify_item),
+    # these tests pass unmodified -- there is no literal here to derive from
+    # development.sequence the way validate_checkpoint_contract.py and
+    # validate_workspace_contract.py did (FR-002, V-5, "Versão resolvida,
+    # nunca embutida").
     def test_one_item_top_level_and_item_schema(self):
         self.item(); p,x=status(self.r); self.assertEqual(p.returncode,0); self.assertEqual(set(x),{"schema","verdict","code","project_root","summary","work_items","next_action"}); item=x["work_items"][0]
         for k in ("work_id","type","slug","fingerprint","locations","recorded","planning","development","governance","blockers","findings","closed","operational_status","pending_reasons","next_gate"): self.assertIn(k,item)
@@ -271,6 +288,33 @@ class StatusPublicContract(unittest.TestCase):
         self.assertEqual(item["next_gate"],"agent-assign")
         self.assertEqual(item["pending_reasons"],["etapa GWD pendente: agent-assign"])
         self.assertNotIn("partition",json.dumps(item["pending_reasons"]))
+
+    def test_status_projects_bundle_created_over_v3_document_by_the_v3_sequence(self):
+        """FR-007/SC-002: unlike `_to_v3` above -- which simulates a legacy
+        pre-024 bundle by rewriting state.json by hand -- this test pins a
+        real v3-marked WORKFLOW.md before `init` runs, so
+        development.workflow_version and .sequence must come from the
+        document the bundle was actually created over. The projection then
+        has to name agent-assign/agent-execute, never the v4 renames
+        partition/implement-parallel."""
+        (self.r/"WORKFLOW.md").write_bytes(V3_WORKFLOW_FIXTURE.read_bytes())
+        self._git("add","."); self._git("commit","-qm","pin v3 workflow")
+        self.item()
+        v3_sequence=["specify","plan","checklist","tasks","analyze","agent-assign","agent-execute","converge","verify","review","ship"]
+        development=self._development()
+        self.assertEqual(development.get("workflow_version"),"v3")
+        self.assertEqual(development["sequence"],v3_sequence)
+        path=self.r/".grill/work-items/work-a/state.json"; state=json.loads(path.read_text(encoding="utf-8"))
+        for step in v3_sequence[:5]: state["development"]["steps"][step]="complete"
+        state["development"]["current_step"]="agent-assign"
+        path.write_text(json.dumps(state,indent=2)+"\n",encoding="utf-8")
+        item=self._item_payload()
+        self.assertEqual(item["operational_status"],"pending")
+        self.assertEqual(item["next_gate"],"agent-assign")
+        self.assertEqual(item["pending_reasons"],["etapa GWD pendente: agent-assign"])
+        self.assertNotIn("partition",json.dumps(item["pending_reasons"]))
+        self.assertNotIn("implement-parallel",json.dumps(item["pending_reasons"]))
+
     def test_incomplete_milestone_without_binding_reports_wrong_live_branch(self):
         self.item(); self._git("add","."); self._git("commit","-qm","bundle")
         p=self.r/".grill/work-items/work-a/state.json"; d=json.loads(p.read_text(encoding="utf-8"))

@@ -6,14 +6,18 @@ REPO=Path(__file__).resolve().parents[1]
 PLUGIN=REPO/'plugin'
 SCRIPT=PLUGIN/'skills/grill-with-docs/scripts/grill_workspace.py'
 TEMPLATE=PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.template.md'
-STEPS = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
-
 def run(*a): return subprocess.run([sys.executable,str(SCRIPT),*map(str,a)],text=True,capture_output=True)
 class CheckpointContract(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.r=Path(self.t.name); subprocess.run(['git','init','-q','-b','main',str(self.r)],check=True); (self.r/'WORKFLOW.md').write_bytes(TEMPLATE.read_bytes())
   subprocess.run(['git','-C',str(self.r),'add','.'],check=True); subprocess.run(['git','-C',str(self.r),'config','user.email','t@e']); subprocess.run(['git','-C',str(self.r),'config','user.name','t']); subprocess.run(['git','-C',str(self.r),'commit','-qm','init']);
   self.assertEqual(run('init',self.r,'--type','feature','--slug','x','--work-id','wx','--skip-backlog').returncode,0); (self.r/'e').write_text('e')
+  # T030: derive the expected step sequence from what this item actually
+  # declares instead of a hard-coded version tuple -- TEMPLATE's v2 marker
+  # resolves to v3 (T009/T010), not v4, so a literal v4 tuple here would be
+  # exactly the defect this work item exists to remove, relocated to the
+  # test (FR-002, V-5, "Versão resolvida, nunca embutida").
+  self.STEPS=json.loads((self.r/'.grill/work-items/wx/state.json').read_text())['development']['sequence']
  def tearDown(self): self.t.cleanup()
  def call(self,step,state,**kw):
   a=['checkpoint',self.r,'--work-id','wx','--step',step,'--state',state]
@@ -21,10 +25,10 @@ class CheckpointContract(unittest.TestCase):
   if 'reason' in kw: a += ['--reason',kw['reason']]
   return run(*a)
  def test_full_matrix_persists(self):
-  for s in STEPS:
+  for s in self.STEPS:
    self.assertEqual(self.call(s,'in-progress').returncode,0,s)
    self.assertEqual(self.call(s,'complete',evidence=['e']).returncode,0,s)
-  d=json.loads((self.r/'.grill/work-items/wx/state.json').read_text()); self.assertTrue(all(d['development']['steps'][s]=='complete' for s in STEPS)); self.assertEqual(d['development']['current_step'],'complete')
+  d=json.loads((self.r/'.grill/work-items/wx/state.json').read_text()); self.assertTrue(all(d['development']['steps'][s]=='complete' for s in self.STEPS)); self.assertEqual(d['development']['current_step'],'complete')
  def test_skip_and_evidence_and_block_reason(self):
   self.assertNotEqual(self.call('plan','in-progress').returncode,0); self.assertNotEqual(self.call('specify','complete').returncode,0); self.assertNotEqual(self.call('specify','blocked').returncode,0)
   self.assertEqual(self.call('specify','in-progress').returncode,0); self.assertEqual(self.call('specify','blocked',reason='wait').returncode,0); self.assertEqual(self.call('specify','in-progress').returncode,0)
@@ -50,14 +54,14 @@ class CheckpointContract(unittest.TestCase):
  def test_divergent_same_state_is_exit_two(self): self.call('specify','in-progress'); p=self.call('specify','in-progress',reason='different'); self.assertEqual(p.returncode,2); self.assertEqual(json.loads(p.stdout)['code'],'STATE-DIVERGENCE')
  def test_current_step_first_pending(self): self.call('specify','in-progress'); p=self.call('specify','complete',evidence=['e']); self.assertEqual(json.loads(p.stdout)['current_step'],'plan')
  def test_ship_gate(self):
-  for s in STEPS[:-1]: self.call(s,'in-progress'); self.call(s,'complete',evidence=['e'])
+  for s in self.STEPS[:-1]: self.call(s,'in-progress'); self.call(s,'complete',evidence=['e'])
   self.assertEqual(json.loads(self.call('ship','complete',evidence=['e']).stdout)['code'],'INVALID-TRANSITION')
  def test_review_blocked_makes_ship_unreachable(self):
   # FASE-004 User Story 2 / plan.md T017: review is dispatched exactly like
   # any other of the eleven macro-steps -- a `blocked` review checkpoint
   # already halts `ship` via this unmodified step-sequence gate, no new
   # mechanism.
-  for s in STEPS[:-2]: self.call(s,'in-progress'); self.call(s,'complete',evidence=['e'])
+  for s in self.STEPS[:-2]: self.call(s,'in-progress'); self.call(s,'complete',evidence=['e'])
   self.call('review','in-progress'); self.call('review','blocked',reason='reprovado')
   self.assertEqual(json.loads(self.call('ship','in-progress').stdout)['code'],'INVALID-TRANSITION')
  def test_invalid_step_json(self): p=run('checkpoint',self.r,'--work-id','wx','--step','bad','--state','in-progress'); self.assertEqual(len(p.stdout.splitlines()),1); self.assertEqual(p.stderr,'')
@@ -65,7 +69,7 @@ class CheckpointContract(unittest.TestCase):
  def test_legacy_initialization_requires_from_step(self): (self.r/'.grill/work-items/wx/state.json').write_text('{}'); p=run('checkpoint',self.r,'--work-id','wx','--step','specify','--state','in-progress','--initialize-legacy','--evidence','e','--reason','decide'); self.assertEqual(json.loads(p.stdout)['code'],'LEGACY-INITIALIZATION-REQUIRES-DECISION-EVIDENCE')
  def test_state_unchanged_on_evidence_rejection(self): before=(self.r/'.grill/work-items/wx/state.json').read_bytes(); self.call('specify','in-progress'); before=(self.r/'.grill/work-items/wx/state.json').read_bytes(); self.call('specify','complete',evidence=['missing']); self.assertEqual(before,(self.r/'.grill/work-items/wx/state.json').read_bytes())
  def test_complete_terminal_current_step(self):
-  for s in STEPS: self.call(s,'in-progress'); self.call(s,'complete',evidence=['e'])
+  for s in self.STEPS: self.call(s,'in-progress'); self.call(s,'complete',evidence=['e'])
   self.assertEqual(json.loads((self.r/'.grill/work-items/wx/state.json').read_text())['development']['current_step'],'complete')
  def test_output_contract_all_calls(self):
   p=self.call('specify','in-progress'); self.assertEqual(p.stderr,''); self.assertEqual(len(p.stdout.splitlines()),1); self.assertIsInstance(json.loads(p.stdout),dict)
@@ -110,11 +114,33 @@ class CheckpointContract(unittest.TestCase):
  def test_legacy_explicit_specify_initialization_succeeds_without_inference(self):
   path=self.r/'.grill/work-items/wx/state.json'; path.write_text('{}')
   p=run('checkpoint',self.r,'--work-id','wx','--step','specify','--state','in-progress','--initialize-legacy','--from-step','specify','--evidence','e','--reason','explicit-decision')
-  self.assertEqual(p.returncode,0,p.stdout); state=json.loads(path.read_text()); self.assertEqual(state['development']['steps']['specify'],'in-progress'); self.assertTrue(all(state['development']['steps'][s]=='pending' for s in STEPS[1:])); self.assertEqual(len(state['development']['audit']),1)
+  # Legacy initialization always seeds ACTIVE_WORKFLOW_VERSION (T-030 note:
+  # this is a distinct writer from state_template()'s document-derived path,
+  # so it does not necessarily agree with self.STEPS from setUp) -- derive
+  # the expected pending steps from what this call itself just persisted.
+  self.assertEqual(p.returncode,0,p.stdout); state=json.loads(path.read_text()); self.assertEqual(state['development']['steps']['specify'],'in-progress'); self.assertTrue(all(state['development']['steps'][s]=='pending' for s in state['development']['sequence'][1:])); self.assertEqual(len(state['development']['audit']),1)
  def test_legacy_posterior_initialization_is_unsafe(self):
   path=self.r/'.grill/work-items/wx/state.json'; path.write_text('{}'); before=path.read_bytes()
   p=run('checkpoint',self.r,'--work-id','wx','--step','plan','--state','in-progress','--initialize-legacy','--from-step','plan','--evidence','e','--reason','explicit-decision')
   self.assertEqual((p.returncode,json.loads(p.stdout)['code']),(2,'LEGACY-INITIALIZATION-UNSAFE')); self.assertEqual(before,path.read_bytes())
+ def test_step_outside_declared_sequence_is_named(self):
+  # T032: `partition` is a globally valid step id (it belongs to v4's
+  # ALL_STEPS-gated `--step` argument, T030) but this item's own sequence is
+  # v3 (agent-assign/agent-execute in its place). The lookup used to be an
+  # unguarded `sequence.index(args.step)`, which raised an uncaught
+  # ValueError and surfaced as UNEXPECTED-FAILURE -- an anticipated
+  # condition wearing the mask of a bug. It must instead be a named
+  # contract code whose message states the sequence the item declares, and
+  # it must not touch state.
+  self.assertNotIn('partition',self.STEPS)
+  state=self.r/'.grill/work-items/wx/state.json'; before=state.read_bytes()
+  p=self.call('partition','in-progress'); payload=json.loads(p.stdout)
+  self.assertEqual((p.returncode,payload['verdict'],payload['code']),(2,'BLOCKED','STEP-NOT-IN-SEQUENCE'))
+  self.assertEqual(payload['workflow_version'],'v3'); self.assertEqual(payload['sequence'],self.STEPS)
+  self.assertIn('v3',payload['error'])
+  for s in self.STEPS: self.assertIn(s,payload['error'])
+  self.assertEqual(before,state.read_bytes())
+  self.assertFalse((self.r/'.grill/work-items/wx.lock').exists())
  def test_state_symlink_is_blocked_without_external_read(self):
   state=self.r/'.grill/work-items/wx/state.json'; outside=Path(self.t.name)/'external-state'; outside.write_text('TOP-SECRET'); state.unlink(); state.symlink_to(outside)
   p=self.call('specify','in-progress'); self.assertEqual(p.returncode,2); self.assertNotIn('TOP-SECRET',p.stdout); self.assertEqual(outside.read_text(),'TOP-SECRET')

@@ -55,10 +55,6 @@ SCRIPTS = SKILL / "scripts"
 WORK_ID = "converge-review-ship-c3d4"
 DAG_SCHEMA = "grill-gauntlet-execution-dag/v1"
 
-# Mirrors grill_workspace.SEQUENCE, duplicated the same way every other
-# validator in this suite duplicates it rather than importing module globals.
-SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
-
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 from grill_core import gauntlet_runs, store
@@ -516,9 +512,17 @@ class GauntletConvergeContractHarness(unittest.TestCase):
 
         The first transition is also what binds ``development.execution_branch``
         -- the same FASE-001 path :meth:`bind_execution_branch` uses.
+
+        T031: the sequence is read from ``development.sequence`` of the item
+        this fixture itself built (``build_rebound_v3_repository`` migrates
+        to v3 explicitly), not a hard-coded tuple. A literal v4 tuple here
+        named steps (``partition``/``implement-parallel``) the v3 item this
+        fixture creates does not declare (v3 uses
+        ``agent-assign``/``agent-execute``) -- the same class of defect T030
+        already removed from the checkpoint and workspace validators.
         """
         predecessor: dict[str, Any] | None = None
-        for step_id in SEQUENCE[:-1]:
+        for step_id in self.development_state()["sequence"][:-1]:
             predecessor = self.complete_step_with_real_attestation(
                 step_id, campaign_run_id="run-ship-gate", generation_label="gen-ship-gate",
                 predecessor=predecessor,
@@ -1498,7 +1502,14 @@ class ShipGateWithoutGauntletContract(unittest.TestCase):
 
     def test_ship_completes_for_a_v2_work_item_with_no_store(self) -> None:
         self.assertFalse(store.store_exists(self.root))
-        for step in SEQUENCE:
+        # T031: derive the expected sequence from what this item itself
+        # declares (TEMPLATE's v2 marker resolves to v3 via T009/T010) rather
+        # than a hard-coded tuple -- a literal v4 tuple here would be exactly
+        # the defect T030 already removed from the sibling validators.
+        state = strict_json_bytes(
+            (self.root / ".grill/work-items" / WORK_ID / "state.json").read_bytes(), source="state.json"
+        )
+        for step in state["development"]["sequence"]:
             process, payload = self.checkpoint(step, "in-progress")
             self.assertEqual(process.returncode, 0, (step, payload, process.stderr))
             process, payload = self.checkpoint(step, "complete", evidence=["evidence.md"])

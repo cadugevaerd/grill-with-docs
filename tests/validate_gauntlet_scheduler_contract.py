@@ -61,12 +61,6 @@ WORKFLOW_TEMPLATE = ASSETS / "WORKFLOW.template.md"
 SCRIPTS = SKILL / "scripts"
 WORK_ID = "scheduler-waves-a1b2"
 
-# Mirrors grill_workspace.SEQUENCE (the eleven canonical macro-steps).  Kept
-# as a literal here -- not imported -- the same way validate_checkpoint_
-# contract.py already duplicates its own ``STEPS`` constant rather than
-# reaching into grill_workspace.py's module globals.
-SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
-
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 from grill_core import store
@@ -295,23 +289,38 @@ class GauntletSchedulerContractHarness(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_implement_parallel_completion_without_attestation_is_rejected_like_any_other_step(self) -> None:
+        # T031: the item's own declared sequence (development.sequence) --
+        # not a hard-coded v4 tuple -- decides which macro-steps precede the
+        # execution step under test and what that step is actually named.
+        # The fixture (build_rebound_v3_repository) migrates to v3, whose
+        # execution step is "agent-execute", not v4's "implement-parallel"
+        # ("partition"/"implement-parallel" are v4-only names -- see
+        # workflow_versions.STEP_RENAMES_V3_TO_V4). A hard-coded
+        # "implement-parallel" literal would checkpoint a step name this v3
+        # item never declares, the exact defect T030 already removed from
+        # the sibling validators. This still proves the same ADR-0016/FR-001
+        # guarantee, against whichever step name the item declares in that
+        # slot.
+        sequence = self.development_state()["sequence"]
+        execute_index = WORKFLOW_VERSIONS.SEQUENCE_V4.index("implement-parallel")
+        execute_step = sequence[execute_index]
         run_id = "run-scheduler-checkpoint"
         generation_label = "gen-scheduler-checkpoint"
         predecessor: dict[str, Any] | None = None
-        for step_id in SEQUENCE[: SEQUENCE.index("implement-parallel")]:
+        for step_id in sequence[:execute_index]:
             predecessor = self.complete_step_with_real_attestation(
                 step_id, run_id=run_id, generation_label=generation_label, predecessor=predecessor,
             )
 
-        process, payload = self.checkpoint("implement-parallel", "in-progress", reason="start implement-parallel")
+        process, payload = self.checkpoint(execute_step, "in-progress", reason=f"start {execute_step}")
         self.assertEqual((process.returncode, payload.get("verdict")), (0, "UPDATED"), (payload, process.stderr))
 
         # --evidence is present so the run reaches the attestation-specific
         # check; EVIDENCE-REQUIRED would fire first if it were absent, which
         # would prove nothing about the attestation gate itself.
-        evidence = self.write_evidence("implement-parallel-evidence.md")
+        evidence = self.write_evidence(f"{execute_step}-evidence.md")
         process, payload = self.checkpoint(
-            "implement-parallel", "complete", evidence=[evidence], reason="complete implement-parallel",
+            execute_step, "complete", evidence=[evidence], reason=f"complete {execute_step}",
         )
 
         self.assertEqual(process.returncode, 2, (payload, process.stderr))
@@ -320,8 +329,8 @@ class GauntletSchedulerContractHarness(unittest.TestCase):
         self.assertEqual(payload.get("code"), "ATTESTATION-REQUIRED")
 
         development = self.development_state()
-        self.assertEqual(development["steps"]["implement-parallel"], "in-progress")
-        self.assertEqual(development["current_step"], "implement-parallel")
+        self.assertEqual(development["steps"][execute_step], "in-progress")
+        self.assertEqual(development["current_step"], execute_step)
 
     # ------------------------------------------------------------------
     # T007.2 -- a blocked step never advances current_step past itself

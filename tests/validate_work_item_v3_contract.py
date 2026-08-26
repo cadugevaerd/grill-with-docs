@@ -216,10 +216,24 @@ class WorkItemV3Contract(unittest.TestCase):
   data=self.document(); self.assertEqual(M.schema_of(data),M.SCHEMA_V2)
   self.assertEqual(M.validate_metadata(data,WORK_ID)['work_id'],WORK_ID)
  def test_tracked_repository_bundles_stay_readable(self):
+  """Todo bundle versionado continua legível pelo contrato, em v2 ou v3.
+
+  A asserção aceita as duas grafias porque o nome deste teste promete
+  legibilidade, não imobilidade, e ``read_document``/``validate_metadata`` já
+  fazem dual-read. Exigir v2 aqui tornava o dogfooding do ciclo v4 impossível:
+  ``gauntlet-init`` recusa bundle que não seja v3 (WORK-ITEM-V3-REQUIRED), de
+  modo que o primeiro work item deste repositório a alcançar
+  ``implement-parallel`` deixava a suíte vermelha só por ter migrado. Os dois
+  contratos se excluíam e nada os reconciliava.
+
+  Isto NÃO cobre migração silenciosa de bundle rastreado -- se essa proteção
+  for desejada, ela é um gate próprio, sobre a decisão de migrar, e não um
+  efeito colateral de uma asserção de legibilidade.
+  """
   bundles=sorted((REPO/'.grill/work-items').glob('*/WORK-ITEM.json')) if (REPO/'.grill/work-items').is_dir() else []
   for bundle in bundles:
    with self.subTest(bundle=bundle.parent.name):
-    self.assertEqual(M.schema_of(M.read_document(bundle)),M.SCHEMA_V2)
+    self.assertIn(M.schema_of(M.read_document(bundle)),{M.SCHEMA_V2,M.SCHEMA_V3})
     self.assertEqual(M.validate_metadata(M.read_document(bundle),bundle.parent.name)['work_id'],bundle.parent.name)
  def test_unknown_schema_is_rejected(self):
   self.rewrite(lambda d:(d.__setitem__('schema','grill-work-item/v4'),d['immutable'].__setitem__('schema','grill-work-item/v4')))

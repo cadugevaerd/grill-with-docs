@@ -22,6 +22,8 @@ REPO = Path(__file__).resolve().parents[1]
 PLUGIN = REPO / "plugin"
 SCRIPT = PLUGIN / "skills/grill-with-docs/scripts/grill_workspace.py"
 WORKFLOW_TEMPLATE = PLUGIN / "skills/grill-with-docs/assets/WORKFLOW.template.md"
+AUDIT_DECISIONS_SCRIPT = PLUGIN / "skills/grill-with-docs/scripts/audit_decisions.py"
+WORKFLOW_MARKER_MATRIX = REPO / "tests/fixtures/workflow-marker-matrix"
 CHECK_START = "<!-- grill-constitution-check:start -->"
 CHECK_END = "<!-- grill-constitution-check:end -->"
 
@@ -48,6 +50,19 @@ def python_test_command(code: str) -> str:
 def load_workspace_module():
     name = "grill_workspace_contract_module"
     spec = importlib.util.spec_from_file_location(name, SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_audit_decisions_module():
+    # Independent loader on purpose: T016 (SC-007) must compare real step
+    # tuples pulled from the auditor's own source of truth, not trust
+    # whatever equivalence map grill_workspace.py happens to implement with.
+    name = "grill_audit_decisions_contract_module"
+    spec = importlib.util.spec_from_file_location(name, AUDIT_DECISIONS_SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
@@ -191,6 +206,130 @@ class WorkspaceV2Contract(unittest.TestCase):
             entry["justification"] = "verified against the work-item scope"
         self._write_check(item, value)
         return value
+
+    def _repo_with_workflow(self, fixture: str) -> Path:
+        # Deliberately does not reuse _init_repo/_new_repo: those always seed
+        # WORKFLOW.md from WORKFLOW_TEMPLATE (a v2 document), which is right for
+        # every other test in this file but wrong here -- the workflow-version
+        # matrix tests (T012-T014, T017) need control over which marker the
+        # document declares. Fixtures come from tests/fixtures/workflow-marker-matrix/,
+        # materialised by T003 through the real ensure_workflow/migrate tooling,
+        # never typed by hand (FR-008).
+        temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.extra.append(temporary)
+        root = Path(temporary.name)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+        git(root, "config", "user.email", "tests@example.invalid")
+        git(root, "config", "user.name", "Contract Tests")
+        source = WORKFLOW_MARKER_MATRIX / fixture / "WORKFLOW.md"
+        (root / "WORKFLOW.md").write_bytes(source.read_bytes())
+        git(root, "add", "WORKFLOW.md")
+        git(root, "commit", "-q", "-m", f"workflow fixture: {fixture}")
+        return root
+
+    def _development(self, item: Path) -> dict:
+        state = json.loads((item / "state.json").read_text(encoding="utf-8"))
+        return state["development"]
+
+    def test_init_writes_v3_from_v3_document(self) -> None:
+        """T012 (FR-001, FR-002, SC-001): a v3-marked WORKFLOW.md must project
+        development.workflow_version == "v3"."""
+        root = self._repo_with_workflow("v3")
+        process, payload = invoke("init", root, "--type", "feature", "--slug", "alpha", "--work-id", "work-v3", "--skip-backlog")
+        self.assertEqual((process.returncode, payload.get("status")), (0, "CREATED"), payload)
+        development = self._development(root / ".grill/work-items/work-v3")
+        self.assertEqual(development["workflow_version"], "v3")
+
+    def test_init_writes_v3_from_v2_document_by_declared_equivalence(self) -> None:
+        """T013 (R3, V-2): a v2-marked document maps to development.workflow_version
+        == "v3" through the declared equivalence, and development_workflow_version()
+        must resolve it -- never None, since a v2 document is a legitimate, still-
+        supported declaration, not an unrecognised one."""
+        module = load_workspace_module()
+        root = self._repo_with_workflow("v2")
+        process, payload = invoke("init", root, "--type", "feature", "--slug", "alpha", "--work-id", "work-v2", "--skip-backlog")
+        self.assertEqual((process.returncode, payload.get("status")), (0, "CREATED"), payload)
+        development = self._development(root / ".grill/work-items/work-v2")
+        self.assertEqual(development["workflow_version"], "v3")
+        resolved = module.development_workflow_version(development)
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved, "v3")
+
+    def test_init_workflow_version_tracks_the_document_not_the_asset_literal(self) -> None:
+        """T014: the v4 case must be *derived* from the document, not merely
+        coincide with it.
+
+        state.template.json seeds development.workflow_version with the literal
+        "v4" (T011, kept as an inert default). That means a writer which stopped
+        reading WORKFLOW.md altogether and just left the seed untouched would
+        still pass a test that only checks the v4 fixture -- the bug this guards
+        against is exactly that coincidence. Running v3 and v4 through the same
+        battery closes the gap: the seed can agree with at most one of the two
+        cases, so requiring both to resolve correctly is what proves the value
+        tracks the document rather than the asset default.
+        """
+        expected_by_fixture = {"v3": "v3", "v4": "v4"}
+        observed: dict[str, str] = {}
+        for fixture, expected in expected_by_fixture.items():
+            with self.subTest(fixture=fixture):
+                root = self._repo_with_workflow(fixture)
+                work_id = f"work-{fixture}"
+                process, payload = invoke("init", root, "--type", "feature", "--slug", "alpha", "--work-id", work_id, "--skip-backlog")
+                self.assertEqual((process.returncode, payload.get("status")), (0, "CREATED"), payload)
+                development = self._development(root / ".grill/work-items" / work_id)
+                observed[fixture] = development["workflow_version"]
+                self.assertEqual(observed[fixture], expected)
+        self.assertNotEqual(
+            observed["v3"], observed["v4"],
+            "v3 and v4 documents must not collapse to the same development.workflow_version -- "
+            "if they do, the value stopped tracking the document.",
+        )
+
+    def test_workflow_version_equivalences_are_backed_by_identical_sequences(self) -> None:
+        """T016 (SC-007): every equivalence applied when deriving
+        development.workflow_version must be justified by an *identical* step
+        sequence, proven by comparing the real tuples -- not by trusting
+        whatever map grill_workspace.py implements the derivation with. A
+        future equivalence added for implementation convenience, without a
+        matching identical sequence, must fail here.
+        """
+        audit_decisions = load_audit_decisions_module()
+        module = load_workspace_module()
+        # The only equivalence this derivation applies today (data-model.md's
+        # "Mapa de derivação"): document marker -> development.workflow_version.
+        # v3 and v4 are trivial identities; v2 is the one that needs justifying.
+        applied_equivalences = {"v2": "v3", "v3": "v3", "v4": "v4"}
+        for document_marker, development_version in applied_equivalences.items():
+            with self.subTest(document_marker=document_marker, development_version=development_version):
+                document_sequence = tuple(audit_decisions.WORKFLOW_SEQUENCE_BY_MARKER[document_marker])
+                development_sequence = tuple(module.SEQUENCE_BY_VERSION[development_version])
+                self.assertEqual(
+                    document_sequence, development_sequence,
+                    f"document marker {document_marker!r} declares a step sequence that differs from "
+                    f"development.workflow_version {development_version!r}'s -- the equivalence is unjustified",
+                )
+
+    def test_migrate_writes_the_same_derived_workflow_version_as_init(self) -> None:
+        """T017 (R1): migrate is the second writer of state.json, reached through
+        the same initial_files -> state_template path as init. Prove it derives
+        the identical development.workflow_version for the same document."""
+        fixture = "v4"
+        expected = "v4"
+
+        init_root = self._repo_with_workflow(fixture)
+        process, payload = invoke("init", init_root, "--type", "feature", "--slug", "alpha", "--work-id", "work-init", "--skip-backlog")
+        self.assertEqual((process.returncode, payload.get("status")), (0, "CREATED"), payload)
+        init_development = self._development(init_root / ".grill/work-items/work-init")
+
+        migrate_root = self._repo_with_workflow(fixture)
+        (migrate_root / "CONTEXT.md").write_text("legacy context\n", encoding="utf-8")
+        process, payload = invoke("migrate", migrate_root, "--type", "feature", "--slug", "alpha", "--work-id", "work-migrate", "--apply")
+        self.assertEqual((process.returncode, payload.get("verdict")), (0, "APPLIED"), payload)
+        migrate_development = self._development(migrate_root / ".grill/work-items/work-migrate")
+
+        self.assertEqual(init_development["workflow_version"], expected)
+        self.assertEqual(migrate_development["workflow_version"], expected)
+        self.assertEqual(init_development["workflow_version"], migrate_development["workflow_version"])
 
     def test_rename_child_fallback_does_not_open_when_capability_is_unavailable(self):
         module = load_workspace_module()
@@ -390,11 +529,23 @@ class WorkspaceV2Contract(unittest.TestCase):
         self.assertNotIn("Traceback", process.stderr)
 
     def _run_full_cycle(self, work_id: str, tag: str) -> None:
-        """Drive the 11 steps to complete, using one evidence file per step."""
+        """Drive the work item's own declared sequence to complete, using one
+        evidence file per step.
+
+        Reads ``development.sequence`` from the item's own state.json instead
+        of trusting the module-level ``SEQUENCE`` (the *active* version's
+        tuple): the default fixture's WORKFLOW.md resolves to v3 via the
+        v2->v3 equivalence (T009/T010), so a v2 fixture's item legitimately
+        declares the v3 sequence, not v4's. Deriving from what the item
+        itself persisted is what T030 requires -- a hard-coded tuple here
+        would be the same defect this work item exists to remove, just
+        relocated to the test (FR-002, V-5).
+        """
         evidence = Path("evidence") / f"{tag}.md"
         (self.root / evidence).parent.mkdir(parents=True, exist_ok=True)
         (self.root / evidence).write_text(f"evidencia {tag}\n", encoding="utf-8")
-        for step in SEQUENCE:
+        sequence = self._development(work_id)["sequence"]
+        for step in sequence:
             for state in ("in-progress", "complete"):
                 arguments = ["checkpoint", self.root, "--work-id", work_id, "--step", step,
                              "--state", state, "--reason", f"{tag} {step}"]
@@ -411,14 +562,14 @@ class WorkspaceV2Contract(unittest.TestCase):
         self._init_item(work_id="turning")
         self._run_full_cycle("turning", "fase-um")
         before = self._development("turning")
-        self.assertTrue(all(before["steps"][s] == "complete" for s in SEQUENCE))
+        self.assertTrue(all(before["steps"][s] == "complete" for s in before["sequence"]))
 
         process, payload = invoke("phase-turn", self.root, "--work-id", "turning",
                                   "--reason", "FASE-001 entregue, abrindo FASE-002")
         self.assertEqual((process.returncode, payload["verdict"]), (0, "TURNED"))
         after = self._development("turning")
-        self.assertTrue(all(after["steps"][s] == "pending" for s in SEQUENCE))
-        self.assertEqual(after["current_step"], SEQUENCE[0])
+        self.assertTrue(all(after["steps"][s] == "pending" for s in after["sequence"]))
+        self.assertEqual(after["current_step"], after["sequence"][0])
         turn = after["audit"][-1]
         self.assertEqual((turn["step"], turn["state"]), ("phase-turn", "turned"))
         self.assertEqual(turn["reason"], "FASE-001 entregue, abrindo FASE-002")
@@ -532,12 +683,14 @@ class WorkspaceV2Contract(unittest.TestCase):
                 _, payload = invoke("phase-turn", self.root, "--work-id", "three",
                                     "--reason", f"encerrando {tag}")
                 self.assertEqual(payload["verdict"], "TURNED")
-        audit = self._development("three")["audit"]
+        development = self._development("three")
+        audit = development["audit"]
         turns = [entry for entry in audit if entry["step"] == "phase-turn"]
         self.assertEqual(len(turns), 2)
         self.assertEqual([t["reason"] for t in turns], ["encerrando fase-1", "encerrando fase-2"])
-        # 3 fases x 11 passos x 2 transições, mais as 2 viradas.
-        self.assertEqual(len(audit), 3 * len(SEQUENCE) * 2 + 2)
+        # 3 fases x N passos (a sequência que o próprio item declara) x 2
+        # transições, mais as 2 viradas.
+        self.assertEqual(len(audit), 3 * len(development["sequence"]) * 2 + 2)
         for tag in ("fase-1", "fase-2", "fase-3"):
             self.assertTrue(any(entry["reason"].startswith(tag) for entry in audit), tag)
 
