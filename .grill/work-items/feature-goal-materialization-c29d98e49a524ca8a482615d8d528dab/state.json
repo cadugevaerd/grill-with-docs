@@ -25,10 +25,14 @@
     "attested_executions": {
       "analyze": "se-0764c1a72a2b8a9eb719c76a5581aaf0019629672dd13c2d56acfe7273b42110",
       "checklist": "se-2e38662b5f060908c74128da7d0c89b65f609d0eb24052ec69f4c79bd06d2796",
+      "converge": "se-5704452c8e8b11b432505e255a487c033cb8dda461e52f2d5a496e864060f323",
+      "implement-parallel": "se-a957caeaa866306d1a6b325ed0396819c7ee3a1a1db8d766ed3ad7c9426a8d60",
       "partition": "se-3399821c3a9a692678d1f06cc78469a1d43ff1042dad33e937edb77e6f4834e4",
       "plan": "se-a03f01217de872cfe773c6f4aa7cc29d10455fd434d4fa52423a2b19b0b6cac9",
+      "review": "se-ff31a774f311c9a9315a86f41243925295de94edeedd202e608a5cf09acd7b22",
       "specify": "se-f06892c480569806dd999e658d929133f67797c74fcc2479a2b8e74636999a52",
-      "tasks": "se-57c8ce21cd28fdb3bf190b9deb9d655908b8a9680c9bf1dd1a82c5333136d919"
+      "tasks": "se-57c8ce21cd28fdb3bf190b9deb9d655908b8a9680c9bf1dd1a82c5333136d919",
+      "verify": "se-c7cb5083d9c3096b8c1b870154f021fa7b2d22cd5a2b42a4fb5a94dc7f49f147"
     },
     "attested_outputs": {
       "analyze": {
@@ -43,6 +47,18 @@
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
         "step_id": "checklist"
       },
+      "converge": {
+        "output_sha256": "sha256:2a8962d6a32f9c09f11057aeba8be817cc6cde901c7a6d31e6c2307e820f9f1a",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+        "step_id": "converge"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:2a8962d6a32f9c09f11057aeba8be817cc6cde901c7a6d31e6c2307e820f9f1a",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "step_id": "implement-parallel"
+      },
       "partition": {
         "output_sha256": "sha256:a5fd04f08cc2588c5c39c11ec628538e09a5541df87f9c5c41684263b94b9a2a",
         "provenance": "current-generation",
@@ -55,6 +71,12 @@
         "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
         "step_id": "plan"
       },
+      "review": {
+        "output_sha256": "sha256:47308e946775defdca7fd2de9b7c289016b13f89f832c699bfd121a34037eead",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "step_id": "review"
+      },
       "specify": {
         "output_sha256": "sha256:0c685dbdcb0d67755a8547e8be04e9aa92915b259f9f830757ebf819f03017ae",
         "provenance": "current-generation",
@@ -66,6 +88,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/tasks-tasks-5.terminal.json",
         "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:90aa3cfb62941c3dd2b79209a96499222f16bfb9484a51e6667b15efdb982573",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
+        "step_id": "verify"
       }
     },
     "audit": [
@@ -383,10 +411,100 @@
         "reason": "invocando grill.implement-parallel sobre o DAG babeb518",
         "state": "in-progress",
         "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-goal-materialization/tasks.md",
+            "sha256": "2a8962d6a32f9c09f11057aeba8be817cc6cde901c7a6d31e6c2307e820f9f1a"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-goal-materialization/tasks.md",
+            "sha256": "2a8962d6a32f9c09f11057aeba8be817cc6cde901c7a6d31e6c2307e820f9f1a"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-goal-materialization/verify.md",
+            "sha256": "ab97a71374500ec549453e5663bdaf15e45ec37da4248f207600e6ac0bbe36f7"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/025-goal-materialization/verify.md",
+            "sha256": "90aa3cfb62941c3dd2b79209a96499222f16bfb9484a51e6667b15efdb982573"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "review I1: cobertura de PRESERVED/BLOCKED acrescentada; verify reemitido sobre a árvore corrigida",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/work-items/feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab/receipts/attestation/verify.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-goal-materialization/review.md",
+            "sha256": "47308e946775defdca7fd2de9b7c289016b13f89f832c699bfd121a34037eead"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "in-progress",
+        "step": "ship"
       }
     ],
     "chain_stale": [],
-    "current_step": "implement-parallel",
+    "current_step": "ship",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -406,15 +524,15 @@
     "steps": {
       "analyze": "complete",
       "checklist": "complete",
-      "converge": "pending",
-      "implement-parallel": "in-progress",
+      "converge": "complete",
+      "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
-      "review": "pending",
-      "ship": "pending",
+      "review": "complete",
+      "ship": "in-progress",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "complete"
     },
     "superseded_outputs": {
       "analyze": [
@@ -557,6 +675,20 @@
           "step_execution_id": "se-e0f58661453a327ddad96dac1a7ba0589f9502fc48317c3469f6b074093429ec",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-57c8ce21cd28fdb3bf190b9deb9d655908b8a9680c9bf1dd1a82c5333136d919"
+        }
+      ],
+      "verify": [
+        {
+          "attempt_id": "verify-1",
+          "attestation": ".grill/work-items/feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab/receipts/attestation/verify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:ab97a71374500ec549453e5663bdaf15e45ec37da4248f207600e6ac0bbe36f7",
+          "provenance": "current-generation",
+          "reason": "review I1: cobertura de PRESERVED/BLOCKED acrescentada; verify reemitido sobre a árvore corrigida",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+          "step_execution_id": "se-d7695a5e952bec04de2a72122d3e9b5df7a97e258f4e53f734be1f7af26c0633",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-c7cb5083d9c3096b8c1b870154f021fa7b2d22cd5a2b42a4fb5a94dc7f49f147"
         }
       ]
     },
