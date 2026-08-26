@@ -30,6 +30,7 @@
       "partition": "se-3399821c3a9a692678d1f06cc78469a1d43ff1042dad33e937edb77e6f4834e4",
       "plan": "se-a03f01217de872cfe773c6f4aa7cc29d10455fd434d4fa52423a2b19b0b6cac9",
       "review": "se-ff31a774f311c9a9315a86f41243925295de94edeedd202e608a5cf09acd7b22",
+      "ship": "se-598368b075844b8fd5967b43fb383f71a022ed94d71b4e13a9f24cb5a77b07b9",
       "specify": "se-f06892c480569806dd999e658d929133f67797c74fcc2479a2b8e74636999a52",
       "tasks": "se-57c8ce21cd28fdb3bf190b9deb9d655908b8a9680c9bf1dd1a82c5333136d919",
       "verify": "se-c7cb5083d9c3096b8c1b870154f021fa7b2d22cd5a2b42a4fb5a94dc7f49f147"
@@ -76,6 +77,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
         "step_id": "review"
+      },
+      "ship": {
+        "output_sha256": "sha256:519348caec977f852013d564f68201b8582bbd6c5e7d13cc82d4db04569a5589",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/ship-ship-1.terminal.json",
+        "step_id": "ship"
       },
       "specify": {
         "output_sha256": "sha256:0c685dbdcb0d67755a8547e8be04e9aa92915b259f9f830757ebf819f03017ae",
@@ -501,10 +508,22 @@
         "reason": "",
         "state": "in-progress",
         "step": "ship"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-goal-materialization/ship-rollback-and-monitoring.md",
+            "sha256": "519348caec977f852013d564f68201b8582bbd6c5e7d13cc82d4db04569a5589"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "",
+        "state": "complete",
+        "step": "ship"
       }
     ],
     "chain_stale": [],
-    "current_step": "ship",
+    "current_step": "complete",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -529,7 +548,7 @@
       "partition": "complete",
       "plan": "complete",
       "review": "complete",
-      "ship": "in-progress",
+      "ship": "complete",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
