@@ -30,7 +30,8 @@
       "partition": "se-9367c769f3872ef21d9e561a444815a62097ef7ad8873f8eab4cfe28d84b8257",
       "plan": "se-aa97935657191f7373745590cf06f0a21c332d051148aa834c4efb36b4b10037",
       "specify": "se-72fd3bd19e7188c72214131b441296ddf407038a577966d8e54b9c028baa816e",
-      "tasks": "se-c941023a49a5e992e44f40e48761051636ff1403862d97479bd6739022554516"
+      "tasks": "se-c941023a49a5e992e44f40e48761051636ff1403862d97479bd6739022554516",
+      "verify": "se-04a6bce0023cffc2f03817bc4fce56a7f2731c26a46c03ebaa3d9fb377dcc9db"
     },
     "attested_outputs": {
       "analyze": {
@@ -82,9 +83,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:ec32d1371838e1f677105e55476cbcf97f1857526e3db8e52a60837ec079ab26",
+        "output_sha256": "sha256:fab3ff771c2a0c41a9e2653822e74951be70e38413531c6f701f5a5d5b1062dd",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
         "step_id": "verify"
       }
     },
@@ -751,11 +752,23 @@
         "state": "complete",
         "step": "converge",
         "supersedes": ".grill/attestations/026-converge-r2.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/verify.md",
+            "sha256": "fab3ff771c2a0c41a9e2653822e74951be70e38413531c6f701f5a5d5b1062dd"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "segunda rodada de verify apos as tres correcoes do review: 1298 testes exit 0, distribution OK, fingerprint imovel ao escrever o relatorio",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/026-verify.json"
       }
     ],
-    "chain_stale": [
-      "verify"
-    ],
+    "chain_stale": [],
     "current_step": "review",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
@@ -1113,6 +1126,20 @@
           "step_execution_id": "se-ee2af9dcfd1d2295e3582ef8602585c0e73f319289ba69e666be68e2005ca499",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-c941023a49a5e992e44f40e48761051636ff1403862d97479bd6739022554516"
+        }
+      ],
+      "verify": [
+        {
+          "attempt_id": "verify-1",
+          "attestation": ".grill/attestations/026-verify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:ec32d1371838e1f677105e55476cbcf97f1857526e3db8e52a60837ec079ab26",
+          "provenance": "current-generation",
+          "reason": "segunda rodada de verify apos as tres correcoes do review: 1298 testes exit 0, distribution OK, fingerprint imovel ao escrever o relatorio",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+          "step_execution_id": "se-37c58a2005763a0aec7647a5bd070b234c0bc6ce5c1269d62db832773d54bd80",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-04a6bce0023cffc2f03817bc4fce56a7f2731c26a46c03ebaa3d9fb377dcc9db"
         }
       ]
     },

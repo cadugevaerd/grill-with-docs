@@ -1,73 +1,68 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree b4d0abfed96c374ae1e3ecd6167a74fd49717eabb3ea071271467d99448c735d / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan e85a29cc44e7edce7be4b8c54c443bc09926e651d02078c019bafd1fb68de8b5
+Source fingerprint: tree 028ee4d5d29f187031fcbaab684ba93d4abb04f12cfba3d2a39c838d47cc917c / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2
 Converge: CONVERGED
 
 Feature: `specs/026-attestation-emitter`
 Work item: `feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25`
 
-Converge oficial rodou cinco vezes nesta sessão. As quatro primeiras devolveram
-`tasks_appended` (Phases 5–8, T023–T034) e cada lote foi implementado antes da
-passada seguinte; a quinta devolveu `converged` com zero findings e `tasks.md`
-byte-idêntico. É essa a evidência consumida aqui.
+Segunda rodada. A primeira terminou em `REQUEST CHANGES` no review, com três
+achados Important; as três correções foram aplicadas e o ciclo voltou ao
+converge, que rodou mais quatro vezes (Phases 9–11, T035–T039) até a nona
+passada devolver `converged` com zero findings e `tasks.md` byte-idêntico.
 
 ### Operational Gates
 
 | Gate | Command | Result | Evidence | Validator |
 |---|---|---|---|---|
-| tests | `python3 tests/run_validators.py` | PASS | 1294 testes em 27 validadores, exit 0, 1 skip dependente de ambiente em `validate_workspace_contract.py` | sequential |
+| tests | `python3 tests/run_validators.py` | PASS | 1298 testes em 27 validadores, exit 0, 1 skip dependente de ambiente em `validate_workspace_contract.py` | sequential |
 | distribution | `python3 tests/validate_distribution.py` | PASS | `distribution: OK` — 5.2.0 idêntico nos oito pontos travados | sequential |
-| bump gate | `python3 tests/validate_bump_gate_contract.py` | PASS | 56 testes, exit 0 | sequential |
-| build | — | SKIPPED | Projeto é biblioteca padrão Python, sem etapa de build | — |
-| lint / typecheck / format | — | SKIPPED | Não há gate configurado no repositório; a suíte de validadores é o gate canônico | — |
-| security | — | SKIPPED | Não há gate automatizado configurado nesta árvore | — |
-
-O gate foi executado duas vezes: uma antes e outra depois da remoção do bundle
-órfão descrita abaixo, porque a remoção moveu o fingerprint. O resultado
-reportado é o da segunda execução, sobre a árvore final.
+| build | — | SKIPPED | Biblioteca padrão Python, sem etapa de build | — |
+| lint / typecheck / format | — | SKIPPED | Sem gate configurado; a suíte de validadores é o gate canônico | — |
+| security | — | SKIPPED | Sem gate automatizado configurado nesta árvore | — |
 
 ### Diff Hygiene
 
-- Árvore limpa: `git status --short` vazio; nada encenado, nada por commitar.
+- Árvore limpa: `git status --short` vazio.
 - Nenhum arquivo de ambiente, credencial, chave ou token no escopo alterado.
-- Nenhum artefato gerado fora de `.grill/attestations/` e `specs/026-*`.
-- **Um achado, corrigido**: `.grill/attestations/026-specify-r3.json` estava
-  versionado sem nunca ter sido aceito. O verbo `attest` escreveu o bundle e o
-  `checkpoint` o recusou com `SUPERSEDE_WITHOUT_CHANGE` — `spec.md` não havia
-  mudado naquela rodada. Cunhar e aceitar são separados de propósito, então a
-  recusa não apaga o que a cunhagem escreveu. O arquivo não era referenciado
-  por estado nem por histórico. Removido em commit próprio.
+- Nenhum bundle de atestação órfão: o único caso da rodada anterior
+  (`026-specify-r3.json`, escrito pela cunhagem e recusado no checkpoint) já
+  foi removido, e a supersessão de `specify` desta rodada foi aceita.
+- `.grill/attestations/**` passou a integrar `converge.fingerprint_exclude`.
+  Um receipt de gate é evidência **sobre** a revisão, não conteúdo revisado —
+  a mesma razão pela qual `verify.md` já estava excluído. Sem isso, fechar
+  `verify` invalidava o relatório do próprio `verify`, e rodar de novo só
+  produzia outro bundle: laço, não detecção. Foi um achado do review anterior
+  (Important #3), não um ajuste de conveniência para fazer este relatório
+  passar — a exclusão vale para qualquer gate, em qualquer rodada.
 
 ### Executable Scenarios
 
-`quickstart.md` declara sete cenários. Todos têm teste correspondente:
+`quickstart.md` declara oito cenários; todos têm teste nomeado. Os dois
+acrescentados nesta rodada:
 
 | Cenário | Onde |
 |---|---|
-| 1 — tabela total e coincidente com o despacho | `validate_attestation_emitter_contract.py::ExecutionClassTable` |
-| 2 — execução direta recusada sem prova de worker | `EmissionPermission` |
-| 3 — alteração do artefato é detectável | `ArtefactAnchor`, `MintedChainIsAccepted` |
-| 4 — nenhuma cadeia com digest vazio | `ArtefactAnchor`, `CliRefusesBeforeReading` |
-| 5 — fechamento do bootstrap | `MintedChainIsAccepted`, e a própria trilha deste work item |
-| 6 — corrigir artefato de etapa fechada | `Supersession`, `validate_v3_wiring_contract.py::test_an_accepted_supersession_records_what_it_replaced_and_why` |
-| 7 — substituição só contra o registro aceito | `test_a_supersession_needs_the_bundle_this_item_actually_accepted` |
+| 7 estendido — registro que difere do aceito só na execução | `validate_v3_wiring_contract.py::test_a_supersession_needs_the_execution_that_was_accepted` |
+| 8 — virada de fase recusada com pendência | `test_a_phase_is_not_turned_over_a_stale_chain`, `test_a_phase_turns_once_the_stale_chain_is_cleared` |
 
-A cadeia de atestação do próprio work item é evidência executável adicional: as
-oito etapas fechadas têm receipt casando com os bytes correntes do seu artefato,
-e `development.chain_stale` está vazia.
+A cadeia de atestação do work item é evidência executável adicional: as oito
+etapas fechadas foram re-atestadas em cascata e cada receipt casa com os bytes
+correntes do seu artefato. `development.chain_stale` contém apenas `verify`,
+que é esta etapa, e esvazia ao ser fechada.
 
 ### Failures / Blockers
 
 Nenhum.
 
-**Flake conhecido, não reproduzido**: numa execução anterior da suíte,
+**Flake conhecido, não reproduzido**:
 `validate_gauntlet_run_contract.py::test_eight_concurrent_identical_admissions_create_once_and_reuse_without_residue`
-falhou com `STATE-DIVERGENCE` ("revision 1 is not the journal's last
-journal-anchored commit"). Passa isolado e passou nas duas execuções do gate
-desta verificação. É um teste de oito admissões concorrentes sobre o journal de
-runs, área que esta entrega não toca. Registrado como flake pré-existente, não
-como falha desta entrega — não é tratado como aprovado por inferência.
+falhou uma vez, muito antes desta rodada, com `STATE-DIVERGENCE` de revisão do
+journal. Passou isolado e em todas as execuções seguintes, incluindo esta. É
+um teste de oito admissões concorrentes sobre o journal de runs, área que esta
+entrega não toca. Registrado como flake pré-existente, nunca como aprovado por
+inferência.
 
 ### Next Action
 
