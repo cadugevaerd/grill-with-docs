@@ -29,10 +29,10 @@
       "implement-parallel": "se-371831aa160655748b677b843265b61501fc429c145f3bdae25f676032e90425",
       "partition": "se-a20077098d3ace8aaabc03b9b6eea6379be52c28bb0f301a7baa622a671eafc2",
       "plan": "se-cf78ecb0ec80629bba927f5999f47064e8849bf8a810755b87555fe64368060d",
-      "review": "se-755b9ad55b68347cdb49ed6952d213600b765920bfe53bba07ab740c7bd010a0",
+      "review": "se-7520d91cd97ce1b6dd4542f1c4fd3f563d1b890da18c3e07f2d91b67b63c585e",
       "specify": "se-e7a926f8b6661101ab6facf9b7aa8d2c3d2685f42f62c0fd733feef501b3e73c",
       "tasks": "se-8a488eedd9e4e6a6bccb7cfcef7b2b0690c0deb415ed0fad754b72c65fa02e66",
-      "verify": "se-872e231063ba4243028ae9e0fccde118a590fe1283277eb7b70759952fbf7b33"
+      "verify": "se-bce3d59f7bd318a48de47410bc2ddb81b93269de5584b230e1d434c7dd40b742"
     },
     "attested_outputs": {
       "analyze": {
@@ -72,9 +72,9 @@
         "step_id": "plan"
       },
       "review": {
-        "output_sha256": "sha256:51079e71584cdde33499ae1d23c35e746d5ac0a2be68e321604d97db94b7e3fc",
+        "output_sha256": "sha256:849a9aca10882964df2253f2fd313b9d4aa329ad9173a9aea9120faf465ae731",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
         "step_id": "review"
       },
       "specify": {
@@ -90,9 +90,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:81d573492de85d3e194d483f291892f29f05681443b510b8b777634c4dd913d3",
+        "output_sha256": "sha256:4eb4a602264bed7e5e7d57bdaee4950fff168e2230c2b0d25290bba1ceb726e2",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
         "step_id": "verify"
       }
     },
@@ -467,6 +467,36 @@
         "reason": "SHIP Phase A BLOCKED: STALE-EVIDENCE. Fingerprints de verify, review e arvore atual divergem em tree e work; plan identico nos tres. Causa: converge.fingerprint_exclude nao cobre .grill/**, e cada etapa grill cunha receipt ali, entao o hash muda entre dois gates por construcao. Os 11 caminhos do escopo estao byte-identicos desde 7cb6529. Requer decisao humana.",
         "state": "blocked",
         "step": "ship"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/verify.md",
+            "sha256": "4eb4a602264bed7e5e7d57bdaee4950fff168e2230c2b0d25290bba1ceb726e2"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "reexecucao sob a exclusao corrigida: a primeira medicao usava regra defeituosa que nunca casava os bundles de atestacao e nao podia ancorar ship",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/verify.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/review.md",
+            "sha256": "849a9aca10882964df2253f2fd313b9d4aa329ad9173a9aea9120faf465ae731"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "reexecucao sob a exclusao corrigida; fingerprint casa com o verify desta rodada nos tres componentes",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/review.json"
       }
     ],
     "chain_stale": [],
@@ -597,6 +627,20 @@
           "superseded_by_step_execution_id": "se-cf78ecb0ec80629bba927f5999f47064e8849bf8a810755b87555fe64368060d"
         }
       ],
+      "review": [
+        {
+          "attempt_id": "review-1",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/review.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:51079e71584cdde33499ae1d23c35e746d5ac0a2be68e321604d97db94b7e3fc",
+          "provenance": "current-generation",
+          "reason": "reexecucao sob a exclusao corrigida; fingerprint casa com o verify desta rodada nos tres componentes",
+          "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+          "step_execution_id": "se-755b9ad55b68347cdb49ed6952d213600b765920bfe53bba07ab740c7bd010a0",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-7520d91cd97ce1b6dd4542f1c4fd3f563d1b890da18c3e07f2d91b67b63c585e"
+        }
+      ],
       "specify": [
         {
           "attempt_id": "specify-1",
@@ -635,6 +679,20 @@
           "step_execution_id": "se-a9618128bf1b62e001a918b807b96185c30a078039178064058b280a6cfd1994",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-8a488eedd9e4e6a6bccb7cfcef7b2b0690c0deb415ed0fad754b72c65fa02e66"
+        }
+      ],
+      "verify": [
+        {
+          "attempt_id": "verify-1",
+          "attestation": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/verify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:81d573492de85d3e194d483f291892f29f05681443b510b8b777634c4dd913d3",
+          "provenance": "current-generation",
+          "reason": "reexecucao sob a exclusao corrigida: a primeira medicao usava regra defeituosa que nunca casava os bundles de atestacao e nao podia ancorar ship",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+          "step_execution_id": "se-872e231063ba4243028ae9e0fccde118a590fe1283277eb7b70759952fbf7b33",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-bce3d59f7bd318a48de47410bc2ddb81b93269de5584b230e1d434c7dd40b742"
         }
       ]
     },
