@@ -1,11 +1,16 @@
 ## Review Report
 
 Verdict: APPROVE
-Source fingerprint: tree 028ee4d5d29f187031fcbaab684ba93d4abb04f12cfba3d2a39c838d47cc917c / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2
+Source fingerprint: tree 0127089e64cdb59ced08016a8464adc504ea2fc012e498b40a703d678e741089 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2
 
-Casa exatamente com Converge (nona passada, `converged`) e Verify (`PASS`).
-Segunda rodada: a primeira devolveu `REQUEST CHANGES` com três achados
-Important, e os três estão corrigidos e travados por teste.
+Casa exatamente com Converge (décima passada, `converged`) e Verify (`PASS`,
+terceira rodada). A primeira rodada de review devolveu `REQUEST CHANGES` com
+três achados Important, e os três estão corrigidos e travados por teste.
+
+Esta é a segunda rodada, reemitida: durante ela corrigi um comentário enganoso
+em `verify_supersession`, o que moveu a fonte e obrigou converge e verify a
+rodarem de novo antes de o veredito valer. O achado está registrado abaixo, em
+Readability.
 
 ### Test Quality
 
@@ -84,6 +89,12 @@ Nenhum pendente. Os três da rodada anterior estão corrigidos:
    que escrever o relatório e fechar a etapa deixaram `tree` e `work` imóveis.
 
 ### Nits (não bloqueiam)
+
+- Este relatório teve de ser reemitido porque o conserto do comentário mudou a
+  fonte no meio da revisão. Um review que corrige o que encontra deixa de ser
+  read-only, e a consequência é um ciclo inteiro de gates. Vale como aviso de
+  processo: achado de leitura devia sair como achado, e a correção entrar na
+  rodada seguinte.
 
 - `attestation.supersede_step_execution({}, prior, successor)` passa um store
   descartável: a imutabilidade que `record_step_execution` garante vale só

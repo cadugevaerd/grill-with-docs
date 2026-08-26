@@ -29,9 +29,10 @@
       "implement-parallel": "se-2ca317ef89c5fd3797c6476ab62d64129c274be8badf25894cbe988c307eb07b",
       "partition": "se-9367c769f3872ef21d9e561a444815a62097ef7ad8873f8eab4cfe28d84b8257",
       "plan": "se-aa97935657191f7373745590cf06f0a21c332d051148aa834c4efb36b4b10037",
+      "review": "se-737158b9e6792f8335ab85bbe62a763879dd2d5211384511ea27c656895cc1e9",
       "specify": "se-72fd3bd19e7188c72214131b441296ddf407038a577966d8e54b9c028baa816e",
       "tasks": "se-c941023a49a5e992e44f40e48761051636ff1403862d97479bd6739022554516",
-      "verify": "se-04a6bce0023cffc2f03817bc4fce56a7f2731c26a46c03ebaa3d9fb377dcc9db"
+      "verify": "se-f033c71e7012a236918d5a90b0aeb1bf04f11c4a4ac87a809d0a10fb22d5d4d4"
     },
     "attested_outputs": {
       "analyze": {
@@ -70,6 +71,12 @@
         "receipt_ref": "receipts/skill-invocation/plan-plan-4.terminal.json",
         "step_id": "plan"
       },
+      "review": {
+        "output_sha256": "sha256:2cbad852a91fdff014d7da2e24b52303cff0acf8b6ec97214572a95a9b48e225",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "step_id": "review"
+      },
       "specify": {
         "output_sha256": "sha256:a674f1ff4d7b8b06188f3f351cfc243bbe7532e51f7e1274d814b6d3e4598247",
         "provenance": "current-generation",
@@ -83,9 +90,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:fab3ff771c2a0c41a9e2653822e74951be70e38413531c6f701f5a5d5b1062dd",
+        "output_sha256": "sha256:ebe5e862e3bc22c712357aabcf4826de3cd6eaa03b2a56c7163648822d2b5232",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-3.terminal.json",
         "step_id": "verify"
       }
     },
@@ -766,10 +773,36 @@
         "state": "complete",
         "step": "verify",
         "supersedes": ".grill/attestations/026-verify.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/verify.md",
+            "sha256": "ebe5e862e3bc22c712357aabcf4826de3cd6eaa03b2a56c7163648822d2b5232"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "terceira rodada de verify: o conserto do comentario moveu a fonte e invalidou o relatorio anterior; gate reexecutado sobre a arvore resultante",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/026-verify-r2.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/026-attestation-emitter/review.md",
+            "sha256": "2cbad852a91fdff014d7da2e24b52303cff0acf8b6ec97214572a95a9b48e225"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "review APPROVE: tres Important da primeira rodada corrigidos e travados por teste, fingerprint casando com converge e verify",
+        "state": "complete",
+        "step": "review"
       }
     ],
     "chain_stale": [],
-    "current_step": "review",
+    "current_step": "ship",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -793,7 +826,7 @@
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
-      "review": "in-progress",
+      "review": "complete",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
@@ -1140,6 +1173,18 @@
           "step_execution_id": "se-37c58a2005763a0aec7647a5bd070b234c0bc6ce5c1269d62db832773d54bd80",
           "step_id": "verify",
           "superseded_by_step_execution_id": "se-04a6bce0023cffc2f03817bc4fce56a7f2731c26a46c03ebaa3d9fb377dcc9db"
+        },
+        {
+          "attempt_id": "verify-2",
+          "attestation": ".grill/attestations/026-verify-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:fab3ff771c2a0c41a9e2653822e74951be70e38413531c6f701f5a5d5b1062dd",
+          "provenance": "current-generation",
+          "reason": "terceira rodada de verify: o conserto do comentario moveu a fonte e invalidou o relatorio anterior; gate reexecutado sobre a arvore resultante",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
+          "step_execution_id": "se-04a6bce0023cffc2f03817bc4fce56a7f2731c26a46c03ebaa3d9fb377dcc9db",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-f033c71e7012a236918d5a90b0aeb1bf04f11c4a4ac87a809d0a10fb22d5d4d4"
         }
       ]
     },

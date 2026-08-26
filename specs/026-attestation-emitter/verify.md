@@ -1,16 +1,23 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree 028ee4d5d29f187031fcbaab684ba93d4abb04f12cfba3d2a39c838d47cc917c / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2
+Source fingerprint: tree 0127089e64cdb59ced08016a8464adc504ea2fc012e498b40a703d678e741089 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 6829dc3378c82021c96bb05a0702e41a6686a247a788c6f8495e4b3a3828edb2
 Converge: CONVERGED
 
 Feature: `specs/026-attestation-emitter`
 Work item: `feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25`
 
-Segunda rodada. A primeira terminou em `REQUEST CHANGES` no review, com três
+Terceira rodada. A primeira terminou em `REQUEST CHANGES` no review, com três
 achados Important; as três correções foram aplicadas e o ciclo voltou ao
 converge, que rodou mais quatro vezes (Phases 9–11, T035–T039) até a nona
-passada devolver `converged` com zero findings e `tasks.md` byte-idêntico.
+passada devolver `converged`.
+
+A segunda rodada foi invalidada por mim: durante o review corrigi um comentário
+enganoso em `verify_supersession`, o que moveu a fonte e tornou o relatório
+anterior obsoleto. A décima passada do converge confirmou que o diff de código
+fora de comentários é vazio desde a nona, e este relatório reexecuta o gate
+sobre a árvore resultante. A regra é que mudança de fonte invalida o relatório;
+ela não abre exceção para mudança pequena, e não deveria.
 
 ### Operational Gates
 
