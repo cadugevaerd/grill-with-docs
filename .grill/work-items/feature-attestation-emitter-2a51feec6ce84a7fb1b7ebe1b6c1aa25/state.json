@@ -993,6 +993,13 @@
         "state": "complete",
         "step": "review",
         "supersedes": ".grill/attestations/026-review.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "ship autorizado explicitamente pelo usuario nesta sessao",
+        "state": "in-progress",
+        "step": "ship"
       }
     ],
     "chain_stale": [],
@@ -1021,7 +1028,7 @@
       "partition": "complete",
       "plan": "complete",
       "review": "complete",
-      "ship": "pending",
+      "ship": "in-progress",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
