@@ -790,6 +790,207 @@ class WorkspaceV2Contract(unittest.TestCase):
         self.assertEqual((process.returncode, payload["code"]), (2, "RECEIPT-INVALID"))
         self.assertFalse((self.root / ".grill/locks/global-reconciliation.lock").exists())
 
+    def test_reconcile_succession_targeted_dependency_authorizes_scope_overlap(self) -> None:
+        owner = self._init_item(work_id="owner"); self._mark_complete(owner); self._set_scope(owner, ["src/api"]); self._commit_all(self.root)
+        process, _payload = invoke("reconcile", self.root, "--work-id", "owner", "--apply", "--integration-branch", "main")
+        self.assertEqual(process.returncode, 0)
+        successor = self._init_item(work_id="successor", slug="successor"); self._mark_complete(successor)
+        self._set_scope(successor, ["src/api/x.py"]); self._set_dependencies(successor, ["owner"])
+        # Commit before --apply: a dirty tree is refused as DIRTY-WORKTREE long
+        # before the scope rule is consulted, so without this the case proves
+        # nothing about succession.
+        self._commit_all(self.root, "successor work item")
+        process, payload = invoke("reconcile", self.root, "--work-id", "successor", "--apply", "--integration-branch", "main")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "APPLIED"))
+        self.assertEqual(payload["conflicts"], [])
+
+    def test_reconcile_succession_full_dependency_authorizes_scope_overlap_both_directions(self) -> None:
+        first = self._init_item(work_id="succ-a"); second = self._init_item(work_id="succ-b", slug="beta")
+        for item in (first, second): self._mark_complete(item)
+        self._set_scope(first, ["src/service"]); self._set_scope(second, ["src/service/api.py"])
+        self._set_dependencies(second, ["succ-a"])
+        process, payload = invoke("reconcile", self.root)
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "PREVIEW"))
+        self.assertFalse(any(conflict.startswith("SCOPE-OVERLAP") for conflict in payload["conflicts"]))
+
+        shutil.rmtree(self.root / ".grill")
+        first = self._init_item(work_id="succ-a"); second = self._init_item(work_id="succ-b", slug="beta")
+        for item in (first, second): self._mark_complete(item)
+        self._set_scope(first, ["src/service"]); self._set_scope(second, ["src/service/api.py"])
+        self._set_dependencies(first, ["succ-b"])
+        process, payload = invoke("reconcile", self.root)
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "PREVIEW"))
+        self.assertFalse(any(conflict.startswith("SCOPE-OVERLAP") for conflict in payload["conflicts"]))
+
+    def test_reconcile_succession_negative_cases_still_flag_scope_overlap(self) -> None:
+        # No dependency at all: overlap stays fail-closed.
+        first = self._init_item(work_id="scope-a"); second = self._init_item(work_id="scope-b", slug="beta")
+        for item in (first, second): self._mark_complete(item)
+        self._set_scope(first, ["src/service"]); self._set_scope(second, ["src/service/api.py"])
+        process, payload = invoke("reconcile", self.root)
+        self.assertEqual(process.returncode, 1)
+        self.assertTrue(any(conflict.startswith("SCOPE-OVERLAP:") for conflict in payload["conflicts"]))
+
+        # A dependency on an unrelated third work item does not authorize the pair.
+        shutil.rmtree(self.root / ".grill")
+        first = self._init_item(work_id="scope-a"); second = self._init_item(work_id="scope-b", slug="beta")
+        third = self._init_item(work_id="scope-c", slug="gamma")
+        for item in (first, second, third): self._mark_complete(item)
+        self._set_scope(first, ["src/service"]); self._set_scope(second, ["src/service/api.py"])
+        self._set_dependencies(first, ["scope-c"])
+        process, payload = invoke("reconcile", self.root)
+        self.assertEqual(process.returncode, 1)
+        self.assertTrue(any(conflict.startswith("SCOPE-OVERLAP:") for conflict in payload["conflicts"]))
+
+        # A transitive chain A->B->C never authorizes the A<->C overlap.
+        shutil.rmtree(self.root / ".grill")
+        first = self._init_item(work_id="chain-a"); second = self._init_item(work_id="chain-b", slug="beta")
+        third = self._init_item(work_id="chain-c", slug="gamma")
+        for item in (first, second, third): self._mark_complete(item)
+        self._set_scope(first, ["src/service"]); self._set_scope(third, ["src/service/api.py"])
+        self._set_dependencies(first, ["chain-b"]); self._set_dependencies(second, ["chain-c"])
+        process, payload = invoke("reconcile", self.root)
+        self.assertEqual(process.returncode, 1)
+        self.assertTrue(any(conflict.startswith("SCOPE-OVERLAP:") for conflict in payload["conflicts"]))
+
+    def test_reconcile_succession_preserves_full_path_refusals(self) -> None:
+        # Malformed depends-on-work grants no authorization: overlap stays flagged too.
+        first = self._init_item(work_id="schema-a"); second = self._init_item(work_id="schema-b", slug="beta")
+        for item in (first, second): self._mark_complete(item)
+        self._set_scope(first, ["src/service"]); self._set_scope(second, ["src/service/api.py"])
+        value = self._metadata(first); value["depends-on-work"] = "schema-b"; self._write_metadata(first, value)
+        process, payload = invoke("reconcile", self.root)
+        self.assertEqual(process.returncode, 1)
+        self.assertIn("DEPENDENCY-SCHEMA:schema-a", payload["conflicts"])
+        self.assertTrue(any(conflict.startswith("SCOPE-OVERLAP:") for conflict in payload["conflicts"]))
+
+        shutil.rmtree(self.root / ".grill")
+        missing = self._init_item(work_id="missing-dep"); self._mark_complete(missing); self._set_dependencies(missing, ["does-not-exist"])
+        process, payload = invoke("reconcile", self.root)
+        self.assertEqual(process.returncode, 1)
+        self.assertIn("DEPENDENCY-MISSING:missing-dep->does-not-exist", payload["conflicts"])
+
+        # Cycle detection is a full-path invariant untouched by direct-dependency authorization.
+        shutil.rmtree(self.root / ".grill")
+        first = self._init_item(work_id="cycle-a"); second = self._init_item(work_id="cycle-b", slug="beta")
+        for item in (first, second): self._mark_complete(item)
+        self._set_dependencies(first, ["cycle-b"]); self._set_dependencies(second, ["cycle-a"])
+        process, payload = invoke("reconcile", self.root)
+        self.assertEqual(process.returncode, 1)
+        self.assertTrue(any(conflict.startswith("DEPENDENCY-CYCLE:") for conflict in payload["conflicts"]))
+
+    def test_reconcile_succession_preserves_targeted_path_refusals(self) -> None:
+        target = self._init_item(work_id="dependent"); self._mark_complete(target); self._set_dependencies(target, ["missing"])
+        process, payload = invoke("reconcile", self.root, "--work-id", "dependent")
+        self.assertEqual(process.returncode, 1)
+        self.assertTrue(any(conflict.startswith("DEPENDENCY-NOT-RECONCILED:") for conflict in payload["conflicts"]))
+
+        shutil.rmtree(self.root / ".grill")
+        self_dep = self._init_item(work_id="self-dep"); self._mark_complete(self_dep); self._set_dependencies(self_dep, ["self-dep"])
+        process, payload = invoke("reconcile", self.root, "--work-id", "self-dep")
+        self.assertEqual(process.returncode, 1)
+        self.assertTrue(any(conflict.startswith("DEPENDENCY-SELF:") for conflict in payload["conflicts"]))
+
+        # A direct dependency authorizes the scope overlap but never waives ADR-CONFLICT.
+        shutil.rmtree(self.root / ".grill")
+        owner = self._init_item(work_id="owner"); self._mark_complete(owner); self._set_scope(owner, ["src/api"])
+        (owner / "docs/adr/ADR-0001.md").write_text("# ADR-0001\n", encoding="utf-8")
+        self._commit_all(self.root)
+        process, _payload = invoke("reconcile", self.root, "--work-id", "owner", "--apply", "--integration-branch", "main")
+        self.assertEqual(process.returncode, 0)
+        consumer = self._init_item(work_id="consumer", slug="consumer"); self._mark_complete(consumer)
+        self._set_scope(consumer, ["src/api/x.py"]); self._set_adr_conflicts(consumer, ["owner/ADR-0001"]); self._set_dependencies(consumer, ["owner"])
+        process, payload = invoke("reconcile", self.root, "--work-id", "consumer")
+        self.assertEqual(process.returncode, 1)
+        self.assertFalse(any(conflict.startswith("SCOPE-OVERLAP") for conflict in payload["conflicts"]))
+        self.assertIn("ADR-CONFLICT:consumer->owner/ADR-0001", payload["conflicts"])
+
+    def test_reconcile_succession_multi_id_dependency_authorizes_only_the_declared_prior(self) -> None:
+        """A multi-id list authorizes the prior it names, and only that one.
+
+        The contract says the target must declare *exactly* the prior whose
+        receipt overlaps. With a single-id list that is indistinguishable from
+        "declares anything at all", so the discriminating case is a list that
+        names several ids: it must authorize when the prior is among them and
+        refuse when it is not.
+        """
+        owner = self._init_item(work_id="owner"); self._mark_complete(owner); self._set_scope(owner, ["src/api"])
+        self._commit_all(self.root)
+        process, _payload = invoke("reconcile", self.root, "--work-id", "owner", "--apply", "--integration-branch", "main")
+        self.assertEqual(process.returncode, 0)
+        successor = self._init_item(work_id="successor", slug="successor"); self._mark_complete(successor)
+        self._set_scope(successor, ["src/api/x.py"])
+        self._set_dependencies(successor, ["owner", "unrelated-one", "unrelated-two"])
+        self._commit_all(self.root, "successor declaring several dependencies")
+        process, payload = invoke("reconcile", self.root, "--work-id", "successor")
+        self.assertEqual((process.returncode, payload["verdict"]), (1, "NO-GO"))
+        self.assertFalse(any(conflict.startswith("SCOPE-OVERLAP") for conflict in payload["conflicts"]))
+        # The two undeclared-elsewhere ids are still unreconciled dependencies;
+        # authorizing the overlap never waives that.
+        self.assertIn("DEPENDENCY-NOT-RECONCILED:successor->unrelated-one", payload["conflicts"])
+
+        # Control: the same multi-id shape without the prior authorizes nothing.
+        self._set_dependencies(successor, ["unrelated-one", "unrelated-two"])
+        self._commit_all(self.root, "successor no longer declaring the prior")
+        process, payload = invoke("reconcile", self.root, "--work-id", "successor")
+        self.assertEqual(process.returncode, 1)
+        self.assertTrue(any(conflict.startswith("SCOPE-OVERLAP:successor:") for conflict in payload["conflicts"]))
+
+    def test_reconcile_succession_full_apply_is_byte_idempotent_with_authorized_overlap(self) -> None:
+        """The full path keeps atomicity and idempotence once an overlap is authorized.
+
+        The pre-existing idempotence case has no overlap at all, and the
+        succession idempotence case is targeted-only; neither exercises the full
+        path with the rule actually firing, which is what FR-008 makes symmetric.
+        """
+        first = self._init_item(work_id="succ-a"); second = self._init_item(work_id="succ-b", slug="beta")
+        for item in (first, second): self._mark_complete(item)
+        self._set_scope(first, ["src/service"]); self._set_scope(second, ["src/service/api.py"])
+        self._set_dependencies(second, ["succ-a"])
+        self._commit_all(self.root)
+        args = ("reconcile", self.root, "--apply", "--integration-branch", "main")
+        process, payload = invoke(*args)
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "APPLIED"))
+        self.assertFalse(any(conflict.startswith("SCOPE-OVERLAP") for conflict in payload["conflicts"]))
+        global_dir = self.root / ".grill/global"
+        before = snapshot(global_dir)
+        before_mtime = {path.name: path.stat().st_mtime_ns for path in global_dir.iterdir()}
+        time.sleep(.02)
+        process, payload = invoke(*args)
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "REUSED"))
+        self.assertEqual(snapshot(global_dir), before)
+        self.assertEqual(before_mtime, {path.name: path.stat().st_mtime_ns for path in global_dir.iterdir()})
+
+    def test_reconcile_succession_preview_is_read_only_with_authorized_overlap(self) -> None:
+        first = self._init_item(work_id="succ-a"); second = self._init_item(work_id="succ-b", slug="beta")
+        for item in (first, second): self._mark_complete(item)
+        self._set_scope(first, ["src/service"]); self._set_scope(second, ["src/service/api.py"]); self._set_dependencies(second, ["succ-a"])
+        before = snapshot(self.root)
+        process, payload = invoke("reconcile", self.root)
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "PREVIEW"))
+        self.assertFalse(any(conflict.startswith("SCOPE-OVERLAP") for conflict in payload["conflicts"]))
+        self.assertEqual(before, snapshot(self.root))
+
+    def test_reconcile_succession_targeted_apply_is_byte_idempotent_and_reuses_prior_receipt(self) -> None:
+        owner = self._init_item(work_id="owner"); self._mark_complete(owner); self._set_scope(owner, ["src/api"]); self._commit_all(self.root)
+        process, _payload = invoke("reconcile", self.root, "--work-id", "owner", "--apply", "--integration-branch", "main")
+        self.assertEqual(process.returncode, 0)
+        owner_receipt = self.root / ".grill/global/receipts/owner.json"; owner_receipt_before = owner_receipt.read_bytes()
+        successor = self._init_item(work_id="successor", slug="successor"); self._mark_complete(successor)
+        self._set_scope(successor, ["src/api/x.py"]); self._set_dependencies(successor, ["owner"]); self._commit_all(self.root, "successor work item")
+        args = ("reconcile", self.root, "--work-id", "successor", "--apply", "--integration-branch", "main")
+        first, p1 = invoke(*args)
+        self.assertEqual((first.returncode, p1["verdict"]), (0, "APPLIED"))
+        # The owner receipt written before this succession was reconciled is read as-is, byte for byte.
+        self.assertEqual(owner_receipt.read_bytes(), owner_receipt_before)
+        successor_receipt = self.root / ".grill/global/receipts/successor.json"; mtime = successor_receipt.stat().st_mtime_ns
+        before = snapshot(self.root / ".grill/global")
+        time.sleep(.02)
+        second, p2 = invoke(*args)
+        self.assertEqual((second.returncode, p2["verdict"]), (0, "REUSED"))
+        self.assertEqual(successor_receipt.stat().st_mtime_ns, mtime)
+        self.assertEqual(snapshot(self.root / ".grill/global"), before)
+
     def test_full_apply_blocks_before_dropping_existing_receipts(self) -> None:
         item = self._init_item(work_id="full-safe"); self._mark_complete(item); self._commit_all(self.root)
         process, _payload = invoke("reconcile", self.root, "--work-id", "full-safe", "--apply", "--integration-branch", "main")

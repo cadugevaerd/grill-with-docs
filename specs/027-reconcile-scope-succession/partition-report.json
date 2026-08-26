@@ -1,0 +1,79 @@
+{
+  "deferred_to_leader": [
+    "T011"
+  ],
+  "dispatchable_tasks": 10,
+  "feature": "027-reconcile-scope-succession",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "id": "p01-a",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T001",
+        "T002",
+        "T003"
+      ]
+    },
+    {
+      "id": "p02-a",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T004",
+        "T005",
+        "T006",
+        "T007"
+      ]
+    },
+    {
+      "id": "p02-b",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T008",
+        "T010"
+      ]
+    },
+    {
+      "id": "p02-c",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T009"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "achieved_groups": 1,
+      "phase": 1,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 3,
+      "title": "Fundação — a regra de autorização",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 3,
+      "phase": 2,
+      "reasons": [],
+      "requested_groups": 3,
+      "tasks": 7,
+      "title": "Cobertura e distribuição",
+      "unmapped_tasks": 0
+    }
+  ],
+  "requested_groups": 3,
+  "schema": "grill-partition-report/v1",
+  "tasks": 11,
+  "unmapped_task_ids": [],
+  "verdict": "PARTITION-DEGRADED"
+}
