@@ -1,0 +1,59 @@
+{
+  "worker": "p02-a",
+  "feature": "027-reconcile-scope-succession",
+  "file_touched": "tests/validate_workspace_contract.py",
+  "tasks": [
+    {
+      "id": "T004",
+      "summary": "US1 positive succession cases",
+      "tests_added": [
+        "test_reconcile_succession_targeted_dependency_authorizes_scope_overlap",
+        "test_reconcile_succession_full_dependency_authorizes_scope_overlap_both_directions"
+      ],
+      "contract_clause": "A direct declared dependency authorizes reusing scope, in the targeted path and in the full path, in either declaration direction.",
+      "status": "written; fails until the implementation lands (verdict stays NO-GO / SCOPE-OVERLAP is still emitted)"
+    },
+    {
+      "id": "T005",
+      "summary": "US2 negative succession cases still flag SCOPE-OVERLAP",
+      "tests_added": [
+        "test_reconcile_succession_negative_cases_still_flag_scope_overlap"
+      ],
+      "contract_clause": "Absence of any dependency, a dependency on an unrelated third work item, and a transitive chain A->B->C never authorize an overlap; SCOPE-OVERLAP keeps firing in all three.",
+      "status": "passes already (fail-closed behavior does not depend on the fix)"
+    },
+    {
+      "id": "T006",
+      "summary": "US3 preservation cases, one per refusal path",
+      "tests_added": [
+        "test_reconcile_succession_preserves_full_path_refusals",
+        "test_reconcile_succession_preserves_targeted_path_refusals"
+      ],
+      "contract_clause": "DEPENDENCY-SCHEMA grants no authorization (full path); DEPENDENCY-MISSING (full path); DEPENDENCY-CYCLE only in the full path; DEPENDENCY-NOT-RECONCILED (targeted path); DEPENDENCY-SELF (targeted path); ADR-CONFLICT is never waived by a direct dependency (targeted path).",
+      "status": "preserves_full_path_refusals passes already; preserves_targeted_path_refusals fails on its last sub-case (ADR-CONFLICT-with-authorized-overlap) until the fix lands, because SCOPE-OVERLAP is not yet waived for the direct dependency"
+    },
+    {
+      "id": "T007",
+      "summary": "US4 invariants: read-only preview, byte-idempotent apply, no-conversion receipt read",
+      "tests_added": [
+        "test_reconcile_succession_preview_is_read_only_with_authorized_overlap",
+        "test_reconcile_succession_targeted_apply_is_byte_idempotent_and_reuses_prior_receipt"
+      ],
+      "contract_clause": "Preview with an authorized overlapping pair touches no byte; an authorized targeted apply goes APPLIED then REUSED, byte-identical with no mtime churn; a receipt written before the succession is reconciled is read back unchanged (no migration/conversion).",
+      "status": "fails until the implementation lands (verdict stays NO-GO / APPLIED never reached)"
+    }
+  ],
+  "verification": {
+    "command_new_tests": "python3 -m unittest tests.validate_workspace_contract -k succession",
+    "command_full_suite": "python3 -m unittest tests.validate_workspace_contract",
+    "full_suite_result": "74 tests, 5 failures (the 5 succession cases gated on the missing implementation), 1 skip (pre-existing, environment-dependent: test_reject_symlink_chain_accepts_macos_var_root_alias), 0 regressions in the 69 pre-existing passing tests",
+    "expected_failures_confirmed_root_cause": [
+      "test_reconcile_succession_targeted_dependency_authorizes_scope_overlap: NO-GO instead of APPLIED, conflicts=['SCOPE-OVERLAP:successor:src/api/x.py<->owner:src/api'] -- confirmed via direct repro, overlap_authorized not yet consulted",
+      "test_reconcile_succession_full_dependency_authorizes_scope_overlap_both_directions: NO-GO instead of PREVIEW",
+      "test_reconcile_succession_preserves_targeted_path_refusals: SCOPE-OVERLAP still present on the ADR-CONFLICT sub-case where it should be authorized away",
+      "test_reconcile_succession_preview_is_read_only_with_authorized_overlap: NO-GO instead of PREVIEW",
+      "test_reconcile_succession_targeted_apply_is_byte_idempotent_and_reuses_prior_receipt: NO-GO instead of APPLIED on first apply"
+    ]
+  },
+  "notes": "Worktree base predates both the spec docs commit (8fbdb76) and the fix commit (f853341) visible on the coordinator branch; specs/027-reconcile-scope-succession did not exist in this worktree before this sidecar. Wrote only tests/validate_workspace_contract.py and this sidecar, per granted scope. Did not touch grill_workspace.py, tasks.md, .grill/, or .specify/reports/."
+}
