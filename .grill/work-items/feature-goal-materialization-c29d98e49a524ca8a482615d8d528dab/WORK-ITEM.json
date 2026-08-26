@@ -16,16 +16,19 @@
       "state": "present"
     },
     "head": "94d0bf7ff16380ca1593405f422a2be4896ffe45",
-    "schema": "grill-work-item/v2",
+    "parent_work_id": null,
+    "schema": "grill-work-item/v3",
     "slug": "goal-materialization",
+    "source": null,
     "type": "feature",
     "work_id": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
     "workflow": {
       "path": "WORKFLOW.md",
       "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0"
-    }
+    },
+    "worktree_key": "wt-feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab"
   },
-  "immutable_sha256": "42fe4d88f5ce066bd41702577e5c2d594eec74258883bd463720c6afda793798",
+  "immutable_sha256": "aef26ec344358d8ef7357e225e80f7c03f9ef4d0abcd00ee076e17e391923885",
   "initial_artifacts": {
     "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
     "CONSTITUTION-CHECK.md": "70982f65169d6155e958ce6e8f7479ff88cff948d5f70133ccf1d91354ae7ea2",
@@ -39,7 +42,10 @@
     "handoffs/FASE-001-SPECIFY-HANDOFF.md": "3cfe46ee546a9c46cf78fd7bf59ca897df07d24431a46ab4b61bf147fe919a58",
     "state.json": "565a2ec83488d695a4ef3231c5657520a0acf163360592cc4f706a6d6c79036a"
   },
-  "schema": "grill-work-item/v2",
+  "orchestration": {
+    "schema": "grill-orchestrator/v1"
+  },
+  "schema": "grill-work-item/v3",
   "scope": {
     "paths": [
       "plugin/skills/grill-with-docs/scripts/grill_core/goal_document.py",

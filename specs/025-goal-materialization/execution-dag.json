@@ -1,0 +1,173 @@
+{
+  "feature": "025-goal-materialization",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        "specs/025-goal-materialization/implement/p01-a.tasks.json"
+      ],
+      "id": "p01-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/assets/GOAL.template.md",
+        "specs/025-goal-materialization/implement/p01-b.tasks.json"
+      ],
+      "id": "p01-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a",
+        "p01-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/assets/GOAL.template.md",
+        "plugin/skills/grill-with-docs/scripts/grill_core/goal_document.py",
+        "specs/025-goal-materialization/implement/p02-a.tasks.json"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/ensure_goal.py",
+        "specs/025-goal-materialization/implement/p03-a.tasks.json"
+      ],
+      "id": "p03-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/025-goal-materialization/implement/p03-b.tasks.json",
+        "tests/validate_goal_document_contract.py"
+      ],
+      "id": "p03-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a",
+        "p03-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/ensure_goal.py",
+        "specs/025-goal-materialization/implement/p04-a.tasks.json"
+      ],
+      "id": "p04-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a",
+        "p03-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/025-goal-materialization/implement/p04-b.tasks.json"
+      ],
+      "id": "p04-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p04-a",
+        "p04-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/assets/GOAL.template.md",
+        "specs/025-goal-materialization/implement/p05-a.tasks.json",
+        "tests/validate_goal_document_contract.py"
+      ],
+      "id": "p05-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p05-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "specs/025-goal-materialization/implement/p06-a.tasks.json",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p06-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p05-a"
+      ],
+      "files": [
+        ".claude-plugin/marketplace.json",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "specs/025-goal-materialization/implement/p06-b.tasks.json"
+      ],
+      "id": "p06-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p05-a"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        "plugin/.codex-plugin/plugin.json",
+        "specs/025-goal-materialization/implement/p06-c.tasks.json",
+        "tests/run_validators.py"
+      ],
+      "id": "p06-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p06-a",
+        "p06-b",
+        "p06-c"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/assets/GOAL.template.md",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "plugin/skills/grill-with-docs/scripts/ensure_goal.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/goal_document.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/025-goal-materialization/implement/p06-serial.tasks.json",
+        "tests/run_validators.py",
+        "tests/validate_distribution.py",
+        "tests/validate_goal_document_contract.py"
+      ],
+      "id": "p06-serial",
+      "parallel": false,
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v1"
+}

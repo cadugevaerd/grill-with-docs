@@ -1,0 +1,224 @@
+{
+  "deferred_to_leader": [],
+  "dispatchable_tasks": 43,
+  "feature": "025-goal-materialization",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "id": "p01-a",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T001"
+      ]
+    },
+    {
+      "id": "p01-b",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T002"
+      ]
+    },
+    {
+      "id": "p02-a",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T003",
+        "T004",
+        "T005",
+        "T006",
+        "T007"
+      ]
+    },
+    {
+      "id": "p03-a",
+      "parallel": true,
+      "phase": 3,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T008",
+        "T009",
+        "T010",
+        "T011",
+        "T012",
+        "T013"
+      ]
+    },
+    {
+      "id": "p03-b",
+      "parallel": true,
+      "phase": 3,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T014",
+        "T015",
+        "T016",
+        "T017"
+      ]
+    },
+    {
+      "id": "p04-a",
+      "parallel": true,
+      "phase": 4,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T018",
+        "T019",
+        "T020",
+        "T021",
+        "T022"
+      ]
+    },
+    {
+      "id": "p04-b",
+      "parallel": true,
+      "phase": 4,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T023"
+      ]
+    },
+    {
+      "id": "p05-a",
+      "parallel": true,
+      "phase": 5,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T024",
+        "T025",
+        "T026",
+        "T027",
+        "T028",
+        "T029",
+        "T030",
+        "T031"
+      ]
+    },
+    {
+      "id": "p06-a",
+      "parallel": true,
+      "phase": 6,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T036",
+        "T037",
+        "T041"
+      ]
+    },
+    {
+      "id": "p06-b",
+      "parallel": true,
+      "phase": 6,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T032",
+        "T034",
+        "T038"
+      ]
+    },
+    {
+      "id": "p06-c",
+      "parallel": true,
+      "phase": 6,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T033",
+        "T035",
+        "T042"
+      ]
+    },
+    {
+      "id": "p06-serial",
+      "parallel": false,
+      "phase": 6,
+      "scope": "FEATURE_WIDE",
+      "task_ids": [
+        "T039",
+        "T040",
+        "T043"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "achieved_groups": 2,
+      "phase": 1,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "Setup",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 2,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 5,
+      "title": "Foundational — o SSOT do contrato",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 3,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 10,
+      "title": "User Story 1 — Receber o documento ao criar um work item (P1) 🎯 MVP",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 4,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 6,
+      "title": "User Story 2 — Não perder arquivo humano na raiz (P1)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 5,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 8,
+      "title": "User Story 3 — Impedir que o contrato do documento se perca (P2)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 3,
+      "phase": 6,
+      "reasons": [
+        "UNMAPPED_TASKS"
+      ],
+      "requested_groups": 3,
+      "tasks": 12,
+      "title": "Polish & Cross-Cutting — o bump sincronizado",
+      "unmapped_tasks": 3
+    }
+  ],
+  "requested_groups": 3,
+  "schema": "grill-partition-report/v1",
+  "tasks": 43,
+  "unmapped_task_ids": [
+    "T039",
+    "T040",
+    "T043"
+  ],
+  "verdict": "PARTITION-DEGRADED"
+}
