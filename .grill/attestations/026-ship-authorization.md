@@ -31,12 +31,13 @@ fora do contrato (WORKFLOW.md, seção de invocação canônica).
 
 ## Evidência consumida
 
-- Converge: doze passadas; a última devolveu `converged` com zero findings e
-  `tasks.md` byte-idêntico.
+- Converge: as doze passadas funcionais terminaram em `converged`; depois, o
+  worker Codex `p04-serial` fechou o nó tardio de T022, a `wave-0005` convergiu
+  e o run `run-c94b6511aedc368366bd4670` alcançou `COMPLETE` com 12/12 nós.
 - Verify: `PASS` — 1303 testes em 27 validadores, exit 0; `distribution: OK`.
 - Review: `APPROVE` — três Important da primeira rodada corrigidos e travados
   por teste; nenhum Critical; quatro Nits registrados e não bloqueantes.
-- Fingerprint casando nos três: `tree 415b3f088e85 / work e3b0c44298fc /
+- Fingerprint casando nos três: `tree 36fb9fa5ba0f / work e3b0c44298fc /
   plan 662848a8fc08`.
 
 ## Ressalva conhecida, aceita

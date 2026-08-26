@@ -30,6 +30,7 @@
       "partition": "se-fafb3b87ae40c86d91fbb9d696f77d5dc8e9f8d67ab776f7e4fdbe8f60e418eb",
       "plan": "se-27e5f0a31d4374f1e6c854304455d39461dd79080c14161630abfea91e34bfde",
       "review": "se-edf26a98eed83716204a990b898906cfe397207a228e6ae0d8bd9e7e4834f943",
+      "ship": "se-ffa06f712ccd97beb721e7cc75a2fda3b013e7220f35d9db423323bd25567fd9",
       "specify": "se-d60cacdf705fd15778db16f717081d2cd4d540d64d1f8ae4bdf4a3d5f2cfca1d",
       "tasks": "se-ecd5753a939c949b17f6cebbd5df310224a90cd9cf0d4927d1ed86b69a6c768f",
       "verify": "se-05b2b67da432ce37cbf6a8fff401fde2e72314bec85f296d05cc35e489d3c7e5"
@@ -76,6 +77,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/review-review-3.terminal.json",
         "step_id": "review"
+      },
+      "ship": {
+        "output_sha256": "sha256:7f17355867e476aaec8443ca5267e6d3fdd9a41e7b394f1987d2fcbf71a82b26",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/ship-ship-1.terminal.json",
+        "step_id": "ship"
       },
       "specify": {
         "output_sha256": "sha256:4404a06d1e53187913df78b3da62b220886731afc4d97ca30b848a41c5d97c16",
@@ -1030,10 +1037,22 @@
         "state": "complete",
         "step": "review",
         "supersedes": ".grill/attestations/026-review-r2.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/attestations/026-ship-authorization.md",
+            "sha256": "7f17355867e476aaec8443ca5267e6d3fdd9a41e7b394f1987d2fcbf71a82b26"
+          }
+        ],
+        "execution_branch": "feature/goal-instruct",
+        "reason": "ship autorizado: run 12/12 COMPLETE, Codex Verify PASS, Codex Review APPROVE, rollback e monitoracao declarados",
+        "state": "complete",
+        "step": "ship"
       }
     ],
     "chain_stale": [],
-    "current_step": "ship",
+    "current_step": "complete",
     "execution_branch": "feature/goal-instruct",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -1058,7 +1077,7 @@
       "partition": "complete",
       "plan": "complete",
       "review": "complete",
-      "ship": "in-progress",
+      "ship": "complete",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"

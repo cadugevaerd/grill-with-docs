@@ -1,6 +1,6 @@
 {
   "authorized_by": "carlosaraujo",
-  "content_sha256": "sha256:e28de0415dc6fbaed75c5529405b12e3fb55d1834991797a3a25ed4adeb09029",
+  "content_sha256": "sha256:7f17355867e476aaec8443ca5267e6d3fdd9a41e7b394f1987d2fcbf71a82b26",
   "decision": "APPROVED",
   "receipt_ref": ".grill/attestations/026-ship-authorization.md",
   "schema": "human-authorization/v1",
