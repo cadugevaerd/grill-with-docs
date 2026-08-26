@@ -127,3 +127,18 @@ sem cerca.
 
 T006 e T007 fecham a regressão. T008..T011 são a obrigação de distribuição da
 cláusula *Bump obrigatório do plugin* e não podem faltar no merge.
+
+---
+
+## Phase 4: Convergence
+
+**Purpose**: Fechar as lacunas que a avaliação do código contra spec, plan e
+tasks encontrou. Todas as três são de cobertura: a correção está implementada e
+nada no código contraria a intenção declarada.
+
+- [X] T012 Commitar a árvore antes do `reconcile --apply` em `test_reconcile_succession_targeted_dependency_authorizes_scope_overlap`, em `tests/validate_workspace_contract.py`, para que o caso exercite a autorização de sucessão em vez de parar em `DIRTY-WORKTREE`; o teste irmão `test_reconcile_succession_targeted_apply_is_byte_idempotent_and_reuses_prior_receipt` já faz isso e é o padrão a seguir per SC-006, US1/AC1 (partial)
+- [X] T013 Acrescentar em `tests/validate_workspace_contract.py` o caso em que `depends-on-work` declara **vários** ids e um deles é o `prior_id` sobreposto — autoriza — mais o controle em que a lista multi-id **não** contém o `prior_id` — não autoriza per FR-001, FR-012 (partial)
+- [X] T014 Acrescentar em `tests/validate_workspace_contract.py` o caso de apply do caminho **completo** com par autorizado, afirmando `APPLIED` seguido de `REUSED` byte-idêntico e sem churn de `mtime`, fechando a simetria que FR-008 exige entre os dois caminhos per FR-008, FR-009, C-009 (partial)
+
+**Checkpoint**: `python3 tests/run_validators.py` fecha em exit 0, com o único
+skip dependente de ambiente preservado.

@@ -25,6 +25,7 @@
     "attested_executions": {
       "analyze": "se-13931aa072b6ef098e7ef58cea5268646b388f12cb6b4a12c0c7f0b0117c2983",
       "checklist": "se-dc876e77daee5d28b6f1ce265d7b29d483802d5431cd34eea0abbf5941122961",
+      "implement-parallel": "se-28933333003e21e678e85fef570782561bfe85c055bf7b752d2f10134d34a416",
       "partition": "se-745453c75541e3dbaf3088082f4cb11f37736079e52ddb66261a7e2c2c16b003",
       "plan": "se-cf78ecb0ec80629bba927f5999f47064e8849bf8a810755b87555fe64368060d",
       "specify": "se-e7a926f8b6661101ab6facf9b7aa8d2c3d2685f42f62c0fd733feef501b3e73c",
@@ -42,6 +43,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
         "step_id": "checklist"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:0506c5a170091830f3558c6e202977ed77439246877d55c8d3d8978ec7215639",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "step_id": "implement-parallel"
       },
       "partition": {
         "output_sha256": "sha256:3f34519e69bf68ad38cc5841883db638c19b784baf7ed24c81841bb5c558664e",
@@ -265,6 +272,25 @@
         "state": "complete",
         "step": "checklist",
         "supersedes": ".grill/work-items/fix-reconcile-scope-succession-60acbf5d02f244a48207ce55aa48f245/attestations/checklist-r2.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "in-progress",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/027-reconcile-scope-succession/tasks.md",
+            "sha256": "0506c5a170091830f3558c6e202977ed77439246877d55c8d3d8978ec7215639"
+          }
+        ],
+        "execution_branch": "fix/reconcile-scope-succession",
+        "reason": "",
+        "state": "complete",
+        "step": "implement-parallel"
       }
     ],
     "chain_stale": [
@@ -272,7 +298,7 @@
       "analyze",
       "partition"
     ],
-    "current_step": "implement-parallel",
+    "current_step": "converge",
     "execution_branch": "fix/reconcile-scope-succession",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -293,7 +319,7 @@
       "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
-      "implement-parallel": "pending",
+      "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
       "review": "pending",

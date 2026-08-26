@@ -796,6 +796,10 @@ class WorkspaceV2Contract(unittest.TestCase):
         self.assertEqual(process.returncode, 0)
         successor = self._init_item(work_id="successor", slug="successor"); self._mark_complete(successor)
         self._set_scope(successor, ["src/api/x.py"]); self._set_dependencies(successor, ["owner"])
+        # Commit before --apply: a dirty tree is refused as DIRTY-WORKTREE long
+        # before the scope rule is consulted, so without this the case proves
+        # nothing about succession.
+        self._commit_all(self.root, "successor work item")
         process, payload = invoke("reconcile", self.root, "--work-id", "successor", "--apply", "--integration-branch", "main")
         self.assertEqual((process.returncode, payload["verdict"]), (0, "APPLIED"))
         self.assertEqual(payload["conflicts"], [])
@@ -900,6 +904,62 @@ class WorkspaceV2Contract(unittest.TestCase):
         self.assertEqual(process.returncode, 1)
         self.assertFalse(any(conflict.startswith("SCOPE-OVERLAP") for conflict in payload["conflicts"]))
         self.assertIn("ADR-CONFLICT:consumer->owner/ADR-0001", payload["conflicts"])
+
+    def test_reconcile_succession_multi_id_dependency_authorizes_only_the_declared_prior(self) -> None:
+        """A multi-id list authorizes the prior it names, and only that one.
+
+        The contract says the target must declare *exactly* the prior whose
+        receipt overlaps. With a single-id list that is indistinguishable from
+        "declares anything at all", so the discriminating case is a list that
+        names several ids: it must authorize when the prior is among them and
+        refuse when it is not.
+        """
+        owner = self._init_item(work_id="owner"); self._mark_complete(owner); self._set_scope(owner, ["src/api"])
+        self._commit_all(self.root)
+        process, _payload = invoke("reconcile", self.root, "--work-id", "owner", "--apply", "--integration-branch", "main")
+        self.assertEqual(process.returncode, 0)
+        successor = self._init_item(work_id="successor", slug="successor"); self._mark_complete(successor)
+        self._set_scope(successor, ["src/api/x.py"])
+        self._set_dependencies(successor, ["owner", "unrelated-one", "unrelated-two"])
+        self._commit_all(self.root, "successor declaring several dependencies")
+        process, payload = invoke("reconcile", self.root, "--work-id", "successor")
+        self.assertEqual((process.returncode, payload["verdict"]), (1, "NO-GO"))
+        self.assertFalse(any(conflict.startswith("SCOPE-OVERLAP") for conflict in payload["conflicts"]))
+        # The two undeclared-elsewhere ids are still unreconciled dependencies;
+        # authorizing the overlap never waives that.
+        self.assertIn("DEPENDENCY-NOT-RECONCILED:successor->unrelated-one", payload["conflicts"])
+
+        # Control: the same multi-id shape without the prior authorizes nothing.
+        self._set_dependencies(successor, ["unrelated-one", "unrelated-two"])
+        self._commit_all(self.root, "successor no longer declaring the prior")
+        process, payload = invoke("reconcile", self.root, "--work-id", "successor")
+        self.assertEqual(process.returncode, 1)
+        self.assertTrue(any(conflict.startswith("SCOPE-OVERLAP:successor:") for conflict in payload["conflicts"]))
+
+    def test_reconcile_succession_full_apply_is_byte_idempotent_with_authorized_overlap(self) -> None:
+        """The full path keeps atomicity and idempotence once an overlap is authorized.
+
+        The pre-existing idempotence case has no overlap at all, and the
+        succession idempotence case is targeted-only; neither exercises the full
+        path with the rule actually firing, which is what FR-008 makes symmetric.
+        """
+        first = self._init_item(work_id="succ-a"); second = self._init_item(work_id="succ-b", slug="beta")
+        for item in (first, second): self._mark_complete(item)
+        self._set_scope(first, ["src/service"]); self._set_scope(second, ["src/service/api.py"])
+        self._set_dependencies(second, ["succ-a"])
+        self._commit_all(self.root)
+        args = ("reconcile", self.root, "--apply", "--integration-branch", "main")
+        process, payload = invoke(*args)
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "APPLIED"))
+        self.assertFalse(any(conflict.startswith("SCOPE-OVERLAP") for conflict in payload["conflicts"]))
+        global_dir = self.root / ".grill/global"
+        before = snapshot(global_dir)
+        before_mtime = {path.name: path.stat().st_mtime_ns for path in global_dir.iterdir()}
+        time.sleep(.02)
+        process, payload = invoke(*args)
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "REUSED"))
+        self.assertEqual(snapshot(global_dir), before)
+        self.assertEqual(before_mtime, {path.name: path.stat().st_mtime_ns for path in global_dir.iterdir()})
 
     def test_reconcile_succession_preview_is_read_only_with_authorized_overlap(self) -> None:
         first = self._init_item(work_id="succ-a"); second = self._init_item(work_id="succ-b", slug="beta")
