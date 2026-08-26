@@ -668,6 +668,12 @@ def base_information(root: Path, requested: str | None) -> tuple[str, str]:
 
 
 def immutable_metadata(root: Path, args: argparse.Namespace, work_id: str) -> dict[str, Any]:
+    # T017: no "goal" key here, by design. This dict is serialised verbatim
+    # into WORK-ITEM.json -- sealed identity that invalidates the work item if
+    # it changes. goal.md is a project-wide artefact a human can legitimately
+    # edit later (unlike constitution/workflow fixation), so it is reported
+    # via ensure_project_goal()/state.json's own goal block, never sealed
+    # here. tests/validate_goal_document_contract.py (T031b) asserts this.
     constitution, _, _ = constitution_info(root)
     base_ref, base_commit = base_information(root, getattr(args, "base_ref", None))
     return {
@@ -684,7 +690,8 @@ def immutable_metadata(root: Path, args: argparse.Namespace, work_id: str) -> di
     }
 
 
-def state_template(root: Path, work_id: str, constitution: dict[str, Any], workflow: dict[str, Any]) -> bytes:
+def state_template(root: Path, work_id: str, constitution: dict[str, Any], workflow: dict[str, Any],
+                   goal: dict[str, Any] | None = None) -> bytes:
     value = json.loads((ASSETS / "state.template.json").read_text(encoding="utf-8"))
     value["work_id"] = work_id
     value["constitution"] = constitution
@@ -694,14 +701,20 @@ def state_template(root: Path, work_id: str, constitution: dict[str, Any], workf
     # that a v4 document with "version": "v2" here was inconsistent.  Readers
     # accept both spellings, so materialised bundles need no migration.
     value["workflow"] = {**workflow, "schema": "v2"}
+    if goal is not None:
+        # E4 (data-model.md): only path/sha256/status land in state.json --
+        # "version" and "reason" are init's payload-only fields (E5). ``goal``
+        # defaults to None for callers (migrate_command) that never
+        # materialise goal.md, so their state.json stays exactly as before.
+        value["goal"] = {"path": goal["path"], "sha256": goal["sha256"], "status": goal["status"]}
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
 
-def initial_files(root: Path, work_id: str, immutable: dict[str, Any], *,
+def initial_files(root: Path, work_id: str, immutable: dict[str, Any], goal: dict[str, Any] | None = None, *,
                   backlog_skipped: bool = False) -> dict[str, bytes]:
     _, _, clauses = constitution_info(root)
     files = {name: read_asset(name) for name in ROOT_FILES if name not in {"state.json", "CONSTITUTION-CHECK.md"}}
-    files["state.json"] = state_template(root, work_id, immutable["constitution"], immutable["workflow"])
+    files["state.json"] = state_template(root, work_id, immutable["constitution"], immutable["workflow"], goal)
     if backlog_skipped:
         # Stamped here, not after publication: initial_artifacts is computed
         # from these bytes, so writing the stamp afterwards would make every
@@ -1138,6 +1151,52 @@ def ensure_project_workflow(root: Path) -> dict[str, Any]:
     return {"status": result.status, "path": "WORKFLOW.md", "sha256": workflow.digest(result.content)}
 
 
+_GOAL_MARKER_RE = re.compile(r"grill-with-docs-goal:(v\d+)")
+
+
+def _goal_document_version(content: bytes) -> str | None:
+    """The goal.md marker version declared on the first line, or ``None``.
+
+    Mirrors ``ensure_workflow.managed_version``/``grill_core.goal_document
+    .managed_version``: matched only against the first line
+    (contracts/goal-document.md) so a marker loose in the document body never
+    identifies prose as managed.
+    """
+    try:
+        text = content.decode("utf-8")
+    except UnicodeError:
+        return None
+    first_line = text.split("\n", 1)[0]
+    match = _GOAL_MARKER_RE.search(first_line)
+    return match.group(1) if match else None
+
+
+def ensure_project_goal(root: Path) -> dict[str, Any]:
+    """Materialise or validate the project-wide goal.md, symmetric to ensure_project_workflow.
+
+    goal.md is a project-wide artefact, fixed once per project like
+    WORKFLOW.md (contracts/materialization-cli.md, Superfície 2). Unlike
+    ``workflow``, this block never enters ``WORK-ITEM.json`` /
+    ``immutable_metadata`` (T017): a document that can be legitimately edited
+    later does not belong in sealed work-item identity.
+    """
+    goal = sibling("ensure_goal")
+    result = goal.resolve_goal(root)
+    if result.status == "BLOCKED":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "GOAL-UNAVAILABLE", result.reason or "unknown")
+    block: dict[str, Any] = {
+        "status": result.status,
+        "path": "goal.md",
+        "sha256": hashlib.sha256(result.content).hexdigest(),
+    }
+    version = _goal_document_version(result.content)
+    if version is not None:
+        block["version"] = version
+    if result.status == "PRESERVED":
+        block["reason"] = result.reason
+    return block
+
+
 def dependency_report(root: Path, *, allow_install: bool, remove_shadows: bool = False) -> dict[str, Any]:
     """Detect the external toolchain; install only when explicitly authorised.
 
@@ -1408,11 +1467,12 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if not WORK_ID_RE.fullmatch(work_id):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", work_id)
     workflow = ensure_project_workflow(root)
+    goal = ensure_project_goal(root)
     dependencies = dependency_report(root, allow_install=getattr(args, "allow_install", False))
     if getattr(args, "require_dependencies", False) and dependencies.get("verdict") != "OK":
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "MISSING-DEPENDENCY",
                          ",".join(dependencies.get("missing_required") or ["unknown"]))
-    environment = {"workflow": workflow, "dependencies": dependencies}
+    environment = {"workflow": workflow, "goal": goal, "dependencies": dependencies}
     skipped_backlog = bool(getattr(args, "skip_backlog", False))
     if not skipped_backlog:
         # Binding no longer waits for --allow-install: the prerequisite is the
@@ -1429,6 +1489,12 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     lock = acquire_lock(root, work_id, target, reuse_if_target_exists=True)
     try:
         if target.exists():
+            # T016b / data-model.md E4 "Alcance": a reencountered bundle's
+            # state.json was sealed by another execution. It is read and
+            # reported, never rewritten to carry the goal block -- mutating it
+            # here would change the fingerprint of a bundle nobody asked to
+            # change. The fixation this call just computed is still reported
+            # via **environment below.
             bundle = read_local_bundle(root, target)
             immutable = validate_metadata(bundle.metadata, work_id)
             if immutable.get("type") != args.type or immutable.get("slug") != args.slug:
@@ -1436,7 +1502,7 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint, **environment}, EXIT_OK
         constitution_created, constitution_hash = ensure_managed_constitution(root)
         immutable = immutable_metadata(root, args, work_id)
-        files = initial_files(root, work_id, immutable, backlog_skipped=skipped_backlog)
+        files = initial_files(root, work_id, immutable, goal, backlog_skipped=skipped_backlog)
         metadata = metadata_document(immutable, files)
         staging = write_bundle_staging(root, work_id, metadata, files)
         try:
