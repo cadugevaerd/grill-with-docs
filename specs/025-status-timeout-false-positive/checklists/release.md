@@ -195,9 +195,10 @@
 - Correções aplicadas na 7ª revisão após executar o particionador real:
   - todos os paths relevantes passaram para a primeira linha de T001–T022, eliminando tarefas
     unmapped e scopes espúrios;
-  - T010–T016 formam três nós worker com grants exatos; T017–T018 são `deferred_to_leader` por
-    declararem `.specify/reports/status-timeout-bump-leader.md`, pois arquivos raiz não são grants
-    seguros; o leader executa e commita esses bumps antes de despachar a Phase 7;
+  - T010–T016 formam três nós worker com grants exatos; T017–T018 são `deferred_to_leader`
+    exclusivamente por declararem `.specify/reports/status-timeout-bump-leader.md` — os nomes raiz
+    não são extraídos porque o parser exige `/`; o leader executa e commita esses bumps antes de
+    despachar a Phase 7;
   - T019–T022 declaram os três inputs comuns na primeira linha e o preview determinístico produz um
     único nó `p07-a`, na ordem correta, dependente dos três nós da Phase 6;
   - baseline documental corrigido para 1237 testes em 26 módulos `unittest`, mais o validador

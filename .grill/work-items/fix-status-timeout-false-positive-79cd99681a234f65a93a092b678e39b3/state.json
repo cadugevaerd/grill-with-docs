@@ -23,10 +23,10 @@
     },
     "attested_executions": {
       "analyze": "se-0c4039b7a277dafe674552f2ee2c80e1b1636a282cba7b155d5a206e76fbfd77",
-      "checklist": "se-d01848366dee6d0ab61911e39cbab10fbef0c533183e012f3f2231c631afef40",
-      "plan": "se-70e6102916f2d54fe637f45ca6324e9d3a70442c634ec7987bb9e6b384fda911",
+      "checklist": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985",
+      "plan": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746",
       "specify": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a",
-      "tasks": "se-ea9def945031e4fa4a4df0328fa0887ca78ddcf1a8ae863ca54cc74327f11ee2"
+      "tasks": "se-f225ed7bdd2b48e14aae51687b5a382590c0107d5ac2301cd079481fa88c54ac"
     },
     "attested_outputs": {
       "analyze": {
@@ -36,15 +36,15 @@
         "step_id": "analyze"
       },
       "checklist": {
-        "output_sha256": "sha256:0bdaf307dff82373ec65722df181a310ec8bc4cbb9686769755a7aa8c424dc2f",
+        "output_sha256": "sha256:f487206d2fe2a8391ed47c4d9f78a5fbbd80ba61fef84053df037b6574a17606",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/checklist-checklist-4.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-5.terminal.json",
         "step_id": "checklist"
       },
       "plan": {
-        "output_sha256": "sha256:af6757a74cc6d642d4326ca836c5c31d8e01b5310e01b69dad45fb4a7d24afb3",
+        "output_sha256": "sha256:0ff133bd392cfba69b0e1419c08e566328141acf7c814b9150f89ba135fd7ae6",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/plan-plan-5.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-6.terminal.json",
         "step_id": "plan"
       },
       "specify": {
@@ -54,9 +54,9 @@
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:338e0d7e423d4cbf66b634eb8e83a58e9130d7e041b973512539e7a6e3a74863",
+        "output_sha256": "sha256:0057ed39852f2bd7330db969c143133c96f4a7f68964220686d740ab5addf2cd",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-5.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-6.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -392,6 +392,57 @@
         "state": "complete",
         "step": "tasks",
         "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r4.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "0ff133bd392cfba69b0e1419c08e566328141acf7c814b9150f89ba135fd7ae6"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "allow expected below-limit conflict groups",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-plan-r5.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/checklists/release.md",
+            "sha256": "f487206d2fe2a8391ed47c4d9f78a5fbbd80ba61fef84053df037b6574a17606"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "clarify evidence boundary defer mechanism",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-checklist-r4.json"
+      },
+      {
+        "chain_stale": [
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "0057ed39852f2bd7330db969c143133c96f4a7f68964220686d740ab5addf2cd"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "match expected partition degradation and phase2 serialization",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r5.json"
       }
     ],
     "chain_stale": [
@@ -464,6 +515,18 @@
           "step_execution_id": "se-4bb37cce39416baaf0bf6e4cca5122fc3e46ddeacba12c478fe385aea2df660f",
           "step_id": "checklist",
           "superseded_by_step_execution_id": "se-d01848366dee6d0ab61911e39cbab10fbef0c533183e012f3f2231c631afef40"
+        },
+        {
+          "attempt_id": "checklist-4",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-checklist-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:0bdaf307dff82373ec65722df181a310ec8bc4cbb9686769755a7aa8c424dc2f",
+          "provenance": "current-generation",
+          "reason": "clarify evidence boundary defer mechanism",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-4.terminal.json",
+          "step_execution_id": "se-d01848366dee6d0ab61911e39cbab10fbef0c533183e012f3f2231c631afef40",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985"
         }
       ],
       "plan": [
@@ -514,6 +577,18 @@
           "step_execution_id": "se-85cb2d23380bed175a59c04f0df326545dd6d3e3ba400fa65a3512ea0182b966",
           "step_id": "plan",
           "superseded_by_step_execution_id": "se-70e6102916f2d54fe637f45ca6324e9d3a70442c634ec7987bb9e6b384fda911"
+        },
+        {
+          "attempt_id": "plan-5",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-plan-r5.json",
+          "execution_round": 5,
+          "output_sha256": "sha256:af6757a74cc6d642d4326ca836c5c31d8e01b5310e01b69dad45fb4a7d24afb3",
+          "provenance": "current-generation",
+          "reason": "allow expected below-limit conflict groups",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-5.terminal.json",
+          "step_execution_id": "se-70e6102916f2d54fe637f45ca6324e9d3a70442c634ec7987bb9e6b384fda911",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746"
         }
       ],
       "specify": [
@@ -602,6 +677,18 @@
           "step_execution_id": "se-6990a54eaca6d068c79266ab75e9cd1bafd8914c2fb4059d18201940618aeddc",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-ea9def945031e4fa4a4df0328fa0887ca78ddcf1a8ae863ca54cc74327f11ee2"
+        },
+        {
+          "attempt_id": "tasks-5",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r5.json",
+          "execution_round": 5,
+          "output_sha256": "sha256:338e0d7e423d4cbf66b634eb8e83a58e9130d7e041b973512539e7a6e3a74863",
+          "provenance": "current-generation",
+          "reason": "match expected partition degradation and phase2 serialization",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-5.terminal.json",
+          "step_execution_id": "se-ea9def945031e4fa4a4df0328fa0887ca78ddcf1a8ae863ca54cc74327f11ee2",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-f225ed7bdd2b48e14aae51687b5a382590c0107d5ac2301cd079481fa88c54ac"
         }
       ]
     },

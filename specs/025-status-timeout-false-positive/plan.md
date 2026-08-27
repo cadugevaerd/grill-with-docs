@@ -132,8 +132,10 @@ gate deixa de significar o que FR-008 pede.
 porque ambas declaram `.specify/reports/status-timeout-bump-leader.md`. Após convergir os nós da
 Phase 6 e antes de declarar o nó da Phase 7, o leader aplica os dois bumps raiz, registra o relatório
 e commita os três arquivos. O worktree de gate nasce desse novo HEAD.
-O relatório esperado é `PARTITION-DEGRADED` **somente** por esse defer explícito, com
-`unmapped_task_ids: []`; qualquer outro motivo de degradação bloqueia o despacho.
+O relatório esperado é `PARTITION-DEGRADED` por esse defer explícito e por
+`CONFLICT_GROUPS_BELOW_LIMIT` nas fases cujo único component não ocupa os três slots, com
+`unmapped_task_ids: []`. Bloqueiam o despacho: `UNMAPPED_TASKS`, Evidence Boundary fora de
+T017–T018 ou qualquer razão diferente dessas duas categorias esperadas.
 
 ## Project Structure
 

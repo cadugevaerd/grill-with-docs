@@ -86,8 +86,9 @@ executou/commitou T017–T018. Regras, sem exceção:
    já fechadas — **antes da partition**; (b) commitar o **Execution DAG e o relatório de partition
    antes do primeiro worker** ser despachado. Sem isso, workers partem de bases divergentes e a
    igualdade de árvore avaliada pelo nó de gate deixa de significar o que FR-008 pede.
-7. **Preview esperado**: `PARTITION-DEGRADED` apenas por `deferred_to_leader: [T017, T018]`, com
-   `unmapped_task_ids: []`, três nós Phase 6 e um único nó Phase 7. Outro motivo bloqueia a run.
+7. **Preview esperado**: `PARTITION-DEGRADED` por `deferred_to_leader: [T017, T018]` e por
+   `CONFLICT_GROUPS_BELOW_LIMIT` nas fases 1–5 e 7, com `unmapped_task_ids: []`, três nós Phase 6 e
+   um único nó Phase 7. Bloqueiam `UNMAPPED_TASKS`, defer fora de T017/T018 ou outra razão.
 
 ---
 
@@ -122,13 +123,13 @@ real, que o código **commitado em `7b3c3fe`** faz o que o ADR-0001/data-model.m
 o código preexistente como candidato, não aceitar de cabeça. O fato de ele já estar commitado em
 `7b3c3fe` é conveniência de distribuição para os workers, **não** um atestado de correção.
 
-- [ ] T002 [P] [X] Ler `plugin/skills/grill-with-docs/scripts/grill_workspace.py` e confirmar, por
+- [ ] T002 [X] Ler `plugin/skills/grill-with-docs/scripts/grill_workspace.py` e confirmar, por
       inspeção direta (não grep solto), que existe uma constante de módulo
       `STATUS_TIMEOUT_SECONDS = 30` e que **ambos** `status_command` e `status_markdown_command` a
       usam como `timeout=` na chamada que invoca `grill_status.py` (linhas atuais ~3760, ~3777,
       ~3804). Se o valor não for exatamente `30` ou se algum dos dois comandos não a referenciar,
       registrar como achado — não corrigir silenciosamente nesta tarefa.
-- [ ] T003 [P] [X] Ler `plugin/skills/grill-with-docs/scripts/grill_status.py` e confirmar, por
+- [ ] T003 [X] Ler `plugin/skills/grill-with-docs/scripts/grill_status.py` e confirmar, por
       inspeção direta:
       (a) `local_branches` é resolvido **uma vez** em `build_status()` via
       `git for-each-ref --format=%(refname:short) refs/heads`, antes do laço de worktrees;
@@ -416,7 +417,8 @@ com o gate de bump reportando literalmente `BUMPED`. **Só depois da convergênc
 
 ### Parallel Opportunities
 
-- T002 e T003 em paralelo (arquivos diferentes: `grill_workspace.py` vs `grill_status.py`).
+- T002, T003 e T004 vivem no mesmo component `p02-a`: T004 declara os dois arquivos auditados para
+  preservar a ordem T002 → T003 → T004 dentro de um worker.
 - **T005 e T006 NÃO rodam em paralelo.** Ambas medem tempo de parede; concorrência entre elas
   disputa CPU, disco e processos `git` e contamina a própria grandeza medida. São serializadas
   (T005 → T006) e por isso não levam `[P]`.
@@ -431,12 +433,13 @@ com o gate de bump reportando literalmente `BUMPED`. **Só depois da convergênc
 
 ---
 
-## Parallel Example: Foundational
+## Execution Example: Foundational
 
 ```bash
-# T002 e T003 em paralelo — leitura de arquivos diferentes
+# T002, T003 e T004 no mesmo nó — auditoria antes do teste
 Task: "Auditar STATUS_TIMEOUT_SECONDS=30 em plugin/skills/grill-with-docs/scripts/grill_workspace.py"
 Task: "Auditar escopo por worktree/repositório em plugin/skills/grill-with-docs/scripts/grill_status.py"
+Task: "Rodar tests/validate_status_contract.py após as duas auditorias"
 ```
 
 ## Parallel Example: Bump de distribuição (Phase 6 — última fase paralela)
