@@ -22,7 +22,7 @@
       "runtime": "claude"
     },
     "attested_executions": {
-      "analyze": "se-2d80182f639cb089569006db082a11cd0a492bf27467f58f8d22445d52c1141d",
+      "analyze": "se-8f84c24dda88bc20443c7e220d52fd29bcc15ec5398d316dcc1ea8383b0d7e85",
       "checklist": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985",
       "partition": "se-232e6409c711185100fda59b3e226ee85eaf39283b9d9a49cfee707f8230eb75",
       "plan": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746",
@@ -31,9 +31,9 @@
     },
     "attested_outputs": {
       "analyze": {
-        "output_sha256": "sha256:fad03f275c00bbabec3691f1084038aef193bed32f7bcf2cf6833a483047928b",
+        "output_sha256": "sha256:712b5ee0d5f51c18a8a9bd9a1ebdaa172d1944d3abfad21a7de4f81290fbb319",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/analyze-analyze-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-3.terminal.json",
         "step_id": "analyze"
       },
       "checklist": {
@@ -507,10 +507,25 @@
         "state": "complete",
         "step": "tasks",
         "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r6.json"
+      },
+      {
+        "chain_stale": [
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/analysis-final.md",
+            "sha256": "712b5ee0d5f51c18a8a9bd9a1ebdaa172d1944d3abfad21a7de4f81290fbb319"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "zero critical or high after EXIT_BLOCKED acceptance review",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-analyze-r2.json"
       }
     ],
     "chain_stale": [
-      "analyze",
       "partition"
     ],
     "current_step": "implement-parallel",
@@ -556,6 +571,18 @@
           "step_execution_id": "se-0c4039b7a277dafe674552f2ee2c80e1b1636a282cba7b155d5a206e76fbfd77",
           "step_id": "analyze",
           "superseded_by_step_execution_id": "se-2d80182f639cb089569006db082a11cd0a492bf27467f58f8d22445d52c1141d"
+        },
+        {
+          "attempt_id": "analyze-2",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-analyze-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:fad03f275c00bbabec3691f1084038aef193bed32f7bcf2cf6833a483047928b",
+          "provenance": "current-generation",
+          "reason": "zero critical or high after EXIT_BLOCKED acceptance review",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-2.terminal.json",
+          "step_execution_id": "se-2d80182f639cb089569006db082a11cd0a492bf27467f58f8d22445d52c1141d",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-8f84c24dda88bc20443c7e220d52fd29bcc15ec5398d316dcc1ea8383b0d7e85"
         }
       ],
       "checklist": [
