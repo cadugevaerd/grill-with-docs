@@ -1,0 +1,25 @@
+{
+  "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
+  "run_id": "run-273d366465d684f1a0b47720",
+  "wave_id": "wave-0001",
+  "node_id": "p01-a",
+  "task_ids": ["T001"],
+  "tasks": [
+    {
+      "id": "T001",
+      "description": "Baseline: python3 tests/run_validators.py (read-only)",
+      "result": "PASS",
+      "evidence": [
+        "tests/run_validators.py -- exit 0",
+        "validate_workspace_contract.py -- Ran 67 tests, OK (skipped=1)"
+      ]
+    }
+  ],
+  "findings": [],
+  "suite": {
+    "command": "python3 tests/run_validators.py",
+    "exit_code": 0,
+    "status": "OK"
+  },
+  "completed": ["T001"]
+}
