@@ -24,7 +24,7 @@
     "attested_executions": {
       "analyze": "se-8f84c24dda88bc20443c7e220d52fd29bcc15ec5398d316dcc1ea8383b0d7e85",
       "checklist": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985",
-      "partition": "se-232e6409c711185100fda59b3e226ee85eaf39283b9d9a49cfee707f8230eb75",
+      "partition": "se-6f9ef4264261b1ecd82cd6ac25582d93fbfc4b338ceb9f5e07138eaa73abc303",
       "plan": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746",
       "specify": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a",
       "tasks": "se-3f8e3a95454a8e91cbca1d492d6282e4d48f04c7f8b0c1721d50391304214bb9"
@@ -45,7 +45,7 @@
       "partition": {
         "output_sha256": "sha256:b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-2.terminal.json",
         "step_id": "partition"
       },
       "plan": {
@@ -523,11 +523,23 @@
         "state": "complete",
         "step": "analyze",
         "supersedes": ".grill/attestations/fix-status-timeout-false-positive-analyze-r2.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/execution-dag.json",
+            "sha256": "b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "Repartition authorized after T005/T006 acceptance correction; deterministic DAG remained bit-identical and validated DAG-VALID.",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-partition.json"
       }
     ],
-    "chain_stale": [
-      "partition"
-    ],
+    "chain_stale": [],
     "current_step": "implement-parallel",
     "execution_branch": "025-status-timeout-false-positive",
     "renamed_from": {},
@@ -633,6 +645,20 @@
           "step_execution_id": "se-d01848366dee6d0ab61911e39cbab10fbef0c533183e012f3f2231c631afef40",
           "step_id": "checklist",
           "superseded_by_step_execution_id": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985"
+        }
+      ],
+      "partition": [
+        {
+          "attempt_id": "partition-1",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-partition.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00",
+          "provenance": "current-generation",
+          "reason": "Repartition authorized after T005/T006 acceptance correction; deterministic DAG remained bit-identical and validated DAG-VALID.",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+          "step_execution_id": "se-232e6409c711185100fda59b3e226ee85eaf39283b9d9a49cfee707f8230eb75",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-6f9ef4264261b1ecd82cd6ac25582d93fbfc4b338ceb9f5e07138eaa73abc303"
         }
       ],
       "plan": [
