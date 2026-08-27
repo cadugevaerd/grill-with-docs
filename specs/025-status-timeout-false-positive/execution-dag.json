@@ -1,0 +1,124 @@
+{
+  "feature": "025-status-timeout-false-positive",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        "specs/025-status-timeout-false-positive/implement/p01-a.tasks.json",
+        "tests/run_validators.py"
+      ],
+      "id": "p01-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_status.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/025-status-timeout-false-positive/implement/p02-a.tasks.json",
+        "tests/validate_status_contract.py"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/025-status-timeout-false-positive/implement/p03-a.tasks.json"
+      ],
+      "id": "p03-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a"
+      ],
+      "files": [
+        "specs/025-status-timeout-false-positive/implement/p04-a.tasks.json",
+        "tests/validate_status_contract.py"
+      ],
+      "id": "p04-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p04-a"
+      ],
+      "files": [
+        "specs/025-status-timeout-false-positive/implement/p05-a.tasks.json",
+        "tests/run_validators.py",
+        "tests/validate_status_contract.py"
+      ],
+      "id": "p05-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p05-a"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "specs/025-status-timeout-false-positive/implement/p06-a.tasks.json"
+      ],
+      "id": "p06-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p05-a"
+      ],
+      "files": [
+        "plugin/.codex-plugin/plugin.json",
+        "specs/025-status-timeout-false-positive/implement/p06-b.tasks.json",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p06-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p05-a"
+      ],
+      "files": [
+        ".claude-plugin/marketplace.json",
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "specs/025-status-timeout-false-positive/implement/p06-c.tasks.json"
+      ],
+      "id": "p06-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p06-a",
+        "p06-b",
+        "p06-c"
+      ],
+      "files": [
+        "specs/025-status-timeout-false-positive/implement/p07-a.tasks.json",
+        "tests/check_version_bump.py",
+        "tests/run_validators.py",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p07-a",
+      "parallel": true,
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v1"
+}
