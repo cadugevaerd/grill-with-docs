@@ -1,0 +1,62 @@
+{
+  "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
+  "run_id": "run-e0aa4a88644e0dfd38c9c6e1",
+  "wave_id": "wave-0003",
+  "node_id": "p03-a",
+  "task_ids": ["T005", "T006"],
+  "tasks": [
+    {
+      "id": "T005",
+      "description": "Medir tempo de parede real do status JSON contra a árvore real do repositório (não fixture)",
+      "command": "time python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py status .",
+      "exit_code": 2,
+      "wall_clock_seconds": 10.42,
+      "user_seconds": 6.12,
+      "system_seconds": 2.54,
+      "status_timeout_present": false,
+      "verdict_observed": "BLOCKED",
+      "code_observed": "DUPLICATE-WORK-ID",
+      "result": "FINDING",
+      "evidence": [
+        "/usr/bin/time -v: Elapsed (wall clock) time (h:mm:ss or m:ss): 0:10.42",
+        "/usr/bin/time -v: Exit status: 2",
+        "grep -c STATUS-TIMEOUT payload -> 0 (ausente)",
+        "payload verdict=BLOCKED, code=DUPLICATE-WORK-ID, summary.blocked=8 total=17"
+      ]
+    },
+    {
+      "id": "T006",
+      "description": "Depois de T005 terminar, medir tempo de parede real do status Markdown contra a mesma árvore real",
+      "command": "time python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py status . --format markdown",
+      "exit_code": 2,
+      "wall_clock_seconds": 7.61,
+      "user_seconds": 5.70,
+      "system_seconds": 1.93,
+      "status_timeout_present": false,
+      "fallback_line_present": false,
+      "result": "FINDING",
+      "evidence": [
+        "/usr/bin/time -v: Elapsed (wall clock) time (h:mm:ss or m:ss): 0:07.61",
+        "/usr/bin/time -v: Exit status: 2",
+        "grep -c '| workspace | blocked | STATUS-TIMEOUT' payload -> 0 (ausente)",
+        "tabela markdown gerada com linhas reais de work items (blocked/in-progress/pending), sem fallback de timeout"
+      ],
+      "notes": "Executada em série após T005 finalizar, conforme serialidade obrigatória de tasks.md."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F001",
+      "severity": "info",
+      "title": "Objetivo primário de SC-001 confirmado: STATUS-TIMEOUT ausente em JSON e Markdown, tempos bem abaixo de 30s",
+      "detail": "T005=10.42s e T006=7.61s, ambos consistentes com a referência de 10,56s citada em .grill/evidence/grill-status-timeout-debug-report.md. Nenhuma ocorrência de STATUS-TIMEOUT no JSON nem da linha de fallback '| workspace | blocked | STATUS-TIMEOUT: ... |' no Markdown."
+    },
+    {
+      "id": "F002",
+      "severity": "fail-closed",
+      "title": "Exit code observado é 2 (EXIT_BLOCKED), não 0, em ambas as tarefas — mas não é erro de uso",
+      "detail": "tasks.md T005/T006 esperam exit code 0, tratando 2 como erro de uso (argparse). Na execução real, exit=2 corresponde a EXIT_BLOCKED (grill_workspace.py:30), retornado porque o workspace real acumulado tem verdict BLOCKED com summary.blocked=8/total=17 (código DUPLICATE-WORK-ID em T005). Não é falha de argparse (root é posicional e foi passado corretamente com '.'), e não envolve STATUS-TIMEOUT. É estado real do workspace, não defeito do script. Registrado fail-closed: produto não alterado; verificação da premissa 'exit 0' em tasks.md fica pendente de revalidação contra um workspace sem itens BLOCKED, ou de ajuste da asserção da tarefa para aceitar EXIT_BLOCKED como resultado válido quando desacoplado de STATUS-TIMEOUT."
+    }
+  ],
+  "completed": ["T005", "T006"]
+}
