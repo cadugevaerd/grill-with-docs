@@ -77,8 +77,9 @@
 - [x] CHK033 A pré-condição de estado commitado (workers commitam, `converge` integra) antes do
       gate de bump está declarada, em vez de assumida? [Coverage, plan.md §Fail-Closed ↔ tasks.md
       Phase 6/Phase 7 ↔ quickstart.md §4] — reescrito na 6ª revisão para a topologia real do
-      gauntlet: **Phase 6** contém só os bumps T010–T018 (`[P]`, worktrees de worker distintos) e
-      **Phase 7** contém T019–T022; a fronteira entre as duas **é** a barreira de convergência. Os
+      gauntlet: **Phase 6** contém T010–T016 em até três nós worker e T017–T018 devolvidas ao leader
+      pelo Evidence Boundary; o commit leader ocorre após a convergência desses nós e antes da
+      Phase 7. A **Phase 7** contém T019–T022; a fronteira entre as duas **é** a barreira. Os
       gates rodam num **nó único**, worktree isolado criado do HEAD coordenador após a convergência
       integral da Phase 6, sem commit nem merge entre T019 e T022. `gauntlet-tasks-reconcile` é
       **posterior** à convergência desse nó — removida a obrigação de commitar `state.json`/`tasks.md`
@@ -191,6 +192,16 @@
   - Escopo desta revisão: `plan.md`, `quickstart.md`, `tasks.md`, `spec.md` (Status Draft → **Ready
     for Implementation**) e esta checklist. Os IDs T001–T022 foram preservados; nenhum código de
     produto, `analysis.md`, `.grill/` ou work item irmão foi tocado; nenhum commit executado.
+- Correções aplicadas na 7ª revisão após executar o particionador real:
+  - todos os paths relevantes passaram para a primeira linha de T001–T022, eliminando tarefas
+    unmapped e scopes espúrios;
+  - T010–T016 formam três nós worker com grants exatos; T017–T018 são `deferred_to_leader` por
+    declararem `.specify/reports/status-timeout-bump-leader.md`, pois arquivos raiz não são grants
+    seguros; o leader executa e commita esses bumps antes de despachar a Phase 7;
+  - T019–T022 declaram os três inputs comuns na primeira linha e o preview determinístico produz um
+    único nó `p07-a`, na ordem correta, dependente dos três nós da Phase 6;
+  - baseline documental corrigido para 1237 testes em 26 módulos `unittest`, mais o validador
+    standalone de distribuição, com 1 skip.
 - **Estado de marcação**: 37 de 37 itens marcados [x] com evidência real nos artefatos.
   Isso valida a qualidade dos **requisitos**, não a execução: `BUMPED` sobre o mesmo SHA
   (T020/T022) e a entrada `## 5.2.1` no `CHANGELOG.md` (T014/T018) seguem pendentes de execução

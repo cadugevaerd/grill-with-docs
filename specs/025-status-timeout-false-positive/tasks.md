@@ -52,12 +52,12 @@ correção não validada publica uma afirmação sem evidência.
 ### Onde as tarefas de gate rodam (N1-A/N1-B)
 
 **T019–T022 formam a Phase 7 e executam todas no MESMO nó** — um único worktree isolado de gate,
-criado a partir do HEAD do coordenador **depois** que todos os nós da Phase 6 (T010–T018) mergearam
-e a fase convergiu. Regras, sem exceção:
+criado a partir do HEAD do coordenador **depois** que os nós worker T010–T016 convergiram e o leader
+executou/commitou T017–T018. Regras, sem exceção:
 
-1. **Barreira de convergência entre Phase 6 e Phase 7.** A Phase 6 contém apenas os bumps
-   (T010–T018), file-disjuntos, despachados em paralelo em worktrees de worker distintos. A Phase 7
-   (T019–T022) só é despachada quando **todos** esses nós convergirem no HEAD do coordenador. Não
+1. **Barreira de convergência entre Phase 6 e Phase 7.** T010–T016 são despachadas em até três
+   worktrees; T017–T018 são devolvidas ao leader pelo Evidence Boundary. A Phase 7 só é despachada
+   quando os workers convergirem e o commit leader existir no HEAD do coordenador. Não
    existe nó de gate rodando concorrente com nó de bump: um gate sobre árvore parcialmente bumpada
    avalia uma versão que não existe.
 2. **Um único nó, um único worktree.** As quatro tarefas não se distribuem entre workers: elas
@@ -86,6 +86,8 @@ e a fase convergiu. Regras, sem exceção:
    já fechadas — **antes da partition**; (b) commitar o **Execution DAG e o relatório de partition
    antes do primeiro worker** ser despachado. Sem isso, workers partem de bases divergentes e a
    igualdade de árvore avaliada pelo nó de gate deixa de significar o que FR-008 pede.
+7. **Preview esperado**: `PARTITION-DEGRADED` apenas por `deferred_to_leader: [T017, T018]`, com
+   `unmapped_task_ids: []`, três nós Phase 6 e um único nó Phase 7. Outro motivo bloqueia a run.
 
 ---
 
@@ -93,11 +95,12 @@ e a fase convergiu. Regras, sem exceção:
 
 **Purpose**: Confirmar o ponto de partida real antes de qualquer mudança de versão/distribuição.
 
-- [ ] T001 [X] Rodar `python3 tests/run_validators.py` a partir da raiz do repo e registrar o resultado
+- [ ] T001 [X] Rodar `tests/run_validators.py` via `python3` a partir da raiz do repo e registrar o resultado
       literal (exit code, contagem de testes, quaisquer falhas). Não assumir "vai passar" — este é
       o baseline real do commit `7b3c3fe`, que já detém a correção de
-      `grill_status.py`/`grill_workspace.py` e ainda **não** tem bump de versão. Esperado: exit 0, baseline ≥1303 testes em 27
-      validadores (ver `CLAUDE.md`), mas o resultado real é o que conta, não a expectativa.
+      `grill_status.py`/`grill_workspace.py` e ainda **não** tem bump de versão. Esperado no HEAD
+      analisado: exit 0, 1237 testes em 26 módulos `unittest`, mais o validador standalone de
+      distribuição, com 1 skip; o resultado real é o que conta.
       **Composição da contagem**: `run_validators.py` soma as saídas de 26 módulos `unittest`
       (`validate_*.py` descobertos por glob) mais a execução à parte de `validate_distribution.py`,
       que é um script de asserções simples (não `unittest`) e **não contribui** para a contagem de
@@ -137,7 +140,7 @@ o código preexistente como candidato, não aceitar de cabeça. O fato de ele j�
       spawnar `git rev-parse --verify` por item.
       Documentar qualquer desvio encontrado em vez de assumir que o data-model.md já está refletido
       corretamente no código.
-- [ ] T004 [X] Rodar `python3 -m unittest tests.validate_status_contract -v` isolado (sem o
+- [ ] T004 [X] Validar `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, `plugin/skills/grill-with-docs/scripts/grill_status.py` e `tests/validate_status_contract.py` rodando `python3 -m unittest tests.validate_status_contract -v` isolado (sem o
       restante da suíte) e confirmar que **todos** os casos passam, incluindo
       `test_live_git_state_is_resolved_once_per_worktree_not_per_item`. Depende de T002 e T003
       confirmarem a forma do código antes de rodar o teste sobre ele.
@@ -177,7 +180,7 @@ timeout público de 30s.
 > (`status_parser.add_argument("root")`). Omiti-lo faz o `argparse` sair com código 2 antes de
 > medir coisa alguma. Rodar da raiz do repositório, passando `.`.
 
-- [ ] T005 [US1] Medir o tempo de parede real do formato JSON contra a árvore real do
+- [ ] T005 [US1] Medir com `plugin/skills/grill-with-docs/scripts/grill_workspace.py` o tempo de parede real do formato JSON contra a árvore real do
       repositório (não fixture sintética), **da raiz do repo**:
       `time python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py status .`
       Confirmar: exit code 0 (não 2 — 2 seria erro de uso, não medição); nenhuma ocorrência de
@@ -185,7 +188,7 @@ timeout público de 30s.
       sob 30s (referência: 10,56s medidos em
       `.grill/evidence/grill-status-timeout-debug-report.md`). Se o tempo se aproximar de 30s,
       registrar como achado a revalidar antes do ship (research.md, "Verificação — timing real").
-- [ ] T006 [US1] **Depois de T005 terminar** (nunca concorrente), medir o tempo de parede real do
+- [ ] T006 [US1] **Depois de T005 terminar**, medir com `plugin/skills/grill-with-docs/scripts/grill_workspace.py` o tempo de parede real do
       formato Markdown contra a mesma árvore real:
       `time python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py status . --format markdown`
       Confirmar: exit code 0; nenhuma linha de fallback
@@ -204,7 +207,7 @@ timeout público de 30s.
 **Independent Test** (spec.md): rodar o status num worktree único com múltiplos work items e
 confirmar que o custo não cresce proporcionalmente à quantidade de itens.
 
-- [ ] T007 [US2] Rodar isoladamente:
+- [ ] T007 [US2] Rodar isoladamente o caso de `tests/validate_status_contract.py`:
       `python3 -m unittest tests.validate_status_contract.StatusPublicContract.test_live_git_state_is_resolved_once_per_worktree_not_per_item -v`
       Confirmar PASS e que a asserção `observed.assert_called_once_with(self.r.resolve())` se
       sustenta com **dois** work items no mesmo worktree (`work-a`, `work-b`) — ou seja, `live()` é
@@ -231,7 +234,7 @@ custo por item, e que ele roda como parte da suíte padrão (não é um teste ó
       característica — é o que torna o teste determinístico e imune a CI lento/rápido
       (research.md, Decisão 3). Se o teste medisse apenas `elapsed < N`, registrar como achado
       grave (o teste não cumpriria FR-004).
-- [ ] T009 [US3] Confirmar que `tests/run_validators.py` descobre `tests/validate_status_contract.py`
+- [ ] T009 [US3] Confirmar em `tests/run_validators.py` que ele descobre `tests/validate_status_contract.py`
       automaticamente pelo glob `validate_*.py` (ler o padrão de descoberta em
       `tests/run_validators.py`) — ou seja, o teste de regressão roda em toda execução da suíte
       completa (`python3 tests/run_validators.py`) sem registro manual adicional, fechando FR-004
@@ -249,23 +252,21 @@ reexecutada limpa. Idem para T009, se o teste não for descoberto pelo glob da s
 
 **Purpose**: sincronizar os 8 locais de distribuição e o `CHANGELOG.md`. Todas as tarefas desta fase
 são cross-cutting (`[X]`) e fecham FR-006/FR-007 e SC-004/SC-005. Cada bump de arquivo é
-file-disjunto dos demais — T010–T018 são `[P]` e são despachados em worktrees de worker distintos.
+file-disjunto dos demais — T010–T016 são `[P]` e são empacotados em até três worktrees de worker.
+T017–T018 são tarefas do leader porque os dois arquivos ficam na raiz e não podem receber grant
+seguro do particionador; elas rodam após a convergência dos workers desta fase e antes da Phase 7.
 Depende das Phases 1–5 **sem achado aberto** (código validado antes de bumpar a versão que o
 descreve).
 
 > **Os gates saíram desta fase (A2/A3)**: T019–T022 passaram a formar a **Phase 7** e só começam
-> depois que **todos** os nós de T010–T018 convergirem no HEAD do coordenador. A fronteira entre
+> depois que os nós de T010–T016 convergirem e o leader commitar T017–T018 no HEAD coordenador. A fronteira entre
 > Phase 6 e Phase 7 **é** a barreira de convergência: gate sobre árvore parcialmente bumpada avalia
 > uma versão que não existe. Nenhuma tarefa de gate roda dentro de um worktree de worker de bump.
 
-- [ ] T010 [P] [X] Atualizar `"version": "5.2.0"` → `"version": "5.2.1"` em
-      `plugin/.claude-plugin/plugin.json`
-- [ ] T011 [P] [X] Atualizar `"version": "5.2.0"` → `"version": "5.2.1"` em
-      `plugin/.codex-plugin/plugin.json`
-- [ ] T012 [P] [X] Atualizar `plugins[0].version` de `"5.2.0"` → `"5.2.1"` em
-      `.claude-plugin/marketplace.json`
-- [ ] T013 [P] [X] Atualizar `plugins[0].version` de `"5.2.0"` → `"5.2.1"` em
-      `.agents/plugins/marketplace.json`
+- [ ] T010 [P] [X] Atualizar `"version": "5.2.0"` → `"version": "5.2.1"` em `plugin/.claude-plugin/plugin.json`
+- [ ] T011 [P] [X] Atualizar `"version": "5.2.0"` → `"version": "5.2.1"` em `plugin/.codex-plugin/plugin.json`
+- [ ] T012 [P] [X] Atualizar `plugins[0].version` de `"5.2.0"` → `"5.2.1"` em `.claude-plugin/marketplace.json`
+- [ ] T013 [P] [X] Atualizar `plugins[0].version` de `"5.2.0"` → `"5.2.1"` em `.agents/plugins/marketplace.json`
 - [ ] T014 [P] [X] Em `tests/validate_distribution.py`, duas mudanças no mesmo arquivo
       (portanto uma única tarefa, sem conflito com as demais `[P]`):
       (a) atualizar a constante `VERSION = "5.2.0"` → `VERSION = "5.2.1"`;
@@ -276,18 +277,16 @@ descreve).
       dependeriam de conferência humana e nenhum gate reprovaria um ship sem entrada de CHANGELOG.
       A asserção casa a própria constante `VERSION`, então o próximo bump reprova sozinho se o
       CHANGELOG não acompanhar.
-- [ ] T015 [P] [X] Atualizar o heading `# Grill with Docs v5.2.0` → `# Grill with Docs v5.2.1` em
-      `plugin/skills/grill-with-docs/SKILL.md`
-- [ ] T016 [P] [X] Atualizar o heading `# Protocolo de sessão v5.2.0` → `# Protocolo de sessão v5.2.1`
-      em `plugin/skills/grill-with-docs/references/session-protocol.md`
-- [ ] T017 [P] [X] Atualizar o heading `**v5.2.0 · MIT**` → `**v5.2.1 · MIT**` (ou equivalente exato já
-      presente) em `README.md`
-- [ ] T018 [P] [X] Adicionar entrada `## 5.2.1` no topo de `CHANGELOG.md` (acima de `## 5.2.0`),
+- [ ] T015 [P] [X] Atualizar em `plugin/skills/grill-with-docs/SKILL.md` o heading `# Grill with Docs v5.2.0` → `# Grill with Docs v5.2.1`
+- [ ] T016 [P] [X] Atualizar em `plugin/skills/grill-with-docs/references/session-protocol.md` o heading `# Protocolo de sessão v5.2.0` → `# Protocolo de sessão v5.2.1`
+- [ ] T017 [X] Leader: atualizar `README.md` para `**v5.2.1 · MIT**` e registrar T017 em `.specify/reports/status-timeout-bump-leader.md`
+- [ ] T018 [X] Leader: adicionar `## 5.2.1` em `CHANGELOG.md` e registrar T018 em `.specify/reports/status-timeout-bump-leader.md`,
       descrevendo em prosa, no mesmo estilo das entradas anteriores: o falso positivo de
       `STATUS-TIMEOUT` corrigido, o escopo dos probes Git movido de por-work-item para
       por-worktree/repositório, e o timeout público subindo de 5s para 30s (FR-007/SC-005).
-**Checkpoint (barreira de convergência)**: os 9 arquivos bumpados para `5.2.1`, cada nó commitado
-no próprio worktree de worker e **todos** mergeados no HEAD do coordenador. FR-006/FR-007 e
+**Checkpoint (barreira de convergência)**: T010–T016 convergidos no HEAD do coordenador; depois o
+leader executa T017–T018, cria o relatório declarado e commita os três arquivos antes de despachar
+a Phase 7. Assim, os 9 arquivos ficam bumpados para `5.2.1`. FR-006/FR-007 e
 SC-004/SC-005 ficam materializados na árvore, ainda sem veredito de gate. Só com a fase **inteira**
 convergida a Phase 7 é despachada.
 
@@ -322,7 +321,7 @@ vez de coincidência.
 > nunca antes de T019: não há obrigação de commitar `state.json` ou `tasks.md` antes dos gates, e
 > fazê-lo moveria o HEAD dentro da janela avaliada.
 
-- [ ] T019 [X] **No nó de gate da Phase 7** (worktree isolado criado do HEAD coordenador após a
+- [ ] T019 [X] No nó único com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, validar distribuição após a
       convergência de **todos** os nós da Phase 6), rodar `python3 tests/validate_distribution.py` e
       confirmar `distribution: OK` com os 8 locais coerentes em `5.2.1` **e** a nova asserção de T014
       encontrando exatamente uma linha `## 5.2.1` em `CHANGELOG.md` (fecha FR-006/SC-004 e
@@ -330,7 +329,7 @@ vez de coincidência.
       **Inputs comuns do nó** (declarados para manter T019–T022 no mesmo conflict component):
       `tests/validate_distribution.py`, `tests/check_version_bump.py`, `tests/run_validators.py`.
       Sem `[P]`.
-- [ ] T020 [X] **No mesmo nó de gate, sem commit nem merge desde T019**, rodar
+- [ ] T020 [X] No mesmo nó com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, sem commit nem merge desde T019, rodar
       `python3 tests/check_version_bump.py --base-ref main --json` e exigir que o campo `code`
       seja **literalmente `BUMPED`**, com `verdict: PASS`, `base_version: "5.2.0"` e
       `head_version: "5.2.1"`.
@@ -344,7 +343,7 @@ vez de coincidência.
       falha. Qualquer código diferente de `BUMPED` bloqueia T021/T022 e o ship (FR-008/SC-006).
       **Inputs comuns do nó**: `tests/validate_distribution.py`, `tests/check_version_bump.py`,
       `tests/run_validators.py`. Sequencial em relação a T019, sem `[P]`.
-- [ ] T021 [X] **No mesmo nó de gate**, rodar a suíte completa novamente:
+- [ ] T021 [X] No mesmo nó com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, rodar a suíte completa novamente:
       `python3 tests/run_validators.py`. Confirmar exit 0 e comparar a contagem de
       testes/validadores contra o baseline capturado em T001 — nenhuma tarefa da Phase 6 deveria
       alterar a contagem de testes (só valores de versão e prosa). Qualquer divergência, sem
@@ -352,7 +351,7 @@ vez de coincidência.
       introduzida por T014. Depende de T019–T020.
       **Inputs comuns do nó**: `tests/validate_distribution.py`, `tests/check_version_bump.py`,
       `tests/run_validators.py`. Sem `[P]`.
-- [ ] T022 [X] Verificação fail-closed dos dois gates de distribuição — **fecha FR-008/SC-006**
+- [ ] T022 [X] Com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, verificar fail-closed e fechar FR-008 e SC-006
       (plan.md, seção "Fail-Closed: `bump-gate.yml` × `ci.yml`"). **No mesmo nó de gate**, sem
       commit nem merge desde T019.
       **Pré-condições explícitas, verificadas nesta ordem e registradas literalmente**:
@@ -404,10 +403,9 @@ com o gate de bump reportando literalmente `BUMPED`. **Só depois da convergênc
     segue Foundational.
   - US3 (T008): achado grave aqui (asserção por tempo em vez de contagem de chamadas) bloqueia
     a Phase 6 inteira.
-- **Bump (Phase 6)**: T010–T018 só começam com Phases 2–5 fechadas **sem achado aberto** (não faz
-  sentido bumpar a versão de uma correção ainda não validada). São `[P]` entre si, em worktrees de
-  worker distintos. A fase fecha numa **barreira de convergência**: todos os nós commitados e
-  mergeados no HEAD do coordenador antes de qualquer tarefa da Phase 7.
+- **Bump (Phase 6)**: T010–T018 só começam com Phases 2–5 fechadas **sem achado aberto**. T010–T016
+  são `[P]` e formam até três nós; T017–T018 são leader-only por escreverem arquivos raiz. A fase
+  fecha após convergência dos workers e commit do leader, antes de qualquer tarefa da Phase 7.
 - **Gates (Phase 7)**: T019–T022 dependem da Phase 6 **inteira** convergida e rodam **todas no mesmo
   nó** — um worktree isolado de gate criado do HEAD coordenador pós-convergência. Dentro do nó:
   T019 → T020 → T021 → T022, estritamente sequenciais, **sem commit e sem merge entre elas**, o que
@@ -422,8 +420,8 @@ com o gate de bump reportando literalmente `BUMPED`. **Só depois da convergênc
 - **T005 e T006 NÃO rodam em paralelo.** Ambas medem tempo de parede; concorrência entre elas
   disputa CPU, disco e processos `git` e contamina a própria grandeza medida. São serializadas
   (T005 → T006) e por isso não levam `[P]`.
-- T010–T018 em paralelo entre si — 9 arquivos disjuntos, nenhuma dependência cruzada. É a última
-  oportunidade de paralelismo do ciclo: a Phase 7 é um nó só.
+- T010–T016 são empacotadas em até três nós paralelos. T017–T018 são executadas pelo leader após
+  essa convergência e antes da Phase 7, que é um nó só.
 - **T019 → T020 → T021 → T022 são estritamente sequenciais e vivem no mesmo nó.** Os três inputs
   comuns declarados em cada uma (`tests/validate_distribution.py`, `tests/check_version_bump.py`,
   `tests/run_validators.py`) forçam o particionador a mantê-las no mesmo conflict component, e a
@@ -444,7 +442,7 @@ Task: "Auditar escopo por worktree/repositório em plugin/skills/grill-with-docs
 ## Parallel Example: Bump de distribuição (Phase 6 — última fase paralela)
 
 ```bash
-# T010-T018 — 9 arquivos file-disjuntos, todos [P]
+# T010-T016 — 7 arquivos file-disjuntos, empacotados em até 3 nós [P]
 Task: "Bump plugin/.claude-plugin/plugin.json → 5.2.1"
 Task: "Bump plugin/.codex-plugin/plugin.json → 5.2.1"
 Task: "Bump .claude-plugin/marketplace.json → 5.2.1"
@@ -452,8 +450,7 @@ Task: "Bump .agents/plugins/marketplace.json → 5.2.1"
 Task: "Bump VERSION → 5.2.1 e adicionar asserção de heading '## 5.2.1' no CHANGELOG em tests/validate_distribution.py"
 Task: "Bump heading em plugin/skills/grill-with-docs/SKILL.md → v5.2.1"
 Task: "Bump heading em plugin/skills/grill-with-docs/references/session-protocol.md → v5.2.1"
-Task: "Bump heading em README.md → v5.2.1"
-Task: "Adicionar entrada ## 5.2.1 em CHANGELOG.md"
+# Após converge: leader executa T017/T018 e registra o relatório Evidence Boundary.
 ```
 
 ---
@@ -486,8 +483,8 @@ Task: "Adicionar entrada ## 5.2.1 em CHANGELOG.md"
 
 - Nenhuma tarefa assume que `grill_status.py`/`grill_workspace.py` já estão corretos: T002–T004,
   T008–T009 exigem leitura e execução real antes de qualquer tarefa de bump confiar no código.
-- Nenhuma tarefa escreve em `.grill/` ou `.specify/reports/` — atestação/receipt é responsabilidade
-  do leader/gauntlet, não deste tasks.md.
+- T017–T018 declaram `.specify/reports/status-timeout-bump-leader.md` para serem devolvidas ao
+  leader pelo Evidence Boundary; nenhum worker escreve em `.grill/` ou `.specify/reports/`.
 - Hooks opcionais de commit (`before_tasks`, `after_tasks` → `speckit.git.commit`,
   `speckit.agent-assign.assign`) foram detectados em `.specify/extensions.yml` e **não** executados
   por instrução explícita do usuário.

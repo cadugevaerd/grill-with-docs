@@ -10,8 +10,8 @@
   As mudanças **não** vivem em working tree sujo — são blobs commitados, e é isso que os
   passos abaixo leem.
 - Os passos 4 e 6 (gates) rodam **no nó único de gate da Phase 7** — um worktree isolado criado a
-  partir do HEAD do coordenador **depois** que todos os nós de bump da Phase 6 (T010–T018)
-  convergiram. As quatro tarefas de gate compartilham esse mesmo worktree e **não** há commit nem
+  partir do HEAD do coordenador **depois** que os nós worker T010–T016 convergiram e o leader
+  executou/commitou T017–T018. As quatro tarefas de gate compartilham esse mesmo worktree e **não** há commit nem
   merge entre elas, então o HEAD não se move da primeira à última. A pré-condição de limpeza é
   **somente tracked**: `git status --porcelain --untracked-files=no` vazio; scratch não versionado do
   próprio nó (sidecar de reconciliação, arquivos de controle) não participa e não é waiver.
@@ -62,8 +62,8 @@ do pior caso").
 
 ## 4. Distribuição (8 locais) após o bump
 
-**Pré-condição**: o bump precisa estar **commitado e convergido** — todos os nós da Phase 6
-mergeados no HEAD do coordenador —, e este passo roda no **nó único de gate da Phase 7**, worktree
+**Pré-condição**: o bump precisa estar **commitado e convergido** — T010–T016 mergeados, seguidos
+do commit leader de T017–T018 e `.specify/reports/status-timeout-bump-leader.md` —, e este passo roda no **nó único de gate da Phase 7**, worktree
 isolado criado desse HEAD. A limpeza exigida é **tracked-only**:
 `git status --porcelain --untracked-files=no` vazio. Untracked do próprio nó (sidecar de
 reconciliação, controle do gauntlet, saídas de execução) **não entra no gate** e **não** é waiver;

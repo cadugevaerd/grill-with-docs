@@ -30,7 +30,7 @@ não muda.
 
 **Storage**: N/A — leitura de árvore de arquivos (`.grill/work-items/`) e chamadas `git` via `subprocess`
 
-**Testing**: `python3 tests/run_validators.py` (glob de `validate_*.py`, 27 validadores, baseline 1303 testes); `tests/validate_status_contract.py` cobre o contrato `grill-status/v1`; `tests/validate_distribution.py` e `tests/check_version_bump.py` cobrem distribuição/bump
+**Testing**: `python3 tests/run_validators.py` (baseline observado: 1237 testes em 26 módulos `unittest`, mais `validate_distribution.py`, com 1 skip); `tests/validate_status_contract.py` cobre o contrato `grill-status/v1`; `tests/validate_distribution.py` e `tests/check_version_bump.py` cobrem distribuição/bump
 
 **Target Platform**: CLI multiplataforma (matriz CI: ubuntu/windows/macos × Python 3.10/3.13); nenhum teste pode tocar rede ou exigir `specify`/`node`/`backlogctl` reais
 
@@ -91,11 +91,11 @@ entre as rodadas não significa igualdade de árvore avaliada, e a verificação
 pede.
 
 **Topologia real do gauntlet: barreira entre Phase 6 e Phase 7 (N1-A).** As tarefas de bump
-(`tasks.md` T010–T018) formam a **Phase 6**: file-disjuntas, `[P]`, despachadas em worktrees de
-worker distintos. As tarefas de gate (T019–T022) formam a **Phase 7**, e a fronteira entre as duas
-fases **é** a barreira de convergência — a Phase 7 só é despachada quando **todos** os nós de bump
-mergearem no HEAD do coordenador. Gate sobre árvore parcialmente bumpada avalia uma versão que não
-existe.
+(`tasks.md` T010–T016) formam até três nós worker file-disjuntos. T017–T018 escrevem arquivos raiz,
+que o grant não representa com segurança, e são devolvidas ao leader pelo Evidence Boundary. As
+tarefas de gate (T019–T022) formam a **Phase 7**; ela só é despachada após convergência de T010–T016
+e commit leader de `README.md`, `CHANGELOG.md` e do relatório declarado. Gate sobre árvore
+parcialmente bumpada avalia uma versão que não existe.
 
 **Um nó único de gate.** T019–T022 não se distribuem entre workers: as quatro rodam no **mesmo nó**,
 num worktree **isolado de gate** criado a partir do HEAD do coordenador depois dessa convergência.
@@ -127,6 +127,13 @@ atestações das etapas já fechadas — **antes da partition**; (b) o leader co
 o relatório de partition antes do primeiro worker** ser despachado. Worker despachado sobre base que
 ainda não contém esses artefatos herda árvore divergente, e a igualdade de árvore avaliada pelo nó de
 gate deixa de significar o que FR-008 pede.
+
+**Evidence Boundary entre waves.** O particionador devolve T017–T018 em `deferred_to_leader`
+porque ambas declaram `.specify/reports/status-timeout-bump-leader.md`. Após convergir os nós da
+Phase 6 e antes de declarar o nó da Phase 7, o leader aplica os dois bumps raiz, registra o relatório
+e commita os três arquivos. O worktree de gate nasce desse novo HEAD.
+O relatório esperado é `PARTITION-DEGRADED` **somente** por esse defer explícito, com
+`unmapped_task_ids: []`; qualquer outro motivo de degradação bloqueia o despacho.
 
 ## Project Structure
 

@@ -23,10 +23,10 @@
     },
     "attested_executions": {
       "analyze": "se-0c4039b7a277dafe674552f2ee2c80e1b1636a282cba7b155d5a206e76fbfd77",
-      "checklist": "se-4bb37cce39416baaf0bf6e4cca5122fc3e46ddeacba12c478fe385aea2df660f",
-      "plan": "se-85cb2d23380bed175a59c04f0df326545dd6d3e3ba400fa65a3512ea0182b966",
+      "checklist": "se-d01848366dee6d0ab61911e39cbab10fbef0c533183e012f3f2231c631afef40",
+      "plan": "se-70e6102916f2d54fe637f45ca6324e9d3a70442c634ec7987bb9e6b384fda911",
       "specify": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a",
-      "tasks": "se-6990a54eaca6d068c79266ab75e9cd1bafd8914c2fb4059d18201940618aeddc"
+      "tasks": "se-ea9def945031e4fa4a4df0328fa0887ca78ddcf1a8ae863ca54cc74327f11ee2"
     },
     "attested_outputs": {
       "analyze": {
@@ -36,15 +36,15 @@
         "step_id": "analyze"
       },
       "checklist": {
-        "output_sha256": "sha256:dcfac349448e64cbcb8f850aa8ccc4780491387dbf2dd859d7fcb52f58750926",
+        "output_sha256": "sha256:0bdaf307dff82373ec65722df181a310ec8bc4cbb9686769755a7aa8c424dc2f",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-4.terminal.json",
         "step_id": "checklist"
       },
       "plan": {
-        "output_sha256": "sha256:6791a1aee70bcee6ecf57e2a45c05f4322457ce53e4f6037cff96291b2ad2485",
+        "output_sha256": "sha256:af6757a74cc6d642d4326ca836c5c31d8e01b5310e01b69dad45fb4a7d24afb3",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/plan-plan-4.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-5.terminal.json",
         "step_id": "plan"
       },
       "specify": {
@@ -54,9 +54,9 @@
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:df0cf11dd96ae4a6c4da89498eec3bddc25c09867211a6bc2b219c85327b3a36",
+        "output_sha256": "sha256:338e0d7e423d4cbf66b634eb8e83a58e9130d7e041b973512539e7a6e3a74863",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-4.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-5.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -341,6 +341,57 @@
         "state": "complete",
         "step": "tasks",
         "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r3.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "af6757a74cc6d642d4326ca836c5c31d8e01b5310e01b69dad45fb4a7d24afb3"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "align plan with deterministic partition output",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-plan-r4.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/checklists/release.md",
+            "sha256": "0bdaf307dff82373ec65722df181a310ec8bc4cbb9686769755a7aa8c424dc2f"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "record executable partition remediation",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-checklist-r3.json"
+      },
+      {
+        "chain_stale": [
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "338e0d7e423d4cbf66b634eb8e83a58e9130d7e041b973512539e7a6e3a74863"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "place grant paths on task lines and defer root files to leader",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r4.json"
       }
     ],
     "chain_stale": [
@@ -401,6 +452,18 @@
           "step_execution_id": "se-6279de1561a25ab46d41df6e27909a413b878f78dddfdf93a35ae29f9e5d5cdb",
           "step_id": "checklist",
           "superseded_by_step_execution_id": "se-4bb37cce39416baaf0bf6e4cca5122fc3e46ddeacba12c478fe385aea2df660f"
+        },
+        {
+          "attempt_id": "checklist-3",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-checklist-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:dcfac349448e64cbcb8f850aa8ccc4780491387dbf2dd859d7fcb52f58750926",
+          "provenance": "current-generation",
+          "reason": "record executable partition remediation",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
+          "step_execution_id": "se-4bb37cce39416baaf0bf6e4cca5122fc3e46ddeacba12c478fe385aea2df660f",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-d01848366dee6d0ab61911e39cbab10fbef0c533183e012f3f2231c631afef40"
         }
       ],
       "plan": [
@@ -439,6 +502,18 @@
           "step_execution_id": "se-ceb3a1efc46ce336b2fc00dfd627adc66853ec61ab2e13c98630b024b7fdea88",
           "step_id": "plan",
           "superseded_by_step_execution_id": "se-85cb2d23380bed175a59c04f0df326545dd6d3e3ba400fa65a3512ea0182b966"
+        },
+        {
+          "attempt_id": "plan-4",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-plan-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:6791a1aee70bcee6ecf57e2a45c05f4322457ce53e4f6037cff96291b2ad2485",
+          "provenance": "current-generation",
+          "reason": "align plan with deterministic partition output",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-4.terminal.json",
+          "step_execution_id": "se-85cb2d23380bed175a59c04f0df326545dd6d3e3ba400fa65a3512ea0182b966",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-70e6102916f2d54fe637f45ca6324e9d3a70442c634ec7987bb9e6b384fda911"
         }
       ],
       "specify": [
@@ -515,6 +590,18 @@
           "step_execution_id": "se-b2bbaf5b96a89204441780db3d31c3aa87feae63afcf59b9a5eba3c3dfae3c15",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-6990a54eaca6d068c79266ab75e9cd1bafd8914c2fb4059d18201940618aeddc"
+        },
+        {
+          "attempt_id": "tasks-4",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:df0cf11dd96ae4a6c4da89498eec3bddc25c09867211a6bc2b219c85327b3a36",
+          "provenance": "current-generation",
+          "reason": "place grant paths on task lines and defer root files to leader",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-4.terminal.json",
+          "step_execution_id": "se-6990a54eaca6d068c79266ab75e9cd1bafd8914c2fb4059d18201940618aeddc",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-ea9def945031e4fa4a4df0328fa0887ca78ddcf1a8ae863ca54cc74327f11ee2"
         }
       ]
     },
