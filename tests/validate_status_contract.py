@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Matriz pública do contrato grill_workspace.py status (somente interface CLI)."""
 from __future__ import annotations
-import concurrent.futures, hashlib, importlib.util, json, os, shutil, subprocess, sys, tempfile, unittest
+import argparse, concurrent.futures, hashlib, importlib.util, json, os, shutil, subprocess, sys, tempfile, unittest
 from unittest import mock
 from pathlib import Path
 
@@ -93,6 +93,34 @@ class StatusPublicContract(unittest.TestCase):
         self.assertEqual(module.render_markdown(payload),"| Item | Status | Pendência |\n|---|---|---|\n| a\\|b\\\\c | pending | line one line\\|two\\\\ |\n")
     def test_missing_work_id_is_one_json_exit1(self):
         p,x=status(self.r,"--work-id","absent"); self.assertEqual(p.returncode,1); self.assertEqual(x["code"],"WORK-ITEM-MISSING"); self.assertEqual(len(p.stdout.splitlines()),1); self.assertEqual(p.stderr,"")
+    def _load_workspace_module(self):
+        spec=importlib.util.spec_from_file_location("status_command_contract",WS)
+        if spec is None or spec.loader is None: self.fail("unable to load workspace module")
+        module=importlib.util.module_from_spec(spec); sys.modules[spec.name]=module; spec.loader.exec_module(module)
+        return module
+    def test_status_command_timeout_returns_status_timeout(self):
+        module=self._load_workspace_module()
+        args=argparse.Namespace(root=self.r,work_id=None,current_worktree=False)
+        with mock.patch.object(module.subprocess,"run",side_effect=module.subprocess.TimeoutExpired(cmd=["grill_status.py"],timeout=module.STATUS_TIMEOUT_SECONDS)):
+            payload,code=module.status_command(args)
+        self.assertEqual(code,module.EXIT_BLOCKED)
+        self.assertEqual(payload,{"schema":"grill-status/v1","verdict":"BLOCKED","code":"STATUS-TIMEOUT","next_action":"resolver-bloqueios"})
+    def test_status_command_invalid_output_returns_status_invalid_output(self):
+        module=self._load_workspace_module()
+        args=argparse.Namespace(root=self.r,work_id=None,current_worktree=False)
+        fake=subprocess.CompletedProcess(args=["grill_status.py"],returncode=0,stdout="not json",stderr="")
+        with mock.patch.object(module.subprocess,"run",return_value=fake):
+            payload,code=module.status_command(args)
+        self.assertEqual(code,module.EXIT_BLOCKED)
+        self.assertEqual(payload,{"schema":"grill-status/v1","verdict":"BLOCKED","code":"STATUS-INVALID-OUTPUT"})
+    def test_status_command_non_dict_payload_returns_status_schema(self):
+        module=self._load_workspace_module()
+        args=argparse.Namespace(root=self.r,work_id=None,current_worktree=False)
+        fake=subprocess.CompletedProcess(args=["grill_status.py"],returncode=0,stdout=json.dumps([1,2,3]),stderr="")
+        with mock.patch.object(module.subprocess,"run",return_value=fake):
+            payload,code=module.status_command(args)
+        self.assertEqual(code,module.EXIT_BLOCKED)
+        self.assertEqual(payload,{"schema":"grill-status/v1","verdict":"BLOCKED","code":"STATUS-SCHEMA"})
     def test_current_worktree_is_not_cross_worktree(self):
         self.item(); _,b=status(self.r); _,d=status(self.r,"--current-worktree"); self.assertEqual(len(b["work_items"]),1); self.assertEqual(len(d["work_items"]),1)
     def test_repeated_output_is_byte_identical(self):
