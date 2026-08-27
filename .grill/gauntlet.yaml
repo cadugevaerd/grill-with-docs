@@ -44,6 +44,51 @@
         "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0",
         "version": "v4"
       }
+    },
+    "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3": {
+      "catalog": {
+        "document_sha256": "0c3799da407c80f60598c5d2944c743e934bbe9d63259fe3949c4103066b813c",
+        "id": "grill-v4-local-skills",
+        "resolution_sha256": "sha256:8937773d807af286d821327d8b9a8c3ba6308c26eca145a03135572dab89fac3",
+        "trusted_asset_document_sha256": "c1708c55972b50ecbf1fe5e9b7d74ea6a71662185631eb39b6ff1e71f3ea628f"
+      },
+      "limits": {
+        "max_workers": 3,
+        "stall_minutes": 15
+      },
+      "runtime": {
+        "adapter": "claude-code-skill/v1",
+        "id": "claude"
+      },
+      "tier_policy": {
+        "adapter": "claude-code-skill/v1",
+        "minimum_by_step": {
+          "analyze": "large",
+          "checklist": "small",
+          "converge": "medium",
+          "implement-parallel": "medium",
+          "partition": "medium",
+          "plan": "large",
+          "review": "large",
+          "ship": "large",
+          "specify": "large",
+          "tasks": "medium",
+          "verify": "medium"
+        },
+        "promotions": [],
+        "supplemental": {
+          "markdown-maintenance": "small"
+        }
+      },
+      "work_item": {
+        "document_sha256": "287fdba5d4507ade008e2e60cb8bec290587acd4ecfde04e6f51f5911c9be396"
+      },
+      "work_item_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
+      "workflow": {
+        "registry_sha256": "sha256:e3f69871406205b77725b41bf0de0b24d9dbd661c004d502f0ddb49f22209ec1",
+        "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0",
+        "version": "v4"
+      }
     }
   },
   "schema": "grill-gauntlet/v1"

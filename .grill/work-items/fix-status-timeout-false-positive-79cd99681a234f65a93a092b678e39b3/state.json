@@ -457,6 +457,13 @@
         "state": "complete",
         "step": "analyze",
         "supersedes": ".grill/attestations/fix-status-timeout-false-positive-analyze.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "emit deterministic execution DAG",
+        "state": "in-progress",
+        "step": "partition"
       }
     ],
     "chain_stale": [],
@@ -482,7 +489,7 @@
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
-      "partition": "pending",
+      "partition": "in-progress",
       "plan": "complete",
       "review": "pending",
       "ship": "pending",
