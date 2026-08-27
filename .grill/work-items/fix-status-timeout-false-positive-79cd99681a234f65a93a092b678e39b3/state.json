@@ -27,7 +27,7 @@
       "partition": "se-232e6409c711185100fda59b3e226ee85eaf39283b9d9a49cfee707f8230eb75",
       "plan": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746",
       "specify": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a",
-      "tasks": "se-f225ed7bdd2b48e14aae51687b5a382590c0107d5ac2301cd079481fa88c54ac"
+      "tasks": "se-3f8e3a95454a8e91cbca1d492d6282e4d48f04c7f8b0c1721d50391304214bb9"
     },
     "attested_outputs": {
       "analyze": {
@@ -61,9 +61,9 @@
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:0057ed39852f2bd7330db969c143133c96f4a7f68964220686d740ab5addf2cd",
+        "output_sha256": "sha256:f6cc96c767fdef0d1e9f73c8d5c0b374a5b2b0fff8aa247151341f56d1f797bd",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-6.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-7.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -490,9 +490,29 @@
         "reason": "dispatch isolated DAG workers",
         "state": "in-progress",
         "step": "implement-parallel"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "f6cc96c767fdef0d1e9f73c8d5c0b374a5b2b0fff8aa247151341f56d1f797bd"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "distinguish EXIT_BLOCKED from argparse usage errors after implementation finding",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r6.json"
       }
     ],
-    "chain_stale": [],
+    "chain_stale": [
+      "analyze",
+      "partition"
+    ],
     "current_step": "implement-parallel",
     "execution_branch": "025-status-timeout-false-positive",
     "renamed_from": {},
@@ -748,6 +768,18 @@
           "step_execution_id": "se-ea9def945031e4fa4a4df0328fa0887ca78ddcf1a8ae863ca54cc74327f11ee2",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-f225ed7bdd2b48e14aae51687b5a382590c0107d5ac2301cd079481fa88c54ac"
+        },
+        {
+          "attempt_id": "tasks-6",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r6.json",
+          "execution_round": 6,
+          "output_sha256": "sha256:0057ed39852f2bd7330db969c143133c96f4a7f68964220686d740ab5addf2cd",
+          "provenance": "current-generation",
+          "reason": "distinguish EXIT_BLOCKED from argparse usage errors after implementation finding",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-6.terminal.json",
+          "step_execution_id": "se-f225ed7bdd2b48e14aae51687b5a382590c0107d5ac2301cd079481fa88c54ac",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-3f8e3a95454a8e91cbca1d492d6282e4d48f04c7f8b0c1721d50391304214bb9"
         }
       ]
     },
