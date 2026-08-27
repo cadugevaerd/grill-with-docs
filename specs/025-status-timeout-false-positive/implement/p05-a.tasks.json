@@ -1,0 +1,42 @@
+{
+  "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
+  "run_id": "run-133216f8532a269f73713b57",
+  "node_id": "p05-a",
+  "task_ids": ["T008", "T009"],
+  "tasks": [
+    {
+      "id": "T008",
+      "description": "Ler tests/validate_status_contract.py (test_live_git_state_is_resolved_once_per_worktree_not_per_item) e confirmar que a asserção trava contagem de chamadas ao probe, não tempo decorrido",
+      "command": "Read tests/validate_status_contract.py",
+      "result": "PASS",
+      "evidence": [
+        "Localização real do teste: tests/validate_status_contract.py:128-137 (não 100-109 como cita a descrição de T008 em tasks.md — desvio de numeração de linha, ver F001)",
+        "Corpo do teste: mock.patch.object(module,\"live\",wraps=module.live) as observed; payload,code=module.build_status(...); observed.assert_called_once_with(self.r.resolve())",
+        "Asserção é estrutural (contagem de chamadas via assert_called_once_with), sem qualquer medição de tempo decorrido (nenhum time.time()/elapsed/perf_counter no corpo do teste)",
+        "Confirma research.md Decisão 3: teste determinístico e imune a CI lento/rápido"
+      ]
+    },
+    {
+      "id": "T009",
+      "description": "Confirmar em tests/run_validators.py que ele descobre tests/validate_status_contract.py automaticamente pelo glob validate_*.py",
+      "command": "Read tests/run_validators.py; python3 tests/run_validators.py",
+      "result": "PASS",
+      "evidence": [
+        "tests/run_validators.py:10 -> VALIDATORS = tuple(sorted(ROOT.glob(\"validate_*.py\")))",
+        "tests/validate_status_contract.py casa o padrão validate_*.py e é descoberto sem registro manual",
+        "Execução real da suíte completa (python3 tests/run_validators.py) confirmada: 27 validadores executados, ==> validate_status_contract.py presente na saída com 'Ran 52 tests in 28.213s' / 'OK'",
+        "Suíte completa: exit 0, 0 FAILED, 26 módulos unittest totalizando 1240 testes + validate_distribution.py standalone ('OK')"
+      ],
+      "notes": "Baseline de T001/tasks.md cita 1237 testes em 26 módulos; execução real aqui mediu 1240. Divergência de +3 não investigada por estar fora do escopo de T009 (comparação formal contra baseline é atribuição de T021, Phase 7); registrada como observação, não como achado de T008/T009."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F001",
+      "severity": "info",
+      "title": "Descrição de T008 em tasks.md cita linhas 100-109 para o teste; localização real é 128-137",
+      "detail": "test_live_git_state_is_resolved_once_per_worktree_not_per_item vive em tests/validate_status_contract.py:128-137 no HEAD atual (6a1ca3a), não 100-109. A propriedade exigida pela tarefa (asserção por contagem de chamadas, não por tempo) se confirma independente da numeração. Drift de numeração de linha na descrição da tarefa, não defeito de código nem de teste — não bloqueia Phase 6 pela regra fail-closed, pois essa regra cobre achado grave sobre a NATUREZA da asserção (medir tempo em vez de contagem), que não ocorreu aqui."
+    }
+  ],
+  "completed": ["T008", "T009"]
+}
