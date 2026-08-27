@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.2.1
+
+- Corrige o falso positivo `STATUS-TIMEOUT` em repositórios com vários work
+  items: os probes Git de estado vivo passam a ser resolvidos uma vez por
+  worktree/repositório e reutilizados na classificação dos itens, em vez de
+  repetidos por work item. O timeout público do status sobe de 5s para 30s,
+  preservando o fallback fail-closed para falhas reais.
+
 ## 5.2.0
 
 - Corrigir o artefato de uma etapa já atestada passa a ter caminho: a **cadeia
