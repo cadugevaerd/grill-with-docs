@@ -24,6 +24,7 @@
     "attested_executions": {
       "analyze": "se-2d80182f639cb089569006db082a11cd0a492bf27467f58f8d22445d52c1141d",
       "checklist": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985",
+      "partition": "se-232e6409c711185100fda59b3e226ee85eaf39283b9d9a49cfee707f8230eb75",
       "plan": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746",
       "specify": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a",
       "tasks": "se-f225ed7bdd2b48e14aae51687b5a382590c0107d5ac2301cd079481fa88c54ac"
@@ -40,6 +41,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-5.terminal.json",
         "step_id": "checklist"
+      },
+      "partition": {
+        "output_sha256": "sha256:b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "step_id": "partition"
       },
       "plan": {
         "output_sha256": "sha256:0ff133bd392cfba69b0e1419c08e566328141acf7c814b9150f89ba135fd7ae6",
@@ -464,10 +471,29 @@
         "reason": "emit deterministic execution DAG",
         "state": "in-progress",
         "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/execution-dag.json",
+            "sha256": "b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "official validator returned DAG-VALID for run-273d366465d684f1a0b47720",
+        "state": "complete",
+        "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "dispatch isolated DAG workers",
+        "state": "in-progress",
+        "step": "implement-parallel"
       }
     ],
     "chain_stale": [],
-    "current_step": "partition",
+    "current_step": "implement-parallel",
     "execution_branch": "025-status-timeout-false-positive",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -488,8 +514,8 @@
       "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
-      "implement-parallel": "pending",
-      "partition": "in-progress",
+      "implement-parallel": "in-progress",
+      "partition": "complete",
       "plan": "complete",
       "review": "pending",
       "ship": "pending",
