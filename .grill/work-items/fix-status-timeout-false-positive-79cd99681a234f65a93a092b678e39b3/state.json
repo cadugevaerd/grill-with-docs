@@ -22,7 +22,7 @@
       "runtime": "claude"
     },
     "attested_executions": {
-      "analyze": "se-0c4039b7a277dafe674552f2ee2c80e1b1636a282cba7b155d5a206e76fbfd77",
+      "analyze": "se-2d80182f639cb089569006db082a11cd0a492bf27467f58f8d22445d52c1141d",
       "checklist": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985",
       "plan": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746",
       "specify": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a",
@@ -30,9 +30,9 @@
     },
     "attested_outputs": {
       "analyze": {
-        "output_sha256": "sha256:af254c216e962f7baec2c1f5b56286755f36358d19246c1d005e8c39e1868ff6",
+        "output_sha256": "sha256:fad03f275c00bbabec3691f1084038aef193bed32f7bcf2cf6833a483047928b",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-2.terminal.json",
         "step_id": "analyze"
       },
       "checklist": {
@@ -443,11 +443,23 @@
         "state": "complete",
         "step": "tasks",
         "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r5.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/analysis-final.md",
+            "sha256": "fad03f275c00bbabec3691f1084038aef193bed32f7bcf2cf6833a483047928b"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "zero critical or high after deterministic partition validation",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-analyze.json"
       }
     ],
-    "chain_stale": [
-      "analyze"
-    ],
+    "chain_stale": [],
     "current_step": "partition",
     "execution_branch": "025-status-timeout-false-positive",
     "renamed_from": {},
@@ -479,6 +491,20 @@
       "verify": "pending"
     },
     "superseded_outputs": {
+      "analyze": [
+        {
+          "attempt_id": "analyze-1",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-analyze.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:af254c216e962f7baec2c1f5b56286755f36358d19246c1d005e8c39e1868ff6",
+          "provenance": "current-generation",
+          "reason": "zero critical or high after deterministic partition validation",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+          "step_execution_id": "se-0c4039b7a277dafe674552f2ee2c80e1b1636a282cba7b155d5a206e76fbfd77",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-2d80182f639cb089569006db082a11cd0a492bf27467f58f8d22445d52c1141d"
+        }
+      ],
       "checklist": [
         {
           "attempt_id": "checklist-1",
