@@ -184,7 +184,10 @@ timeout público de 30s.
 - [ ] T005 [US1] Medir com `plugin/skills/grill-with-docs/scripts/grill_workspace.py` o tempo de parede real do formato JSON contra a árvore real do
       repositório (não fixture sintética), **da raiz do repo**:
       `time python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py status .`
-      Confirmar: exit code 0 (não 2 — 2 seria erro de uso, não medição); nenhuma ocorrência de
+      Confirmar que o processo produziu payload JSON válido e terminou com exit code `0` ou com
+      `2` **somente quando** o payload declarar `verdict=BLOCKED` por estado real dos work items.
+      Distinguir esse `EXIT_BLOCKED=2` de erro de uso do `argparse` pela presença do payload JSON
+      válido; erro de uso sem payload continua sendo achado. Confirmar nenhuma ocorrência de
       `STATUS-TIMEOUT` no payload; tempo de parede registrado e comparado com margem confortável
       sob 30s (referência: 10,56s medidos em
       `.grill/evidence/grill-status-timeout-debug-report.md`). Se o tempo se aproximar de 30s,
@@ -192,7 +195,8 @@ timeout público de 30s.
 - [ ] T006 [US1] **Depois de T005 terminar**, medir com `plugin/skills/grill-with-docs/scripts/grill_workspace.py` o tempo de parede real do
       formato Markdown contra a mesma árvore real:
       `time python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py status . --format markdown`
-      Confirmar: exit code 0; nenhuma linha de fallback
+      Confirmar exit code `0` ou `EXIT_BLOCKED=2` quando houver tabela Markdown válida refletindo
+      estado real dos work items; erro de uso sem tabela continua sendo achado. Confirmar nenhuma linha de fallback
       `| workspace | blocked | STATUS-TIMEOUT: ... |`; tempo de parede registrado com a mesma
       margem de T005. Registrar os dois tempos lado a lado, anotando que foram medidos em
       série.
