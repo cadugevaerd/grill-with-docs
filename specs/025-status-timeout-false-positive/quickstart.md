@@ -9,10 +9,14 @@
   `grill_status.py`, `grill_workspace.py` e `validate_status_contract.py` com a correção.
   As mudanças **não** vivem em working tree sujo — são blobs commitados, e é isso que os
   passos abaixo leem.
-- Os passos 4 e 6 (gates) rodam **exclusivamente no worktree coordenador da run**, depois
-  de todos os waves de `implement-parallel` convergirem e de `tasks.md` ser reconciliado.
-  Esse worktree contém só paths commitados da branch e sai com `git status --porcelain`
-  vazio. Os passos 1–3 podem rodar em qualquer checkout dessa branch.
+- Os passos 4 e 6 (gates) rodam **no nó único de gate da Phase 7** — um worktree isolado criado a
+  partir do HEAD do coordenador **depois** que todos os nós de bump da Phase 6 (T010–T018)
+  convergiram. As quatro tarefas de gate compartilham esse mesmo worktree e **não** há commit nem
+  merge entre elas, então o HEAD não se move da primeira à última. A pré-condição de limpeza é
+  **somente tracked**: `git status --porcelain --untracked-files=no` vazio; scratch não versionado do
+  próprio nó (sidecar de reconciliação, arquivos de controle) não participa e não é waiver.
+  `gauntlet-tasks-reconcile` roda **depois** da convergência desse nó, nunca antes do passo 4. Os
+  passos 1–3 podem rodar em qualquer checkout dessa branch.
 
 ## 1. Suíte completa de validadores
 
@@ -58,11 +62,14 @@ do pior caso").
 
 ## 4. Distribuição (8 locais) após o bump
 
-**Pré-condição**: o bump precisa estar **commitado**, e este passo roda no **worktree
-coordenador da run** (só paths commitados da branch, `git status --porcelain` vazio), depois da
-convergência de todos os waves e da reconciliação de `tasks.md`. Sujeira do workspace principal
-— `.specify/feature.json`, bundles de work items irmãos, atestações não commitadas — não existe
-nesse worktree e não participa da verificação.
+**Pré-condição**: o bump precisa estar **commitado e convergido** — todos os nós da Phase 6
+mergeados no HEAD do coordenador —, e este passo roda no **nó único de gate da Phase 7**, worktree
+isolado criado desse HEAD. A limpeza exigida é **tracked-only**:
+`git status --porcelain --untracked-files=no` vazio. Untracked do próprio nó (sidecar de
+reconciliação, controle do gauntlet, saídas de execução) **não entra no gate** e **não** é waiver;
+estado alheio do workspace principal (`.specify/feature.json`, bundles de work items irmãos,
+atestações não commitadas) não existe nesse worktree. Nada de `state.json`/`tasks.md` commitados
+antes deste passo: `gauntlet-tasks-reconcile` é posterior à convergência do nó.
 
 `check_version_bump.py` decide sobre blobs commitados (`git diff base...head` e
 `git show <rev>:plugin/.claude-plugin/plugin.json`). O baseline `7b3c3fe` já alterou `plugin/**`
@@ -73,7 +80,7 @@ que `plugin/**` não mudou no SHA avaliado, impossível a partir de `7b3c3fe`; s
 `--base-ref`/HEAD errados, e é falha.
 
 ```bash
-git status --porcelain          # precisa sair vazio: árvore limpa
+git status --porcelain --untracked-files=no   # precisa sair vazio: nada tracked pendente
 python3 tests/validate_distribution.py
 python3 tests/check_version_bump.py --base-ref main --json
 ```
@@ -94,22 +101,22 @@ exige exatamente uma linha `## 5.2.1`, casando a constante `VERSION`, e reprova 
 
 ## 6. Gates fail-closed sobre o mesmo SHA (FR-008/SC-006)
 
-Também no **worktree coordenador da run**, com todos os waves convergidos e `tasks.md`
-reconciliado. Árvore limpa aqui é propriedade desse worktree — ele só contém paths commitados da
-branch —, não algo a ser obtido limpando o workspace principal.
+Ainda no **mesmo nó de gate** do passo 4, sem commit e sem merge desde então — o HEAD não se moveu
+entre os dois passos, e é essa invariante que a leitura dupla abaixo verifica.
 
 ```bash
-git rev-parse HEAD              # registrar o SHA
-git status --porcelain          # precisa sair vazio
+git rev-parse HEAD                            # registrar o SHA
+git status --porcelain --untracked-files=no   # precisa sair vazio (tracked-only)
 python3 tests/check_version_bump.py --base-ref main --json
 python3 tests/run_validators.py
-git rev-parse HEAD              # precisa ser o MESMO SHA da primeira leitura
+git rev-parse HEAD                            # precisa ser o MESMO SHA da primeira leitura
 ```
 
 **Esperado**: `"code":"BUMPED"` e exit 0 na suíte, ambos sobre o mesmo SHA e a mesma árvore
-limpa do worktree coordenador. Divergência, falha ou qualquer alteração entre as duas execuções
-invalida as duas e exige reavaliação conjunta no novo SHA. Rodar isso de um workspace principal
-sujo é erro de execução, não motivo de waiver. A confirmação local não substitui `bump-gate.yml` e
+tracked-limpa do nó de gate. SHA divergente significa que algo commitou dentro da janela avaliada e
+invalida as duas execuções, que são refeitas juntas sobre o novo SHA. Untracked scratch do nó não
+invalida nada e não é waiver de nada — ele simplesmente não é avaliado. Rodar isso fora do nó de gate
+é erro de execução, não motivo de waiver. A confirmação local não substitui `bump-gate.yml` e
 `ci.yml` verdes na mesma revisão de topo da PR real.
 
 ## Critério de aceite (mapeado ao spec)

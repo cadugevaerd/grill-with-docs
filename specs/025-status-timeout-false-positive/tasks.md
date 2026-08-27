@@ -49,30 +49,43 @@ execução para no checkpoint da fase, o achado é remediado e a tarefa que o pr
 nenhuma tarefa de bump (T010–T018) pode iniciar com achado aberto: bumpar a versão de uma
 correção não validada publica uma afirmação sem evidência.
 
-### Onde as tarefas de gate rodam (N1)
+### Onde as tarefas de gate rodam (N1-A/N1-B)
 
-**T019–T022 executam exclusivamente no worktree coordenador da run**, e só **depois de todos os
-waves da etapa `implement-parallel` convergirem** e de `tasks.md` ser **reconciliado**. Regras,
-sem exceção:
+**T019–T022 formam a Phase 7 e executam todas no MESMO nó** — um único worktree isolado de gate,
+criado a partir do HEAD do coordenador **depois** que todos os nós da Phase 6 (T010–T018) mergearam
+e a fase convergiu. Regras, sem exceção:
 
-1. Esse worktree contém **somente paths commitados da branch** `025-status-timeout-false-positive`
-   e, no momento da execução dessas quatro tarefas, seu `git status --porcelain` **sai vazio**.
-   Árvore limpa aqui é propriedade estrutural do worktree, não um passo de limpeza manual.
-2. **Nenhum worker** roda T019–T022 dentro do próprio worktree de nó, e **nenhuma** dessas tarefas
-   roda a partir do workspace principal.
-3. **Sujeira do workspace principal e de work items irmãos não participa**: `.specify/feature.json`
-   modificado, bundles não versionados (por exemplo `fix-attestation-registry-anchor-…`), atestações
-   e evidências ainda não commitadas não existem no worktree coordenador, não sujam o
-   `git status --porcelain` avaliado e não entram no SHA avaliado. Observá-las no workspace
-   principal **não** é achado destas tarefas e **não** autoriza waiver da pré-condição de árvore
-   limpa — se os gates foram rodados de lá, a execução é inválida e se repete no worktree
-   coordenador.
-4. **Obrigação do leader, antes de despachar**: (a) commitar os artefatos relacionados desta
-   feature — `specs/025-status-timeout-false-positive/`, o bundle do work item
+1. **Barreira de convergência entre Phase 6 e Phase 7.** A Phase 6 contém apenas os bumps
+   (T010–T018), file-disjuntos, despachados em paralelo em worktrees de worker distintos. A Phase 7
+   (T019–T022) só é despachada quando **todos** esses nós convergirem no HEAD do coordenador. Não
+   existe nó de gate rodando concorrente com nó de bump: um gate sobre árvore parcialmente bumpada
+   avalia uma versão que não existe.
+2. **Um único nó, um único worktree.** As quatro tarefas não se distribuem entre workers: elas
+   compartilham o mesmo worktree isolado de gate. Para forçar o particionador a mantê-las no mesmo
+   *conflict component*, cada uma de T019–T022 declara os três inputs comuns
+   `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`.
+   **Nenhuma delas leva `[P]`** — a serialidade T019 → T020 → T021 → T022 dentro do nó é obrigatória.
+3. **Nenhum commit e nenhum merge entre T019 e T022.** Dentro desse worker o HEAD não se move: o
+   bump já entrou na árvore antes de o nó nascer. Por isso `git rev-parse HEAD` lido antes de T019 e
+   depois de T022 é **idêntico por construção**, e a igualdade exigida por T022 verifica essa
+   invariante em vez de torcer por uma coincidência.
+4. **Pré-condição de limpeza é somente tracked (N1-B).** O que se exige é
+   `git status --porcelain --untracked-files=no` **vazio**: nenhuma modificação, adição ou remoção
+   pendente de path versionado. Scratch não versionado do próprio nó — sidecar de reconciliação,
+   arquivos de controle do gauntlet, saídas de execução — **não** entra nessa checagem, **não** é
+   achado destas tarefas e **não** é waiver de nada: simplesmente não faz parte do que os gates
+   avaliam, porque `check_version_bump.py` decide sobre blobs commitados e
+   `validate_distribution.py`/`run_validators.py` leem paths versionados. Untracked nunca relaxa a
+   exigência de tracked-vazio nem a faz falhar.
+5. **`gauntlet-tasks-reconcile` ocorre somente depois da convergência deste nó**, nunca antes de
+   T019. Não há obrigação de commitar `state.json` nem `tasks.md` antes dos gates — fazê-lo moveria o
+   HEAD dentro da janela avaliada e quebraria a invariante de (3). A reconciliação é pós-Phase 7.
+6. **Obrigação do leader, preservada**: (a) commitar os artefatos relacionados desta feature —
+   `specs/025-status-timeout-false-positive/`, o bundle do work item
    `fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3` e as atestações das etapas
    já fechadas — **antes da partition**; (b) commitar o **Execution DAG e o relatório de partition
    antes do primeiro worker** ser despachado. Sem isso, workers partem de bases divergentes e a
-   igualdade de SHA exigida por T022 deixa de significar igualdade de árvore avaliada.
+   igualdade de árvore avaliada pelo nó de gate deixa de significar o que FR-008 pede.
 
 ---
 
@@ -232,27 +245,18 @@ reexecutada limpa. Idem para T009, se o teste não for descoberto pelo glob da s
 
 ---
 
-## Phase 6: Polish & Cross-Cutting Concerns — Bump, Distribuição, CHANGELOG, Gates
+## Phase 6: Bump, Distribuição e CHANGELOG (T010–T018)
 
-**Purpose**: sincronizar os 8 locais de distribuição, o CHANGELOG, e confirmar os gates
-fail-closed. Todas as tarefas desta fase são cross-cutting (`[X]`) e fecham FR-006/FR-007/FR-008
-e SC-004/SC-005/SC-006. Cada bump de arquivo é file-disjunto dos demais — T010–T018 são `[P]`.
+**Purpose**: sincronizar os 8 locais de distribuição e o `CHANGELOG.md`. Todas as tarefas desta fase
+são cross-cutting (`[X]`) e fecham FR-006/FR-007 e SC-004/SC-005. Cada bump de arquivo é
+file-disjunto dos demais — T010–T018 são `[P]` e são despachados em worktrees de worker distintos.
 Depende das Phases 1–5 **sem achado aberto** (código validado antes de bumpar a versão que o
 descreve).
 
-> **Pré-condição de commit, convergência e local de execução (D1/D2/N1)**: T019–T022 leem estado
-> **commitado** e rodam **exclusivamente no worktree coordenador da run**, depois de **todos os
-> waves convergirem** e de `tasks.md` ser **reconciliado** (regras completas em "Onde as tarefas de
-> gate rodam"). `check_version_bump.py` decide sobre blobs
-> (`git diff --no-renames --name-only main...HEAD` + `git show <rev>:plugin/.claude-plugin/plugin.json`).
-> **Estado pré-bump desta branch**: como `7b3c3fe` alterou `plugin/**` sem bump, o veredito atual do
-> gate é literalmente `MISSING-BUMP` / `verdict: FAIL`, com `base_version` e `head_version` ambos
-> `5.2.0` — o gate já reprova, e T010–T018 existem para virá-lo. `NO-PLUGIN-CHANGE` sobrou como
-> **código residual rejeitado**: descreve a árvore em que `plugin/**` não mudou no SHA avaliado,
-> impossível a partir de `7b3c3fe`; se aparecer, é `--base-ref`/HEAD errados e é falha. Na trilha do
-> gauntlet, os workers de `implement-parallel` **commitam** seus nós nos respectivos worktrees e
-> `converge` integra tudo **antes** de T020 rodar. Portanto, ao entrar em T019, no worktree
-> coordenador: `git status --porcelain` sai **vazio** e o bump de T010–T018 está no HEAD.
+> **Os gates saíram desta fase (A2/A3)**: T019–T022 passaram a formar a **Phase 7** e só começam
+> depois que **todos** os nós de T010–T018 convergirem no HEAD do coordenador. A fronteira entre
+> Phase 6 e Phase 7 **é** a barreira de convergência: gate sobre árvore parcialmente bumpada avalia
+> uma versão que não existe. Nenhuma tarefa de gate roda dentro de um worktree de worker de bump.
 
 - [ ] T010 [P] [X] Atualizar `"version": "5.2.0"` → `"version": "5.2.1"` em
       `plugin/.claude-plugin/plugin.json`
@@ -282,17 +286,55 @@ descreve).
       descrevendo em prosa, no mesmo estilo das entradas anteriores: o falso positivo de
       `STATUS-TIMEOUT` corrigido, o escopo dos probes Git movido de por-work-item para
       por-worktree/repositório, e o timeout público subindo de 5s para 30s (FR-007/SC-005).
-- [ ] T019 [X] **No worktree coordenador da run** (waves convergidos, `tasks.md` reconciliado),
-      rodar `python3 tests/validate_distribution.py` e confirmar `distribution: OK`
-      com os 8 locais coerentes em `5.2.1` **e** a nova asserção de T014 encontrando exatamente
-      uma linha `## 5.2.1` em `CHANGELOG.md` (fecha FR-006/SC-004 e FR-007/SC-005). Depende de
-      T010–T018 completas.
-- [ ] T020 [X] **No worktree coordenador da run**, com o bump já **commitado e convergido** (ver
-      pré-condição acima), rodar
+**Checkpoint (barreira de convergência)**: os 9 arquivos bumpados para `5.2.1`, cada nó commitado
+no próprio worktree de worker e **todos** mergeados no HEAD do coordenador. FR-006/FR-007 e
+SC-004/SC-005 ficam materializados na árvore, ainda sem veredito de gate. Só com a fase **inteira**
+convergida a Phase 7 é despachada.
+
+---
+
+## Phase 7: Gates fail-closed sobre o mesmo SHA (T019–T022)
+
+**Purpose**: confirmar os dois gates de distribuição sobre a árvore já bumpada e convergida,
+fechando **FR-008/SC-006** e ratificando FR-006/SC-004 e FR-007/SC-005 por execução. Todas as
+tarefas desta fase são cross-cutting (`[X]`).
+
+**Topologia (N1-A/A2/A3)**: as quatro tarefas rodam **no mesmo nó**, num worktree isolado de gate
+criado a partir do HEAD do coordenador **depois** da convergência integral da Phase 6. Elas declaram
+os **três mesmos inputs** — `tests/validate_distribution.py`, `tests/check_version_bump.py`,
+`tests/run_validators.py` — justamente para cair no mesmo *conflict component* do particionador, e
+**nenhuma leva `[P]`**. Dentro do nó **não há commit nem merge** entre T019 e T022: o HEAD é imóvel
+por construção, e é isso que torna a igualdade de SHA exigida por T022 uma invariante verificável em
+vez de coincidência.
+
+> **Estado pré-bump do gate**: `check_version_bump.py` decide sobre blobs
+> (`git diff --no-renames --name-only main...HEAD` + `git show <rev>:plugin/.claude-plugin/plugin.json`).
+> Como `7b3c3fe` alterou `plugin/**` sem bump, o veredito **antes** da Phase 6 é literalmente
+> `MISSING-BUMP` / `verdict: FAIL`, com `base_version` e `head_version` ambos `5.2.0` — o gate já
+> reprova, e T010–T018 existem para virá-lo. `NO-PLUGIN-CHANGE` sobrou como **código residual
+> rejeitado**: descreve a árvore em que `plugin/**` não mudou no SHA avaliado, impossível a partir de
+> `7b3c3fe`; se aparecer, é `--base-ref`/HEAD errados e é falha.
+>
+> **Limpeza tracked-only (N1-B)**: a pré-condição desta fase é
+> `git status --porcelain --untracked-files=no` **vazio**. Scratch não versionado do próprio nó —
+> sidecar de reconciliação, arquivos de controle do gauntlet, saídas de execução — não entra no gate,
+> não é achado e não é waiver. **`gauntlet-tasks-reconcile` roda depois da convergência deste nó**,
+> nunca antes de T019: não há obrigação de commitar `state.json` ou `tasks.md` antes dos gates, e
+> fazê-lo moveria o HEAD dentro da janela avaliada.
+
+- [ ] T019 [X] **No nó de gate da Phase 7** (worktree isolado criado do HEAD coordenador após a
+      convergência de **todos** os nós da Phase 6), rodar `python3 tests/validate_distribution.py` e
+      confirmar `distribution: OK` com os 8 locais coerentes em `5.2.1` **e** a nova asserção de T014
+      encontrando exatamente uma linha `## 5.2.1` em `CHANGELOG.md` (fecha FR-006/SC-004 e
+      FR-007/SC-005). Depende de T010–T018 completas **e convergidas**.
+      **Inputs comuns do nó** (declarados para manter T019–T022 no mesmo conflict component):
+      `tests/validate_distribution.py`, `tests/check_version_bump.py`, `tests/run_validators.py`.
+      Sem `[P]`.
+- [ ] T020 [X] **No mesmo nó de gate, sem commit nem merge desde T019**, rodar
       `python3 tests/check_version_bump.py --base-ref main --json` e exigir que o campo `code`
       seja **literalmente `BUMPED`**, com `verdict: PASS`, `base_version: "5.2.0"` e
       `head_version: "5.2.1"`.
-      **Ponto de partida**: antes de T010–T018, este mesmo comando devolve `MISSING-BUMP` /
+      **Ponto de partida**: antes da Phase 6, este mesmo comando devolve `MISSING-BUMP` /
       `verdict: FAIL` (`5.2.0` → `5.2.0`), porque `7b3c3fe` já alterou `plugin/**` sem bump. Ver
       `MISSING-BUMP` **depois** do bump significa que o bump não entrou no SHA avaliado — falha.
       **`NO-PLUGIN-CHANGE` é código residual rejeitado**: descreve a árvore em que `plugin/**` não
@@ -300,41 +342,46 @@ descreve).
       `--base-ref`/HEAD errados e é **falha**, nunca aprovação. Não basta conferir o exit code; a
       verificação é sobre o campo `code`. `VERSION-REGRESSION` e `VERSION-UNREADABLE` também são
       falha. Qualquer código diferente de `BUMPED` bloqueia T021/T022 e o ship (FR-008/SC-006).
-      Sequencial em relação a T019 — T019 e T020 **não** rodam em paralelo (T020 exige a árvore
-      commitada que T019 acabou de validar; ver F2 do `analysis.md`).
-- [ ] T021 [X] **No worktree coordenador da run**, rodar a suíte completa novamente:
-      `python3 tests/run_validators.py`. Confirmar exit 0 e
-      comparar a contagem de testes/validadores contra o baseline capturado em T001 — nenhuma
-      tarefa desta fase deveria alterar a contagem de testes (só valores de versão e prosa).
-      Qualquer divergência, sem exceção, é achado a investigar antes do ship — inclusive a
-      asserção nova de CHANGELOG introduzida por T014 (depende de T019–T020).
+      **Inputs comuns do nó**: `tests/validate_distribution.py`, `tests/check_version_bump.py`,
+      `tests/run_validators.py`. Sequencial em relação a T019, sem `[P]`.
+- [ ] T021 [X] **No mesmo nó de gate**, rodar a suíte completa novamente:
+      `python3 tests/run_validators.py`. Confirmar exit 0 e comparar a contagem de
+      testes/validadores contra o baseline capturado em T001 — nenhuma tarefa da Phase 6 deveria
+      alterar a contagem de testes (só valores de versão e prosa). Qualquer divergência, sem
+      exceção, é achado a investigar antes do ship — inclusive a asserção nova de CHANGELOG
+      introduzida por T014. Depende de T019–T020.
+      **Inputs comuns do nó**: `tests/validate_distribution.py`, `tests/check_version_bump.py`,
+      `tests/run_validators.py`. Sem `[P]`.
 - [ ] T022 [X] Verificação fail-closed dos dois gates de distribuição — **fecha FR-008/SC-006**
-      (plan.md, seção "Fail-Closed: `bump-gate.yml` × `ci.yml`").
-      **Pré-condições explícitas, verificadas nesta ordem e registradas literalmente**, todas
-      **dentro do worktree coordenador da run** (waves convergidos, `tasks.md` reconciliado):
-      (a) `git status --porcelain` sai **vazio** — o worktree coordenador contém só paths
-      commitados da branch, então todo o bump está commitado e convergido; com árvore suja a
-      igualdade de SHA entre as rodadas não significa igualdade de árvore avaliada, e a verificação
-      não prova o que FR-008 pede. Sujeira do workspace principal e de work items irmãos
-      (`.specify/feature.json`, bundles não versionados, atestações não commitadas) **não
-      participa** desta checagem e não é achado desta tarefa;
+      (plan.md, seção "Fail-Closed: `bump-gate.yml` × `ci.yml`"). **No mesmo nó de gate**, sem
+      commit nem merge desde T019.
+      **Pré-condições explícitas, verificadas nesta ordem e registradas literalmente**:
+      (a) `git status --porcelain --untracked-files=no` sai **vazio** — a checagem é **somente de
+      paths versionados**: todo o bump está commitado e convergido, sem modificação, adição ou
+      remoção tracked pendente. **Untracked não entra**: sidecar de reconciliação, arquivos de
+      controle do gauntlet e saídas de execução do próprio nó não são avaliados pelos gates, não
+      são achado desta tarefa e **não** funcionam como waiver da alínea (a);
       (b) `git rev-parse HEAD` registrado **antes** das duas execuções;
       (c) `check_version_bump.py --base-ref main --json` reportando `code == "BUMPED"` (T020) e
       `run_validators.py` com exit 0 (T021), ambos sobre esse mesmo HEAD;
-      (d) `git rev-parse HEAD` registrado **depois**, e **idêntico** ao de (b), com
-      `git status --porcelain` ainda vazio.
-      Qualquer divergência entre (b) e (d), qualquer sujeira em (a)/(d), ou qualquer código
-      diferente de `BUMPED` invalida as duas execuções: as duas são refeitas juntas sobre o novo
-      SHA, sem waiver — e rodar esta tarefa fora do worktree coordenador invalida a execução em vez
-      de justificar exceção. Isso não substitui a checagem em CI na PR real — `bump-gate.yml` e
-      `ci.yml` ainda precisam passar verdes na mesma revisão de topo antes do ship; uma
-      re-execução verde de um gate após nova alteração invalida a aprovação anterior do outro
-      para aquele SHA. Nenhuma escrita em `.grill/` ou `.specify/reports/` nesta tarefa — isso é
-      atestação, fora de escopo de worker.
+      (d) `git rev-parse HEAD` registrado **depois** e **idêntico** ao de (b) — idêntico *por
+      construção*, já que não há commit nem merge entre T019 e T022 neste nó —, com
+      `git status --porcelain --untracked-files=no` ainda vazio.
+      Divergência entre (b) e (d) significa que algo commitou dentro da janela avaliada e invalida
+      as duas execuções; sujeira tracked em (a)/(d) ou qualquer código diferente de `BUMPED` também
+      invalida: as duas são refeitas juntas sobre o novo SHA, sem waiver — e rodar esta tarefa fora
+      do nó de gate invalida a execução em vez de justificar exceção. Isso não substitui a checagem
+      em CI na PR real — `bump-gate.yml` e `ci.yml` ainda precisam passar verdes na mesma revisão de
+      topo antes do ship; uma re-execução verde de um gate após nova alteração invalida a aprovação
+      anterior do outro para aquele SHA. Nenhuma escrita em `.grill/` ou `.specify/reports/` nesta
+      tarefa — isso é atestação, fora de escopo de worker.
+      **Inputs comuns do nó**: `tests/validate_distribution.py`, `tests/check_version_bump.py`,
+      `tests/run_validators.py`. Sem `[P]`.
 
 **Checkpoint (fail-closed)**: FR-006/FR-007/FR-008 e SC-004/SC-005/SC-006 verificados; ambos
-os gates confirmados localmente sobre o **mesmo SHA** e a **mesma árvore limpa**, com o gate de
-bump reportando literalmente `BUMPED`.
+os gates confirmados localmente sobre o **mesmo SHA** e a mesma árvore tracked-limpa do nó de gate,
+com o gate de bump reportando literalmente `BUMPED`. **Só depois da convergência deste nó** o
+`gauntlet-tasks-reconcile` roda.
 
 ---
 
@@ -357,12 +404,17 @@ bump reportando literalmente `BUMPED`.
     segue Foundational.
   - US3 (T008): achado grave aqui (asserção por tempo em vez de contagem de chamadas) bloqueia
     a Phase 6 inteira.
-- **Polish (Phase 6)**: T010–T018 só começam com Phases 2–5 fechadas **sem achado aberto** (não
-  faz sentido bumpar a versão de uma correção ainda não validada). T019 depende de T010–T018.
-  T020 depende de T019 **e** do commit/convergência do bump (blobs commitados, não working tree).
-  T021 depende de T019–T020. T022 depende de T020 e T021 e exige árvore limpa e o mesmo HEAD nas
-  duas rodadas. **T019–T022 dependem, além disso, do local de execução**: só rodam no worktree
-  coordenador da run, com todos os waves convergidos e `tasks.md` reconciliado.
+- **Bump (Phase 6)**: T010–T018 só começam com Phases 2–5 fechadas **sem achado aberto** (não faz
+  sentido bumpar a versão de uma correção ainda não validada). São `[P]` entre si, em worktrees de
+  worker distintos. A fase fecha numa **barreira de convergência**: todos os nós commitados e
+  mergeados no HEAD do coordenador antes de qualquer tarefa da Phase 7.
+- **Gates (Phase 7)**: T019–T022 dependem da Phase 6 **inteira** convergida e rodam **todas no mesmo
+  nó** — um worktree isolado de gate criado do HEAD coordenador pós-convergência. Dentro do nó:
+  T019 → T020 → T021 → T022, estritamente sequenciais, **sem commit e sem merge entre elas**, o que
+  torna `git rev-parse HEAD` idêntico do início ao fim. T020 exige o bump commitado que T019 validou;
+  T021 compara contra o baseline de T001; T022 exige `git status --porcelain --untracked-files=no`
+  vazio e o mesmo HEAD antes/depois. `gauntlet-tasks-reconcile` é **posterior** à convergência deste
+  nó — nada de state/tasks commitados antes dos gates.
 
 ### Parallel Opportunities
 
@@ -370,10 +422,14 @@ bump reportando literalmente `BUMPED`.
 - **T005 e T006 NÃO rodam em paralelo.** Ambas medem tempo de parede; concorrência entre elas
   disputa CPU, disco e processos `git` e contamina a própria grandeza medida. São serializadas
   (T005 → T006) e por isso não levam `[P]`.
-- T010–T018 em paralelo entre si — 9 arquivos disjuntos, nenhuma dependência cruzada.
-- **T019 → T020 → T021 → T022 são estritamente sequenciais.** T020 exige o bump commitado e
-  convergido que T019 validou, T021 compara contra o baseline pós-bump, e T022 exige que T020 e
-  T021 tenham rodado sobre o mesmo HEAD com árvore limpa. Nenhuma delas leva `[P]`.
+- T010–T018 em paralelo entre si — 9 arquivos disjuntos, nenhuma dependência cruzada. É a última
+  oportunidade de paralelismo do ciclo: a Phase 7 é um nó só.
+- **T019 → T020 → T021 → T022 são estritamente sequenciais e vivem no mesmo nó.** Os três inputs
+  comuns declarados em cada uma (`tests/validate_distribution.py`, `tests/check_version_bump.py`,
+  `tests/run_validators.py`) forçam o particionador a mantê-las no mesmo conflict component, e a
+  barreira de convergência da Phase 6 garante que elas partam da árvore bumpada completa. T020 exige
+  o bump commitado que T019 validou, T021 compara contra o baseline pós-bump, e T022 exige que T020 e
+  T021 tenham rodado sobre o mesmo HEAD com a árvore tracked-limpa. **Nenhuma delas leva `[P]`.**
 
 ---
 
@@ -385,7 +441,7 @@ Task: "Auditar STATUS_TIMEOUT_SECONDS=30 em plugin/skills/grill-with-docs/script
 Task: "Auditar escopo por worktree/repositório em plugin/skills/grill-with-docs/scripts/grill_status.py"
 ```
 
-## Parallel Example: Bump de distribuição (Phase 6)
+## Parallel Example: Bump de distribuição (Phase 6 — última fase paralela)
 
 ```bash
 # T010-T018 — 9 arquivos file-disjuntos, todos [P]
@@ -419,8 +475,10 @@ Task: "Adicionar entrada ## 5.2.1 em CHANGELOG.md"
 2. US1 → SC-001 confirmado (MVP: falso positivo eliminado no caso real)
 3. US2 → SC-002 confirmado (custo não escala por item, prova estrutural)
 4. US3 → FR-004/SC-003 confirmado (regressão travada e descoberta pela suíte)
-5. Polish → bump 5.2.1, CHANGELOG (com gate no validador), distribuição, gates fail-closed sobre
-   o mesmo SHA — só depois de 1–4 fechados sem achado aberto
+5. Phase 6 → bump 5.2.1, CHANGELOG (com gate no validador) e distribuição, em paralelo — só depois
+   de 1–4 fechados sem achado aberto; a fase termina em **barreira de convergência**
+6. Phase 7 → gates fail-closed no **nó único de gate**, sobre o mesmo SHA e com limpeza tracked-only;
+   `gauntlet-tasks-reconcile` só depois que esse nó convergir
 
 ---
 
@@ -441,7 +499,9 @@ Task: "Adicionar entrada ## 5.2.1 em CHANGELOG.md"
   nenhuma tarefa deste arquivo o edita (ver `plan.md §Project Structure`).
 - Achado em T002/T003/T004/T008 é parada, não anotação: bloqueia todas as fases seguintes até a
   remediação e a reexecução limpa da tarefa.
-- T019–T022 rodam só no worktree coordenador da run, após convergência de todos os waves e
-  reconciliação de `tasks.md`; sujeira do workspace principal e de work items irmãos não participa
-  (ver "Onde as tarefas de gate rodam").
+- T019–T022 são a Phase 7 e rodam num **único nó de gate** (worktree isolado criado do HEAD
+  coordenador após a convergência integral da Phase 6), sem commit nem merge entre elas; a limpeza
+  exigida é **tracked-only** (`git status --porcelain --untracked-files=no`), e untracked scratch do
+  nó não participa, não é achado e não é waiver; `gauntlet-tasks-reconcile` vem **depois** da
+  convergência desse nó (ver "Onde as tarefas de gate rodam").
 - Pare em qualquer checkpoint para validar a story isoladamente antes de avançar.

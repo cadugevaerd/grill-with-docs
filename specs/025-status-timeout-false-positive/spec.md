@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-26
 
-**Status**: Draft
+**Status**: Ready for Implementation
 
 **Input**: User description: "Fonte exclusiva de WHAT/WHY: .grill/work-items/fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3/handoffs/FASE-001-SPECIFY-HANDOFF.md — o comando público status (JSON e Markdown) deixa de bloquear com STATUS-TIMEOUT num workspace real com múltiplos work items/worktrees, mesmo quando a projeção leva mais de 5 segundos, porque o custo por worktree deixa de crescer com o número de work items e o timeout público passa a ter margem sobre o pior caso real."
 

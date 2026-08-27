@@ -76,19 +76,24 @@
       D1 sem descrever o estado atual de forma errada.
 - [x] CHK033 A pré-condição de estado commitado (workers commitam, `converge` integra) antes do
       gate de bump está declarada, em vez de assumida? [Coverage, plan.md §Fail-Closed ↔ tasks.md
-      Phase 6 ↔ quickstart.md §4] — ampliado na 5ª revisão com o **local** de execução: T019–T022
-      rodam exclusivamente no **worktree coordenador da run**, após todos os waves convergirem e
-      `tasks.md` ser reconciliado; esse worktree contém só paths commitados da branch e sai com
-      `git status --porcelain` vazio. Declarada também a obrigação do leader de commitar os
-      artefatos relacionados antes da partition e o Execution DAG/relatório antes do primeiro
-      worker.
+      Phase 6/Phase 7 ↔ quickstart.md §4] — reescrito na 6ª revisão para a topologia real do
+      gauntlet: **Phase 6** contém só os bumps T010–T018 (`[P]`, worktrees de worker distintos) e
+      **Phase 7** contém T019–T022; a fronteira entre as duas **é** a barreira de convergência. Os
+      gates rodam num **nó único**, worktree isolado criado do HEAD coordenador após a convergência
+      integral da Phase 6, sem commit nem merge entre T019 e T022. `gauntlet-tasks-reconcile` é
+      **posterior** à convergência desse nó — removida a obrigação de commitar `state.json`/`tasks.md`
+      antes dos gates. Preservada a obrigação do leader de commitar os artefatos relacionados antes
+      da partition e o Execution DAG/relatório antes do primeiro worker.
 - [x] CHK034 A exigência de árvore limpa **e** mesmo HEAD antes/depois das duas execuções está
       escrita como pré-condição verificável, e não como expectativa? [Measurability, tasks.md T022]
-      — fechado: T022 lista (a) `git status --porcelain` vazio, (b)/(d) `git rev-parse HEAD`
-      idêntico (finding D2). Na 5ª revisão ficou explícito **de onde** essa árvore limpa vem: é
-      propriedade do worktree coordenador, e sujeira do workspace principal ou de work items irmãos
-      (`.specify/feature.json`, bundles não versionados, atestações não commitadas) **não participa**
-      da checagem nem autoriza waiver.
+      — fechado: T022 lista (a) limpeza, (b)/(d) `git rev-parse HEAD` idêntico (finding D2).
+      Precisado na 6ª revisão: a limpeza exigida é **somente tracked**
+      (`git status --porcelain --untracked-files=no` vazio), porque é isso que os gates avaliam —
+      `check_version_bump.py` decide sobre blobs commitados e
+      `validate_distribution.py`/`run_validators.py` leem paths versionados. **Untracked sidecar e
+      scratch de controle do próprio nó não participam, não são achado e não são waiver.** A
+      igualdade de HEAD entre (b) e (d) passou a ser **invariante por construção**: não há commit nem
+      merge entre T019 e T022 dentro do nó de gate.
 - [x] CHK035 O requisito de CHANGELOG (FR-007) passou a ter gate automatizado, em vez de depender
       de conferência humana? [Measurability, Spec §FR-007/SC-005 ↔ tasks.md T014] — requisito e
       tarefa declarados: `validate_distribution.py` deve exigir exatamente uma linha `## {VERSION}`
@@ -156,6 +161,36 @@
     partition, que ela será auditada por T002–T009 e que isso **não** autoriza publicação.
   - **N6** — a árvore de `plan.md §Project Structure` passou a incluir `checklists/` e
     `analysis*.md`.
+- Correções aplicadas na 6ª revisão (remediações R1/R2 e N1-A/N1-B; nenhum item novo, apenas
+  CHK033/CHK034 reescritos para casar a topologia real do gauntlet):
+  - **N1-A — nó único de gate, atrás de barreira de convergência.** A Phase 6 passou a conter
+    **somente** os bumps T010–T018 e uma **Phase 7** nova passou a conter T019–T022; a fronteira
+    entre as duas é a barreira. As quatro tarefas de gate executam **todas no mesmo nó** — um
+    worktree **isolado de gate** criado a partir do HEAD do coordenador **depois** do merge e da
+    convergência de todos os workers da Phase 6. Substitui a formulação anterior ("worktree
+    coordenador da run"), que não descrevia um nó do DAG. Aplicado em `plan.md §Fail-Closed`,
+    `tasks.md` (seção "Onde as tarefas de gate rodam", Phase 6, Phase 7, Dependencies, Parallel
+    Opportunities, Implementation Strategy, Notes) e `quickstart.md` (pré-requisitos, §4, §6).
+  - **N1-B — limpeza tracked-only.** A pré-condição virou
+    `git status --porcelain --untracked-files=no` **vazio**. Untracked sidecar e scratch de controle
+    do próprio nó **não** entram no gate, **não** são achado e **não** funcionam como waiver — os
+    gates avaliam blobs commitados e paths versionados. Aplicado em `plan.md`, `tasks.md` T022 e
+    `quickstart.md` §4/§6.
+  - **R1 — mesmo conflict component forçado por inputs declarados (A3).** Cada uma de T019–T022
+    declara os três inputs comuns `tests/validate_distribution.py`, `tests/check_version_bump.py` e
+    `tests/run_validators.py`, garantindo que o particionador não as espalhe entre nós; **nenhuma
+    leva `[P]`**, e a serialidade T019 → T020 → T021 → T022 é obrigatória. Como não há commit nem
+    merge entre elas dentro do nó, `git rev-parse HEAD` é **idêntico por construção** — a igualdade
+    exigida por T022 deixou de ser expectativa e virou invariante verificável.
+  - **R2 — ordem da reconciliação e obrigações do leader (A2).** `gauntlet-tasks-reconcile` ocorre
+    **somente depois** da convergência do nó de gate, nunca antes de T019; foi **removida** a
+    obrigação de commitar `state.json`/`tasks.md` antes dos gates, que moveria o HEAD dentro da
+    janela avaliada. Preservadas, sem mudança, as duas obrigações do leader: commitar os artefatos
+    relacionados **antes da partition** e o Execution DAG/relatório de partition **antes do primeiro
+    worker**.
+  - Escopo desta revisão: `plan.md`, `quickstart.md`, `tasks.md`, `spec.md` (Status Draft → **Ready
+    for Implementation**) e esta checklist. Os IDs T001–T022 foram preservados; nenhum código de
+    produto, `analysis.md`, `.grill/` ou work item irmão foi tocado; nenhum commit executado.
 - **Estado de marcação**: 37 de 37 itens marcados [x] com evidência real nos artefatos.
   Isso valida a qualidade dos **requisitos**, não a execução: `BUMPED` sobre o mesmo SHA
   (T020/T022) e a entrada `## 5.2.1` no `CHANGELOG.md` (T014/T018) seguem pendentes de execução

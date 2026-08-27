@@ -85,34 +85,48 @@ avaliado, o que deixou de ser possível a partir de `7b3c3fe`; se aparecer, é s
 `--base-ref`/HEAD errados e é **falha**, nunca aprovação. O único veredito aceito é literalmente
 `BUMPED`, lido do campo `code` de `check_version_bump.py --json`.
 
-**Mesmo estado de árvore.** A confirmação local dos dois gates exige `git status --porcelain`
-vazio e o mesmo `git rev-parse HEAD` antes e depois das duas execuções. Sem árvore limpa, a
-igualdade de SHA entre as rodadas não significa igualdade de árvore avaliada, e a verificação
-não prova o que FR-008 pede.
+**Mesmo estado de árvore.** A confirmação local dos dois gates exige o mesmo `git rev-parse HEAD`
+antes e depois das duas execuções, sobre árvore **tracked-limpa**. Sem isso, a igualdade de SHA
+entre as rodadas não significa igualdade de árvore avaliada, e a verificação não prova o que FR-008
+pede.
 
-**Worktree coordenador da run — onde os gates rodam.** As tarefas de gate (`tasks.md`
-T019–T022) executam **exclusivamente no worktree coordenador da run**, e só **depois de todos os
-waves da etapa `implement-parallel` convergirem** e de `tasks.md` ser **reconciliado**. Esse
-worktree contém **somente paths commitados da branch** `025-status-timeout-false-positive`; no
-momento da verificação seu `git status --porcelain` **sai vazio**. Nenhum worker roda esses gates
-dentro do próprio worktree de nó, e nenhum deles é rodado a partir do workspace principal.
+**Topologia real do gauntlet: barreira entre Phase 6 e Phase 7 (N1-A).** As tarefas de bump
+(`tasks.md` T010–T018) formam a **Phase 6**: file-disjuntas, `[P]`, despachadas em worktrees de
+worker distintos. As tarefas de gate (T019–T022) formam a **Phase 7**, e a fronteira entre as duas
+fases **é** a barreira de convergência — a Phase 7 só é despachada quando **todos** os nós de bump
+mergearem no HEAD do coordenador. Gate sobre árvore parcialmente bumpada avalia uma versão que não
+existe.
 
-**Sujeira que não participa.** O workspace principal carrega estado alheio a esta verificação —
-`.specify/feature.json` modificado, bundles não versionados de work items irmãos (por exemplo
-`fix-attestation-registry-anchor-…`), atestações e evidências ainda não commitadas. Nada disso
-existe no worktree coordenador: não suja o `git status --porcelain` avaliado nem entra no SHA
-avaliado, e portanto **não participa** da verificação de FR-008/SC-006. Rodar os gates a partir
-de um workspace principal sujo é erro de execução, não motivo de waiver — a resposta é repetir a
-verificação no worktree coordenador, nunca relaxar a pré-condição.
+**Um nó único de gate.** T019–T022 não se distribuem entre workers: as quatro rodam no **mesmo nó**,
+num worktree **isolado de gate** criado a partir do HEAD do coordenador depois dessa convergência.
+Para que o particionador as mantenha no mesmo *conflict component*, cada uma declara os **três
+inputs comuns** `tests/validate_distribution.py`, `tests/check_version_bump.py` e
+`tests/run_validators.py`, e **nenhuma leva `[P]`**. Dentro desse nó **não há commit nem merge** entre
+T019 e T022: o HEAD é imóvel por construção, e é por isso que a igualdade de `git rev-parse HEAD`
+exigida por T022 é uma invariante verificável em vez de uma coincidência a torcer.
 
-**Obrigação do leader antes de despachar.** Para que o worktree coordenador nasça limpo e todo
-worker parta da mesma árvore: (a) o leader **commita os artefatos relacionados** desta feature —
-`specs/025-status-timeout-false-positive/`, o bundle do work item
-`fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3` e as atestações das etapas
-já fechadas — **antes da partition**; (b) o leader commita o **Execution DAG e o relatório de
-partition antes do primeiro worker** ser despachado. Worker despachado sobre base que ainda não
-contém esses artefatos herda árvore divergente, e a igualdade de SHA exigida por FR-008 deixa de
-significar igualdade de árvore avaliada.
+**Limpeza é tracked-only (N1-B).** A pré-condição verificável é
+`git status --porcelain --untracked-files=no` **vazio**: nenhuma modificação, adição ou remoção
+pendente de path **versionado**. Scratch não versionado do próprio nó — sidecar de reconciliação,
+arquivos de controle do gauntlet, saídas de execução — **não entra no gate**: `check_version_bump.py`
+decide sobre blobs commitados e `validate_distribution.py`/`run_validators.py` leem paths
+versionados. Untracked, portanto, não é achado, não suja a checagem e **não funciona como waiver** da
+exigência tracked-vazio. Estado alheio do workspace principal (`.specify/feature.json` modificado,
+bundles não versionados de work items irmãos, atestações não commitadas) tampouco participa: ele não
+existe no worktree isolado de gate.
+
+**Reconciliação é posterior aos gates.** `gauntlet-tasks-reconcile` ocorre **somente depois** da
+convergência do nó de gate, nunca antes de T019. Não existe obrigação de commitar `state.json` ou
+`tasks.md` antes dos gates — fazê-lo moveria o HEAD dentro da janela avaliada e quebraria a
+invariante do parágrafo anterior.
+
+**Obrigação do leader antes de despachar.** Para que todo worker parta da mesma árvore: (a) o leader
+**commita os artefatos relacionados** desta feature — `specs/025-status-timeout-false-positive/`, o
+bundle do work item `fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3` e as
+atestações das etapas já fechadas — **antes da partition**; (b) o leader commita o **Execution DAG e
+o relatório de partition antes do primeiro worker** ser despachado. Worker despachado sobre base que
+ainda não contém esses artefatos herda árvore divergente, e a igualdade de árvore avaliada pelo nó de
+gate deixa de significar o que FR-008 pede.
 
 ## Project Structure
 

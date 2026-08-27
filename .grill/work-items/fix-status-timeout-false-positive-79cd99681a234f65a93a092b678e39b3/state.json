@@ -23,10 +23,10 @@
     },
     "attested_executions": {
       "analyze": "se-0c4039b7a277dafe674552f2ee2c80e1b1636a282cba7b155d5a206e76fbfd77",
-      "checklist": "se-6279de1561a25ab46d41df6e27909a413b878f78dddfdf93a35ae29f9e5d5cdb",
-      "plan": "se-ceb3a1efc46ce336b2fc00dfd627adc66853ec61ab2e13c98630b024b7fdea88",
-      "specify": "se-94eb0d13401da9d436776d3c6d93b318de2326d3c734a9af113acfabc7b7bd3b",
-      "tasks": "se-b2bbaf5b96a89204441780db3d31c3aa87feae63afcf59b9a5eba3c3dfae3c15"
+      "checklist": "se-4bb37cce39416baaf0bf6e4cca5122fc3e46ddeacba12c478fe385aea2df660f",
+      "plan": "se-85cb2d23380bed175a59c04f0df326545dd6d3e3ba400fa65a3512ea0182b966",
+      "specify": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a",
+      "tasks": "se-6990a54eaca6d068c79266ab75e9cd1bafd8914c2fb4059d18201940618aeddc"
     },
     "attested_outputs": {
       "analyze": {
@@ -36,27 +36,27 @@
         "step_id": "analyze"
       },
       "checklist": {
-        "output_sha256": "sha256:aee6fde7fc5964adea4524543c0dca317886ba96a0ba447214d476e273a30cb7",
+        "output_sha256": "sha256:dcfac349448e64cbcb8f850aa8ccc4780491387dbf2dd859d7fcb52f58750926",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/checklist-checklist-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
         "step_id": "checklist"
       },
       "plan": {
-        "output_sha256": "sha256:285b4a4c5724efe27eabf481e91518abb7f0197b663ed7eb2ba0f3eda8d8cd6c",
+        "output_sha256": "sha256:6791a1aee70bcee6ecf57e2a45c05f4322457ce53e4f6037cff96291b2ad2485",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/plan-plan-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-4.terminal.json",
         "step_id": "plan"
       },
       "specify": {
-        "output_sha256": "sha256:dc7b27741fa3280199c18e0aa09b7ac1b2e9adb1c6adf89dabf36f9890bede18",
+        "output_sha256": "sha256:d0105df4bcdbe5132c88c6c31040498acbcf1256754b596be9ef7c45bd3e86cf",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/specify-specify-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-4.terminal.json",
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:b41c00423775de5a1db9fbae68a28fcffd689ca131cd3ff847b21956634ac314",
+        "output_sha256": "sha256:df0cf11dd96ae4a6c4da89498eec3bddc25c09867211a6bc2b219c85327b3a36",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-4.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -271,6 +271,76 @@
         "state": "complete",
         "step": "tasks",
         "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r2.json"
+      },
+      {
+        "chain_stale": [
+          "plan",
+          "checklist",
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/spec.md",
+            "sha256": "d0105df4bcdbe5132c88c6c31040498acbcf1256754b596be9ef7c45bd3e86cf"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "status promoted after analyze remediation",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-specify-r3.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "6791a1aee70bcee6ecf57e2a45c05f4322457ce53e4f6037cff96291b2ad2485"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "gate worker topology remediation",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-plan-r3.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/checklists/release.md",
+            "sha256": "dcfac349448e64cbcb8f850aa8ccc4780491387dbf2dd859d7fcb52f58750926"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "N1 and traceability remediation",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-checklist-r2.json"
+      },
+      {
+        "chain_stale": [
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "df0cf11dd96ae4a6c4da89498eec3bddc25c09867211a6bc2b219c85327b3a36"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "split bump and gate phases with one immutable gate worker",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r3.json"
       }
     ],
     "chain_stale": [
@@ -319,6 +389,18 @@
           "step_execution_id": "se-b8fbd0d2165d64e21b4325dc88783e718df81c8e86998b351f1e13e4a16fe725",
           "step_id": "checklist",
           "superseded_by_step_execution_id": "se-6279de1561a25ab46d41df6e27909a413b878f78dddfdf93a35ae29f9e5d5cdb"
+        },
+        {
+          "attempt_id": "checklist-2",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-checklist-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:aee6fde7fc5964adea4524543c0dca317886ba96a0ba447214d476e273a30cb7",
+          "provenance": "current-generation",
+          "reason": "N1 and traceability remediation",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-2.terminal.json",
+          "step_execution_id": "se-6279de1561a25ab46d41df6e27909a413b878f78dddfdf93a35ae29f9e5d5cdb",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-4bb37cce39416baaf0bf6e4cca5122fc3e46ddeacba12c478fe385aea2df660f"
         }
       ],
       "plan": [
@@ -345,6 +427,18 @@
           "step_execution_id": "se-66b99b62d24fe97259c8b34503fad063716d18bf4f2bc7c8a18ad724da6295b1",
           "step_id": "plan",
           "superseded_by_step_execution_id": "se-ceb3a1efc46ce336b2fc00dfd627adc66853ec61ab2e13c98630b024b7fdea88"
+        },
+        {
+          "attempt_id": "plan-3",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-plan-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:285b4a4c5724efe27eabf481e91518abb7f0197b663ed7eb2ba0f3eda8d8cd6c",
+          "provenance": "current-generation",
+          "reason": "gate worker topology remediation",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-3.terminal.json",
+          "step_execution_id": "se-ceb3a1efc46ce336b2fc00dfd627adc66853ec61ab2e13c98630b024b7fdea88",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-85cb2d23380bed175a59c04f0df326545dd6d3e3ba400fa65a3512ea0182b966"
         }
       ],
       "specify": [
@@ -371,6 +465,18 @@
           "step_execution_id": "se-4b2ada6f5d832ef1315a4e53ded23910f1713513b3c2d1e703cd99fb3834838a",
           "step_id": "specify",
           "superseded_by_step_execution_id": "se-94eb0d13401da9d436776d3c6d93b318de2326d3c734a9af113acfabc7b7bd3b"
+        },
+        {
+          "attempt_id": "specify-3",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-specify-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:dc7b27741fa3280199c18e0aa09b7ac1b2e9adb1c6adf89dabf36f9890bede18",
+          "provenance": "current-generation",
+          "reason": "status promoted after analyze remediation",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-3.terminal.json",
+          "step_execution_id": "se-94eb0d13401da9d436776d3c6d93b318de2326d3c734a9af113acfabc7b7bd3b",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a"
         }
       ],
       "tasks": [
@@ -397,6 +503,18 @@
           "step_execution_id": "se-70de82943b5e52072639249522bf15946b1abe7c1c5075f1487fd6174f38e69e",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-b2bbaf5b96a89204441780db3d31c3aa87feae63afcf59b9a5eba3c3dfae3c15"
+        },
+        {
+          "attempt_id": "tasks-3",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:b41c00423775de5a1db9fbae68a28fcffd689ca131cd3ff847b21956634ac314",
+          "provenance": "current-generation",
+          "reason": "split bump and gate phases with one immutable gate worker",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-3.terminal.json",
+          "step_execution_id": "se-b2bbaf5b96a89204441780db3d31c3aa87feae63afcf59b9a5eba3c3dfae3c15",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-6990a54eaca6d068c79266ab75e9cd1bafd8914c2fb4059d18201940618aeddc"
         }
       ]
     },
