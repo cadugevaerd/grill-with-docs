@@ -1,0 +1,23 @@
+{
+  "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
+  "run_id": "run-133216f8532a269f73713b57",
+  "wave_id": "wave-0004",
+  "node_id": "p04-a",
+  "task_ids": ["T007"],
+  "tasks": [
+    {
+      "id": "T007",
+      "description": "Rodar isoladamente tests/validate_status_contract.py::StatusPublicContract::test_live_git_state_is_resolved_once_per_worktree_not_per_item e confirmar prova estrutural de SC-002 (live() chamado uma vez por worktree, não por item)",
+      "command": "python3 -m unittest tests.validate_status_contract.StatusPublicContract.test_live_git_state_is_resolved_once_per_worktree_not_per_item -v",
+      "exit_code": 0,
+      "result": "PASS",
+      "evidence": [
+        "python3 -m unittest ...test_live_git_state_is_resolved_once_per_worktree_not_per_item -v -> ok (Ran 1 test in 0.750s, OK)",
+        "corpo do teste confirmado por leitura direta (tests/validate_status_contract.py:128-137): cria work-a e work-b no mesmo worktree, faz mock.patch.object(module,\"live\",wraps=module.live), chama build_status uma vez, e assevera observed.assert_called_once_with(self.r.resolve()) com len(payload['work_items'])==2 — prova por contagem de chamadas, não por tempo",
+        "suíte completa: python3 tests/validate_status_contract.py -> Ran 52 tests in 28.627s, OK (52/52, esperado bate)"
+      ]
+    }
+  ],
+  "findings": [],
+  "completed": ["T007"]
+}
