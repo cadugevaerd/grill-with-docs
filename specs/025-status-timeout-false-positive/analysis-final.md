@@ -1,7 +1,21 @@
 # Análise final — false positive de STATUS-TIMEOUT
 
-**HEAD analisado**: `660180a`
+**HEAD analisado**: `a61ac8d` (pós-revisão autorizada de T005/T006)
 **Veredito**: `READY-FOR-PARTITION`
+
+## Revisão T005/T006 (achado de implementação)
+
+`EXIT_BLOCKED=2` passa a ser aceito em T005/T006 **somente** quando acompanhado de payload
+JSON (T005) ou tabela Markdown (T006) válidos refletindo estado real de work items bloqueados
+— distinto de erro de uso do `argparse` (positional `root` ausente), que sai 2 **sem** payload
+e continua sendo achado. Confirmado no código real: `EXIT_BLOCKED = 2`
+(`grill_workspace.py:30`); `status_command`/`status_markdown_command` propagam
+`process.returncode` do subprocesso `grill_status.py` (sempre com payload/tabela), enquanto o
+argparse do `grill_workspace.py` falha **antes** de invocar `status_command`, sem payload
+algum. FR-001/SC-001 exigem só ausência de `STATUS-TIMEOUT` dentro do timeout público — não
+exigem exit 0 estrito — logo a mudança não afrouxa nenhum requisito. Sem conflito em
+`contracts/grill-status-v1.md`, `quickstart.md` ou `checklists/`. Fail-closed preservado:
+achado continua obrigatório para exit-2-sem-payload.
 
 ## Evidência executada
 
@@ -17,10 +31,13 @@
 
 - CRITICAL: 0.
 - HIGH: 0.
-- MEDIUM: 1. Dois trechos residuais atribuem o defer de T017–T018 aos arquivos raiz; tecnicamente, o defer é provocado pelo path Evidence Boundary. Não bloqueia: o relatório real confirma o defer e o DAG correto.
+- MEDIUM: 1 (herdado, não relacionado à revisão T005/T006). Dois trechos residuais atribuem o defer de T017–T018 aos arquivos raiz; tecnicamente, o defer é provocado pelo path Evidence Boundary. Não bloqueia: o relatório real confirma o defer e o DAG correto.
 
 ## Rastreabilidade
 
-FR-001–FR-008 e SC-001–SC-006 possuem cobertura completa em T001–T022. Os gates de distribuição permanecem fail-closed e executam sobre um único SHA tracked-clean.
+FR-001–FR-008 e SC-001–SC-006 possuem cobertura completa em T001–T022, inclusive após a revisão
+de T005/T006 (a distinção EXIT_BLOCKED=2-com-payload × argparse-exit-2-sem-payload não altera
+mapeamento de nenhum FR/SC). Os gates de distribuição permanecem fail-closed e executam sobre um
+único SHA tracked-clean.
 
 **READY-FOR-PARTITION**
