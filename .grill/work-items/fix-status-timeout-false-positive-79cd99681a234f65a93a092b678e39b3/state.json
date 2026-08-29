@@ -28,6 +28,7 @@
       "implement-parallel": "se-bc05691bbc7204b9fe72ca711d550d5059659969bf8a3627b6d6be90c7b2f594",
       "partition": "se-10da1b0f29345dc14241fcfeed1a7fc28c7f0eccbd7dc59d0fdbc3e730f683fd",
       "plan": "se-a35216f6e24baacae7cba5383017a99cfaadb3a7f3f8f26d932582a3c04084f4",
+      "review": "se-853ca24764b4981f4fa82f34112df802f0c72070f46c8becc4857d58cb6fecde",
       "specify": "se-cb523a70bcbd48d351896342319c009619efe622f7927130c9a99add54f00461",
       "tasks": "se-552f2a4263922111255871e789c7b4d4a4d5605dece1a83e0734f03da8a5ce4c",
       "verify": "se-058cd0e1f43161119cd49fe57ec7ac773297ff077b20c967a4e160096ad222cc"
@@ -68,6 +69,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/plan-plan-7.terminal.json",
         "step_id": "plan"
+      },
+      "review": {
+        "output_sha256": "sha256:26d2fbca21af3011579b00ec8e88b8f06e28423e14fe63cafbcb365e15f7dbda",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "step_id": "review"
       },
       "specify": {
         "output_sha256": "sha256:6b006be1bafecd050c934c1383588fc9fa960d9c540cbce2ffe4df3d66915197",
@@ -712,10 +719,29 @@
         "reason": "VERIFY PASS; fingerprint stable; distribution, BUMPED, and 1335-test suite passed",
         "state": "complete",
         "step": "verify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "official technical review started after fresh VERIFY PASS",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/review.md",
+            "sha256": "26d2fbca21af3011579b00ec8e88b8f06e28423e14fe63cafbcb365e15f7dbda"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "REVIEW APPROVE; no Critical or Important issues; fingerprint matches Verify",
+        "state": "complete",
+        "step": "review"
       }
     ],
     "chain_stale": [],
-    "current_step": "review",
+    "current_step": "ship",
     "execution_branch": "025-status-timeout-false-positive",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -739,7 +765,7 @@
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
-      "review": "pending",
+      "review": "complete",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
