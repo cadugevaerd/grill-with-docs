@@ -24,6 +24,7 @@
     "attested_executions": {
       "analyze": "se-7b9f6745e05567ccb00f372dbaaed93b1deb0d4284d2f83ae5615c54bdf44593",
       "checklist": "se-3834085e3ed3f0d9ad8bc03fc74fc55e44f54cb7193773a7ede19c4e51658e66",
+      "implement-parallel": "se-bc05691bbc7204b9fe72ca711d550d5059659969bf8a3627b6d6be90c7b2f594",
       "partition": "se-10da1b0f29345dc14241fcfeed1a7fc28c7f0eccbd7dc59d0fdbc3e730f683fd",
       "plan": "se-a35216f6e24baacae7cba5383017a99cfaadb3a7f3f8f26d932582a3c04084f4",
       "specify": "se-cb523a70bcbd48d351896342319c009619efe622f7927130c9a99add54f00461",
@@ -41,6 +42,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-6.terminal.json",
         "step_id": "checklist"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:2d8c1892a7ca0ce7ea3f86933a9ec04b44325c0cda47b9cc6653c4b24c62e7c4",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "step_id": "implement-parallel"
       },
       "partition": {
         "output_sha256": "sha256:b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00",
@@ -641,10 +648,22 @@
         "state": "complete",
         "step": "partition",
         "supersedes": ".grill/attestations/fix-status-timeout-false-positive-partition-r2.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "2d8c1892a7ca0ce7ea3f86933a9ec04b44325c0cda47b9cc6653c4b24c62e7c4"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "run-e8b9ef83ec5732a739c919ac complete; nine workers converged; T001-T022 reconciled; 5.3.1 gates PASS",
+        "state": "complete",
+        "step": "implement-parallel"
       }
     ],
     "chain_stale": [],
-    "current_step": "implement-parallel",
+    "current_step": "converge",
     "execution_branch": "025-status-timeout-false-positive",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -665,7 +684,7 @@
       "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
-      "implement-parallel": "in-progress",
+      "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
       "review": "pending",
