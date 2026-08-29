@@ -96,7 +96,7 @@ executou/commitou T017–T018. Regras, sem exceção:
 
 **Purpose**: Confirmar o ponto de partida real antes de qualquer mudança de versão/distribuição.
 
-- [ ] T001 [X] Rodar `tests/run_validators.py` via `python3` a partir da raiz do repo e registrar o resultado
+- [X] T001 [X] Rodar `tests/run_validators.py` via `python3` a partir da raiz do repo e registrar o resultado
       literal (exit code, contagem de testes, quaisquer falhas). Não assumir "vai passar" — este é
       o baseline real após o merge `007b781`, que contém a correção de
       `grill_status.py`/`grill_workspace.py` e ainda **não** tem o bump desta feature. Esperado no
@@ -119,13 +119,13 @@ real, que o código **commitado em `7b3c3fe`** faz o que o ADR-0001/data-model.m
 o código preexistente como candidato, não aceitar de cabeça. O fato de ele já estar commitado em
 `7b3c3fe` é conveniência de distribuição para os workers, **não** um atestado de correção.
 
-- [ ] T002 [X] Ler `plugin/skills/grill-with-docs/scripts/grill_workspace.py` e confirmar, por
+- [X] T002 [X] Ler `plugin/skills/grill-with-docs/scripts/grill_workspace.py` e confirmar, por
       inspeção direta (não grep solto), que existe uma constante de módulo
       `STATUS_TIMEOUT_SECONDS = 30` e que **ambos** `status_command` e `status_markdown_command` a
       usam como `timeout=` na chamada que invoca `grill_status.py` (linhas atuais ~3760, ~3777,
       ~3804). Se o valor não for exatamente `30` ou se algum dos dois comandos não a referenciar,
       registrar como achado — não corrigir silenciosamente nesta tarefa.
-- [ ] T003 [X] Ler `plugin/skills/grill-with-docs/scripts/grill_status.py` e confirmar, por
+- [X] T003 [X] Ler `plugin/skills/grill-with-docs/scripts/grill_status.py` e confirmar, por
       inspeção direta:
       (a) `local_branches` é resolvido **uma vez** em `build_status()` via
       `git for-each-ref --format=%(refname:short) refs/heads`, antes do laço de worktrees;
@@ -137,7 +137,7 @@ o código preexistente como candidato, não aceitar de cabeça. O fato de ele j�
       spawnar `git rev-parse --verify` por item.
       Documentar qualquer desvio encontrado em vez de assumir que o data-model.md já está refletido
       corretamente no código.
-- [ ] T004 [X] Validar `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, `plugin/skills/grill-with-docs/scripts/grill_status.py` e `tests/validate_status_contract.py` rodando `python3 -m unittest tests.validate_status_contract -v` isolado (sem o
+- [X] T004 [X] Validar `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, `plugin/skills/grill-with-docs/scripts/grill_status.py` e `tests/validate_status_contract.py` rodando `python3 -m unittest tests.validate_status_contract -v` isolado (sem o
       restante da suíte) e confirmar que **todos** os casos passam, incluindo
       `test_live_git_state_is_resolved_once_per_worktree_not_per_item`. Depende de T002 e T003
       confirmarem a forma do código antes de rodar o teste sobre ele.
@@ -177,7 +177,7 @@ timeout público de 30s.
 > (`status_parser.add_argument("root")`). Omiti-lo faz o `argparse` sair com código 2 antes de
 > medir coisa alguma. Rodar da raiz do repositório, passando `.`.
 
-- [ ] T005 [US1] Medir com `plugin/skills/grill-with-docs/scripts/grill_workspace.py` o tempo de parede real do formato JSON contra a árvore real do
+- [X] T005 [US1] Medir com `plugin/skills/grill-with-docs/scripts/grill_workspace.py` o tempo de parede real do formato JSON contra a árvore real do
       repositório (não fixture sintética), **da raiz do repo**:
       `time python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py status .`
       Confirmar que o processo produziu payload JSON válido e terminou com exit code `0` ou com
@@ -188,7 +188,7 @@ timeout público de 30s.
       sob 30s (referência: 10,56s medidos em
       `.grill/evidence/grill-status-timeout-debug-report.md`). Se o tempo se aproximar de 30s,
       registrar como achado a revalidar antes do ship (research.md, "Verificação — timing real").
-- [ ] T006 [US1] **Depois de T005 terminar**, medir com `plugin/skills/grill-with-docs/scripts/grill_workspace.py` o tempo de parede real do
+- [X] T006 [US1] **Depois de T005 terminar**, medir com `plugin/skills/grill-with-docs/scripts/grill_workspace.py` o tempo de parede real do
       formato Markdown contra a mesma árvore real:
       `time python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py status . --format markdown`
       Confirmar exit code `0` ou `EXIT_BLOCKED=2` quando houver tabela Markdown válida refletindo
@@ -208,7 +208,7 @@ timeout público de 30s.
 **Independent Test** (spec.md): rodar o status num worktree único com múltiplos work items e
 confirmar que o custo não cresce proporcionalmente à quantidade de itens.
 
-- [ ] T007 [US2] Rodar isoladamente o caso de `tests/validate_status_contract.py`:
+- [X] T007 [US2] Rodar isoladamente o caso de `tests/validate_status_contract.py`:
       `python3 -m unittest tests.validate_status_contract.StatusPublicContract.test_live_git_state_is_resolved_once_per_worktree_not_per_item -v`
       Confirmar PASS e que a asserção `observed.assert_called_once_with(self.r.resolve())` se
       sustenta com **dois** work items no mesmo worktree (`work-a`, `work-b`) — ou seja, `live()` é
@@ -228,14 +228,14 @@ voltar a bloquear workspaces reais.
 **Independent Test** (spec.md): confirmar que existe um teste dedicado que reprova a regressão de
 custo por item, e que ele roda como parte da suíte padrão (não é um teste órfão manual).
 
-- [ ] T008 [US3] Ler `tests/validate_status_contract.py:100-109`
+- [X] T008 [US3] Ler `tests/validate_status_contract.py:100-109`
       (`test_live_git_state_is_resolved_once_per_worktree_not_per_item`) e confirmar que a asserção
       trava **contagem de chamadas** ao probe (`mock.patch.object(module, "live", wraps=module.live)`
       + `assert_called_once_with`), não tempo decorrido. Documentar explicitamente essa
       característica — é o que torna o teste determinístico e imune a CI lento/rápido
       (research.md, Decisão 3). Se o teste medisse apenas `elapsed < N`, registrar como achado
       grave (o teste não cumpriria FR-004).
-- [ ] T009 [US3] Confirmar em `tests/run_validators.py` que ele descobre `tests/validate_status_contract.py`
+- [X] T009 [US3] Confirmar em `tests/run_validators.py` que ele descobre `tests/validate_status_contract.py`
       automaticamente pelo glob `validate_*.py` (ler o padrão de descoberta em
       `tests/run_validators.py`) — ou seja, o teste de regressão roda em toda execução da suíte
       completa (`python3 tests/run_validators.py`) sem registro manual adicional, fechando FR-004
@@ -264,11 +264,11 @@ descreve).
 > Phase 6 e Phase 7 **é** a barreira de convergência: gate sobre árvore parcialmente bumpada avalia
 > uma versão que não existe. Nenhuma tarefa de gate roda dentro de um worktree de worker de bump.
 
-- [ ] T010 [P] [X] Atualizar `"version": "5.3.0"` → `"version": "5.3.1"` em `plugin/.claude-plugin/plugin.json`
-- [ ] T011 [P] [X] Atualizar `"version": "5.3.0"` → `"version": "5.3.1"` em `plugin/.codex-plugin/plugin.json`
-- [ ] T012 [P] [X] Atualizar `plugins[0].version` de `"5.3.0"` → `"5.3.1"` em `.claude-plugin/marketplace.json`
-- [ ] T013 [P] [X] Atualizar `plugins[0].version` de `"5.3.0"` → `"5.3.1"` em `.agents/plugins/marketplace.json`
-- [ ] T014 [P] [X] Em `tests/validate_distribution.py`, duas mudanças no mesmo arquivo
+- [X] T010 [P] [X] Atualizar `"version": "5.3.0"` → `"version": "5.3.1"` em `plugin/.claude-plugin/plugin.json`
+- [X] T011 [P] [X] Atualizar `"version": "5.3.0"` → `"version": "5.3.1"` em `plugin/.codex-plugin/plugin.json`
+- [X] T012 [P] [X] Atualizar `plugins[0].version` de `"5.3.0"` → `"5.3.1"` em `.claude-plugin/marketplace.json`
+- [X] T013 [P] [X] Atualizar `plugins[0].version` de `"5.3.0"` → `"5.3.1"` em `.agents/plugins/marketplace.json`
+- [X] T014 [P] [X] Em `tests/validate_distribution.py`, duas mudanças no mesmo arquivo
       (portanto uma única tarefa, sem conflito com as demais `[P]`):
       (a) atualizar a constante `VERSION = "5.3.0"` → `VERSION = "5.3.1"`;
       (b) **estender o validador para travar o CHANGELOG** (fecha C1 do `analysis.md`): antes do
@@ -278,10 +278,10 @@ descreve).
       dependeriam de conferência humana e nenhum gate reprovaria um ship sem entrada de CHANGELOG.
       A asserção casa a própria constante `VERSION`, então o próximo bump reprova sozinho se o
       CHANGELOG não acompanhar.
-- [ ] T015 [P] [X] Atualizar em `plugin/skills/grill-with-docs/SKILL.md` o heading `# Grill with Docs v5.3.0` → `# Grill with Docs v5.3.1`
-- [ ] T016 [P] [X] Atualizar em `plugin/skills/grill-with-docs/references/session-protocol.md` o heading `# Protocolo de sessão v5.3.0` → `# Protocolo de sessão v5.3.1`
-- [ ] T017 [X] Leader: atualizar `README.md` para `**v5.3.1 · MIT**` e registrar T017 em `.specify/reports/status-timeout-bump-leader.md`
-- [ ] T018 [X] Leader: adicionar `## 5.3.1` em `CHANGELOG.md` e registrar T018 em `.specify/reports/status-timeout-bump-leader.md`,
+- [X] T015 [P] [X] Atualizar em `plugin/skills/grill-with-docs/SKILL.md` o heading `# Grill with Docs v5.3.0` → `# Grill with Docs v5.3.1`
+- [X] T016 [P] [X] Atualizar em `plugin/skills/grill-with-docs/references/session-protocol.md` o heading `# Protocolo de sessão v5.3.0` → `# Protocolo de sessão v5.3.1`
+- [X] T017 [X] Leader: atualizar `README.md` para `**v5.3.1 · MIT**` e registrar T017 em `.specify/reports/status-timeout-bump-leader.md`
+- [X] T018 [X] Leader: adicionar `## 5.3.1` em `CHANGELOG.md` e registrar T018 em `.specify/reports/status-timeout-bump-leader.md`,
       descrevendo em prosa, no mesmo estilo das entradas anteriores: o falso positivo de
       `STATUS-TIMEOUT` corrigido, o escopo dos probes Git movido de por-work-item para
       por-worktree/repositório, e o timeout público subindo de 5s para 30s (FR-007/SC-005).
@@ -326,7 +326,7 @@ vez de coincidência.
 > nunca antes de T019: não há obrigação de commitar `state.json` ou `tasks.md` antes dos gates, e
 > fazê-lo moveria o HEAD dentro da janela avaliada.
 
-- [ ] T019 [X] No nó único com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, validar distribuição após a
+- [X] T019 [X] No nó único com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, validar distribuição após a
       convergência de **todos** os nós da Phase 6), rodar `python3 tests/validate_distribution.py` e
       confirmar `distribution: OK` com os 8 locais coerentes em `5.3.1` **e** a nova asserção de T014
       encontrando exatamente uma linha `## 5.3.1` em `CHANGELOG.md` (fecha FR-006/SC-004 e
@@ -334,7 +334,7 @@ vez de coincidência.
       **Inputs comuns do nó** (declarados para manter T019–T022 no mesmo conflict component):
       `tests/validate_distribution.py`, `tests/check_version_bump.py`, `tests/run_validators.py`.
       Sem `[P]`.
-- [ ] T020 [X] No mesmo nó com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, sem commit nem merge desde T019, rodar
+- [X] T020 [X] No mesmo nó com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, sem commit nem merge desde T019, rodar
       `python3 tests/check_version_bump.py --base-ref main --json` e exigir que o campo `code`
       seja **literalmente `BUMPED`**, com `verdict: PASS`, `base_version: "5.3.0"` e
       `head_version: "5.3.1"`.
@@ -348,7 +348,7 @@ vez de coincidência.
       falha. Qualquer código diferente de `BUMPED` bloqueia T021/T022 e o ship (FR-008/SC-006).
       **Inputs comuns do nó**: `tests/validate_distribution.py`, `tests/check_version_bump.py`,
       `tests/run_validators.py`. Sequencial em relação a T019, sem `[P]`.
-- [ ] T021 [X] No mesmo nó com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, rodar a suíte completa novamente:
+- [X] T021 [X] No mesmo nó com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, rodar a suíte completa novamente:
       `python3 tests/run_validators.py`. Confirmar exit 0 e comparar a contagem de
       testes/validadores contra o baseline capturado em T001 — nenhuma tarefa da Phase 6 deveria
       alterar a contagem de testes (só valores de versão e prosa). Qualquer divergência, sem
@@ -356,7 +356,7 @@ vez de coincidência.
       introduzida por T014. Depende de T019–T020.
       **Inputs comuns do nó**: `tests/validate_distribution.py`, `tests/check_version_bump.py`,
       `tests/run_validators.py`. Sem `[P]`.
-- [ ] T022 [X] Com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, verificar fail-closed e fechar FR-008 e SC-006
+- [X] T022 [X] Com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, verificar fail-closed e fechar FR-008 e SC-006
       (plan.md, seção "Fail-Closed: `bump-gate.yml` × `ci.yml`"). **No mesmo nó de gate**, sem
       commit nem merge desde T019.
       **Pré-condições explícitas, verificadas nesta ordem e registradas literalmente**:
