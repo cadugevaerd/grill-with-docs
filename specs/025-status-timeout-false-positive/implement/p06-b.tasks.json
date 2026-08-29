@@ -1,27 +1,27 @@
 {
   "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
-  "run_id": "run-133216f8532a269f73713b57",
+  "run_id": "run-e8b9ef83ec5732a739c919ac",
   "wave_id": "wave-0006",
   "node_id": "p06-b",
   "task_ids": ["T011", "T014"],
   "tasks": [
     {
       "id": "T011",
-      "description": "Atualizar \"version\": \"5.2.0\" -> \"5.2.1\" em plugin/.codex-plugin/plugin.json",
+      "description": "Retargetar \"version\": \"5.3.0\" -> \"5.3.1\" em plugin/.codex-plugin/plugin.json",
       "result": "PASS",
       "evidence": [
-        "plugin/.codex-plugin/plugin.json:3 -- \"version\": \"5.2.1\""
+        "plugin/.codex-plugin/plugin.json:3 -- \"version\": \"5.3.1\""
       ]
     },
     {
       "id": "T014",
-      "description": "Em tests/validate_distribution.py: (a) VERSION 5.2.0 -> 5.2.1; (b) travar assert de CHANGELOG.md exigindo exatamente uma linha '## {VERSION}' antes do print distribution: OK",
+      "description": "Em tests/validate_distribution.py: retargetar VERSION 5.3.0 -> 5.3.1, mantendo a asserção que exige exatamente uma linha '## {VERSION}' em CHANGELOG.md",
       "result": "PASS",
       "evidence": [
-        "tests/validate_distribution.py:8 -- VERSION = \"5.2.1\"",
-        "tests/validate_distribution.py:42-44 -- nova asserção lê CHANGELOG.md e exige len(changelog_headings) == 1 para a linha '## 5.2.1', mensagem nomeia arquivo e versão esperada",
-        "python3 tests/validate_distribution.py -- AssertionError na linha 19 (codex[version] == claude[version] == VERSION), esperado: plugin/.claude-plugin/plugin.json (T010, nó p06-a) ainda não convergido nesta árvore parcial; comportamento fail-closed correto antes da barreira de convergência da Phase 6",
-        "CHANGELOG.md não possui ainda '## 5.2.1' -- entrada é responsabilidade do leader (T018); a asserção nova está pronta para reprovar caso T018 não seja cumprida"
+        "tests/validate_distribution.py:8 -- VERSION = \"5.3.1\"",
+        "tests/validate_distribution.py:41-43 -- asserção existente preservada: len(changelog_headings) == 1 para a linha '## 5.3.1'",
+        "python3 tests/validate_distribution.py -- AssertionError na linha 19 (codex[version] == claude[version] == VERSION), esperado: plugin/.claude-plugin/plugin.json (outro nó) ainda não convergido nesta árvore parcial; comportamento fail-closed correto antes da barreira de convergência",
+        "CHANGELOG.md não possui ainda '## 5.3.1' -- entrada é responsabilidade do leader; asserção pronta para reprovar caso não seja cumprida"
       ]
     }
   ],
@@ -30,7 +30,7 @@
     "command": "python3 tests/validate_distribution.py",
     "exit_code": 1,
     "status": "EXPECTED_FAIL_PARTIAL_TREE",
-    "note": "Falha esperada: nó isolado só possui o bump de T011/T014; T010/T012/T013/T015/T016/T017/T018 convergem em outros nós/leader. Veredito final só é válido na Phase 7 (T019-T022), sobre a árvore integralmente convergida."
+    "note": "Falha esperada: nó isolado só possui o bump de T011/T014 (5.3.0 -> 5.3.1). Demais paths de bump convergem em outros nós/leader. Veredito final só é válido sobre a árvore integralmente convergida."
   },
   "completed": ["T011", "T014"]
 }
