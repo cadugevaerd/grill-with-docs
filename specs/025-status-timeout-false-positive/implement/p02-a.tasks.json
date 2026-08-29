@@ -1,6 +1,6 @@
 {
   "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
-  "run_id": "run-133216f8532a269f73713b57",
+  "run_id": "run-e8b9ef83ec5732a739c919ac",
   "wave_id": "wave-0002",
   "node_id": "p02-a",
   "task_ids": ["T002", "T003", "T004"],
@@ -10,9 +10,9 @@
       "description": "Auditar grill_workspace.py: STATUS_TIMEOUT_SECONDS=30 usada por status_command e status_markdown_command",
       "result": "PASS",
       "evidence": [
-        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3760 -- STATUS_TIMEOUT_SECONDS = 30",
-        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3777 -- status_command() timeout=STATUS_TIMEOUT_SECONDS",
-        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3804 -- status_markdown_command() timeout=STATUS_TIMEOUT_SECONDS"
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3837 -- STATUS_TIMEOUT_SECONDS = 30",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3854 -- status_command() timeout=STATUS_TIMEOUT_SECONDS",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3881 -- status_markdown_command() timeout=STATUS_TIMEOUT_SECONDS"
       ]
     },
     {
@@ -31,13 +31,12 @@
       "description": "Rodar python3 -m unittest tests.validate_status_contract -v isolado; confirmar cobertura nominal do schema grill-status/v1 e dos códigos STATUS-TIMEOUT, STATUS-INVALID-OUTPUT, STATUS-SCHEMA, WORK-ITEM-MISSING",
       "result": "PASS",
       "evidence": [
-        "python3 -m unittest tests.validate_status_contract -v -- Ran 52 tests, OK",
+        "python3 -m unittest tests.validate_status_contract -v -- Ran 52 tests in 30.581s, OK",
         "test_live_git_state_is_resolved_once_per_worktree_not_per_item -- ok",
-        "schema grill-status/v1 -- test_core_entrypoint_zero_items_exact_schema (linha 37) e os 3 testes novos abaixo",
-        "STATUS-TIMEOUT -- test_status_command_timeout_returns_status_timeout (adicionado nesta tarefa)",
-        "STATUS-INVALID-OUTPUT -- test_status_command_invalid_output_returns_status_invalid_output (adicionado nesta tarefa)",
-        "STATUS-SCHEMA -- test_status_command_non_dict_payload_returns_status_schema (adicionado nesta tarefa)",
-        "WORK-ITEM-MISSING -- test_missing_work_id_is_one_json_exit1 (pré-existente)"
+        "STATUS-TIMEOUT -- test_status_command_timeout_returns_status_timeout",
+        "STATUS-INVALID-OUTPUT -- test_status_command_invalid_output_returns_status_invalid_output",
+        "STATUS-SCHEMA -- test_status_command_non_dict_payload_returns_status_schema",
+        "WORK-ITEM-MISSING -- test_missing_work_id_is_one_json_exit1 (tests/validate_status_contract.py:95)"
       ]
     }
   ],
