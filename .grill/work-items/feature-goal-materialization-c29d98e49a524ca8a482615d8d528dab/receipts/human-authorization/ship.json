@@ -1,0 +1,8 @@
+{
+  "schema": "human-authorization/v1",
+  "scope": "ship",
+  "decision": "APPROVED",
+  "authorized_by": "carlos.araujo@civilmaster.com.br",
+  "receipt_ref": "specs/025-goal-materialization/review.md",
+  "content_sha256": "sha256:47308e946775defdca7fd2de9b7c289016b13f89f832c699bfd121a34037eead"
+}

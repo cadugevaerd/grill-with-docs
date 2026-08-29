@@ -1,0 +1,38 @@
+{
+  "node_id": "p06-serial",
+  "feature": "025-goal-materialization",
+  "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
+  "run": "run-aab4cf5224dbb4cbf563ba17",
+  "executed_by": "leader",
+  "deferred_reason": "T039/T040 escrevem README.md e CHANGELOG.md, fora do grant de qualquer nó; T041/T042 só têm sentido depois do merge dos oito lugares. partition-report já os declarava unmapped_task_ids.",
+  "completed": [
+    "T039",
+    "T040",
+    "T041",
+    "T042",
+    "T043"
+  ],
+  "tasks_completed": [
+    "T039",
+    "T040",
+    "T041",
+    "T042",
+    "T043"
+  ],
+  "result": {
+    "T039": "README.md heading **v5.2.0 -> **v5.3.0",
+    "T040": "CHANGELOG.md: entrada 5.3.0 com a fixação do goal.md no init e o validador novo",
+    "T041": "python3 tests/validate_distribution.py -> 'distribution: OK', exit 0, versão idêntica nos oito lugares",
+    "T042": "python3 tests/run_validators.py -> ver campo suite_result",
+    "T043": "Cenários 1 a 5 do quickstart executados em /tmp, saída registrada no CHANGELOG"
+  },
+  "quickstart_evidence": {
+    "C1": "CREATED, version v1, sha256 af97e289..., hash payload == disco == state.json",
+    "C2": "REUSED, mesmo sha256, mtime e tamanho inalterados, um único goal.md",
+    "C3": "PRESERVED, reason \"human document\", sha256sum -c OK, nenhum arquivo extra, version ausente",
+    "C4": "BLOCKED GOAL-UNAVAILABLE \"unsafe target\", alvo do symlink intacto",
+    "C5": "PRESERVED, goal.md com 0 bytes"
+  },
+  "suite_result": "pendente-no-momento-da-escrita",
+  "status": "completed"
+}

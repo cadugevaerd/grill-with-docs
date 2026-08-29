@@ -1,0 +1,58 @@
+{
+  "feature": "027-reconcile-scope-succession",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/027-reconcile-scope-succession/implement/p01-a.tasks.json"
+      ],
+      "id": "p01-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a"
+      ],
+      "files": [
+        "specs/027-reconcile-scope-succession/implement/p02-a.tasks.json",
+        "tests/validate_workspace_contract.py"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "specs/027-reconcile-scope-succession/implement/p02-b.tasks.json",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p02-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "specs/027-reconcile-scope-succession/implement/p02-c.tasks.json"
+      ],
+      "id": "p02-c",
+      "parallel": true,
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v1"
+}

@@ -82,6 +82,7 @@ verificar que ela reprova apontando a parte ausente.
 - O arquivo tem as partes exigidas mas em ordem diferente: o contrato não fixa ordem; presença basta.
 - Duas criações concorrentes no mesmo projeto: a segunda encontra o arquivo já criado pela primeira e reporta reuso, sem corromper nem duplicar.
 - O projeto de destino não permite escrita na raiz: a criação falha nomeando o impedimento, e não segue como se tivesse fixado.
+- Existe na raiz um **diretório** com o nome do documento: a criação não o remove nem escreve dentro dele; falha nomeando o impedimento, como qualquer outro destino que não é arquivo regular.
 - O conjunto de partes exigidas é alterado sem mudar o marcador de versão: todo documento já materializado passa a divergir de uma vez, sem caminho de migração — por isso mudar o conjunto exige marcador novo.
 
 ## Requirements *(mandatory)*
@@ -91,14 +92,14 @@ verificar que ela reprova apontando a parte ausente.
 - **FR-001**: A criação de work item MUST fixar o documento na raiz do projeto de destino.
 - **FR-002**: A fixação MUST NOT sobrescrever arquivo existente, em nenhuma circunstância.
 - **FR-003**: A fixação MUST reportar o estado do documento em três valores distinguíveis sem interpretar prosa: recém-criado, reusado e preservado por divergência.
-- **FR-004**: O caminho e o hash do documento fixado MUST ser registrados no estado do work item.
+- **FR-004**: O caminho e o hash do documento fixado MUST ser registrados no estado do work item criado pela execução. Work item preexistente, que a execução apenas reencontra, MUST NOT ser reescrito para receber o registro: o estado dele foi selado por outra execução, e a fixação continua reportada no retorno.
 - **FR-005**: O hash registrado MUST corresponder aos bytes efetivamente materializados, não ao conteúdo esperado.
 - **FR-006**: Documento existente que não corresponda ao contrato MUST permanecer byte a byte inalterado.
 - **FR-007**: A fixação MUST NOT criar backup, cópia ou renomeação de arquivo preexistente.
 - **FR-008**: A fixação MUST NOT seguir link simbólico nem escrever no destino apontado por um.
 - **FR-009**: O conjunto de partes que o contrato exige MUST ser declarado num único lugar, do qual o materializador, o validador e qualquer consumidor futuro leem.
 - **FR-010**: Nenhum consumidor MUST redeclarar esse conjunto, nem derivá-lo do conjunto de outro documento ou de outra versão.
-- **FR-011**: O documento MUST carregar um marcador de versão próprio na primeira linha, independente da versão publicada do plugin.
+- **FR-011**: O documento MUST carregar um marcador de versão próprio na primeira linha, independente da versão publicada do plugin. A posição MUST ser verificada onde a conformidade é decidida, não apenas no documento de origem: um marcador encontrado fora da primeira linha não identifica um documento gerenciado.
 - **FR-012**: A suíte de testes do projeto MUST reprovar um documento a que falte qualquer parte exigida pelo contrato, nomeando a parte ausente.
 - **FR-013**: O teste do contrato MUST rodar sem acesso à rede e sem exigir ferramenta externa instalada.
 - **FR-014**: A conformidade MUST ser decidida por presença das partes exigidas, não por ordem entre elas nem por ausência de conteúdo adicional.
@@ -123,7 +124,7 @@ verificar que ela reprova apontando a parte ausente.
 - **SC-003**: Duas criações seguidas no mesmo projeto produzem exatamente um arquivo, e a segunda reporta reuso.
 - **SC-004**: O hash registrado no estado do work item corresponde aos bytes no disco em 100% das execuções bem-sucedidas.
 - **SC-005**: Remover qualquer parte exigida do documento faz a suíte reprovar, e a saída nomeia a parte ausente sem que o leitor precise procurá-la.
-- **SC-006**: O conjunto de partes exigidas aparece declarado em exatamente um lugar do repositório — verificável por busca textual.
+- **SC-006**: O conjunto de partes exigidas aparece declarado em exatamente um lugar da árvore de fontes — verificável por busca textual. Documentos de especificação podem citá-lo; citação em prosa não é declaração, e nenhum deles é lido em tempo de execução.
 - **SC-007**: A suíte completa continua passando sem rede e sem ferramenta externa, nas três plataformas e nas duas versões de linguagem que a integração cobre.
 - **SC-008**: A versão publicada é idêntica em todos os pontos que a distribuição trava, verificável pelo gate que já existe.
 
@@ -132,5 +133,6 @@ verificar que ela reprova apontando a parte ausente.
 - O texto normativo do documento já está entregue e não é reaberto aqui; esta entrega o transporta e o protege, não o escreve.
 - O projeto de destino já tem a governança e o contrato de fluxo materializados; esta entrega acrescenta um terceiro artefato project-wide ao lado deles, não os substitui.
 - A raiz do projeto de destino é gravável no caso normal; o caso contrário é tratado como falha nomeada, não como cenário comum.
+- Os requisitos falam da **criação de work item**. O relatório de pré-verificação de ambiente, que existe em separado, permanece como está: estendê-lo é acréscimo defensável, não pedido, e fica declarado fora de escopo em vez de omitido.
 - O mecanismo de fixação já usado para o contrato de fluxo é considerado adequado e serve de referência de comportamento, ainda que a organização interna do código difira.
 - Mudar o conjunto de partes exigidas sem trocar o marcador invalidaria todo documento já materializado de uma vez; por isso o conjunto é tratado como congelado e uma mudança de contrato exige marcador novo.

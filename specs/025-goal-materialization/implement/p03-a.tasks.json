@@ -1,0 +1,39 @@
+{
+  "node_id": "p03-a",
+  "feature": "025-goal-materialization",
+  "run": "aab4cf5224dbb4cbf563ba17",
+  "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
+  "tasks_completed": [
+    "T008",
+    "T009",
+    "T010",
+    "T011",
+    "T012",
+    "T013"
+  ],
+  "files_written": [
+    "plugin/skills/grill-with-docs/scripts/ensure_goal.py"
+  ],
+  "result": "durable",
+  "notes": "resolve_goal() implements CREATED (atomic mkstemp+os.link create, best-effort dir fsync, reread+validate) and REUSED (existing goal.md with v1 marker + compatible() True, no write). Existing document that does not match REUSED falls into a single PRESERVED branch with a placeholder reason (\"not yet classified\") -- deliberately not implemented further (T018, later node), structured so that task only refines reason into its three named cases without restructuring resolve_goal. main() dispatches generically on GoalResult.status: exit 2 for BLOCKED, exit 0 otherwise, emitting one sorted-key JSON line with status/path/sha256/version (version omitted when the read-back text carries no marker) and reason (present for BLOCKED and PRESERVED). Imports grill_core.goal_document as a plain package import (SSOT never redeclared: VERSION, MARKER, ESSENTIAL, compatible, managed_version all imported, none copied).",
+  "verification": {
+    "compile": "python3 -m py_compile ensure_goal.py -> OK",
+    "manual_exercise": [
+      "throwaway git repo (git init + 1 commit) in /tmp",
+      "resolve_goal(root) first call -> GoalResult(status='CREATED', path=<root>/goal.md, reason=None)",
+      "resolve_goal(root) second call -> GoalResult(status='REUSED', path=<root>/goal.md, reason=None), content byte-identical to first call",
+      "CLI --ensure <root> first run -> stdout {\"path\":...,\"sha256\":...,\"status\":\"CREATED\",\"version\":\"v1\"}, exit 0",
+      "CLI --ensure <root> second run -> same sha256, \"status\":\"REUSED\", exit 0",
+      "CLI --ensure /tmp (not a Git top-level) -> {\"reason\":\"ROOT must be existing Git top-level\",\"status\":\"BLOCKED\"}, exit 2"
+    ],
+    "how_ssot_was_reached_locally": "base worktree lacks grill_core/goal_document.py (merged separately by p02-a, not yet in this node's fixed base commit). Exercised against a scratch copy assembled outside both worktrees (leader's plugin/skills/grill-with-docs/ tree with this node's ensure_goal.py laid over it) so relative asset paths (grill_core/goal_document.py -> ../assets/GOAL.template.md) resolved correctly. goal_document.py was never copied into this worktree."
+  },
+  "completed": [
+    "T008",
+    "T009",
+    "T010",
+    "T011",
+    "T012",
+    "T013"
+  ]
+}

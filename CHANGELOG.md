@@ -1,12 +1,81 @@
 # Changelog
 
+## 5.3.0
+
+- `init` passa a fixar o **`goal.md` project-wide** na raiz, do mesmo modo que
+  já fixava o `WORKFLOW.md`. Até aqui o documento simplesmente não era gerado:
+  a feature que o introduziu entregou o template e parou antes do
+  materializador, então todo projeto consumidor terminava o `init` sem ele e
+  sem nenhum sinal de que faltava (SGD, spec 025).
+- O contrato do documento vive num único lugar, `grill_core/goal_document.py`:
+  `VERSION`, `MARKER` e a tupla `ESSENTIAL` de onze itens, congelada como
+  literal. Quem valida importa dali e nunca redeclara — acrescentar item à
+  tupla é divergência de frota sem migração, por isso versão nova é marcador
+  novo ao lado do antigo, nunca edição da tupla existente (ADR-0101).
+- `ensure_goal.py --ensure ROOT` materializa e reporta em três estados
+  terminais mais um de recusa. `CREATED` cria por `mkstemp` + `os.link`, com
+  `fsync` de arquivo e diretório; `REUSED` reencontra documento `v1` conforme e
+  **não escreve nada**; `PRESERVED` deixa o arquivo byte a byte intacto.
+- **Documento humano nunca é sobrescrito.** `PRESERVED` nomeia a razão em três
+  casos distintos — `human document` (sem marcador), `managed version
+  mismatch` (marcador de outra versão) e `incompatible goal` (marcador `v1`
+  fora do contrato) — e não faz backup, cópia nem renomeação. Arquivo vazio é
+  divergente, logo preservado: tratá-lo como ausente reabriria a exceção que
+  FR-002 nega (ADR-0102).
+- Destino que é symlink, diretório, ou cuja resolução cai fora da raiz, é
+  `BLOCKED` com razão `unsafe target` **antes de qualquer escrita**; leitura
+  usa `O_NOFOLLOW` e confere `S_ISREG` sobre o descritor já aberto. `init`
+  converte a recusa em `GOAL-UNAVAILABLE` e falha fechado, em vez de seguir
+  como se tivesse fixado.
+- O bloco `goal` entra em `state.json` e no payload do `init` com `path`,
+  `sha256` e `status` — e fica **fora** de `WORK-ITEM.json` e de
+  `immutable_metadata`: editar legitimamente o documento não pode invalidar
+  work item vivo. A chave `version` é omitida quando o documento preservado não
+  carrega marcador.
+- `tests/validate_goal_document_contract.py` entra na suíte pelo glob, com 12
+  testes. Reprova documento a que falte qualquer item de `ESSENTIAL` **nomeando
+  o item ausente**, aprova ordem trocada e conteúdo extra (presença basta), e
+  trava por asserção que a tupla é declarada em exatamente um arquivo.
+
+### Evidência observada (quickstart, Cenários 1 a 5)
+
+Executados num diretório temporário, `GRILL_SKIP_DEPENDENCIES=1`:
+
+- **C1, projeto limpo**: `{"status":"CREATED","version":"v1","sha256":"af97e289…"}`,
+  primeira linha `<!-- grill-with-docs-goal:v1 -->`. O hash do payload é
+  idêntico ao dos bytes em disco **e** ao gravado em `state.json` — o hash vem
+  do disco, não do conteúdo esperado (SC-004).
+- **C2, segunda execução**: `"status":"REUSED"`, mesmo `sha256`, `mtime` e
+  tamanho inalterados, exatamente um `goal.md` na raiz.
+- **C3, arquivo humano**: `"status":"PRESERVED"`, `"reason":"human document"`,
+  `sha256sum -c` aprova, e nenhum arquivo extra. `version` ausente do bloco,
+  como manda o contrato para documento sem marcador.
+- **C4, symlink**: `{"code":"GOAL-UNAVAILABLE","error":"unsafe target","verdict":"BLOCKED"}`
+  e o alvo apontado segue com `segredo` — nenhuma escrita fora da raiz.
+- **C5, documento vazio**: `"status":"PRESERVED"` e `goal.md` com `0` bytes.
+
+`tests/validate_distribution.py` sai `0` com a versão idêntica nos oito lugares.
 ## 5.2.1
 
-- Corrige o falso positivo `STATUS-TIMEOUT` em repositórios com vários work
-  items: os probes Git de estado vivo passam a ser resolvidos uma vez por
-  worktree/repositório e reutilizados na classificação dos itens, em vez de
-  repetidos por work item. O timeout público do status sobe de 5s para 30s,
-  preservando o fallback fail-closed para falhas reais.
+- Um recibo de reconciliação concluído deixa de ser ownership perpétuo dos
+  caminhos que cobriu. Até aqui, qualquer trabalho posterior que declarasse
+  honestamente o mesmo arquivo era recusado com `SCOPE-OVERLAP`, mesmo quando
+  declarava dependência direta do trabalho anterior — a classificação acontecia
+  antes da leitura de `depends-on-work`, nos dois caminhos (SGD-24).
+- A autorização é a mais estreita que dá para rastrear: **somente dependência
+  direta declarada**. No reconcile de alvo único, `depends-on-work` do alvo
+  precisa conter exatamente o `prior_id` do recibo sobreposto; no reconcile
+  completo, um dos dois trabalhos precisa declarar o outro, e a direção
+  identifica o sucessor. Dependência transitiva **não** autoriza: `A → B → C`
+  não deixa A reutilizar o escopo de C sem declarar `A → C` (ADR-0001).
+- Tudo o mais continua fail-closed e nada é dispensado por dependência:
+  ausência de declaração, dependência de terceiro, `DEPENDENCY-SCHEMA`,
+  `DEPENDENCY-MISSING`, `DEPENDENCY-NOT-RECONCILED`, `DEPENDENCY-SELF`,
+  `DEPENDENCY-CYCLE` e `ADR-CONFLICT`. Declaração malformada mapeia para
+  conjunto vazio e não autoriza nada.
+- Sem mudança de schema e sem migração: recibos gravados antes desta versão
+  continuam legíveis como estão. Quem declara a relação é sempre o sucessor, e o
+  recibo anterior não precisa saber quem virá depois.
 
 ## 5.2.0
 

@@ -1,0 +1,36 @@
+{
+  "node_id": "p03-b",
+  "work_item": "feature-goal-materialization-c29d98e49a524ca8a482615d8d528dab",
+  "feature": "025-goal-materialization",
+  "run_id": "aab4cf5224dbb4cbf563ba17",
+  "tasks_completed": [
+    "T014",
+    "T015",
+    "T016",
+    "T016b",
+    "T017"
+  ],
+  "files_written": [
+    "plugin/skills/grill-with-docs/scripts/grill_workspace.py"
+  ],
+  "result": {
+    "T014": "ensure_project_goal(root) added, symmetric to ensure_project_workflow. Calls sibling('ensure_goal').resolve_goal(root); BLOCKED -> CliFailure(EXIT_BLOCKED, \"BLOCKED\", \"GOAL-UNAVAILABLE\", reason). Non-BLOCKED returns {status, path:'goal.md', sha256}; adds 'version' when the marker resolves (first-line regex grill-with-docs-goal:(v\\d+), mirroring ensure_workflow.managed_version -- goal_document.py's SSOT is not in this worktree's base so version extraction is duplicated locally, not imported); adds 'reason' only when status == PRESERVED.",
+    "T015": "init_command now calls goal = ensure_project_goal(root) immediately after ensure_project_workflow(root) and before dependency_report(...); environment dict extended to {'workflow':..., 'goal': goal, 'dependencies':...}.",
+    "T016": "state_template(root, work_id, constitution, workflow, goal=None) extended: when goal is not None, writes value['goal'] = {path, sha256, status} only (no version/reason -- those are init-payload-only per data-model.md E4/E5). goal defaults to None so migrate_command's existing call (line ~2147, does not materialise goal.md) is unaffected -- no 'goal' key written there, same bytes as before this change. initial_files() gained the same optional goal parameter and threads it through.",
+    "T016b": "Reencountered-bundle branch of init_command (target.exists()) left untouched functionally -- it never called initial_files/state_template and still doesn't. Added a comment there documenting the invariant: the sealed state.json is read and reported (via REUSED + **environment, which now includes 'goal'), never rewritten.",
+    "T017": "No 'goal' key added to immutable_metadata (WORK-ITEM.json source). Added a comment on immutable_metadata documenting the boundary and pointing at T031b (tests/validate_goal_document_contract.py) as the assertion that locks it. T031b itself was not written -- it belongs to a different task/node, out of my grant's task list (T014-T017 verbatim from brief).",
+    "py_compile": "python3 -m py_compile plugin/skills/grill-with-docs/scripts/grill_workspace.py -> OK",
+    "dependency_note": "ensure_project_goal() calls sibling('ensure_goal').resolve_goal(root) per contracts/materialization-cli.md Superfície 2. ensure_goal.py is owned by p03-a in a sibling worktree and was not visible from here; not created or modified by this node.",
+    "not_touched": [
+      "tests/validate_goal_document_contract.py (granted but no task of mine required a write there; T030/T031/T031b belong elsewhere)"
+    ]
+  },
+  "status": "completed",
+  "completed": [
+    "T014",
+    "T015",
+    "T016",
+    "T016b",
+    "T017"
+  ]
+}
