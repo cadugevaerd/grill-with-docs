@@ -22,48 +22,48 @@
       "runtime": "claude"
     },
     "attested_executions": {
-      "analyze": "se-8f84c24dda88bc20443c7e220d52fd29bcc15ec5398d316dcc1ea8383b0d7e85",
-      "checklist": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985",
-      "partition": "se-6f9ef4264261b1ecd82cd6ac25582d93fbfc4b338ceb9f5e07138eaa73abc303",
-      "plan": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746",
-      "specify": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a",
-      "tasks": "se-3f8e3a95454a8e91cbca1d492d6282e4d48f04c7f8b0c1721d50391304214bb9"
+      "analyze": "se-7b9f6745e05567ccb00f372dbaaed93b1deb0d4284d2f83ae5615c54bdf44593",
+      "checklist": "se-3834085e3ed3f0d9ad8bc03fc74fc55e44f54cb7193773a7ede19c4e51658e66",
+      "partition": "se-10da1b0f29345dc14241fcfeed1a7fc28c7f0eccbd7dc59d0fdbc3e730f683fd",
+      "plan": "se-a35216f6e24baacae7cba5383017a99cfaadb3a7f3f8f26d932582a3c04084f4",
+      "specify": "se-cb523a70bcbd48d351896342319c009619efe622f7927130c9a99add54f00461",
+      "tasks": "se-552f2a4263922111255871e789c7b4d4a4d5605dece1a83e0734f03da8a5ce4c"
     },
     "attested_outputs": {
       "analyze": {
-        "output_sha256": "sha256:712b5ee0d5f51c18a8a9bd9a1ebdaa172d1944d3abfad21a7de4f81290fbb319",
+        "output_sha256": "sha256:b33b3a82adc2daf37405d92777b6abe099e72dcd6a1b4d66c6c2965766cd7575",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/analyze-analyze-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-4.terminal.json",
         "step_id": "analyze"
       },
       "checklist": {
-        "output_sha256": "sha256:f487206d2fe2a8391ed47c4d9f78a5fbbd80ba61fef84053df037b6574a17606",
+        "output_sha256": "sha256:c9fccd17be8766a25b10bcd9aeb4b29eed0b20ad57e713a6e799f2e135848e4c",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/checklist-checklist-5.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-6.terminal.json",
         "step_id": "checklist"
       },
       "partition": {
         "output_sha256": "sha256:b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/partition-partition-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-3.terminal.json",
         "step_id": "partition"
       },
       "plan": {
-        "output_sha256": "sha256:0ff133bd392cfba69b0e1419c08e566328141acf7c814b9150f89ba135fd7ae6",
+        "output_sha256": "sha256:2761b004a9385b3d6a5e7f5aa0ace5e3a28953ebd89653fa4615f01106d2dc99",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/plan-plan-6.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-7.terminal.json",
         "step_id": "plan"
       },
       "specify": {
-        "output_sha256": "sha256:d0105df4bcdbe5132c88c6c31040498acbcf1256754b596be9ef7c45bd3e86cf",
+        "output_sha256": "sha256:6b006be1bafecd050c934c1383588fc9fa960d9c540cbce2ffe4df3d66915197",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/specify-specify-4.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-5.terminal.json",
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:f6cc96c767fdef0d1e9f73c8d5c0b374a5b2b0fff8aa247151341f56d1f797bd",
+        "output_sha256": "sha256:5bd4dfdc2f86e4bbeb4e463d91f8759daac3b98ebb2c74e6518147cfeb86bc35",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-7.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-8.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -537,6 +537,110 @@
         "state": "complete",
         "step": "partition",
         "supersedes": ".grill/attestations/fix-status-timeout-false-positive-partition.json"
+      },
+      {
+        "chain_stale": [
+          "plan",
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/spec.md",
+            "sha256": "6b006be1bafecd050c934c1383588fc9fa960d9c540cbce2ffe4df3d66915197"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "retarget authorized status fix from 5.2.1 to 5.3.1 after main advanced to 5.3.0",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-specify-r4.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "2761b004a9385b3d6a5e7f5aa0ace5e3a28953ebd89653fa4615f01106d2dc99"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "align plan to main 5.3.0 and patch target 5.3.1",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-plan-r6.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/checklists/release.md",
+            "sha256": "c9fccd17be8766a25b10bcd9aeb4b29eed0b20ad57e713a6e799f2e135848e4c"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "record authorized base advance and run restart",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-checklist-r5.json"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "5bd4dfdc2f86e4bbeb4e463d91f8759daac3b98ebb2c74e6518147cfeb86bc35"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "retarget distribution and gate tasks to 5.3.0 -> 5.3.1",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r7.json"
+      },
+      {
+        "chain_stale": [
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/analysis-final.md",
+            "sha256": "b33b3a82adc2daf37405d92777b6abe099e72dcd6a1b4d66c6c2965766cd7575"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "zero critical or high after authorized 5.3.1 retarget review",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-analyze-r3.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/execution-dag.json",
+            "sha256": "b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "repartition authorized for 5.3.1 retarget; deterministic DAG remained bit-identical and DAG-VALID",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-partition-r2.json"
       }
     ],
     "chain_stale": [],
@@ -595,6 +699,18 @@
           "step_execution_id": "se-2d80182f639cb089569006db082a11cd0a492bf27467f58f8d22445d52c1141d",
           "step_id": "analyze",
           "superseded_by_step_execution_id": "se-8f84c24dda88bc20443c7e220d52fd29bcc15ec5398d316dcc1ea8383b0d7e85"
+        },
+        {
+          "attempt_id": "analyze-3",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-analyze-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:712b5ee0d5f51c18a8a9bd9a1ebdaa172d1944d3abfad21a7de4f81290fbb319",
+          "provenance": "current-generation",
+          "reason": "zero critical or high after authorized 5.3.1 retarget review",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-3.terminal.json",
+          "step_execution_id": "se-8f84c24dda88bc20443c7e220d52fd29bcc15ec5398d316dcc1ea8383b0d7e85",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-7b9f6745e05567ccb00f372dbaaed93b1deb0d4284d2f83ae5615c54bdf44593"
         }
       ],
       "checklist": [
@@ -645,6 +761,18 @@
           "step_execution_id": "se-d01848366dee6d0ab61911e39cbab10fbef0c533183e012f3f2231c631afef40",
           "step_id": "checklist",
           "superseded_by_step_execution_id": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985"
+        },
+        {
+          "attempt_id": "checklist-5",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-checklist-r5.json",
+          "execution_round": 5,
+          "output_sha256": "sha256:f487206d2fe2a8391ed47c4d9f78a5fbbd80ba61fef84053df037b6574a17606",
+          "provenance": "current-generation",
+          "reason": "record authorized base advance and run restart",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-5.terminal.json",
+          "step_execution_id": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-3834085e3ed3f0d9ad8bc03fc74fc55e44f54cb7193773a7ede19c4e51658e66"
         }
       ],
       "partition": [
@@ -659,6 +787,18 @@
           "step_execution_id": "se-232e6409c711185100fda59b3e226ee85eaf39283b9d9a49cfee707f8230eb75",
           "step_id": "partition",
           "superseded_by_step_execution_id": "se-6f9ef4264261b1ecd82cd6ac25582d93fbfc4b338ceb9f5e07138eaa73abc303"
+        },
+        {
+          "attempt_id": "partition-2",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-partition-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00",
+          "provenance": "current-generation",
+          "reason": "repartition authorized for 5.3.1 retarget; deterministic DAG remained bit-identical and DAG-VALID",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-2.terminal.json",
+          "step_execution_id": "se-6f9ef4264261b1ecd82cd6ac25582d93fbfc4b338ceb9f5e07138eaa73abc303",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-10da1b0f29345dc14241fcfeed1a7fc28c7f0eccbd7dc59d0fdbc3e730f683fd"
         }
       ],
       "plan": [
@@ -721,6 +861,18 @@
           "step_execution_id": "se-70e6102916f2d54fe637f45ca6324e9d3a70442c634ec7987bb9e6b384fda911",
           "step_id": "plan",
           "superseded_by_step_execution_id": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746"
+        },
+        {
+          "attempt_id": "plan-6",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-plan-r6.json",
+          "execution_round": 6,
+          "output_sha256": "sha256:0ff133bd392cfba69b0e1419c08e566328141acf7c814b9150f89ba135fd7ae6",
+          "provenance": "current-generation",
+          "reason": "align plan to main 5.3.0 and patch target 5.3.1",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-6.terminal.json",
+          "step_execution_id": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-a35216f6e24baacae7cba5383017a99cfaadb3a7f3f8f26d932582a3c04084f4"
         }
       ],
       "specify": [
@@ -759,6 +911,18 @@
           "step_execution_id": "se-94eb0d13401da9d436776d3c6d93b318de2326d3c734a9af113acfabc7b7bd3b",
           "step_id": "specify",
           "superseded_by_step_execution_id": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a"
+        },
+        {
+          "attempt_id": "specify-4",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-specify-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:d0105df4bcdbe5132c88c6c31040498acbcf1256754b596be9ef7c45bd3e86cf",
+          "provenance": "current-generation",
+          "reason": "retarget authorized status fix from 5.2.1 to 5.3.1 after main advanced to 5.3.0",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-4.terminal.json",
+          "step_execution_id": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-cb523a70bcbd48d351896342319c009619efe622f7927130c9a99add54f00461"
         }
       ],
       "tasks": [
@@ -833,6 +997,18 @@
           "step_execution_id": "se-f225ed7bdd2b48e14aae51687b5a382590c0107d5ac2301cd079481fa88c54ac",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-3f8e3a95454a8e91cbca1d492d6282e4d48f04c7f8b0c1721d50391304214bb9"
+        },
+        {
+          "attempt_id": "tasks-7",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r7.json",
+          "execution_round": 7,
+          "output_sha256": "sha256:f6cc96c767fdef0d1e9f73c8d5c0b374a5b2b0fff8aa247151341f56d1f797bd",
+          "provenance": "current-generation",
+          "reason": "retarget distribution and gate tasks to 5.3.0 -> 5.3.1",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-7.terminal.json",
+          "step_execution_id": "se-3f8e3a95454a8e91cbca1d492d6282e4d48f04c7f8b0c1721d50391304214bb9",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-552f2a4263922111255871e789c7b4d4a4d5605dece1a83e0734f03da8a5ce4c"
         }
       ]
     },
