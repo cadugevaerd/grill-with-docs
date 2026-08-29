@@ -16,7 +16,7 @@ Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfood
 python3 tests/run_validators.py
 ```
 
-Baseline atual: 1303 testes em 27 validadores, exit 0, com 1 skip dependente de ambiente em `validate_workspace_contract.py`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
+Baseline atual (v5.3.0, `f78e009`): 28 validadores, exit 0. Vinte e sete são suítes `unittest` e somam 1225 testes, com 1 skip dependente de ambiente em `validate_workspace_contract.py`; o 28º, `validate_distribution.py`, valida por asserção direta e por isso não imprime `Ran N tests`. Ao reconferir esse baseline, conte os arquivos pelo marcador `==>` do runner, não pelas linhas `Ran` — elas ignoram o validador sem unittest. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
 
 ## Restrições do core
 
