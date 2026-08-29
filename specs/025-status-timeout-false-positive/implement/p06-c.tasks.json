@@ -1,24 +1,24 @@
 {
   "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
-  "run_id": "run-133216f8532a269f73713b57",
+  "run_id": "run-e8b9ef83ec5732a739c919ac",
   "wave_id": "wave-0006",
   "node_id": "p06-c",
   "task_ids": ["T012", "T015"],
   "tasks": [
     {
       "id": "T012",
-      "description": "Atualizar plugins[0].version de \"5.2.0\" -> \"5.2.1\" em .claude-plugin/marketplace.json",
+      "description": "Atualizar plugins[0].version de \"5.3.0\" -> \"5.3.1\" em .claude-plugin/marketplace.json",
       "result": "PASS",
       "evidence": [
-        ".claude-plugin/marketplace.json:11 -- \"version\": \"5.2.1\""
+        ".claude-plugin/marketplace.json:11 -- \"version\": \"5.3.1\""
       ]
     },
     {
       "id": "T015",
-      "description": "Atualizar em plugin/skills/grill-with-docs/SKILL.md o heading '# Grill with Docs v5.2.0' -> '# Grill with Docs v5.2.1'",
+      "description": "Atualizar em plugin/skills/grill-with-docs/SKILL.md o heading '# Grill with Docs v5.3.0' -> '# Grill with Docs v5.3.1'",
       "result": "PASS",
       "evidence": [
-        "plugin/skills/grill-with-docs/SKILL.md:6 -- # Grill with Docs v5.2.1"
+        "plugin/skills/grill-with-docs/SKILL.md:6 -- # Grill with Docs v5.3.1"
       ]
     }
   ],
