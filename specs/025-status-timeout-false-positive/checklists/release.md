@@ -39,7 +39,7 @@
 - [x] CHK018 O requisito fixa o número exato de locais de distribuição a manter coerentes ("oito"), sem ambiguidade de contagem? [Clarity, Spec §FR-006]
 - [x] CHK019 O tipo de bump (patch/minor/major) é resolvido por regra documentada e amarrada a FR-005, em vez de deixado a critério do implementador? [Traceability, research.md §Decisão 4]
 - [x] CHK020 O critério de aceite de coerência de versão é mensurável via gate automatizado existente? [Measurability, Spec §SC-004 → tests/validate_distribution.py]
-- [x] CHK021 O estado atual dos 8 locais (todos em 5.2.0, sem entrada 5.2.1 no CHANGELOG) é consistente com "bump ainda pendente de implementação", sem drift entre plan.md e o repositório? [Consistency] — reafirmado na 5ª revisão: com a correção já commitada em `7b3c3fe` sem bump, o gate reprova a branch com `MISSING-BUMP`, que é exatamente "bump pendente" expresso como veredito.
+- [x] CHK021 O estado atual dos 8 locais (todos em 5.3.0, sem entrada 5.3.1 no CHANGELOG) é consistente com "bump ainda pendente de implementação", sem drift entre plan.md e o repositório? [Consistency] — reafirmado na 5ª revisão: com a correção já commitada em `7b3c3fe` sem bump, o gate reprova a branch com `MISSING-BUMP`, que é exatamente "bump pendente" expresso como veredito.
 
 ## CHANGELOG
 
@@ -69,7 +69,7 @@
 - [x] CHK032 O tratamento dos vereditos do gate está desambiguado — estado pré-bump real e código
       residual? [Clarity, Spec §FR-008 ↔ tasks.md T020] — atualizado na 5ª revisão: com `7b3c3fe`
       commitado alterando `plugin/**` sem bump, o veredito **atual** da branch é `MISSING-BUMP` /
-      `verdict: FAIL` (`5.2.0` → `5.2.0`), e é esse o ponto de partida declarado em plan.md,
+      `verdict: FAIL` (`5.3.0` → `5.3.0`), e é esse o ponto de partida declarado em plan.md,
       quickstart.md §4 e tasks.md Phase 6. `NO-PLUGIN-CHANGE` permanece enumerado apenas como
       **código residual rejeitado** (árvore impossível a partir de `7b3c3fe`; se aparecer é
       `--base-ref`/HEAD errados, e é falha apesar do exit 0) — preservando o fechamento do finding
@@ -109,7 +109,7 @@
       automatizado que reprova sua ausência? [Traceability, Spec §FR-007/SC-005 ↔ tasks.md
       T014/T018] — confirmado: SC-005 exige a entrada antes do ship, T014 estende
       `validate_distribution.py` com a asserção de CHANGELOG, T018 aplica o bump real. Execução real
-      (CHANGELOG.md com `## 5.2.1`) permanece pendente nas tarefas, não nesta checklist.
+      (CHANGELOG.md com `## 5.3.1`) permanece pendente nas tarefas, não nesta checklist.
 
 ## Dependências e Assunções
 
@@ -154,7 +154,7 @@
     o DAG/relatório antes do primeiro worker.
   - **N2** — toda prosa "fix só no working tree" foi substituída pelo **baseline commitado
     `7b3c3fe`** em `plan.md`, `quickstart.md`, `tasks.md` e `ADR-0001`.
-  - **N3** — estado pré-bump declarado como **`MISSING-BUMP`** (`verdict: FAIL`, `5.2.0` → `5.2.0`);
+  - **N3** — estado pré-bump declarado como **`MISSING-BUMP`** (`verdict: FAIL`, `5.3.0` → `5.3.0`);
     `NO-PLUGIN-CHANGE` mantido como código residual rejeitado.
   - **N4** — `analysis.md` marcado **SUPERSEDED** com o conteúdo preservado na íntegra; relatório
     vigente passa a ser `analysis-final.md`.
@@ -201,11 +201,12 @@
     despachar a Phase 7;
   - T019–T022 declaram os três inputs comuns na primeira linha e o preview determinístico produz um
     único nó `p07-a`, na ordem correta, dependente dos três nós da Phase 6;
-  - baseline documental corrigido para 1237 testes em 26 módulos `unittest`, mais o validador
-    standalone de distribuição, com 1 skip.
+  - baseline documental atualizado após integrar `main`: 1307 testes em 27 validadores, com 1 skip;
+  - `run-133216f8532a269f73713b57` substituído após `VERSION-REGRESSION`; autorização humana cobre
+    o novo alvo `5.3.0 → 5.3.1`, a reemissão do DAG e o reinício do run.
 - **Estado de marcação**: 37 de 37 itens marcados [x] com evidência real nos artefatos.
   Isso valida a qualidade dos **requisitos**, não a execução: `BUMPED` sobre o mesmo SHA
-  (T020/T022) e a entrada `## 5.2.1` no `CHANGELOG.md` (T014/T018) seguem pendentes de execução
-  real — o repositório está em `5.2.0` e o gate de bump reprova a branch com `MISSING-BUMP`. A checklist 100% não é um veredito de "feature pronta para
+  (T020/T022) e a entrada `## 5.3.1` no `CHANGELOG.md` (T014/T018) seguem pendentes de execução
+  real — o repositório está em `5.3.0` e o gate de bump reprova a branch com `MISSING-BUMP`. A checklist 100% não é um veredito de "feature pronta para
   ship"; é um veredito de "spec/plan/tasks especificam corretamente o que falta executar".
 - Hooks opcionais de commit (`before_checklist`/`after_checklist`) não foram executados, por instrução explícita do usuário. Nenhum commit, hook ou tarefa de implementação foi executado nesta revisão — apenas edição de artefatos de especificação.

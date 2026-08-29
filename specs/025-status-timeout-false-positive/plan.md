@@ -18,7 +18,7 @@ e o timeout público sobe de 5s para 30s, com margem sobre os 10,56s medidos. Na
 correção depende de working tree sujo — o que cada worker herda é o commit. Esta fase de
 plano cobre o que falta: teste de regressão de escopo (commitado no mesmo baseline,
 auditado abaixo), bump
-SemVer obrigatório (patch 5.2.0 → 5.2.1), sincronização dos oito locais de distribuição,
+SemVer obrigatório (patch 5.3.0 → 5.3.1), sincronização dos oito locais de distribuição,
 CHANGELOG, e verificação real de timing antes do ship. O contrato `grill-status/v1`
 não muda.
 
@@ -30,7 +30,7 @@ não muda.
 
 **Storage**: N/A — leitura de árvore de arquivos (`.grill/work-items/`) e chamadas `git` via `subprocess`
 
-**Testing**: `python3 tests/run_validators.py` (baseline observado: 1237 testes em 26 módulos `unittest`, mais `validate_distribution.py`, com 1 skip); `tests/validate_status_contract.py` cobre o contrato `grill-status/v1`; `tests/validate_distribution.py` e `tests/check_version_bump.py` cobrem distribuição/bump
+**Testing**: `python3 tests/run_validators.py` (baseline observado após integrar `main`: 1307 testes em 27 validadores, com 1 skip); `tests/validate_status_contract.py` cobre o contrato `grill-status/v1`; `tests/validate_distribution.py` e `tests/check_version_bump.py` cobrem distribuição/bump
 
 **Target Platform**: CLI multiplataforma (matriz CI: ubuntu/windows/macos × Python 3.10/3.13); nenhum teste pode tocar rede ou exigir `specify`/`node`/`backlogctl` reais
 
@@ -56,7 +56,7 @@ não muda.
 | Fail-closed sem waiver | PASS | Timeout não pode cair abaixo de 10,56s; ambiguidade de escopo (FR-005) é tratada como bloqueio, não suposição; divergência entre `bump-gate.yml` e `ci.yml` bloqueia ship até ambos passarem na mesma revisão, agora normatizado como FR-008/SC-006 (ver seção dedicada) |
 | Rastreabilidade | PASS | ADR-0001, triagem selada (`tri-status-timeout-false-positive.json`), PLAN-CONTEXT.md referenciam o mesmo work item; a regra fail-closed dos dois gates tem requisito próprio (FR-008/SC-006) e tarefa própria (`tasks.md` T020/T022), sem regra órfã de plano |
 | Tier de modelo e esforço do worker Orca | N/A nesta fase | Não há despacho de worker Orca neste comando |
-| Bump obrigatório do plugin | PASS (planejado) | Este plano declara o bump patch 5.2.0 → 5.2.1 e os 8 locais como tarefa obrigatória da fase de implementação |
+| Bump obrigatório do plugin | PASS (planejado) | Este plano declara o bump patch 5.3.0 → 5.3.1 e os 8 locais como tarefa obrigatória da fase de implementação |
 | Release obrigatória por versão | N/A nesta fase | Aplicável ao pipeline `publish.yml` no merge para `main`, fora do escopo de `plan` |
 
 Nenhuma violação sem justificativa. Complexity Tracking não se aplica.
@@ -77,13 +77,18 @@ está normatizada em `spec.md` como **FR-008** (regra) e **SC-006** (critério m
 **Estado pré-bump: `MISSING-BUMP`.** `check_version_bump.py` decide sobre *blobs commitados*
 (`git diff --no-renames --name-only base...head` e `git show <rev>:plugin/.claude-plugin/plugin.json`).
 Como o baseline `7b3c3fe` já alterou `plugin/**` **sem** bump, o veredito **atual** do gate
-nesta branch é literalmente `MISSING-BUMP`, com `verdict: FAIL`, `base_version: "5.2.0"` e
-`head_version: "5.2.0"`. Esse é o ponto de partida real desta feature — o gate já reprova, e a
+nesta branch é literalmente `MISSING-BUMP`, com `verdict: FAIL`, `base_version: "5.3.0"` e
+`head_version: "5.3.0"`. Esse é o ponto de partida real desta feature — o gate já reprova, e a
 tarefa de bump existe para virá-lo. `NO-PLUGIN-CHANGE` permanece enumerado apenas como
 **código residual rejeitado**: descreve a árvore hipotética em que `plugin/**` não mudou no SHA
 avaliado, o que deixou de ser possível a partir de `7b3c3fe`; se aparecer, é sinal de
 `--base-ref`/HEAD errados e é **falha**, nunca aprovação. O único veredito aceito é literalmente
 `BUMPED`, lido do campo `code` de `check_version_bump.py --json`.
+
+**Revisão por avanço de `main`.** O run `run-133216f8532a269f73713b57` planejou `5.2.0 → 5.2.1`,
+mas o gate final encontrou `main` em `5.3.0` e retornou `VERSION-REGRESSION`. Após autorização
+humana, `main` foi integrado no commit `007b781`; este plano substitui o alvo antigo por
+`5.3.0 → 5.3.1` e exige um novo run fixado sobre essa base.
 
 **Mesmo estado de árvore.** A confirmação local dos dois gates exige o mesmo `git rev-parse HEAD`
 antes e depois das duas execuções, sobre árvore **tracked-limpa**. Sem isso, a igualdade de SHA
@@ -178,7 +183,7 @@ tests/
 ├── validate_distribution.py      # trava os 8 locais de distribuição + constante VERSION
 └── check_version_bump.py         # gate de bump SemVer (bump-gate.yml)
 
-# 8 locais de distribuição a sincronizar no bump patch 5.2.0 → 5.2.1:
+# 8 locais de distribuição a sincronizar no bump patch 5.3.0 → 5.3.1:
 plugin/.claude-plugin/plugin.json
 plugin/.codex-plugin/plugin.json
 .claude-plugin/marketplace.json
@@ -188,7 +193,7 @@ plugin/skills/grill-with-docs/SKILL.md              # heading "# Grill with Docs
 plugin/skills/grill-with-docs/references/session-protocol.md  # heading "# Protocolo de sessão vX.Y.Z"
 README.md                                  # heading "**vX.Y.Z"
 
-CHANGELOG.md   # nova entrada ## 5.2.1
+CHANGELOG.md   # nova entrada ## 5.3.1
 ```
 
 **Structure Decision**: Single project já existente. Nenhuma estrutura nova. A fase de

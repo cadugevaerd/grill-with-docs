@@ -98,14 +98,10 @@ executou/commitou T017–T018. Regras, sem exceção:
 
 - [ ] T001 [X] Rodar `tests/run_validators.py` via `python3` a partir da raiz do repo e registrar o resultado
       literal (exit code, contagem de testes, quaisquer falhas). Não assumir "vai passar" — este é
-      o baseline real do commit `7b3c3fe`, que já detém a correção de
-      `grill_status.py`/`grill_workspace.py` e ainda **não** tem bump de versão. Esperado no HEAD
-      analisado: exit 0, 1237 testes em 26 módulos `unittest`, mais o validador standalone de
-      distribuição, com 1 skip; o resultado real é o que conta.
-      **Composição da contagem**: `run_validators.py` soma as saídas de 26 módulos `unittest`
-      (`validate_*.py` descobertos por glob) mais a execução à parte de `validate_distribution.py`,
-      que é um script de asserções simples (não `unittest`) e **não contribui** para a contagem de
-      testes reportada — ele só soma ao veredito exit 0/1 da suíte.
+      o baseline real após o merge `007b781`, que contém a correção de
+      `grill_status.py`/`grill_workspace.py` e ainda **não** tem o bump desta feature. Esperado no
+      HEAD analisado: exit 0, 1307 testes em 27 validadores, com 1 skip; o resultado real é o que
+      conta.
 
 **Checkpoint**: baseline real capturado — segue para Foundational apenas se T001 não travar em erro
 de ambiente (rede, `specify`/`node`/`backlogctl` reais são proibidos pela matriz e não devem
@@ -268,30 +264,30 @@ descreve).
 > Phase 6 e Phase 7 **é** a barreira de convergência: gate sobre árvore parcialmente bumpada avalia
 > uma versão que não existe. Nenhuma tarefa de gate roda dentro de um worktree de worker de bump.
 
-- [ ] T010 [P] [X] Atualizar `"version": "5.2.0"` → `"version": "5.2.1"` em `plugin/.claude-plugin/plugin.json`
-- [ ] T011 [P] [X] Atualizar `"version": "5.2.0"` → `"version": "5.2.1"` em `plugin/.codex-plugin/plugin.json`
-- [ ] T012 [P] [X] Atualizar `plugins[0].version` de `"5.2.0"` → `"5.2.1"` em `.claude-plugin/marketplace.json`
-- [ ] T013 [P] [X] Atualizar `plugins[0].version` de `"5.2.0"` → `"5.2.1"` em `.agents/plugins/marketplace.json`
+- [ ] T010 [P] [X] Atualizar `"version": "5.3.0"` → `"version": "5.3.1"` em `plugin/.claude-plugin/plugin.json`
+- [ ] T011 [P] [X] Atualizar `"version": "5.3.0"` → `"version": "5.3.1"` em `plugin/.codex-plugin/plugin.json`
+- [ ] T012 [P] [X] Atualizar `plugins[0].version` de `"5.3.0"` → `"5.3.1"` em `.claude-plugin/marketplace.json`
+- [ ] T013 [P] [X] Atualizar `plugins[0].version` de `"5.3.0"` → `"5.3.1"` em `.agents/plugins/marketplace.json`
 - [ ] T014 [P] [X] Em `tests/validate_distribution.py`, duas mudanças no mesmo arquivo
       (portanto uma única tarefa, sem conflito com as demais `[P]`):
-      (a) atualizar a constante `VERSION = "5.2.0"` → `VERSION = "5.2.1"`;
+      (a) atualizar a constante `VERSION = "5.3.0"` → `VERSION = "5.3.1"`;
       (b) **estender o validador para travar o CHANGELOG** (fecha C1 do `analysis.md`): antes do
       `print("distribution: OK")`, ler `CHANGELOG.md` da raiz e afirmar que existe **exatamente
-      uma** linha igual a `## {VERSION}` (formato já usado pelas entradas anteriores: `## 5.2.0`),
+      uma** linha igual a `## {VERSION}` (formato já usado pelas entradas anteriores: `## 5.3.0`),
       com mensagem de assert nomeando o arquivo e a versão esperada. Sem isso, FR-007/SC-005
       dependeriam de conferência humana e nenhum gate reprovaria um ship sem entrada de CHANGELOG.
       A asserção casa a própria constante `VERSION`, então o próximo bump reprova sozinho se o
       CHANGELOG não acompanhar.
-- [ ] T015 [P] [X] Atualizar em `plugin/skills/grill-with-docs/SKILL.md` o heading `# Grill with Docs v5.2.0` → `# Grill with Docs v5.2.1`
-- [ ] T016 [P] [X] Atualizar em `plugin/skills/grill-with-docs/references/session-protocol.md` o heading `# Protocolo de sessão v5.2.0` → `# Protocolo de sessão v5.2.1`
-- [ ] T017 [X] Leader: atualizar `README.md` para `**v5.2.1 · MIT**` e registrar T017 em `.specify/reports/status-timeout-bump-leader.md`
-- [ ] T018 [X] Leader: adicionar `## 5.2.1` em `CHANGELOG.md` e registrar T018 em `.specify/reports/status-timeout-bump-leader.md`,
+- [ ] T015 [P] [X] Atualizar em `plugin/skills/grill-with-docs/SKILL.md` o heading `# Grill with Docs v5.3.0` → `# Grill with Docs v5.3.1`
+- [ ] T016 [P] [X] Atualizar em `plugin/skills/grill-with-docs/references/session-protocol.md` o heading `# Protocolo de sessão v5.3.0` → `# Protocolo de sessão v5.3.1`
+- [ ] T017 [X] Leader: atualizar `README.md` para `**v5.3.1 · MIT**` e registrar T017 em `.specify/reports/status-timeout-bump-leader.md`
+- [ ] T018 [X] Leader: adicionar `## 5.3.1` em `CHANGELOG.md` e registrar T018 em `.specify/reports/status-timeout-bump-leader.md`,
       descrevendo em prosa, no mesmo estilo das entradas anteriores: o falso positivo de
       `STATUS-TIMEOUT` corrigido, o escopo dos probes Git movido de por-work-item para
       por-worktree/repositório, e o timeout público subindo de 5s para 30s (FR-007/SC-005).
 **Checkpoint (barreira de convergência)**: T010–T016 convergidos no HEAD do coordenador; depois o
 leader executa T017–T018, cria o relatório declarado e commita os três arquivos antes de despachar
-a Phase 7. Assim, os 9 arquivos ficam bumpados para `5.2.1`. FR-006/FR-007 e
+a Phase 7. Assim, os 9 arquivos ficam bumpados para `5.3.1`. FR-006/FR-007 e
 SC-004/SC-005 ficam materializados na árvore, ainda sem veredito de gate. Só com a fase **inteira**
 convergida a Phase 7 é despachada.
 
@@ -314,10 +310,14 @@ vez de coincidência.
 > **Estado pré-bump do gate**: `check_version_bump.py` decide sobre blobs
 > (`git diff --no-renames --name-only main...HEAD` + `git show <rev>:plugin/.claude-plugin/plugin.json`).
 > Como `7b3c3fe` alterou `plugin/**` sem bump, o veredito **antes** da Phase 6 é literalmente
-> `MISSING-BUMP` / `verdict: FAIL`, com `base_version` e `head_version` ambos `5.2.0` — o gate já
+> `MISSING-BUMP` / `verdict: FAIL`, com `base_version` e `head_version` ambos `5.3.0` — o gate já
 > reprova, e T010–T018 existem para virá-lo. `NO-PLUGIN-CHANGE` sobrou como **código residual
 > rejeitado**: descreve a árvore em que `plugin/**` não mudou no SHA avaliado, impossível a partir de
 > `7b3c3fe`; se aparecer, é `--base-ref`/HEAD errados e é falha.
+>
+> **Run substituído por avanço de base**: `run-133216f8532a269f73713b57` chegou ao gate com alvo
+> `5.2.1`, enquanto `main` já estava em `5.3.0`, e recebeu `VERSION-REGRESSION`. A autorização
+> humana cobriu integrar `main`, revisar o alvo para `5.3.1`, reemitir o DAG e iniciar novo run.
 >
 > **Limpeza tracked-only (N1-B)**: a pré-condição desta fase é
 > `git status --porcelain --untracked-files=no` **vazio**. Scratch não versionado do próprio nó —
@@ -328,18 +328,18 @@ vez de coincidência.
 
 - [ ] T019 [X] No nó único com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, validar distribuição após a
       convergência de **todos** os nós da Phase 6), rodar `python3 tests/validate_distribution.py` e
-      confirmar `distribution: OK` com os 8 locais coerentes em `5.2.1` **e** a nova asserção de T014
-      encontrando exatamente uma linha `## 5.2.1` em `CHANGELOG.md` (fecha FR-006/SC-004 e
+      confirmar `distribution: OK` com os 8 locais coerentes em `5.3.1` **e** a nova asserção de T014
+      encontrando exatamente uma linha `## 5.3.1` em `CHANGELOG.md` (fecha FR-006/SC-004 e
       FR-007/SC-005). Depende de T010–T018 completas **e convergidas**.
       **Inputs comuns do nó** (declarados para manter T019–T022 no mesmo conflict component):
       `tests/validate_distribution.py`, `tests/check_version_bump.py`, `tests/run_validators.py`.
       Sem `[P]`.
 - [ ] T020 [X] No mesmo nó com `tests/validate_distribution.py`, `tests/check_version_bump.py` e `tests/run_validators.py`, sem commit nem merge desde T019, rodar
       `python3 tests/check_version_bump.py --base-ref main --json` e exigir que o campo `code`
-      seja **literalmente `BUMPED`**, com `verdict: PASS`, `base_version: "5.2.0"` e
-      `head_version: "5.2.1"`.
+      seja **literalmente `BUMPED`**, com `verdict: PASS`, `base_version: "5.3.0"` e
+      `head_version: "5.3.1"`.
       **Ponto de partida**: antes da Phase 6, este mesmo comando devolve `MISSING-BUMP` /
-      `verdict: FAIL` (`5.2.0` → `5.2.0`), porque `7b3c3fe` já alterou `plugin/**` sem bump. Ver
+      `verdict: FAIL` (`5.3.0` → `5.3.0`), porque `7b3c3fe` já alterou `plugin/**` sem bump. Ver
       `MISSING-BUMP` **depois** do bump significa que o bump não entrou no SHA avaliado — falha.
       **`NO-PLUGIN-CHANGE` é código residual rejeitado**: descreve a árvore em que `plugin/**` não
       mudou no SHA avaliado, impossível a partir de `7b3c3fe`; se aparecer (apesar do exit 0), é
@@ -450,13 +450,13 @@ Task: "Rodar tests/validate_status_contract.py após as duas auditorias"
 
 ```bash
 # T010-T016 — 7 arquivos file-disjuntos, empacotados em até 3 nós [P]
-Task: "Bump plugin/.claude-plugin/plugin.json → 5.2.1"
-Task: "Bump plugin/.codex-plugin/plugin.json → 5.2.1"
-Task: "Bump .claude-plugin/marketplace.json → 5.2.1"
-Task: "Bump .agents/plugins/marketplace.json → 5.2.1"
-Task: "Bump VERSION → 5.2.1 e adicionar asserção de heading '## 5.2.1' no CHANGELOG em tests/validate_distribution.py"
-Task: "Bump heading em plugin/skills/grill-with-docs/SKILL.md → v5.2.1"
-Task: "Bump heading em plugin/skills/grill-with-docs/references/session-protocol.md → v5.2.1"
+Task: "Bump plugin/.claude-plugin/plugin.json → 5.3.1"
+Task: "Bump plugin/.codex-plugin/plugin.json → 5.3.1"
+Task: "Bump .claude-plugin/marketplace.json → 5.3.1"
+Task: "Bump .agents/plugins/marketplace.json → 5.3.1"
+Task: "Bump VERSION → 5.3.1 e adicionar asserção de heading '## 5.3.1' no CHANGELOG em tests/validate_distribution.py"
+Task: "Bump heading em plugin/skills/grill-with-docs/SKILL.md → v5.3.1"
+Task: "Bump heading em plugin/skills/grill-with-docs/references/session-protocol.md → v5.3.1"
 # Após converge: leader executa T017/T018 e registra o relatório Evidence Boundary.
 ```
 
@@ -479,7 +479,7 @@ Task: "Bump heading em plugin/skills/grill-with-docs/references/session-protocol
 2. US1 → SC-001 confirmado (MVP: falso positivo eliminado no caso real)
 3. US2 → SC-002 confirmado (custo não escala por item, prova estrutural)
 4. US3 → FR-004/SC-003 confirmado (regressão travada e descoberta pela suíte)
-5. Phase 6 → bump 5.2.1, CHANGELOG (com gate no validador) e distribuição, em paralelo — só depois
+5. Phase 6 → bump 5.3.1, CHANGELOG (com gate no validador) e distribuição, em paralelo — só depois
    de 1–4 fechados sem achado aberto; a fase termina em **barreira de convergência**
 6. Phase 7 → gates fail-closed no **nó único de gate**, sobre o mesmo SHA e com limpeza tracked-only;
    `gauntlet-tasks-reconcile` só depois que esse nó convergir

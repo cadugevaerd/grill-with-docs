@@ -61,7 +61,7 @@ variância de máquina — é o que FR-004/SC-003 exigem.
   vivo com outras chamadas Git do módulo (ex.: leitura de metadata), perdendo
   especificidade sobre qual custo está sendo travado.
 
-## Decisão 4 — Bump SemVer: patch (5.2.0 → 5.2.1)
+## Decisão 4 — Bump SemVer: patch (5.3.0 → 5.3.1)
 
 **Decision**: bump PATCH, não MINOR/MAJOR.
 

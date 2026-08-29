@@ -19,7 +19,7 @@ achado continua obrigatório para exit-2-sem-payload.
 
 ## Evidência executada
 
-- Suíte completa: exit 0; 1237 testes em 26 módulos `unittest`, mais o validador standalone de distribuição; 1 skip.
+- Suíte completa após integrar `main`: exit 0; 1307 testes em 27 validadores; 1 skip.
 - Particionador real, `groups=3`: `PARTITION-DEGRADED`, `max_workers=3`, 22 tarefas, 20 dispatchable, 9 nós.
 - `unmapped_task_ids`: vazio.
 - `deferred_to_leader`: exatamente T017 e T018, pelo Evidence Boundary declarado em `.specify/reports/status-timeout-bump-leader.md`.

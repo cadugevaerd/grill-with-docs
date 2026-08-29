@@ -55,8 +55,8 @@ explícito o que a correção NÃO toca:
 
 | Campo | Local(is) | Valor anterior | Valor novo |
 |---|---|---|---|
-| `version` | `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json` (`plugins[0].version`), `.agents/plugins/marketplace.json` (`plugins[0].version`) | `5.2.0` | `5.2.1` |
-| `VERSION` | `tests/validate_distribution.py` | `"5.2.0"` | `"5.2.1"` |
-| heading `# Grill with Docs vX.Y.Z` | `plugin/skills/grill-with-docs/SKILL.md` | `v5.2.0` | `v5.2.1` |
-| heading `# Protocolo de sessão vX.Y.Z` | `plugin/skills/grill-with-docs/references/session-protocol.md` | `v5.2.0` | `v5.2.1` |
-| heading `**vX.Y.Z` | `README.md` | `**v5.2.0` | `**v5.2.1` |
+| `version` | `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json` (`plugins[0].version`), `.agents/plugins/marketplace.json` (`plugins[0].version`) | `5.3.0` | `5.3.1` |
+| `VERSION` | `tests/validate_distribution.py` | `"5.3.0"` | `"5.3.1"` |
+| heading `# Grill with Docs vX.Y.Z` | `plugin/skills/grill-with-docs/SKILL.md` | `v5.3.0` | `v5.3.1` |
+| heading `# Protocolo de sessão vX.Y.Z` | `plugin/skills/grill-with-docs/references/session-protocol.md` | `v5.3.0` | `v5.3.1` |
+| heading `**vX.Y.Z` | `README.md` | `**v5.3.0` | `**v5.3.1` |

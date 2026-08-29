@@ -74,7 +74,7 @@ antes deste passo: `gauntlet-tasks-reconcile` é posterior à convergência do n
 `check_version_bump.py` decide sobre blobs commitados (`git diff base...head` e
 `git show <rev>:plugin/.claude-plugin/plugin.json`). O baseline `7b3c3fe` já alterou `plugin/**`
 sem bump, então o veredito **atual**, antes do bump, é `MISSING-BUMP` com `verdict: FAIL`
-(`base_version` e `head_version` ambos `5.2.0`) — é esse estado que as tarefas de bump precisam
+(`base_version` e `head_version` ambos `5.3.0`) — é esse estado que as tarefas de bump precisam
 virar. `NO-PLUGIN-CHANGE` permanece só como **código residual rejeitado**: descreve a árvore em
 que `plugin/**` não mudou no SHA avaliado, impossível a partir de `7b3c3fe`; se aparecer, é
 `--base-ref`/HEAD errados, e é falha.
@@ -85,18 +85,18 @@ python3 tests/validate_distribution.py
 python3 tests/check_version_bump.py --base-ref main --json
 ```
 
-**Esperado**: `distribution: OK` — incluindo a asserção do heading `## 5.2.1` em
+**Esperado**: `distribution: OK` — incluindo a asserção do heading `## 5.3.1` em
 `CHANGELOG.md`. E o gate de bump reportando **literalmente** `"code":"BUMPED"` no JSON
-(`5.2.0` → `5.2.1`). Qualquer outro código é falha: `MISSING-BUMP` significa que o bump não
+(`5.3.0` → `5.3.1`). Qualquer outro código é falha: `MISSING-BUMP` significa que o bump não
 entrou no SHA avaliado; `NO-PLUGIN-CHANGE` significa base/HEAD errados. Os 8 locais listados em
-`data-model.md` ("Versão do plugin") devem conter `5.2.1` de forma consistente.
+`data-model.md` ("Versão do plugin") devem conter `5.3.1` de forma consistente.
 
 ## 5. CHANGELOG
 
-A entrada `## 5.2.1` em `CHANGELOG.md` descreve a correção (falso positivo de timeout, escopo
+A entrada `## 5.3.1` em `CHANGELOG.md` descreve a correção (falso positivo de timeout, escopo
 dos probes por worktree, bump obrigatório), seguindo o mesmo formato de prosa das entradas
 anteriores. A **existência** da entrada não depende de conferência humana: `validate_distribution.py`
-exige exatamente uma linha `## 5.2.1`, casando a constante `VERSION`, e reprova a ausência
+exige exatamente uma linha `## 5.3.1`, casando a constante `VERSION`, e reprova a ausência
 (passo 4). A leitura manual serve só para julgar a qualidade da prosa.
 
 ## 6. Gates fail-closed sobre o mesmo SHA (FR-008/SC-006)
@@ -127,5 +127,5 @@ invalida nada e não é waiver de nada — ele simplesmente não é avaliado. Ro
 | SC-002 (custo não escala por item) | Passo 2 — `test_live_git_state_is_resolved_once_per_worktree_not_per_item` |
 | SC-003 (suíte completa passa) | Passo 1 |
 | SC-004 (versão/distribuição coerentes) | Passo 4 — `distribution: OK` nos 8 locais |
-| SC-005 (entrada de CHANGELOG antes do ship) | Passo 4 (gate: heading `## 5.2.1`) + Passo 5 |
+| SC-005 (entrada de CHANGELOG antes do ship) | Passo 4 (gate: heading `## 5.3.1`) + Passo 5 |
 | SC-006 (ambos os gates verdes no mesmo SHA) | Passo 6 — `BUMPED` + suíte exit 0, mesmo HEAD |

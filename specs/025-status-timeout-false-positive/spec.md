@@ -81,7 +81,7 @@ Quem mantém o projeto precisa que uma futura mudança não reintroduza custo Gi
 - **SC-002**: O tempo de execução do status num worktree com múltiplos work items é equivalente ao de um worktree com um único work item (sem crescimento proporcional ao número de itens).
 - **SC-003**: 100% dos testes automatizados de regressão do workspace passam após a correção, incluindo o teste dedicado que trava o escopo por worktree.
 - **SC-004**: A versão do plugin e os oito locais de distribuição ficam coerentes entre si após o bump obrigatório.
-- **SC-005**: O `CHANGELOG.md` contém uma entrada `## 5.2.1` antes do ship, e `tests/validate_distribution.py` reprova (exit ≠ 0) a ausência dessa entrada — o critério é verificado por execução do validador, não por leitura manual.
+- **SC-005**: O `CHANGELOG.md` contém uma entrada `## 5.3.1` antes do ship, e `tests/validate_distribution.py` reprova (exit ≠ 0) a ausência dessa entrada — o critério é verificado por execução do validador, não por leitura manual.
 - **SC-006**: Antes do ship, `bump-gate.yml` e `ci.yml` estão ambos verdes sobre o mesmo SHA de topo, com o gate de bump reportando literalmente o código `BUMPED`: 0 execuções aceitas com `NO-PLUGIN-CHANGE`, `MISSING-BUMP`, `VERSION-REGRESSION` ou `VERSION-UNREADABLE`.
 
 ## Assumptions
