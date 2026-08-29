@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.3.1
+
+- Corrige o falso `STATUS-TIMEOUT` do comando público `status` em workspaces
+  acumulados: probes Git passam a ser resolvidos por worktree/repositório, em
+  vez de crescerem com o número de work items.
+- O timeout público de JSON e Markdown passa a 30 segundos, preservando o
+  contrato `grill-status/v1` e mantendo margem sobre o pior caso real medido.
+- Adiciona regressão automatizada para o escopo do cache e trava a presença
+  desta entrada de changelog no gate de distribuição.
+
 ## 5.3.0
 
 - `init` passa a fixar o **`goal.md` project-wide** na raiz, do mesmo modo que
