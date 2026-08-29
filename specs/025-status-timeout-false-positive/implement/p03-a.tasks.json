@@ -1,6 +1,6 @@
 {
   "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
-  "run_id": "run-133216f8532a269f73713b57",
+  "run_id": "run-e8b9ef83ec5732a739c919ac",
   "wave_id": "wave-0003",
   "node_id": "p03-a",
   "task_ids": ["T005", "T006"],
@@ -10,40 +10,42 @@
       "description": "Medir tempo de parede real do status JSON contra a árvore real do repositório (não fixture), da raiz do repo",
       "command": "time python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py status .",
       "exit_code": 2,
-      "wall_clock_seconds": 1.85,
-      "timeout_margin_seconds": 28.15,
+      "wall_clock_seconds": 2.473,
+      "timeout_margin_seconds": 27.527,
       "status_timeout_present": false,
       "verdict_observed": "BLOCKED",
       "code_observed": "DUPLICATE-WORK-ID",
       "summary_observed": {"blocked": 5, "completed": 8, "in_progress": 2, "total": 15},
       "result": "PASS",
       "evidence": [
-        "/usr/bin/time -f WALLTIME: WALLTIME=1.85 s",
-        "Command exited with non-zero status 2",
-        "python3 -c json.load(stdout) -- payload JSON válido, sem exceção de parsing",
-        "grep -c STATUS-TIMEOUT no payload -> 0 (ausente)",
+        "bash `{ time cmd > /tmp/t005_stdout.json 2>/tmp/t005_stderr.txt ; echo EXIT_CODE=$? ; }` -> EXIT_CODE=2",
+        "time builtin -> real 0m2.473s, user 0m1.895s, sys 0m0.583s",
+        "/tmp/t005_stderr.txt vazio (sem erro de uso do argparse)",
+        "python3 -c json.load(open(stdout)) -- payload JSON válido, sem exceção de parsing",
+        "grep -c STATUS-TIMEOUT /tmp/t005_stdout.json -> 0 (ausente)",
         "payload['code']=DUPLICATE-WORK-ID, payload['verdict']=BLOCKED, payload['summary']={'blocked':5,'completed':8,'in_progress':2,'total':15} -- 15 work items reais no workspace acumulado (múltiplos worktrees), reflete estado real, não erro de uso do argparse"
       ],
-      "notes": "exit 2 aceito como EXIT_BLOCKED por payload JSON válido declarando verdict=BLOCKED por estado real (DUPLICATE-WORK-ID + findings LIVE-VS-RECORDED em itens específicos), conforme tasks.md corrigido (linhas 187-190). Não é erro de uso do argparse: root posicional '.' foi passado corretamente e o processo produziu payload completo antes de sair. 1,85s bem abaixo dos 30s de STATUS_TIMEOUT_SECONDS, consistente com a referência de 10,56s pré-fix."
+      "notes": "exit 2 aceito como EXIT_BLOCKED por payload JSON válido declarando verdict=BLOCKED por estado real (DUPLICATE-WORK-ID + findings LIVE-VS-RECORDED em itens específicos), conforme tasks.md (linhas 183-190). Não é erro de uso do argparse: root posicional '.' foi passado corretamente e o processo produziu payload completo antes de sair. 2,473s bem abaixo dos 30s de STATUS_TIMEOUT_SECONDS, consistente com a referência de 10,56s pré-fix registrada em .grill/evidence/grill-status-timeout-debug-report.md."
     },
     {
       "id": "T006",
       "description": "Depois de T005 terminar, medir tempo de parede real do status Markdown contra a mesma árvore real",
       "command": "time python3 plugin/skills/grill-with-docs/scripts/grill_workspace.py status . --format markdown",
       "exit_code": 2,
-      "wall_clock_seconds": 1.56,
-      "timeout_margin_seconds": 28.44,
+      "wall_clock_seconds": 2.385,
+      "timeout_margin_seconds": 27.615,
       "status_timeout_present": false,
       "fallback_line_present": false,
       "result": "PASS",
       "evidence": [
-        "/usr/bin/time -f WALLTIME: WALLTIME=1.56 s",
-        "Command exited with non-zero status 2",
-        "wc -l stdout -> 9 linhas: cabeçalho da tabela + 7 linhas de work items reais (blocked/pending)",
-        "grep -c STATUS-TIMEOUT no stdout -> 0 (ausente); nenhuma linha '| workspace | blocked | STATUS-TIMEOUT: ... |'",
+        "bash `{ time cmd > /tmp/t006_stdout.md 2>/tmp/t006_stderr.txt ; echo EXIT_CODE=$? ; }` -> EXIT_CODE=2 (executado depois de T005 terminar, em série)",
+        "time builtin -> real 0m2.385s, user 0m1.817s, sys 0m0.577s",
+        "/tmp/t006_stderr.txt vazio (sem erro de uso do argparse)",
+        "wc -l /tmp/t006_stdout.md -> 9 linhas: cabeçalho + separador + 7 linhas de work items reais (blocked/pending)",
+        "grep -c '| workspace | blocked | STATUS-TIMEOUT' /tmp/t006_stdout.md -> 0 (ausente)",
         "tabela Markdown com pendências reais por item: findings LIVE-VS-RECORDED, CONSTITUTION-HASH-MISMATCH, etapa GWD pendente/bloqueada -- todas condições reais do workspace, não timeout"
       ],
-      "notes": "Executada em série, depois de T005 finalizar (não em paralelo), conforme serialidade obrigatória de tasks.md. exit 2 aceito pelo mesmo critério de T005: tabela Markdown válida refletindo estado real, sem fallback de timeout. Tempos de T005 (1,85s) e T006 (1,56s) registrados lado a lado -- ambos medidos em série, mesma árvore real, folga de ~28s sob STATUS_TIMEOUT_SECONDS=30."
+      "notes": "Executada em série, depois de T005 finalizar (não em paralelo), conforme serialidade obrigatória de tasks.md (linhas 170-173). exit 2 aceito pelo mesmo critério de T005: tabela Markdown válida refletindo estado real, sem fallback de timeout. Tempos de T005 (2,473s) e T006 (2,385s) registrados lado a lado -- ambos medidos em série, mesma árvore real, folga de ~27,5s sob STATUS_TIMEOUT_SECONDS=30."
     }
   ],
   "findings": [
@@ -51,7 +53,7 @@
       "id": "F001",
       "severity": "info",
       "title": "SC-001 confirmado: STATUS-TIMEOUT ausente em JSON e Markdown, tempos muito abaixo de 30s no workspace real acumulado",
-      "detail": "T005=1,85s e T006=1,56s, ambos medidos em série contra o mesmo workspace real (15 work items, múltiplos worktrees). Nenhuma ocorrência de STATUS-TIMEOUT no payload JSON nem da linha de fallback '| workspace | blocked | STATUS-TIMEOUT: ... |' no Markdown. Margem confortável (~28s) sob STATUS_TIMEOUT_SECONDS=30; nenhum indício de aproximação do timeout que justifique achado a revalidar antes do ship."
+      "detail": "T005=2,473s e T006=2,385s, ambos medidos em série contra o mesmo workspace real (15 work items, múltiplos worktrees). Nenhuma ocorrência de STATUS-TIMEOUT no payload JSON nem da linha de fallback '| workspace | blocked | STATUS-TIMEOUT: ... |' no Markdown. Margem confortável (~27,5s) sob STATUS_TIMEOUT_SECONDS=30; nenhum indício de aproximação do timeout que justifique achado a revalidar antes do ship."
     }
   ],
   "completed": ["T005", "T006"]
