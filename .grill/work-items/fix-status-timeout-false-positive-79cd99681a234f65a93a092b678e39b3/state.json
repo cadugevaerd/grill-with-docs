@@ -29,7 +29,8 @@
       "partition": "se-10da1b0f29345dc14241fcfeed1a7fc28c7f0eccbd7dc59d0fdbc3e730f683fd",
       "plan": "se-a35216f6e24baacae7cba5383017a99cfaadb3a7f3f8f26d932582a3c04084f4",
       "specify": "se-cb523a70bcbd48d351896342319c009619efe622f7927130c9a99add54f00461",
-      "tasks": "se-552f2a4263922111255871e789c7b4d4a4d5605dece1a83e0734f03da8a5ce4c"
+      "tasks": "se-552f2a4263922111255871e789c7b4d4a4d5605dece1a83e0734f03da8a5ce4c",
+      "verify": "se-058cd0e1f43161119cd49fe57ec7ac773297ff077b20c967a4e160096ad222cc"
     },
     "attested_outputs": {
       "analyze": {
@@ -79,6 +80,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/tasks-tasks-8.terminal.json",
         "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:7a42ba64c13188dc227835e9a43a5d98576a33c6ab6141cb18c7859244384d87",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "step_id": "verify"
       }
     },
     "audit": [
@@ -686,10 +693,29 @@
         "reason": "official speckit-converge outcome converged; zero missing, partial, contradicts, or unrequested gaps",
         "state": "complete",
         "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "official verify-review-ship verify gate started after converged outcome",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/verify.md",
+            "sha256": "7a42ba64c13188dc227835e9a43a5d98576a33c6ab6141cb18c7859244384d87"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "VERIFY PASS; fingerprint stable; distribution, BUMPED, and 1335-test suite passed",
+        "state": "complete",
+        "step": "verify"
       }
     ],
     "chain_stale": [],
-    "current_step": "verify",
+    "current_step": "review",
     "execution_branch": "025-status-timeout-false-positive",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -717,7 +743,7 @@
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "complete"
     },
     "superseded_outputs": {
       "analyze": [
