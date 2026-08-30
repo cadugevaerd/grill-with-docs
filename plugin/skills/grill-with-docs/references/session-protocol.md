@@ -1,4 +1,4 @@
-# Protocolo de sessão v5.3.2
+# Protocolo de sessão v5.3.3
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 

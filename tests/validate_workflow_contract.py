@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib, importlib.util, json, os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
-HERE=Path(__file__).resolve(); REPO=HERE.parents[1]; PLUGIN=REPO/'plugin'; SCRIPT=PLUGIN/'skills/grill-with-docs/scripts/ensure_workflow.py'; WS=PLUGIN/'skills/grill-with-docs/scripts/grill_workspace.py'; TEMPLATE=PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.template.md'; HOOKS=PLUGIN/'hooks/hooks.json'; MARK='grill-with-docs-workflow:v2'; MARK_V4='grill-with-docs-workflow:v4'
+HERE=Path(__file__).resolve(); REPO=HERE.parents[1]; PLUGIN=REPO/'plugin'; SCRIPT=PLUGIN/'skills/grill-with-docs/scripts/ensure_workflow.py'; WS=PLUGIN/'skills/grill-with-docs/scripts/grill_workspace.py'; ASSETS=PLUGIN/'skills/grill-with-docs/assets'; TEMPLATE=ASSETS/'WORKFLOW.template.md'; TEMPLATE_V4=ASSETS/'WORKFLOW.v4.template.md'; REGISTRY_V4=ASSETS/'workflow-step-skills.v4.json'; HOOKS=PLUGIN/'hooks/hooks.json'; MARK='grill-with-docs-workflow:v2'; MARK_V4='grill-with-docs-workflow:v4'
 
 def symlink_supported():
  with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
@@ -37,6 +37,9 @@ class Contract(unittest.TestCase):
  def test_create_reuse_hash_readback(self):
   r=run('--ensure',str(self.root)); self.assertEqual(r.returncode,0); o=json.loads(r.stdout); self.assertEqual(o['status'],'CREATED'); p=self.root/'WORKFLOW.md'; self.assertEqual(o['sha256'],hashlib.sha256(p.read_bytes()).hexdigest()); b=p.read_bytes(); r=run('--ensure',str(self.root)); self.assertEqual(json.loads(r.stdout)['status'],'REUSED'); self.assertEqual(b,p.read_bytes())
   self.assertEqual(o['version'],'v4'); self.assertIn(MARK_V4,p.read_text()); self.assertNotIn('__REGISTRY_SHA256__',p.read_text())
+  source=SCRIPT.read_text(encoding='utf-8'); self.assertIn('TEMPLATE = HERE.parents[1] / "assets/WORKFLOW.v4.template.md"',source)
+  expected=TEMPLATE_V4.read_text(encoding='utf-8').replace('__REGISTRY_SHA256__','sha256:'+hashlib.sha256(REGISTRY_V4.read_bytes()).hexdigest()).encode('utf-8')
+  self.assertEqual(p.read_bytes(),expected)
  def test_versions_and_humans(self):
   p=self.root/'WORKFLOW.md'; p.write_text(MARK.replace('v2','v3')); self.assertEqual(run('--ensure',str(self.root)).returncode,2)
   p.write_text(TEMPLATE.read_text().replace('<!-- grill-with-docs-workflow:v2 -->','<!-- human-maintained equivalent -->')); b=p.read_bytes(); self.assertEqual(json.loads(run('--ensure',str(self.root)).stdout)['status'],'REUSED'); self.assertEqual(b,p.read_bytes())

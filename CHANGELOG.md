@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.3.3
+
+- `ensure_workflow.py` passa a declarar `WORKFLOW.v4.template.md` como seu
+  template de bootstrap e usa esses bytes como entrada explícita de
+  `workflow_v4.render_v4`. O bootstrap novo continua preservando o pin do
+  registry e agora elimina a referência estática enganosa ao template v2.
+
 ## 5.3.2
 
 - Projetos novos passam a materializar `WORKFLOW.md` v4 já renderizado com o

@@ -20,7 +20,7 @@ from typing import NamedTuple
 VERSION = "v2"
 MARKER = "grill-with-docs-workflow:v2"
 HERE = Path(__file__).resolve()
-TEMPLATE = HERE.parents[1] / "assets/WORKFLOW.template.md"
+TEMPLATE = HERE.parents[1] / "assets/WORKFLOW.v4.template.md"
 # LD-004 item 3/4: a NEW, additive marker recognised alongside VERSION ("v2").
 # VERSION and the v2 ESSENTIAL tuple stay untouched so already materialised v2
 # documents retain their original read contract; BOOTSTRAP_VERSION below owns
@@ -206,7 +206,8 @@ def bootstrap_document() -> tuple[bytes, str] | None:
     if module is None or not hasattr(module, "render_v4"):
         return None
     try:
-        content = module.render_v4()
+        _, template_text = read_regular(TEMPLATE)
+        content = module.render_v4(template_text)
         text = content.decode("utf-8")
         if managed_version(text) != BOOTSTRAP_VERSION or module.execution_gate(text).status != "OK":
             return None
