@@ -100,3 +100,8 @@ Ao marcar, vale exigir junto **branch atualizada em relação à base**: isso fe
 - `README.md` — heading `**vX.Y.Z`
 
 Os três headings existem porque derivavam silenciosamente dos manifests; o validador exige exatamente uma ocorrência de cada prefixo, casando a versão.
+
+## Project Learnings
+
+- **`EXIT_BLOCKED=2` com payload ≠ exit 2 puro do argparse**: argparse usa exit code 2 para os próprios erros de parsing. Um contrato de CLI que espera `EXIT_BLOCKED=2` precisa checar o payload, não só o código de saída — senão confunde bloqueio legítimo com erro de parsing (`specs/025-status-timeout-false-positive/tasks.md`, T005/T006).
+- **Estado Git live resolve uma vez por worktree, não uma vez por work item**: comandos que iteram work items e precisam de estado Git (branches, status) devem resolver esse estado uma vez por worktree e passá-lo por parâmetro, não reconsultar por item — custo O(items) de subprocessos Git é o bug a evitar (`plugin/skills/grill-with-docs/scripts/grill_core/grill_status.py`).
