@@ -1,9 +1,11 @@
 ## Review Report
 
 Verdict: APPROVE
-Source fingerprint: tree 671243b135800f8ea7bb46072ab1a7559301eae1ae70d8fe5329af7954e6bc15 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 2d8c1892a7ca0ce7ea3f86933a9ec04b44325c0cda47b9cc6653c4b24c62e7c4
+Source fingerprint: tree 078dae5ccc3ec6b8a7eb8972fb278e63fc2eb20611f8d32ed75663434348719b / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 2d8c1892a7ca0ce7ea3f86933a9ec04b44325c0cda47b9cc6653c4b24c62e7c4
 
-Converge: CONVERGED, zero findings. Verify: PASS, fingerprint idêntico.
+Converge: CONVERGED, zero findings. Verify: PASS, fingerprint idêntico (revalidado após proposal `66ac48924a0e2fb6…` aplicado em `6869a6a`).
+
+Revalidação: única mudança desde a última medição é a seção `## Project Learnings` acrescentada a `CLAUDE.md` raiz (LRN-001, LRN-002, doc-only, aprovado). Nenhum código, spec.md, plan.md ou tasks.md foi tocado; todas as seções abaixo permanecem válidas sem nova análise de risco.
 
 ### Test Quality
 
