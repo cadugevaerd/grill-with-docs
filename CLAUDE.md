@@ -82,9 +82,15 @@ São dois workflows, e a separação é deliberada:
 
 O gate mora sozinho porque `paths:` é declarado no nível do workflow, não do job: enquanto vivia no `ci.yml`, herdava o filtro da matriz e ficava mudo nas PRs que não o casavam. Um required check mudo prende a PR para sempre.
 
-**Ato humano pendente:** registrar `Version bump gate` como *required status check* na branch protection de `main`, em `cadugevaerd/grill-with-docs`. Sem isso, FR-007 é convenção e não gate — a reprovação aparece em vermelho e nada impede o merge. Nenhum commit consegue fazer isso; é configuração do serviço. Rastreado em SGD-4 e SGD-7.
+**Registrado** (2026-08-30, SGD-4 e SGD-7): `Version bump gate` é *required status check* na branch protection de `main` em `cadugevaerd/grill-with-docs`, com `strict: true` — a PR também precisa estar atualizada em relação à base, o que fecha a ressalva da guarda de deduplicação do `ci.yml`, onde uma PR desatualizada poderia depositar árvore diferente da testada. O check está amarrado ao app do GitHub Actions (`app_id: 15368`), então um status de terceiro com o mesmo nome não o satisfaz. Ligar a proteção também passou a recusar force-push e deleção da `main`, que antes eram livres.
 
-Ao marcar, vale exigir junto **branch atualizada em relação à base**: isso fecha a ressalva da guarda de deduplicação do `ci.yml`, onde uma PR desatualizada poderia depositar árvore diferente da testada.
+Nenhum commit consegue mexer nisso; é configuração do serviço, e o estado real vive só na API:
+
+```bash
+gh api repos/cadugevaerd/grill-with-docs/branches/main/protection
+```
+
+**`enforce_admins` está `false`, de propósito.** O gate bloqueia o merge de qualquer PR, inclusive as do dono, mas push direto para `main` continua permitido para quem é admin — é como o ship deste repo opera hoje. A consequência é que FR-007 vincula o caminho de PR, não o de push: quem tem admin ainda contorna. Tornar a cláusula constitucional realmente vinculante é `enforce_admins: true`, um `PATCH` de uma linha, ao custo de todo ship passar a exigir PR.
 
 ## Distribuição
 
