@@ -1,6 +1,6 @@
 # Ship — 025-status-timeout-false-positive
 
-Status: `MERGED_WITH_POST_MERGE_WARNINGS`
+Status: `MERGED`
 
 ## Fonte e aprovação
 
@@ -40,15 +40,13 @@ passou; a configuração documentada permite push administrativo direto.
   `agent-context` e versionados em `CLAUDE.md`.
 - Trabalho não relacionado da worktree primária não foi alterado.
 
-## Warning pós-merge
+## Warning pós-merge resolvido
 
-- `grill-with-docs portability` permanece em execução:
+- `grill-with-docs portability` concluiu com sucesso:
   https://github.com/cadugevaerd/grill-with-docs/actions/runs/33324527332
-- `publish to marketplaces` falhou:
+- `publish to marketplaces` foi reexecutada e concluiu com sucesso:
   https://github.com/cadugevaerd/grill-with-docs/actions/runs/33324527376
-- Os jobs `Publicar em codex` e `Publicar em claude` receberam o secret
-  `MARKETPLACE_PUBLISH_TOKEN`, mas o clone HTTPS foi rejeitado com
-  `fatal: could not read Username for 'https://github.com': No such device or address`.
-- Próxima ação segura: corrigir/renovar a credencial e reexecutar a workflow de
-  publicação para o commit de merge. O merge verificado não deve ser revertido
-  por essa falha pós-merge.
+- O secret `MARKETPLACE_PUBLISH_TOKEN` foi atualizado com a credencial validada.
+- Tag/release, publicação em `cadugevaerd/codex-skills` e publicação em
+  `cadugevaerd/claude-skills` passaram, incluindo verificação do estado
+  publicado.

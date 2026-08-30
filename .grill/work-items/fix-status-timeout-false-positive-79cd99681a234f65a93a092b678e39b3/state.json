@@ -29,7 +29,7 @@
       "partition": "se-10da1b0f29345dc14241fcfeed1a7fc28c7f0eccbd7dc59d0fdbc3e730f683fd",
       "plan": "se-a35216f6e24baacae7cba5383017a99cfaadb3a7f3f8f26d932582a3c04084f4",
       "review": "se-853ca24764b4981f4fa82f34112df802f0c72070f46c8becc4857d58cb6fecde",
-      "ship": "se-4dbf039e6c727053ff3352d7d13f62988944432b2ce1fcfe3ef97d5142c0a035",
+      "ship": "se-54e0a4ce24575e2e5e3872d3e8b0e83b29dc0e809d447902245b53752ce8f5df",
       "specify": "se-cb523a70bcbd48d351896342319c009619efe622f7927130c9a99add54f00461",
       "tasks": "se-552f2a4263922111255871e789c7b4d4a4d5605dece1a83e0734f03da8a5ce4c",
       "verify": "se-058cd0e1f43161119cd49fe57ec7ac773297ff077b20c967a4e160096ad222cc"
@@ -78,9 +78,9 @@
         "step_id": "review"
       },
       "ship": {
-        "output_sha256": "sha256:d383ee1bf86e86c3f890b4c608046bcaf60fc8c2e96c023c623dcfba18727741",
+        "output_sha256": "sha256:65b5c3a4625e529c5c52ad5985fb2edc606aa11f7aeaaa80e574e6c7bd3aa23f",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/ship-ship-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/ship-ship-3.terminal.json",
         "step_id": "ship"
       },
       "specify": {
@@ -783,6 +783,20 @@
         "state": "complete",
         "step": "ship",
         "supersedes": ".grill/attestations/fix-status-timeout-false-positive-ship.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/ship.md",
+            "sha256": "65b5c3a4625e529c5c52ad5985fb2edc606aa11f7aeaaa80e574e6c7bd3aa23f"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "registrar resolução da publicação pós-merge",
+        "state": "complete",
+        "step": "ship",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-ship-r2.json"
       }
     ],
     "chain_stale": [],
@@ -1029,6 +1043,18 @@
           "step_execution_id": "se-a84658d6636ff9723646ff0d05cdf22c2b9b38fb32256c90cd0758e8f99bccdf",
           "step_id": "ship",
           "superseded_by_step_execution_id": "se-4dbf039e6c727053ff3352d7d13f62988944432b2ce1fcfe3ef97d5142c0a035"
+        },
+        {
+          "attempt_id": "ship-2",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-ship-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:d383ee1bf86e86c3f890b4c608046bcaf60fc8c2e96c023c623dcfba18727741",
+          "provenance": "current-generation",
+          "reason": "registrar resolução da publicação pós-merge",
+          "receipt_ref": "receipts/skill-invocation/ship-ship-2.terminal.json",
+          "step_execution_id": "se-4dbf039e6c727053ff3352d7d13f62988944432b2ce1fcfe3ef97d5142c0a035",
+          "step_id": "ship",
+          "superseded_by_step_execution_id": "se-54e0a4ce24575e2e5e3872d3e8b0e83b29dc0e809d447902245b53752ce8f5df"
         }
       ],
       "specify": [
