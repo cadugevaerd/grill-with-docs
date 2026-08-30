@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v5.3.1
+# Grill with Docs v5.3.2
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -293,9 +293,11 @@ Sempre execute preview antes de aplicar:
 ```text
 python3 .../grill_workspace.py migrate ROOT --type feature|fix|hotfix --slug SLUG [--work-id ID]
 python3 .../grill_workspace.py migrate ROOT --type feature|fix|hotfix --slug SLUG [--work-id ID] --apply
+python3 .../grill_workspace.py migrate-v4 ROOT
+python3 .../grill_workspace.py migrate-v4 ROOT --apply --expected-sha256 SHA256 [--allow-local-edits]
 ```
 
-A migração copia arquivos planos, `docs/adr|adrs` e `handoffs` para staging, preserva bytes e mantém a origem. Symlink, UTF-8 inválido, colisão ou divergência bloqueiam; falha não deixa bundle parcial.
+A migração legada copia arquivos planos, `docs/adr|adrs` e `handoffs` para staging, preserva bytes e mantém a origem. `migrate-v4` atualiza `WORKFLOW.md` v2/v3 com compare-and-swap; projeto novo já materializa v4. Symlink, UTF-8 inválido, colisão ou divergência bloqueiam; falha não deixa bundle parcial.
 
 ## ROADMAP, GO e `PLAN_ONLY_STOP`
 

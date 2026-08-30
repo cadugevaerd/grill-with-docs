@@ -19,7 +19,29 @@ O agrupamento **não é decisão sua**. Ele vive em `grill_core/partition.py` e 
    .specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks
    ```
 
-2. **Emitir o DAG**
+2. **Tornar a frontier v4 alcançável** — preview primeiro. Se `migrate-v4`
+   retornar `PREVIEW`, reaplique com o `sha256` retornado. Edição local nunca é
+   descartada automaticamente: `WORKFLOW_LOCAL_EDITS` exige revisão humana.
+
+   ```bash
+   python3 <plugin>/scripts/grill_workspace.py migrate-v4 ROOT
+   python3 <plugin>/scripts/grill_workspace.py migrate-v4 ROOT \
+       --apply --expected-sha256 SHA256_DO_PREVIEW
+   ```
+
+3. **Preparar e rebindar o work item** — `gauntlet-init` exige o schema v3 e
+   que ele esteja preso aos bytes correntes do workflow. Execute cada operação
+   em preview; aplique somente quando o retorno for `PREVIEW`. `REUSED` segue
+   sem escrita.
+
+   ```bash
+   python3 <plugin>/scripts/grill_workspace.py migrate-v3 ROOT --work-id ID
+   python3 <plugin>/scripts/grill_workspace.py migrate-v3 ROOT --work-id ID --apply
+   python3 <plugin>/scripts/grill_workspace.py migrate-v3 ROOT --work-id ID --rebind-workflow
+   python3 <plugin>/scripts/grill_workspace.py migrate-v3 ROOT --work-id ID --rebind-workflow --apply
+   ```
+
+4. **Emitir o DAG**
 
    ```bash
    python3 <plugin>/scripts/grill_workspace.py partition-emit ROOT \
@@ -28,7 +50,21 @@ O agrupamento **não é decisão sua**. Ele vive em `grill_core/partition.py` e 
 
    Sem `--apply` é preview: imprime o DAG e o relatório sem escrever. Com `--apply` grava `specs/NNN-slug/execution-dag.json` e `specs/NNN-slug/partition-report.json`.
 
-3. **Validar pelo validador oficial** — último ato, sempre:
+5. **Ativar o Gauntlet e admitir a run** — responsabilidade desta skill,
+   porque a validação do DAG já exige `run-id`. Ambos os comandos são
+   idempotentes (`REUSED`/`RUN-REUSED` em repetição idêntica):
+
+   ```bash
+   python3 <plugin>/scripts/grill_workspace.py gauntlet-init ROOT \
+       --work-id ID --max-workers MAX_WORKERS_DO_DAG
+   python3 <plugin>/scripts/grill_workspace.py gauntlet-run ROOT \
+       --work-id ID
+   ```
+
+   Preserve o `run_id` retornado: ele é a saída operacional de `partition` e a
+   entrada obrigatória de `implement-parallel`.
+
+6. **Validar pelo validador oficial** — último ato, sempre:
 
    ```bash
    python3 <plugin>/scripts/grill_workspace.py gauntlet-dag-validate ROOT \
@@ -37,7 +73,8 @@ O agrupamento **não é decisão sua**. Ele vive em `grill_core/partition.py` e 
 
    Veredito diferente de `DAG-VALID` ⇒ reporte `blocked` e **não** faça checkpoint.
 
-4. **Checkpoint** só depois de `DAG-VALID`.
+7. **Checkpoint** só depois de `DAG-VALID`. A evidência deve registrar o
+   `run_id`, para que `implement-parallel` retome a mesma run validada.
 
 ## Como ler o relatório
 
@@ -68,4 +105,5 @@ Nenhuma delas se resolve editando o DAG à mão. Todas se resolvem no `tasks.md`
 - Não edita `tasks.md`.
 - Não escolhe agente, modelo ou tier — o tier vem do `TIER_POLICY` da ativação.
 - Não despacha worker: isso é `implement-parallel`.
+- Não declara waves: isso começa em `implement-parallel`, depois de `DAG-VALID`.
 - Não fatia um grupo de conflito para forçar 3 bins.

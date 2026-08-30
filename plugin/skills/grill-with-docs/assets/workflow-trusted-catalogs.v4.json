@@ -1,6 +1,6 @@
 {
   "catalogs": {
-    "grill-v4-local-skills": "sha256:8937773d807af286d821327d8b9a8c3ba6308c26eca145a03135572dab89fac3"
+    "grill-v4-local-skills": "sha256:847e73e2022a97cbf6ddab4b346c199b0d734c8f5c2661bfd4e65b1ce3a46f8d"
   },
   "schema": "workflow-trusted-catalogs/v1",
   "workflow_version": "v4"

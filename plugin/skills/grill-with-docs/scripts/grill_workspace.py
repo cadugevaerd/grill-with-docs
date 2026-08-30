@@ -2427,6 +2427,27 @@ def migrate_v3_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             shutil.rmtree(lock, ignore_errors=True)
 
 
+def migrate_v4_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Expose the preview-first WORKFLOW.md v2/v3 -> v4 migration."""
+    workflow_v4 = grill_core_module("workflow_v4")
+    try:
+        return workflow_v4.migrate_command(
+            args.root,
+            apply=args.apply,
+            expected_sha256=args.expected_sha256,
+            allow_local_edits=args.allow_local_edits,
+        )
+    except workflow_v4.Failure as error:
+        code = translate_v3_code(error.code)
+        raise CliFailure(
+            error.exit_code,
+            error.verdict,
+            code,
+            error.message,
+            extra=dict(error.extra) if error.extra else None,
+        ) from error
+
+
 def gauntlet_init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Explicitly activate one verified V3 work item for the FASE-001 Gauntlet."""
     root = project_root(args.root)
@@ -3993,6 +4014,11 @@ def build_parser() -> JsonParser:
     migrate_v3_parser.add_argument("--work-id", required=True)
     migrate_v3_parser.add_argument("--rebind-workflow", action="store_true")
     migrate_v3_parser.add_argument("--apply", action="store_true")
+    migrate_v4_parser = subparsers.add_parser("migrate-v4")
+    migrate_v4_parser.add_argument("root")
+    migrate_v4_parser.add_argument("--apply", action="store_true")
+    migrate_v4_parser.add_argument("--expected-sha256")
+    migrate_v4_parser.add_argument("--allow-local-edits", action="store_true")
     gauntlet_init_parser = subparsers.add_parser("gauntlet-init")
     gauntlet_init_parser.add_argument("root")
     gauntlet_init_parser.add_argument("--work-id", required=True)
@@ -4142,6 +4168,7 @@ def main(argv: list[str] | None = None) -> int:
             "reconcile": reconcile_command,
             "migrate": migrate_command,
             "migrate-v3": migrate_v3_command,
+            "migrate-v4": migrate_v4_command,
             "gauntlet-init": gauntlet_init_command,
             "gauntlet-status": gauntlet_status_command,
             "gauntlet-run": gauntlet_run_command,

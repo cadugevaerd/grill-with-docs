@@ -1,4 +1,4 @@
-# Protocolo de sessão v5.3.1
+# Protocolo de sessão v5.3.2
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -136,6 +136,7 @@ Apply:
 
 ## Migração
 
+- [ ] Para `WORKFLOW.md` v2/v3, executar `migrate-v4 ROOT` em preview e aplicar somente com `--expected-sha256`; usar `--allow-local-edits` apenas após revisar o diff.
 - [ ] Preview primeiro e sem escrita.
 - [ ] Mapear arquivos planos, `docs/adr`, `adrs` e `handoffs`.
 - [ ] Validar tudo antes do staging.

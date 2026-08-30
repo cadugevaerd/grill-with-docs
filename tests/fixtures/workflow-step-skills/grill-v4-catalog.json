@@ -1,13 +1,13 @@
 {
   "catalog_id": "grill-v4-local-skills",
-  "catalog_sha256": "sha256:8937773d807af286d821327d8b9a8c3ba6308c26eca145a03135572dab89fac3",
+  "catalog_sha256": "sha256:847e73e2022a97cbf6ddab4b346c199b0d734c8f5c2661bfd4e65b1ce3a46f8d",
   "entries": [
     {
       "adapter": "claude-code-skill/v1",
       "content_sha256": "sha256:89f1ee45d1f66e5eb72e5abc9226fad90aa6c96195ddff8710b67ad2bab5a4ef",
       "entrypoint": "grill-with-docs:grill-implement-parallel",
       "entrypoint_kind": "skill",
-      "manifest_sha256": "sha256:d9dc0760b5d046371cf750886376fe2e40ed80281d83504de0f7f6ea5b829e37",
+      "manifest_sha256": "sha256:fa7d2564063b981c15af3bff9de2c680170247921dc66f5ca85c4e4e0a09ed0e",
       "native_invocation": true,
       "preflight_ref": "preflight:claude-code-skill/grill-with-docs:grill-implement-parallel",
       "source_ref": "grill-with-docs:implement-parallel@4.0.0",
@@ -15,10 +15,10 @@
     },
     {
       "adapter": "claude-code-skill/v1",
-      "content_sha256": "sha256:1337bfae1be51f66e36b8cb711cd201d3063173545313357f9f06bb5934f9170",
+      "content_sha256": "sha256:2b8ca639b4d79464c4715fff1d9677d206f22c6c08ec734508d5f5c989ae6474",
       "entrypoint": "grill-with-docs:grill-partition",
       "entrypoint_kind": "skill",
-      "manifest_sha256": "sha256:d9dc0760b5d046371cf750886376fe2e40ed80281d83504de0f7f6ea5b829e37",
+      "manifest_sha256": "sha256:fa7d2564063b981c15af3bff9de2c680170247921dc66f5ca85c4e4e0a09ed0e",
       "native_invocation": true,
       "preflight_ref": "preflight:claude-code-skill/grill-with-docs:grill-partition",
       "source_ref": "grill-with-docs:partition@4.0.0",

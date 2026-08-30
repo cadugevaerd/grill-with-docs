@@ -22,19 +22,21 @@ MARKER = "grill-with-docs-workflow:v2"
 HERE = Path(__file__).resolve()
 TEMPLATE = HERE.parents[1] / "assets/WORKFLOW.template.md"
 # LD-004 item 3/4: a NEW, additive marker recognised alongside VERSION ("v2").
-# Never assigned to VERSION itself -- VERSION keeps gating fresh bootstrap
-# (init/`--ensure` on a repo with no WORKFLOW.md still materialise v2, per
-# LD-004's invariant that default bootstrap must not change) and the v2
-# ESSENTIAL tuple below is untouched, byte for byte, so no v2 consumer is
-# affected by this addition.
+# VERSION and the v2 ESSENTIAL tuple stay untouched so already materialised v2
+# documents retain their original read contract; BOOTSTRAP_VERSION below owns
+# the independent choice for an absent document.
 V3_MARKER_VERSION = "v3"
 # Same additive contract LD-004 established for v3: a NEW marker recognised
-# alongside VERSION, never assigned to it. Fresh bootstrap still materialises
-# v2 and the v2 ESSENTIAL tuple below stays byte-for-byte untouched, so no
-# consumer that changed nothing is affected by v4 existing.
+# alongside VERSION, never assigned to it. The v2 ESSENTIAL tuple below stays
+# byte-for-byte untouched even though fresh bootstrap now selects v4.
 V4_MARKER_VERSION = "v4"
-#: Marker versions this build can READ and execute against, newest last. v2 is
-#: readable and bootstrappable but was never an execution surface.
+# Existing v2 documents remain readable against VERSION/ESSENTIAL above, but
+# a fresh project must start on the executable frontier.  Keeping these names
+# separate is what lets bootstrap advance without silently reinterpreting an
+# already-materialised v2 document as v4.
+BOOTSTRAP_VERSION = V4_MARKER_VERSION
+#: Marker versions this build can execute against, newest last. v2 remains
+#: readable through its frozen legacy contract but was never executable.
 EXECUTABLE_MARKER_VERSIONS = (V3_MARKER_VERSION, V4_MARKER_VERSION)
 # Same path grill_core/workflow_v3.py resolves REGISTRY to (its ASSETS is
 # HERE.parents[2] / "assets" from one directory deeper); kept as a literal
@@ -196,6 +198,23 @@ def _v3_ready(text: str) -> bool:
         return False
 
 
+def bootstrap_document() -> tuple[bytes, str] | None:
+    """Render the active bootstrap document through its owning version module."""
+    if BOOTSTRAP_VERSION != V4_MARKER_VERSION:
+        return None
+    module = _load_grill_core("workflow_v4")
+    if module is None or not hasattr(module, "render_v4"):
+        return None
+    try:
+        content = module.render_v4()
+        text = content.decode("utf-8")
+        if managed_version(text) != BOOTSTRAP_VERSION or module.execution_gate(text).status != "OK":
+            return None
+        return content, text
+    except Exception:
+        return None
+
+
 def read_regular(path: Path) -> tuple[bytes, str]:
     """Open one regular file without following a final-component symlink."""
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -305,16 +324,17 @@ def resolve_workflow(root_argument: str | Path) -> WorkflowResult:
                 return WorkflowResult("REUSED", target, content, None)
             return WorkflowResult("BLOCKED", None, b"", "incompatible workflow")
 
-        template_content, template_text = read_regular(TEMPLATE)
-        if managed_version(template_text) != VERSION or not compatible(template_text):
+        rendered = bootstrap_document()
+        if rendered is None:
             return WorkflowResult("BLOCKED", None, b"", "invalid bundled template")
+        template_content, _template_text = rendered
         created = atomic_create(target, template_content)
 
         if target.is_symlink() or target.resolve(strict=False).parent != root:
             return WorkflowResult("BLOCKED", None, b"", "unsafe target after create")
         content, text = read_regular(target)
         version = managed_version(text)
-        if (version and version != VERSION) or not compatible(text):
+        if version != BOOTSTRAP_VERSION or not _v4_ready(text):
             return WorkflowResult("BLOCKED", None, b"", "read-back validation failed")
         return WorkflowResult("CREATED" if created else "REUSED", target, content, None)
     except UnicodeError:
@@ -328,9 +348,8 @@ def ensure(root_argument: str) -> int:
     if result.status == "BLOCKED":
         emit("BLOCKED", reason=result.reason or "unknown")
         return 2
-    # Report the marker actually materialised/read back, not the bootstrap
-    # default: a REUSED v3 document must say version:"v3", not silently lie
-    # "v2" (fresh CREATED is always VERSION, since only v2 gets bootstrapped).
+    # Report the marker actually materialised/read back: CREATED now says v4,
+    # while a REUSED v3 or v2 document retains its own declared version.
     try:
         actual_version = managed_version(result.content.decode("utf-8")) or VERSION
     except UnicodeError:

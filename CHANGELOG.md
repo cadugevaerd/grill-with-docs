@@ -1,5 +1,19 @@
 # Changelog
 
+## 5.3.2
+
+- Projetos novos passam a materializar `WORKFLOW.md` v4 já renderizado com o
+  pin do registry atual. Documentos v2 existentes continuam byte-intactos e
+  legíveis; avançar um projeto existente permanece uma mutação explícita.
+- `grill_workspace.py migrate-v4` expõe a migração v2/v3 já implementada no
+  core: preview por padrão, compare-and-swap obrigatório em `--apply`, proteção
+  de edições locais e reexecução idempotente.
+- `grill-partition` agora assume a fronteira que seu próprio gate exige:
+  migra/rebinda workflow e work item em preview-first, emite o DAG, ativa o
+  Gauntlet, admite/reutiliza a run e só então chama `gauntlet-dag-validate`. O
+  `run_id` validado é entregue a `implement-parallel`, que continua responsável
+  por waves e workers.
+
 ## 5.3.1
 
 - Corrige o falso `STATUS-TIMEOUT` do comando público `status` em workspaces
