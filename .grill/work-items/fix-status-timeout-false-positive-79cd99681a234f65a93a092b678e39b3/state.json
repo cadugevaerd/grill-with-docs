@@ -29,7 +29,7 @@
       "partition": "se-10da1b0f29345dc14241fcfeed1a7fc28c7f0eccbd7dc59d0fdbc3e730f683fd",
       "plan": "se-a35216f6e24baacae7cba5383017a99cfaadb3a7f3f8f26d932582a3c04084f4",
       "review": "se-853ca24764b4981f4fa82f34112df802f0c72070f46c8becc4857d58cb6fecde",
-      "ship": "se-a84658d6636ff9723646ff0d05cdf22c2b9b38fb32256c90cd0758e8f99bccdf",
+      "ship": "se-4dbf039e6c727053ff3352d7d13f62988944432b2ce1fcfe3ef97d5142c0a035",
       "specify": "se-cb523a70bcbd48d351896342319c009619efe622f7927130c9a99add54f00461",
       "tasks": "se-552f2a4263922111255871e789c7b4d4a4d5605dece1a83e0734f03da8a5ce4c",
       "verify": "se-058cd0e1f43161119cd49fe57ec7ac773297ff077b20c967a4e160096ad222cc"
@@ -78,9 +78,9 @@
         "step_id": "review"
       },
       "ship": {
-        "output_sha256": "sha256:f74ce771e19f1579ad7aa9843c348fac4026ad10d7da07188d0b6d8f427a4f7d",
+        "output_sha256": "sha256:d383ee1bf86e86c3f890b4c608046bcaf60fc8c2e96c023c623dcfba18727741",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/ship-ship-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/ship-ship-2.terminal.json",
         "step_id": "ship"
       },
       "specify": {
@@ -769,6 +769,20 @@
         "reason": "",
         "state": "complete",
         "step": "ship"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/ship.md",
+            "sha256": "d383ee1bf86e86c3f890b4c608046bcaf60fc8c2e96c023c623dcfba18727741"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "registrar falha pós-merge da publicação nos marketplaces",
+        "state": "complete",
+        "step": "ship",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-ship.json"
       }
     ],
     "chain_stale": [],
@@ -1001,6 +1015,20 @@
           "step_execution_id": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746",
           "step_id": "plan",
           "superseded_by_step_execution_id": "se-a35216f6e24baacae7cba5383017a99cfaadb3a7f3f8f26d932582a3c04084f4"
+        }
+      ],
+      "ship": [
+        {
+          "attempt_id": "ship-1",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-ship.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:f74ce771e19f1579ad7aa9843c348fac4026ad10d7da07188d0b6d8f427a4f7d",
+          "provenance": "current-generation",
+          "reason": "registrar falha pós-merge da publicação nos marketplaces",
+          "receipt_ref": "receipts/skill-invocation/ship-ship-1.terminal.json",
+          "step_execution_id": "se-a84658d6636ff9723646ff0d05cdf22c2b9b38fb32256c90cd0758e8f99bccdf",
+          "step_id": "ship",
+          "superseded_by_step_execution_id": "se-4dbf039e6c727053ff3352d7d13f62988944432b2ce1fcfe3ef97d5142c0a035"
         }
       ],
       "specify": [
