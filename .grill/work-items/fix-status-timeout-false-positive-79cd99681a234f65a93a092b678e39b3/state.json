@@ -1,0 +1,1138 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "pending",
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+    "state": "present"
+  },
+  "development": {
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-4bb265654b2a21148130b93a44bff7260319502ebc9cb3e9c8f92463eff9630d",
+      "registry_sha256": "sha256:e3f69871406205b77725b41bf0de0b24d9dbd661c004d502f0ddb49f22209ec1",
+      "run_id": "leader-fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "analyze": "se-7b9f6745e05567ccb00f372dbaaed93b1deb0d4284d2f83ae5615c54bdf44593",
+      "checklist": "se-3834085e3ed3f0d9ad8bc03fc74fc55e44f54cb7193773a7ede19c4e51658e66",
+      "converge": "se-a0ef1a8ebdee51c270cf4bb4f8dfc7ca93e7e133b95fc53ed320e5337ef33e80",
+      "implement-parallel": "se-bc05691bbc7204b9fe72ca711d550d5059659969bf8a3627b6d6be90c7b2f594",
+      "partition": "se-10da1b0f29345dc14241fcfeed1a7fc28c7f0eccbd7dc59d0fdbc3e730f683fd",
+      "plan": "se-a35216f6e24baacae7cba5383017a99cfaadb3a7f3f8f26d932582a3c04084f4",
+      "review": "se-853ca24764b4981f4fa82f34112df802f0c72070f46c8becc4857d58cb6fecde",
+      "specify": "se-cb523a70bcbd48d351896342319c009619efe622f7927130c9a99add54f00461",
+      "tasks": "se-552f2a4263922111255871e789c7b4d4a4d5605dece1a83e0734f03da8a5ce4c",
+      "verify": "se-058cd0e1f43161119cd49fe57ec7ac773297ff077b20c967a4e160096ad222cc"
+    },
+    "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:b33b3a82adc2daf37405d92777b6abe099e72dcd6a1b4d66c6c2965766cd7575",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-4.terminal.json",
+        "step_id": "analyze"
+      },
+      "checklist": {
+        "output_sha256": "sha256:c9fccd17be8766a25b10bcd9aeb4b29eed0b20ad57e713a6e799f2e135848e4c",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-6.terminal.json",
+        "step_id": "checklist"
+      },
+      "converge": {
+        "output_sha256": "sha256:2d8c1892a7ca0ce7ea3f86933a9ec04b44325c0cda47b9cc6653c4b24c62e7c4",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+        "step_id": "converge"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:2d8c1892a7ca0ce7ea3f86933a9ec04b44325c0cda47b9cc6653c4b24c62e7c4",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "step_id": "implement-parallel"
+      },
+      "partition": {
+        "output_sha256": "sha256:b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-3.terminal.json",
+        "step_id": "partition"
+      },
+      "plan": {
+        "output_sha256": "sha256:2761b004a9385b3d6a5e7f5aa0ace5e3a28953ebd89653fa4615f01106d2dc99",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-7.terminal.json",
+        "step_id": "plan"
+      },
+      "review": {
+        "output_sha256": "sha256:26d2fbca21af3011579b00ec8e88b8f06e28423e14fe63cafbcb365e15f7dbda",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "step_id": "review"
+      },
+      "specify": {
+        "output_sha256": "sha256:6b006be1bafecd050c934c1383588fc9fa960d9c540cbce2ffe4df3d66915197",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-5.terminal.json",
+        "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:5bd4dfdc2f86e4bbeb4e463d91f8759daac3b98ebb2c74e6518147cfeb86bc35",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-8.terminal.json",
+        "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:7a42ba64c13188dc227835e9a43a5d98576a33c6ab6141cb18c7859244384d87",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "step_id": "verify"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "invocação canônica speckit-specify iniciada no runtime Claude",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/spec.md",
+            "sha256": "ea2129c17687e4008f96b0f01d4f0666548ee04c99e23ad15ff3297e5e231183"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "invocação canônica speckit-plan no runtime Claude",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "8a21df202020dd9a17522424c372f2ef8bd363f5832e2a7d703a7563c945d175"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "invocação canônica speckit-checklist no runtime Claude",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "chain_stale": [
+          "plan"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/spec.md",
+            "sha256": "067d2a03110547a4d9df1e201fa26748e892d1582a24a916d4bace6798c49120"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "checklist fechou requisitos de timeout e rastreabilidade",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-specify.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "b5289e07e95e4e1104575a2e175546e3a158e3480746195b21772a0a3bd0b30a"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "checklist fechou regra fail-closed dos gates",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-plan.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/checklists/release.md",
+            "sha256": "3699fb496bbd969f077ce94c822743f43fcc3027e734c8e34e3b3013969ec455"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "invocação canônica speckit-tasks no runtime Claude",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "d3a0316f4c7fb8a6ee66942b4b5c2085bf8a833699a50d1d7a9c85e68e1586f0"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "invocação canônica speckit-analyze no runtime Claude",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/analysis.md",
+            "sha256": "af254c216e962f7baec2c1f5b56286755f36358d19246c1d005e8c39e1868ff6"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "chain_stale": [
+          "plan",
+          "checklist",
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/spec.md",
+            "sha256": "dc7b27741fa3280199c18e0aa09b7ac1b2e9adb1c6adf89dabf36f9890bede18"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "remediação do analyze: FR-008, SC-006 e rastreabilidade",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-specify-r2.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "285b4a4c5724efe27eabf481e91518abb7f0197b663ed7eb2ba0f3eda8d8cd6c"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "remediação do analyze: gates commitados e fail-closed",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-plan-r2.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/checklists/release.md",
+            "sha256": "aee6fde7fc5964adea4524543c0dca317886ba96a0ba447214d476e273a30cb7"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "checklist de requisitos cobre FR-008 e SC-006",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-checklist.json"
+      },
+      {
+        "chain_stale": [
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "4fb4961e3263f02445363a0fea66ae1c4b8ada02383634aeeafe174a63fa0f74"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "remediação do analyze: comandos, gates e condições de parada",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks.json"
+      },
+      {
+        "chain_stale": [
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "b41c00423775de5a1db9fbae68a28fcffd689ca131cd3ff847b21956634ac314"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "baseline do fix commitado em 7b3c3fe e métricas corrigidas",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r2.json"
+      },
+      {
+        "chain_stale": [
+          "plan",
+          "checklist",
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/spec.md",
+            "sha256": "d0105df4bcdbe5132c88c6c31040498acbcf1256754b596be9ef7c45bd3e86cf"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "status promoted after analyze remediation",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-specify-r3.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "6791a1aee70bcee6ecf57e2a45c05f4322457ce53e4f6037cff96291b2ad2485"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "gate worker topology remediation",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-plan-r3.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/checklists/release.md",
+            "sha256": "dcfac349448e64cbcb8f850aa8ccc4780491387dbf2dd859d7fcb52f58750926"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "N1 and traceability remediation",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-checklist-r2.json"
+      },
+      {
+        "chain_stale": [
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "df0cf11dd96ae4a6c4da89498eec3bddc25c09867211a6bc2b219c85327b3a36"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "split bump and gate phases with one immutable gate worker",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r3.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "af6757a74cc6d642d4326ca836c5c31d8e01b5310e01b69dad45fb4a7d24afb3"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "align plan with deterministic partition output",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-plan-r4.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/checklists/release.md",
+            "sha256": "0bdaf307dff82373ec65722df181a310ec8bc4cbb9686769755a7aa8c424dc2f"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "record executable partition remediation",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-checklist-r3.json"
+      },
+      {
+        "chain_stale": [
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "338e0d7e423d4cbf66b634eb8e83a58e9130d7e041b973512539e7a6e3a74863"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "place grant paths on task lines and defer root files to leader",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r4.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "0ff133bd392cfba69b0e1419c08e566328141acf7c814b9150f89ba135fd7ae6"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "allow expected below-limit conflict groups",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-plan-r5.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/checklists/release.md",
+            "sha256": "f487206d2fe2a8391ed47c4d9f78a5fbbd80ba61fef84053df037b6574a17606"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "clarify evidence boundary defer mechanism",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-checklist-r4.json"
+      },
+      {
+        "chain_stale": [
+          "analyze"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "0057ed39852f2bd7330db969c143133c96f4a7f68964220686d740ab5addf2cd"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "match expected partition degradation and phase2 serialization",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r5.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/analysis-final.md",
+            "sha256": "fad03f275c00bbabec3691f1084038aef193bed32f7bcf2cf6833a483047928b"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "zero critical or high after deterministic partition validation",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-analyze.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "emit deterministic execution DAG",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/execution-dag.json",
+            "sha256": "b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "official validator returned DAG-VALID for run-273d366465d684f1a0b47720",
+        "state": "complete",
+        "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "dispatch isolated DAG workers",
+        "state": "in-progress",
+        "step": "implement-parallel"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "f6cc96c767fdef0d1e9f73c8d5c0b374a5b2b0fff8aa247151341f56d1f797bd"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "distinguish EXIT_BLOCKED from argparse usage errors after implementation finding",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r6.json"
+      },
+      {
+        "chain_stale": [
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/analysis-final.md",
+            "sha256": "712b5ee0d5f51c18a8a9bd9a1ebdaa172d1944d3abfad21a7de4f81290fbb319"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "zero critical or high after EXIT_BLOCKED acceptance review",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-analyze-r2.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/execution-dag.json",
+            "sha256": "b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "Repartition authorized after T005/T006 acceptance correction; deterministic DAG remained bit-identical and validated DAG-VALID.",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-partition.json"
+      },
+      {
+        "chain_stale": [
+          "plan",
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/spec.md",
+            "sha256": "6b006be1bafecd050c934c1383588fc9fa960d9c540cbce2ffe4df3d66915197"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "retarget authorized status fix from 5.2.1 to 5.3.1 after main advanced to 5.3.0",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-specify-r4.json"
+      },
+      {
+        "chain_stale": [
+          "checklist",
+          "tasks",
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/plan.md",
+            "sha256": "2761b004a9385b3d6a5e7f5aa0ace5e3a28953ebd89653fa4615f01106d2dc99"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "align plan to main 5.3.0 and patch target 5.3.1",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-plan-r6.json"
+      },
+      {
+        "chain_stale": [
+          "tasks",
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/checklists/release.md",
+            "sha256": "c9fccd17be8766a25b10bcd9aeb4b29eed0b20ad57e713a6e799f2e135848e4c"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "record authorized base advance and run restart",
+        "state": "complete",
+        "step": "checklist",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-checklist-r5.json"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "5bd4dfdc2f86e4bbeb4e463d91f8759daac3b98ebb2c74e6518147cfeb86bc35"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "retarget distribution and gate tasks to 5.3.0 -> 5.3.1",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-tasks-r7.json"
+      },
+      {
+        "chain_stale": [
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/analysis-final.md",
+            "sha256": "b33b3a82adc2daf37405d92777b6abe099e72dcd6a1b4d66c6c2965766cd7575"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "zero critical or high after authorized 5.3.1 retarget review",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-analyze-r3.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/execution-dag.json",
+            "sha256": "b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "repartition authorized for 5.3.1 retarget; deterministic DAG remained bit-identical and DAG-VALID",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/fix-status-timeout-false-positive-partition-r2.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "2d8c1892a7ca0ce7ea3f86933a9ec04b44325c0cda47b9cc6653c4b24c62e7c4"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "run-e8b9ef83ec5732a739c919ac complete; nine workers converged; T001-T022 reconciled; 5.3.1 gates PASS",
+        "state": "complete",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "official speckit-converge invocation started after implementation completion",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/tasks.md",
+            "sha256": "2d8c1892a7ca0ce7ea3f86933a9ec04b44325c0cda47b9cc6653c4b24c62e7c4"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "official speckit-converge outcome converged; zero missing, partial, contradicts, or unrequested gaps",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "official verify-review-ship verify gate started after converged outcome",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/verify.md",
+            "sha256": "7a42ba64c13188dc227835e9a43a5d98576a33c6ab6141cb18c7859244384d87"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "VERIFY PASS; fingerprint stable; distribution, BUMPED, and 1335-test suite passed",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "official technical review started after fresh VERIFY PASS",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/025-status-timeout-false-positive/review.md",
+            "sha256": "26d2fbca21af3011579b00ec8e88b8f06e28423e14fe63cafbcb365e15f7dbda"
+          }
+        ],
+        "execution_branch": "025-status-timeout-false-positive",
+        "reason": "REVIEW APPROVE; no Critical or Important issues; fingerprint matches Verify",
+        "state": "complete",
+        "step": "review"
+      }
+    ],
+    "chain_stale": [],
+    "current_step": "ship",
+    "execution_branch": "025-status-timeout-false-positive",
+    "renamed_from": {},
+    "schema": "grill-development/v2",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "partition",
+      "implement-parallel",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "implement-parallel": "complete",
+      "partition": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "pending",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    },
+    "superseded_outputs": {
+      "analyze": [
+        {
+          "attempt_id": "analyze-1",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-analyze.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:af254c216e962f7baec2c1f5b56286755f36358d19246c1d005e8c39e1868ff6",
+          "provenance": "current-generation",
+          "reason": "zero critical or high after deterministic partition validation",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+          "step_execution_id": "se-0c4039b7a277dafe674552f2ee2c80e1b1636a282cba7b155d5a206e76fbfd77",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-2d80182f639cb089569006db082a11cd0a492bf27467f58f8d22445d52c1141d"
+        },
+        {
+          "attempt_id": "analyze-2",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-analyze-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:fad03f275c00bbabec3691f1084038aef193bed32f7bcf2cf6833a483047928b",
+          "provenance": "current-generation",
+          "reason": "zero critical or high after EXIT_BLOCKED acceptance review",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-2.terminal.json",
+          "step_execution_id": "se-2d80182f639cb089569006db082a11cd0a492bf27467f58f8d22445d52c1141d",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-8f84c24dda88bc20443c7e220d52fd29bcc15ec5398d316dcc1ea8383b0d7e85"
+        },
+        {
+          "attempt_id": "analyze-3",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-analyze-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:712b5ee0d5f51c18a8a9bd9a1ebdaa172d1944d3abfad21a7de4f81290fbb319",
+          "provenance": "current-generation",
+          "reason": "zero critical or high after authorized 5.3.1 retarget review",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-3.terminal.json",
+          "step_execution_id": "se-8f84c24dda88bc20443c7e220d52fd29bcc15ec5398d316dcc1ea8383b0d7e85",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-7b9f6745e05567ccb00f372dbaaed93b1deb0d4284d2f83ae5615c54bdf44593"
+        }
+      ],
+      "checklist": [
+        {
+          "attempt_id": "checklist-1",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-checklist.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:3699fb496bbd969f077ce94c822743f43fcc3027e734c8e34e3b3013969ec455",
+          "provenance": "current-generation",
+          "reason": "checklist de requisitos cobre FR-008 e SC-006",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+          "step_execution_id": "se-b8fbd0d2165d64e21b4325dc88783e718df81c8e86998b351f1e13e4a16fe725",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-6279de1561a25ab46d41df6e27909a413b878f78dddfdf93a35ae29f9e5d5cdb"
+        },
+        {
+          "attempt_id": "checklist-2",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-checklist-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:aee6fde7fc5964adea4524543c0dca317886ba96a0ba447214d476e273a30cb7",
+          "provenance": "current-generation",
+          "reason": "N1 and traceability remediation",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-2.terminal.json",
+          "step_execution_id": "se-6279de1561a25ab46d41df6e27909a413b878f78dddfdf93a35ae29f9e5d5cdb",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-4bb37cce39416baaf0bf6e4cca5122fc3e46ddeacba12c478fe385aea2df660f"
+        },
+        {
+          "attempt_id": "checklist-3",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-checklist-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:dcfac349448e64cbcb8f850aa8ccc4780491387dbf2dd859d7fcb52f58750926",
+          "provenance": "current-generation",
+          "reason": "record executable partition remediation",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-3.terminal.json",
+          "step_execution_id": "se-4bb37cce39416baaf0bf6e4cca5122fc3e46ddeacba12c478fe385aea2df660f",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-d01848366dee6d0ab61911e39cbab10fbef0c533183e012f3f2231c631afef40"
+        },
+        {
+          "attempt_id": "checklist-4",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-checklist-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:0bdaf307dff82373ec65722df181a310ec8bc4cbb9686769755a7aa8c424dc2f",
+          "provenance": "current-generation",
+          "reason": "clarify evidence boundary defer mechanism",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-4.terminal.json",
+          "step_execution_id": "se-d01848366dee6d0ab61911e39cbab10fbef0c533183e012f3f2231c631afef40",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985"
+        },
+        {
+          "attempt_id": "checklist-5",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-checklist-r5.json",
+          "execution_round": 5,
+          "output_sha256": "sha256:f487206d2fe2a8391ed47c4d9f78a5fbbd80ba61fef84053df037b6574a17606",
+          "provenance": "current-generation",
+          "reason": "record authorized base advance and run restart",
+          "receipt_ref": "receipts/skill-invocation/checklist-checklist-5.terminal.json",
+          "step_execution_id": "se-aa9044fb5c5c85657533504f29858f81dee4a04da155de2ccbb46f5ef16ec985",
+          "step_id": "checklist",
+          "superseded_by_step_execution_id": "se-3834085e3ed3f0d9ad8bc03fc74fc55e44f54cb7193773a7ede19c4e51658e66"
+        }
+      ],
+      "partition": [
+        {
+          "attempt_id": "partition-1",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-partition.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00",
+          "provenance": "current-generation",
+          "reason": "Repartition authorized after T005/T006 acceptance correction; deterministic DAG remained bit-identical and validated DAG-VALID.",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+          "step_execution_id": "se-232e6409c711185100fda59b3e226ee85eaf39283b9d9a49cfee707f8230eb75",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-6f9ef4264261b1ecd82cd6ac25582d93fbfc4b338ceb9f5e07138eaa73abc303"
+        },
+        {
+          "attempt_id": "partition-2",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-partition-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:b32d49e208546474464b2423c28f5724d250b23c21c6227856af49940879ae00",
+          "provenance": "current-generation",
+          "reason": "repartition authorized for 5.3.1 retarget; deterministic DAG remained bit-identical and DAG-VALID",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-2.terminal.json",
+          "step_execution_id": "se-6f9ef4264261b1ecd82cd6ac25582d93fbfc4b338ceb9f5e07138eaa73abc303",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-10da1b0f29345dc14241fcfeed1a7fc28c7f0eccbd7dc59d0fdbc3e730f683fd"
+        }
+      ],
+      "plan": [
+        {
+          "attempt_id": "plan-1",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-plan.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:8a21df202020dd9a17522424c372f2ef8bd363f5832e2a7d703a7563c945d175",
+          "provenance": "current-generation",
+          "reason": "checklist fechou regra fail-closed dos gates",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+          "step_execution_id": "se-cbeaab998aa7890406bf43f6f62c8f0cb0b26c3bd2e81c638e23bde001c45799",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-66b99b62d24fe97259c8b34503fad063716d18bf4f2bc7c8a18ad724da6295b1"
+        },
+        {
+          "attempt_id": "plan-2",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-plan-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:b5289e07e95e4e1104575a2e175546e3a158e3480746195b21772a0a3bd0b30a",
+          "provenance": "current-generation",
+          "reason": "remediação do analyze: gates commitados e fail-closed",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
+          "step_execution_id": "se-66b99b62d24fe97259c8b34503fad063716d18bf4f2bc7c8a18ad724da6295b1",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-ceb3a1efc46ce336b2fc00dfd627adc66853ec61ab2e13c98630b024b7fdea88"
+        },
+        {
+          "attempt_id": "plan-3",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-plan-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:285b4a4c5724efe27eabf481e91518abb7f0197b663ed7eb2ba0f3eda8d8cd6c",
+          "provenance": "current-generation",
+          "reason": "gate worker topology remediation",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-3.terminal.json",
+          "step_execution_id": "se-ceb3a1efc46ce336b2fc00dfd627adc66853ec61ab2e13c98630b024b7fdea88",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-85cb2d23380bed175a59c04f0df326545dd6d3e3ba400fa65a3512ea0182b966"
+        },
+        {
+          "attempt_id": "plan-4",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-plan-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:6791a1aee70bcee6ecf57e2a45c05f4322457ce53e4f6037cff96291b2ad2485",
+          "provenance": "current-generation",
+          "reason": "align plan with deterministic partition output",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-4.terminal.json",
+          "step_execution_id": "se-85cb2d23380bed175a59c04f0df326545dd6d3e3ba400fa65a3512ea0182b966",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-70e6102916f2d54fe637f45ca6324e9d3a70442c634ec7987bb9e6b384fda911"
+        },
+        {
+          "attempt_id": "plan-5",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-plan-r5.json",
+          "execution_round": 5,
+          "output_sha256": "sha256:af6757a74cc6d642d4326ca836c5c31d8e01b5310e01b69dad45fb4a7d24afb3",
+          "provenance": "current-generation",
+          "reason": "allow expected below-limit conflict groups",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-5.terminal.json",
+          "step_execution_id": "se-70e6102916f2d54fe637f45ca6324e9d3a70442c634ec7987bb9e6b384fda911",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746"
+        },
+        {
+          "attempt_id": "plan-6",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-plan-r6.json",
+          "execution_round": 6,
+          "output_sha256": "sha256:0ff133bd392cfba69b0e1419c08e566328141acf7c814b9150f89ba135fd7ae6",
+          "provenance": "current-generation",
+          "reason": "align plan to main 5.3.0 and patch target 5.3.1",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-6.terminal.json",
+          "step_execution_id": "se-6c3bcd5c3d0b301a66611842fcad9f13555eb8be95eb77496fee5d9d7ad61746",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-a35216f6e24baacae7cba5383017a99cfaadb3a7f3f8f26d932582a3c04084f4"
+        }
+      ],
+      "specify": [
+        {
+          "attempt_id": "specify-1",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-specify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:ea2129c17687e4008f96b0f01d4f0666548ee04c99e23ad15ff3297e5e231183",
+          "provenance": "current-generation",
+          "reason": "checklist fechou requisitos de timeout e rastreabilidade",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+          "step_execution_id": "se-6325d62cc22f9ae7e6fe39202b0498d0e9e6708fd65c0cc7962e8adab856b612",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-4b2ada6f5d832ef1315a4e53ded23910f1713513b3c2d1e703cd99fb3834838a"
+        },
+        {
+          "attempt_id": "specify-2",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-specify-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:067d2a03110547a4d9df1e201fa26748e892d1582a24a916d4bace6798c49120",
+          "provenance": "current-generation",
+          "reason": "remediação do analyze: FR-008, SC-006 e rastreabilidade",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
+          "step_execution_id": "se-4b2ada6f5d832ef1315a4e53ded23910f1713513b3c2d1e703cd99fb3834838a",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-94eb0d13401da9d436776d3c6d93b318de2326d3c734a9af113acfabc7b7bd3b"
+        },
+        {
+          "attempt_id": "specify-3",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-specify-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:dc7b27741fa3280199c18e0aa09b7ac1b2e9adb1c6adf89dabf36f9890bede18",
+          "provenance": "current-generation",
+          "reason": "status promoted after analyze remediation",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-3.terminal.json",
+          "step_execution_id": "se-94eb0d13401da9d436776d3c6d93b318de2326d3c734a9af113acfabc7b7bd3b",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a"
+        },
+        {
+          "attempt_id": "specify-4",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-specify-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:d0105df4bcdbe5132c88c6c31040498acbcf1256754b596be9ef7c45bd3e86cf",
+          "provenance": "current-generation",
+          "reason": "retarget authorized status fix from 5.2.1 to 5.3.1 after main advanced to 5.3.0",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-4.terminal.json",
+          "step_execution_id": "se-188e90c52d1e3ff4cf2000c14c74e2d0daed68dbce46fec8c2c3e864dc54722a",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-cb523a70bcbd48d351896342319c009619efe622f7927130c9a99add54f00461"
+        }
+      ],
+      "tasks": [
+        {
+          "attempt_id": "tasks-1",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:d3a0316f4c7fb8a6ee66942b4b5c2085bf8a833699a50d1d7a9c85e68e1586f0",
+          "provenance": "current-generation",
+          "reason": "remediação do analyze: comandos, gates e condições de parada",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+          "step_execution_id": "se-7f2f67a7b4f60fe18afee4372403206728e0c3a816cb6727584a74268a56d4ac",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-70de82943b5e52072639249522bf15946b1abe7c1c5075f1487fd6174f38e69e"
+        },
+        {
+          "attempt_id": "tasks-2",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:4fb4961e3263f02445363a0fea66ae1c4b8ada02383634aeeafe174a63fa0f74",
+          "provenance": "current-generation",
+          "reason": "baseline do fix commitado em 7b3c3fe e métricas corrigidas",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
+          "step_execution_id": "se-70de82943b5e52072639249522bf15946b1abe7c1c5075f1487fd6174f38e69e",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-b2bbaf5b96a89204441780db3d31c3aa87feae63afcf59b9a5eba3c3dfae3c15"
+        },
+        {
+          "attempt_id": "tasks-3",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:b41c00423775de5a1db9fbae68a28fcffd689ca131cd3ff847b21956634ac314",
+          "provenance": "current-generation",
+          "reason": "split bump and gate phases with one immutable gate worker",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-3.terminal.json",
+          "step_execution_id": "se-b2bbaf5b96a89204441780db3d31c3aa87feae63afcf59b9a5eba3c3dfae3c15",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-6990a54eaca6d068c79266ab75e9cd1bafd8914c2fb4059d18201940618aeddc"
+        },
+        {
+          "attempt_id": "tasks-4",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:df0cf11dd96ae4a6c4da89498eec3bddc25c09867211a6bc2b219c85327b3a36",
+          "provenance": "current-generation",
+          "reason": "place grant paths on task lines and defer root files to leader",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-4.terminal.json",
+          "step_execution_id": "se-6990a54eaca6d068c79266ab75e9cd1bafd8914c2fb4059d18201940618aeddc",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-ea9def945031e4fa4a4df0328fa0887ca78ddcf1a8ae863ca54cc74327f11ee2"
+        },
+        {
+          "attempt_id": "tasks-5",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r5.json",
+          "execution_round": 5,
+          "output_sha256": "sha256:338e0d7e423d4cbf66b634eb8e83a58e9130d7e041b973512539e7a6e3a74863",
+          "provenance": "current-generation",
+          "reason": "match expected partition degradation and phase2 serialization",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-5.terminal.json",
+          "step_execution_id": "se-ea9def945031e4fa4a4df0328fa0887ca78ddcf1a8ae863ca54cc74327f11ee2",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-f225ed7bdd2b48e14aae51687b5a382590c0107d5ac2301cd079481fa88c54ac"
+        },
+        {
+          "attempt_id": "tasks-6",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r6.json",
+          "execution_round": 6,
+          "output_sha256": "sha256:0057ed39852f2bd7330db969c143133c96f4a7f68964220686d740ab5addf2cd",
+          "provenance": "current-generation",
+          "reason": "distinguish EXIT_BLOCKED from argparse usage errors after implementation finding",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-6.terminal.json",
+          "step_execution_id": "se-f225ed7bdd2b48e14aae51687b5a382590c0107d5ac2301cd079481fa88c54ac",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-3f8e3a95454a8e91cbca1d492d6282e4d48f04c7f8b0c1721d50391304214bb9"
+        },
+        {
+          "attempt_id": "tasks-7",
+          "attestation": ".grill/attestations/fix-status-timeout-false-positive-tasks-r7.json",
+          "execution_round": 7,
+          "output_sha256": "sha256:f6cc96c767fdef0d1e9f73c8d5c0b374a5b2b0fff8aa247151341f56d1f797bd",
+          "provenance": "current-generation",
+          "reason": "retarget distribution and gate tasks to 5.3.0 -> 5.3.1",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-7.terminal.json",
+          "step_execution_id": "se-3f8e3a95454a8e91cbca1d492d6282e4d48f04c7f8b0c1721d50391304214bb9",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-552f2a4263922111255871e789c7b4d4a4d5605dece1a83e0734f03da8a5ce4c"
+        }
+      ]
+    },
+    "workflow_version": "v4"
+  },
+  "goal": {
+    "path": "goal.md",
+    "sha256": "af97e2899ddd6668c5fc80eef153cd94b7d88ea92235650370572770e5b291d1",
+    "status": "CREATED"
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "ready",
+  "version": "1.2.0",
+  "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "schema": "v2",
+    "sha256": "78688870adec7c57a32a8f7b8dfaa6426c349b32e0f8a04a7c76b1399ec2cda0"
+  }
+}

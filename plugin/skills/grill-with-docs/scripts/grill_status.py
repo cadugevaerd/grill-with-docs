@@ -66,7 +66,13 @@ def phases_and_map(files: dict[str, bytes]) -> tuple[list[str], dict[str, str], 
     types = sorted(set(re.findall(r"(?m)^-\s+development-type:\s*(\S+)\s*$", delivery)))
     return ordered, phase_state, modules, units, types
 
-def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
+def item_payload(
+    root: Path,
+    bundle: Any,
+    *,
+    live_state: dict[str, Any],
+    local_branches: set[str],
+) -> dict[str, Any]:
     immutable = workspace.validate_metadata(bundle.metadata, bundle.work_id)
     state = parse_json(bundle, "state.json")
     dev = state.get("development")
@@ -88,7 +94,7 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
         if any(steps.get(s) not in STATES for s in item_sequence) or any(steps.get(s) == "complete" and any(steps.get(p) != "complete" for p in item_sequence[:item_sequence.index(s)]) for s in item_sequence):
             findings.append("INVALID-DEVELOPMENT-SEQUENCE")
     phases, phase_states, modules, units, types = phases_and_map(bundle.files)
-    lv = live(root)
+    lv = live_state
     # `immutable.branch` is creation provenance. The first canonical
     # `specify` checkpoint records a separate execution branch after the
     # before-specify hook has created it; old bundles without that field keep
@@ -107,8 +113,7 @@ def item_payload(root: Path, bundle: Any) -> dict[str, Any]:
         else:
             execution_branch = candidate
     terminal = state.get("status") == "complete" and state.get("milestone_status") == "completed"
-    branch_alive = bool(execution_branch) and bool(
-        git(root, "rev-parse", "--verify", "--quiet", f"refs/heads/{execution_branch}"))
+    branch_alive = bool(execution_branch) and execution_branch in local_branches
     if not terminal and branch_alive and execution_branch != lv["branch"]:
         findings.append("LIVE-VS-RECORDED")
     # Re-read all governance evidence through the same no-follow reader used by
@@ -237,16 +242,28 @@ def worktree_roots(root: Path, current: bool) -> list[Path]:
 def build_status(root_arg: str | Path, work_id: str | None = None, current_worktree: bool = False) -> tuple[dict[str, Any], int]:
     root = workspace.project_root(root_arg)
     grouped: dict[str, list[dict[str, Any]]] = {}
+    # Branch refs belong to the repository, while branch/head/dirty belong to
+    # each worktree.  Resolve each at its actual scope instead of spawning four
+    # git processes for every copied work item.  A gauntlet repository commonly
+    # has many items in many worker worktrees, making the old O(items) git
+    # probing exceed the public entry point's bounded timeout.
+    local_branches = set(git(root, "for-each-ref", "--format=%(refname:short)", "refs/heads").splitlines())
     for worktree in worktree_roots(root, current_worktree):
         directory = worktree / ".grill" / "work-items"
         if not directory.exists(): continue
         workspace.reject_symlink_chain(worktree, directory, allow_missing=False)
+        live_state = live(worktree)
         for item in sorted(directory.iterdir(), key=lambda p: p.name):
             if item.is_symlink():
                 raise workspace.CliFailure(workspace.EXIT_BLOCKED, "BLOCKED", "SYMLINK-REJECTED", str(item))
             if not item.is_dir() or (work_id and item.name != work_id): continue
             bundle = workspace.read_local_bundle(worktree, item)
-            value = item_payload(worktree, bundle)
+            value = item_payload(
+                worktree,
+                bundle,
+                live_state=live_state,
+                local_branches=local_branches,
+            )
             value["locations"][0]["current"] = worktree == root
             grouped.setdefault(bundle.work_id, []).append(value)
     if work_id and work_id not in grouped: return {"schema":"grill-status/v1","verdict":"NO-GO","code":"WORK-ITEM-MISSING","project_root":str(root),"summary":{"total":0,"in_progress":0,"blocked":0,"completed":0},"work_items":[],"next_action":"iniciar"}, 1

@@ -1,0 +1,8 @@
+{
+  "authorized_by": "human-user",
+  "content_sha256": "90c6fad88e97cc2a8b4d7316b1e7a45da4dc4eafa76d65bcde13de3dd55df527",
+  "decision": "APPROVED",
+  "receipt_ref": "conversation:user-explicit-authorization-to-ship",
+  "schema": "human-authorization/v1",
+  "scope": "ship"
+}

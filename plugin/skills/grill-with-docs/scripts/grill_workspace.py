@@ -3834,6 +3834,9 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "GLOBAL-MUTATION", args.work_id)
 
 
+STATUS_TIMEOUT_SECONDS = 30
+
+
 def status_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Public workspace entry point for the read-only status projection."""
     script = Path(__file__).with_name("grill_status.py")
@@ -3843,7 +3846,13 @@ def status_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if args.current_worktree:
         command.append("--current-worktree")
     try:
-        process = subprocess.run(command, capture_output=True, text=True, check=False, timeout=5)
+        process = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=STATUS_TIMEOUT_SECONDS,
+        )
     except subprocess.TimeoutExpired:
         return {"schema": "grill-status/v1", "verdict": "BLOCKED", "code": "STATUS-TIMEOUT", "next_action": "resolver-bloqueios"}, EXIT_BLOCKED
     try:
@@ -3864,7 +3873,13 @@ def status_markdown_command(args: argparse.Namespace) -> int:
     if args.current_worktree:
         command.append("--current-worktree")
     try:
-        process = subprocess.run(command, capture_output=True, text=True, check=False, timeout=5)
+        process = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=STATUS_TIMEOUT_SECONDS,
+        )
     except subprocess.TimeoutExpired:
         sys.stdout.write("| Item | Status | Pendência |\n|---|---|---|\n| workspace | blocked | STATUS-TIMEOUT: resolver bloqueios |\n")
         return EXIT_BLOCKED

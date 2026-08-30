@@ -1,0 +1,51 @@
+{
+  "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
+  "run_id": "run-e8b9ef83ec5732a739c919ac",
+  "wave_id": "wave-0002",
+  "node_id": "p02-a",
+  "task_ids": ["T002", "T003", "T004"],
+  "tasks": [
+    {
+      "id": "T002",
+      "description": "Auditar grill_workspace.py: STATUS_TIMEOUT_SECONDS=30 usada por status_command e status_markdown_command",
+      "result": "PASS",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3837 -- STATUS_TIMEOUT_SECONDS = 30",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3854 -- status_command() timeout=STATUS_TIMEOUT_SECONDS",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py:3881 -- status_markdown_command() timeout=STATUS_TIMEOUT_SECONDS"
+      ]
+    },
+    {
+      "id": "T003",
+      "description": "Auditar grill_status.py: local_branches e live_state resolvidos uma vez por escopo, item_payload() sem I/O interno",
+      "result": "PASS",
+      "evidence": [
+        "plugin/skills/grill-with-docs/scripts/grill_status.py:250 -- local_branches resolvido uma vez em build_status(), antes do laço de worktrees",
+        "plugin/skills/grill-with-docs/scripts/grill_status.py:255 -- live_state = live(worktree) resolvido uma vez por worktree, antes do laço de work items",
+        "plugin/skills/grill-with-docs/scripts/grill_status.py:69-75,261-266 -- item_payload() recebe live_state e local_branches por parâmetro; não chama live() nem resolve branches internamente",
+        "plugin/skills/grill-with-docs/scripts/grill_status.py:116 -- branch_alive testa pertencimento em local_branches (operação em memória), sem git rev-parse --verify por item"
+      ]
+    },
+    {
+      "id": "T004",
+      "description": "Rodar python3 -m unittest tests.validate_status_contract -v isolado; confirmar cobertura nominal do schema grill-status/v1 e dos códigos STATUS-TIMEOUT, STATUS-INVALID-OUTPUT, STATUS-SCHEMA, WORK-ITEM-MISSING",
+      "result": "PASS",
+      "evidence": [
+        "python3 -m unittest tests.validate_status_contract -v -- Ran 52 tests in 30.581s, OK",
+        "test_live_git_state_is_resolved_once_per_worktree_not_per_item -- ok",
+        "STATUS-TIMEOUT -- test_status_command_timeout_returns_status_timeout",
+        "STATUS-INVALID-OUTPUT -- test_status_command_invalid_output_returns_status_invalid_output",
+        "STATUS-SCHEMA -- test_status_command_non_dict_payload_returns_status_schema",
+        "WORK-ITEM-MISSING -- test_missing_work_id_is_one_json_exit1 (tests/validate_status_contract.py:95)"
+      ]
+    }
+  ],
+  "findings": [],
+  "suite": {
+    "command": "python3 -m unittest tests.validate_status_contract -v",
+    "exit_code": 0,
+    "status": "OK",
+    "tests_ran": 52
+  },
+  "completed": ["T002", "T003", "T004"]
+}

@@ -1,0 +1,8 @@
+{
+  "authorized_by": "human-user",
+  "content_sha256": "sha256:f54d0bf3c6c609d5e7f93d348d4332364fdee0edc1592ea2a30137ba31ead0e1",
+  "decision": "APPROVED",
+  "receipt_ref": "conversation:user-authorization-to-revise-tasks-and-restart-run",
+  "schema": "human-authorization/v1",
+  "scope": "run-e0aa4a88644e0dfd38c9c6e1"
+}

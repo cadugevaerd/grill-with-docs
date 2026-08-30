@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugin"
-VERSION = "5.3.0"
+VERSION = "5.3.1"
 
 def load(path):
     with path.open(encoding="utf-8") as handle:
@@ -38,6 +38,9 @@ def main():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "codex plugin marketplace add ." in readme and "codex plugin add grill-with-docs@grill-with-docs" in readme
     assert "claude plugin marketplace add cadugevaerd/grill-with-docs" in readme and "claude plugin install grill-with-docs@grill-with-docs" in readme
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+    changelog_headings = [line for line in changelog if line == f"## {VERSION}"]
+    assert len(changelog_headings) == 1, ("CHANGELOG.md", VERSION, changelog_headings)
     print("distribution: OK")
 
 if __name__ == "__main__":
