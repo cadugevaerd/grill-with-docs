@@ -7,13 +7,15 @@ Generic, project-independent contract. Requires Spec Kit >=0.11.2 and verified e
 
 Cada token da sequência de 11 etapas é uma **referência de invocação**, nunca uma descrição livre de tarefa. Ler o nome de uma etapa significa **invocar a skill registrada** para aquela etapa pela superfície nativa de invocação do runtime. Produzir artefato semelhante não equivale a executar a skill.
 
+A invocação ocorre na sessão que conduz o ciclo: Codex usa `$<entrypoint>` e Claude Code usa `/<entrypoint>`. É proibido delegar a etapa a `specify workflow run`, abrir `claude`, executar `codex exec` ou iniciar outro processo de agente. O runtime é informado explicitamente no `preflight`, `init` e `gauntlet-init`; o valor salvo em `.specify/integration.json` nunca substitui essa escolha.
+
 O mapa `step_id → skill` vive no registry versionado `workflow-step-skills.v4.json` (schema `workflow-step-skills/v1`), distribuído com o bundle em `assets/workflow-step-skills.v4.json`. O registry é referenciado **por hash**: toda resolução fixa `registry_sha256` (SHA-256 dos bytes exatos do registry) e todo dispatch carrega esse valor. Bytes de registry cujo `registry_sha256` divergir do valor fixado na resolução são recusados antes de qualquer capability mutável. Nesta materialização, o `registry_sha256` corrente do bundle está fixado em `__REGISTRY_SHA256__`.
 
 Antes de despachar uma etapa, o core resolve a skill e persiste `skill-resolution` com `skill_id`, runtime, adapter, entrypoint nativo efetivo, versão mínima, source ref, manifest/content SHA-256 e `registry_sha256`. A cadeia obrigatória é:
 
 `skill-resolution → dispatch-intent (execution_mode=CANONICAL_SKILL) → skill-invocation STARTED → skill-invocation terminal → step-output`.
 
-`step-output` só é aceito quando referencia o receipt terminal `COMPLETED` da invocação canônica corrente daquele `step_id` e a cadeia inteira é consistente com o projeto, work item, run, geração e predecessor atuais. O orquestrador pode iniciar um subagente cooperativo para montar e revisar esse receipt antes do checkpoint. JSON e hashes constituem evidência estrutural auditável; não são prova criptográfica nem protegem contra um executor malicioso.
+`step-output` só é aceito quando referencia o receipt terminal `COMPLETED` da invocação canônica corrente daquele `step_id` e a cadeia inteira é consistente com o projeto, work item, run, geração e predecessor atuais. JSON e hashes constituem evidência estrutural auditável; não são prova criptográfica nem protegem contra um executor malicioso.
 
 ### Proibição explícita de semantic emulation
 

@@ -52,9 +52,40 @@
           "init",
           "--here",
           "--integration",
-          "claude",
+          "${GRILL_RUNTIME}",
+          "${GRILL_INTEGRATION_OPTIONS}",
           "--script",
           "sh",
+          "--ignore-agent-tools",
+          "--force"
+        ]
+      ]
+    },
+    {
+      "id": "spec-kit-harness",
+      "kind": "harness",
+      "required": true,
+      "commands": [
+        "speckit-analyze",
+        "speckit-checklist",
+        "speckit-converge",
+        "speckit-implement",
+        "speckit-plan",
+        "speckit-specify",
+        "speckit-tasks"
+      ],
+      "reason": "skills nativas do Spec Kit no harness selecionado",
+      "install": [
+        [
+          "specify",
+          "init",
+          "--here",
+          "--integration",
+          "${GRILL_RUNTIME}",
+          "${GRILL_INTEGRATION_OPTIONS}",
+          "--script",
+          "sh",
+          "--ignore-agent-tools",
           "--force"
         ]
       ]
@@ -93,6 +124,13 @@
       "kind": "specify-extension",
       "required": true,
       "extension": "git",
+      "commands": [
+        "speckit.git.feature",
+        "speckit.git.validate",
+        "speckit.git.remote",
+        "speckit.git.initialize",
+        "speckit.git.commit"
+      ],
       "reason": "WORKFLOW.md exige a extensao git",
       "install": [
         [
@@ -114,6 +152,11 @@
       "kind": "specify-extension",
       "required": true,
       "extension": "bugfix",
+      "commands": [
+        "speckit.bugfix.report",
+        "speckit.bugfix.patch",
+        "speckit.bugfix.verify"
+      ],
       "reason": "WORKFLOW.md exige a extensao bugfix",
       "install": [
         [
@@ -135,6 +178,11 @@
       "kind": "specify-extension",
       "required": true,
       "extension": "verify-review-ship",
+      "commands": [
+        "speckit.verify-review-ship.verify",
+        "speckit.verify-review-ship.review",
+        "speckit.verify-review-ship.ship"
+      ],
       "reason": "WORKFLOW.md exige a extensao verify-review-ship",
       "install": [
         [

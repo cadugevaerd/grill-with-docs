@@ -36,6 +36,10 @@ REGISTRY_PATH_BY_VERSION = {
 CATALOG_PATH_BY_VERSION = {
     v: ASSETS / n for v, n in workflow_versions.CATALOG_FILENAME_BY_VERSION.items()
 }
+CATALOG_PATH_BY_VERSION_RUNTIME = {
+    version: {runtime: ASSETS / name for runtime, name in catalogs.items()}
+    for version, catalogs in workflow_versions.CATALOG_FILENAME_BY_VERSION_RUNTIME.items()
+}
 TRUSTED_CATALOGS_PATH_BY_VERSION = {
     v: ASSETS / n for v, n in workflow_versions.TRUSTED_CATALOGS_FILENAME_BY_VERSION.items()
 }
@@ -58,7 +62,12 @@ TIER_POLICY_BY_VERSION = {
 }
 WORKFLOW_STEPS = WORKFLOW_STEPS_BY_VERSION[WORKFLOW_VERSION]
 TIER_POLICY = TIER_POLICY_BY_VERSION[WORKFLOW_VERSION]
-ADAPTER = "claude-code-skill/v1"
+ADAPTER_BY_RUNTIME = {
+    "claude": "claude-code-skill/v1",
+    "codex": "codex-skill/v1",
+}
+# Compatibility projection for v3 callers. New activations use the runtime map.
+ADAPTER = ADAPTER_BY_RUNTIME["claude"]
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -406,14 +415,18 @@ def _validate_record(work_id: str, record: Any) -> None:
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation work item identity is invalid", work_id=work_id)
     if not isinstance(workflow, dict) or set(workflow) != {"version", "sha256", "registry_sha256"} or workflow.get("version") not in WORKFLOW_STEPS_BY_VERSION or not isinstance(workflow.get("sha256"), str) or not SHA256_RE.fullmatch(workflow["sha256"]) or not isinstance(workflow.get("registry_sha256"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", workflow["registry_sha256"]):
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation workflow identity is invalid", work_id=work_id)
-    if runtime != {"id": "claude", "adapter": ADAPTER}:
+    runtime_id = runtime.get("id") if isinstance(runtime, dict) else None
+    adapter = ADAPTER_BY_RUNTIME.get(runtime_id)
+    if adapter is None or runtime != {"id": runtime_id, "adapter": adapter}:
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation runtime is invalid", work_id=work_id)
+    if runtime_id not in CATALOG_PATH_BY_VERSION_RUNTIME.get(workflow["version"], {}):
+        raise _fail("GAUNTLET-CONFIG-INVALID", "activation runtime is unavailable for workflow version", work_id=work_id)
     if not isinstance(catalog, dict) or set(catalog) != {"id", "document_sha256", "resolution_sha256", "trusted_asset_document_sha256"} or not isinstance(catalog.get("id"), str) or not isinstance(catalog.get("document_sha256"), str) or not SHA256_RE.fullmatch(catalog["document_sha256"]) or not isinstance(catalog.get("resolution_sha256"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", catalog["resolution_sha256"]) or not isinstance(catalog.get("trusted_asset_document_sha256"), str) or not SHA256_RE.fullmatch(catalog["trusted_asset_document_sha256"]):
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation catalog identity is invalid", work_id=work_id)
     if not isinstance(limits, dict) or set(limits) != {"max_workers", "stall_minutes"} or type(limits.get("max_workers")) is not int or not 1 <= limits["max_workers"] <= 5 or limits.get("stall_minutes") != 15:
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation limits are invalid", work_id=work_id)
     expected_tiers = TIER_POLICY_BY_VERSION[workflow["version"]]
-    if not isinstance(tiers, dict) or set(tiers) != {"adapter", "minimum_by_step", "supplemental", "promotions"} or tiers.get("adapter") != ADAPTER or tiers.get("minimum_by_step") != expected_tiers or tiers.get("supplemental") != {"markdown-maintenance": "small"} or tiers.get("promotions") != []:
+    if not isinstance(tiers, dict) or set(tiers) != {"adapter", "minimum_by_step", "supplemental", "promotions"} or tiers.get("adapter") != adapter or tiers.get("minimum_by_step") != expected_tiers or tiers.get("supplemental") != {"markdown-maintenance": "small"} or tiers.get("promotions") != []:
         raise _fail("GAUNTLET-CONFIG-INVALID", "activation tier policy is invalid", work_id=work_id)
 
 
@@ -456,7 +469,8 @@ def _skill_error_code(error: Any, step_skills: Any) -> str:
 
 def current_activation(
     *, root: Path, work_id: str, item_dir_fd: int, workflow_bytes: bytes, workflow_text: str,
-    workflow_gate: Any, work_item_v3: Any, step_skills: Any, work_item_bytes: bytes | None = None,
+    workflow_gate: Any, work_item_v3: Any, step_skills: Any, runtime: str,
+    work_item_bytes: bytes | None = None,
 ) -> dict[str, Any]:
     """Prove all immutable inputs required to create or use an activation."""
     try:
@@ -497,36 +511,47 @@ def current_activation(
     # floors, and record that it did.
     version = _document_version(workflow_text)
     steps = WORKFLOW_STEPS_BY_VERSION[version]
+    adapter = ADAPTER_BY_RUNTIME.get(runtime)
+    if adapter is None:
+        raise _fail("UNKNOWN-RUNTIME", "runtime must be claude or codex", runtime=runtime)
+    catalog_path = CATALOG_PATH_BY_VERSION_RUNTIME.get(version, {}).get(runtime)
+    if catalog_path is None:
+        raise _fail(
+            "RUNTIME-ENTRYPOINT-UNPROVEN",
+            "selected runtime has no catalog for this workflow version",
+            runtime=runtime,
+            workflow_version=version,
+        )
     try:
         registry_bytes = REGISTRY_PATH_BY_VERSION[version].read_bytes()
     except OSError as exc:
         raise _fail("REGISTRY-UNREADABLE", "shipped workflow registry is unavailable") from exc
     try:
-        catalog_bytes = CATALOG_PATH_BY_VERSION[version].read_bytes()
+        catalog_bytes = catalog_path.read_bytes()
     except OSError as exc:
-        raise _fail("CATALOG-ABSENT", "shipped Claude catalog is unavailable") from exc
+        raise _fail("CATALOG-ABSENT", "selected runtime catalog is unavailable", runtime=runtime) from exc
     try:
         catalog = step_skills.parse_strict(catalog_bytes)
         registry_sha256 = step_skills.registry_sha256(registry_bytes)
         resolutions, trusted_bytes = step_skills.resolve_shipped_workflow_skills(
-            steps, "claude", registry_sha256, registry=registry_bytes, catalog=catalog,
+            steps, runtime, registry_sha256, registry=registry_bytes, catalog=catalog,
             trusted_catalogs_path=TRUSTED_CATALOGS_PATH_BY_VERSION[version],
         )
     except step_skills.SkillResolutionError as exc:
-        raise _fail(_skill_error_code(exc, step_skills), "Claude capability proof failed") from exc
+        raise _fail(_skill_error_code(exc, step_skills), "selected runtime capability proof failed", runtime=runtime) from exc
     except Exception as exc:
-        raise _fail("CATALOG-INVALID", "shipped Claude catalog is invalid") from exc
-    if len(resolutions) != len(steps) or {entry["adapter"] for entry in resolutions} != {ADAPTER}:
-        raise _fail("RUNTIME-ENTRYPOINT-UNPROVEN", "Claude does not prove every canonical entrypoint")
+        raise _fail("CATALOG-INVALID", "selected runtime catalog is invalid", runtime=runtime) from exc
+    if len(resolutions) != len(steps) or {entry["adapter"] for entry in resolutions} != {adapter}:
+        raise _fail("RUNTIME-ENTRYPOINT-UNPROVEN", "selected runtime does not prove every canonical entrypoint", runtime=runtime)
     catalog_id = catalog.get("catalog_id") if isinstance(catalog, dict) else None
     catalog_sha256 = catalog.get("catalog_sha256") if isinstance(catalog, dict) else None
     if not isinstance(catalog_id, str) or not isinstance(catalog_sha256, str):
-        raise _fail("CATALOG-INVALID", "shipped Claude catalog has no identity")
+        raise _fail("CATALOG-INVALID", "selected runtime catalog has no identity", runtime=runtime)
     return {
         "work_item_id": work_id,
         "work_item": {"document_sha256": document_sha256},
         "workflow": {"version": version, "sha256": workflow_sha256, "registry_sha256": registry_sha256},
-        "runtime": {"id": "claude", "adapter": ADAPTER},
+        "runtime": {"id": runtime, "adapter": adapter},
         "catalog": {
             "id": catalog_id,
             "document_sha256": _sha256(catalog_bytes),
@@ -539,18 +564,20 @@ def current_activation(
 def activate(
     *, root: Path, work_id: str, max_workers: Any, item_dir_fd: int, grill_fd: int,
     workflow_bytes: bytes, workflow_text: str, workflow_gate: Any, work_item_v3: Any, step_skills: Any,
+    runtime: str,
 ) -> str:
     """Create or reuse an activation while the caller owns both write locks."""
     workers = _validate_worker_count(max_workers)
     proof = current_activation(
         root=root, work_id=work_id, item_dir_fd=item_dir_fd, workflow_bytes=workflow_bytes,
         workflow_text=workflow_text, workflow_gate=workflow_gate, work_item_v3=work_item_v3, step_skills=step_skills,
+        runtime=runtime,
     )
     record = {
         **proof,
         "limits": {"max_workers": workers, "stall_minutes": 15},
         "tier_policy": {
-            "adapter": ADAPTER,
+            "adapter": proof["runtime"]["adapter"],
             "minimum_by_step": dict(TIER_POLICY_BY_VERSION[proof["workflow"]["version"]]),
             "supplemental": {"markdown-maintenance": "small"}, "promotions": [],
         },
@@ -613,7 +640,11 @@ def _activation_is_stale(
         return True, item_bytes
     try:
         registry_bytes = REGISTRY_PATH_BY_VERSION[version].read_bytes()
-        catalog_bytes = CATALOG_PATH_BY_VERSION[version].read_bytes()
+        runtime = record.get("runtime", {}).get("id")
+        catalog_path = CATALOG_PATH_BY_VERSION_RUNTIME.get(version, {}).get(runtime)
+        if catalog_path is None:
+            return True, item_bytes
+        catalog_bytes = catalog_path.read_bytes()
         trusted_bytes = TRUSTED_CATALOGS_PATH_BY_VERSION[version].read_bytes()
     except Exception:
         return False, item_bytes
@@ -641,10 +672,15 @@ def activation_state(
         if stale:
             return "STALE", "IDENTITY-STALE"
     try:
+        # Once sealed, runtime is inherited from the immutable activation.
+        # Before activation, status retains the historical Claude eligibility
+        # projection; the mutating gauntlet-init command itself always requires
+        # an explicit runtime.
+        runtime = record["runtime"]["id"] if record is not None else "claude"
         proof = current_activation(
             root=root, work_id=work_id, item_dir_fd=item_dir_fd, workflow_bytes=workflow_bytes,
             workflow_text=workflow_text, workflow_gate=workflow_gate, work_item_v3=work_item_v3,
-            step_skills=step_skills, work_item_bytes=work_item_bytes,
+            step_skills=step_skills, runtime=runtime, work_item_bytes=work_item_bytes,
         )
     except GauntletError as exc:
         return "BLOCKED", exc.code
@@ -654,3 +690,12 @@ def activation_state(
     if any(record[key] != value for key, value in identity.items()):
         return "STALE", "IDENTITY-STALE"
     return "ACTIVATED", None
+
+
+def require_activation(grill_fd: int, work_id: str) -> dict[str, Any]:
+    """Return the immutable activation selected for attestation."""
+    document, _, _ = _read_config(grill_fd)
+    record = document["activations"].get(work_id)
+    if record is None:
+        raise _fail("GAUNTLET-NOT-ACTIVATED", "work item has no Gauntlet activation", work_id=work_id)
+    return record

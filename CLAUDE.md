@@ -7,7 +7,7 @@ Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfood
 - `plugin/` — fonte publicada do plugin: `SKILL.md`, `assets/`, `scripts/`, `references/` e os dois manifests (`.claude-plugin/`, `.codex-plugin/`).
 - `tests/` — validadores canônicos. `tests/run_validators.py` faz glob de `validate_*.py`, então um arquivo novo entra na suíte sozinho.
 - `tests/fixtures/` — repositórios sintéticos, incluindo `.specify/` próprios. Não confundir com o `.specify/` da raiz.
-- `.specify/` e `.claude/` na raiz — stack do Spec Kit deste repositório, versionada de propósito (ver abaixo).
+- `.specify/`, `.claude/` e `.agents/skills/` na raiz — stack Claude/Codex do Spec Kit deste repositório, versionada de propósito (ver abaixo).
 - `WORKFLOW.md` na raiz — workflow project-wide gerenciado, marcador `grill-with-docs-workflow:v4`.
 
 ## Rodar os testes
@@ -16,7 +16,7 @@ Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfood
 python3 tests/run_validators.py
 ```
 
-Baseline atual (v5.3.0, `f78e009`): 28 validadores, exit 0. Vinte e sete são suítes `unittest` e somam 1225 testes, com 1 skip dependente de ambiente em `validate_workspace_contract.py`; o 28º, `validate_distribution.py`, valida por asserção direta e por isso não imprime `Ran N tests`. Ao reconferir esse baseline, conte os arquivos pelo marcador `==>` do runner, não pelas linhas `Ran` — elas ignoram o validador sem unittest. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
+A suíte completa roda por `tests/run_validators.py`; conte os validadores pelo marcador `==>`, pois `validate_distribution.py` usa asserções diretas e não imprime `Ran N tests`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
 
 ## Restrições do core
 
@@ -38,13 +38,14 @@ A ordem canônica de cada versão vive em `grill_core/workflow_versions.py`, que
 `grill_workspace.py init` fixa o `WORKFLOW.md` antes de montar o bundle e reporta o estado das dependências externas em `dependencies`. O preflight é declarado em `plugin/skills/grill-with-docs/assets/dependencies.json`.
 
 - **backlogctl é exigido desde a 3.0.0**: `init` recusa com `BACKLOG-REQUIRED` sem backlog vinculado;
+- `--runtime claude|codex` é obrigatório e seleciona o harness da sessão sem consultar o default salvo em `.specify/integration.json`;
 - demais dependências: só detecta e reporta, nunca bloqueia;
 - `--allow-install`: autoriza a instalação delegada e a criação/bind do backlog. Essa flag é a confirmação explícita que o contrato do backlog exige;
 - `--require-dependencies`: torna a falta um `MISSING-DEPENDENCY` fail-closed;
 - `--skip-backlog`: única saída para criar sem backlog. Fica carimbada em `state.json` e aparece em toda auditoria como `backlog_skipped`. `backlog-adopt ROOT --work-id ID --apply` limpa o carimbo depois do vínculo;
 - `GRILL_SKIP_DEPENDENCIES=1`: desliga a detecção em ambiente air-gapped e **nunca** é reportado como `OK`.
 
-Subcomandos auxiliares: `preflight ROOT [--allow-install] [--skip-backlog]` e `backlog-sync ROOT --work-id ID [--apply] [--db PATH]`.
+Subcomandos auxiliares: `preflight ROOT --runtime claude|codex [--allow-install] [--skip-backlog]` e `backlog-sync ROOT --work-id ID [--apply] [--db PATH]`.
 
 ## Triagem e rotas
 
@@ -58,12 +59,13 @@ Desde a 3.3.0 a triagem é **consultiva**: `init` e `hotfix` ainda não a exigem
 
 `git`, `bugfix` e `verify-review-ship` são exigidas pelo `WORKFLOW.md`. As duas últimas vivem no catálogo `community`, que é discovery-only: instalar por `--from <archive-url>` dispara um aviso interativo de fonte não confiável e aborta em modo não-interativo. Um instalador automatizado não deve responder esse aviso no lugar do humano, então `--allow-install` registra o catálogo como confiável em `.specify/extension-catalogs.yml` (`install_allowed: true`) e instala pelo nome. É uma decisão de confiança explícita e revisável no diff.
 
-## Por que `.specify/` e `.claude/` são versionados
+## Por que `.specify/`, `.claude/` e `.agents/skills/` são versionados
 
 A stack do Spec Kit deste repositório está no controle de versão de propósito, para que a configuração seja reproduzível e revisável. Consequências a conhecer:
 
 - `.specify/extensions/` carrega código de terceiros vendorizado (`bugfix` de Quratulain-bilal; `agent-assign` de xymelon permanece na árvore como histórico, já não exigido desde a 4.0.0). Atualizações de extensão aparecem como diff.
 - `.specify/extensions/.cache/` é cache do catálogo e gera churn a cada refresh.
+- `.agents/skills/speckit-*` materializa a integração Codex; `.claude/skills/speckit-*` mantém a integração Claude secundária.
 - `.claude/settings.local.json` é override por máquina; mudanças locais de configuração viram diff.
 - `.specify/memory/constitution.md` na raiz é a **Constituição gerenciada do grill**, gerada de `assets/GRILL-CONSTITUTION.template.md` e não o placeholder do spec-kit. São 9 cláusulas normativas e ela é read-only depois do bootstrap: nenhum ADR ou decisão local funciona como waiver. Duas dessas cláusulas — `Bump obrigatório do plugin` e `Release obrigatória por versão` — existem **só aqui**, não no asset: governam a distribuição deste plugin e não teriam sentido na constituição de um projeto consumidor. Emendar a Constituição é ato deliberado e caro: o hash muda e todo work item que selou o hash anterior passa a acusar `CONSTITUTION-STALE` até ser re-selado.
 

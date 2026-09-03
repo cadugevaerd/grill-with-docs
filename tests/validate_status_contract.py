@@ -11,6 +11,9 @@ WORKFLOW_TEMPLATE=PLUGIN/"skills/grill-with-docs/assets/WORKFLOW.template.md"
 STATUS=PLUGIN/"skills/grill-with-docs/scripts/grill_status.py"
 
 def cli(script,*args):
+    args=tuple(args)
+    if script == WS and args and args[0] in {"init","preflight","gauntlet-init"} and "--runtime" not in args:
+        args += ("--runtime","claude")
     return subprocess.run([sys.executable,str(script),*(str(x) for x in args)],text=True,capture_output=True,env={**os.environ,"PYTHONDONTWRITEBYTECODE":"1"})
 def status(root,*args):
     # Exercise the public CORE entry point; direct grill_status invocation

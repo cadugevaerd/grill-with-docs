@@ -152,6 +152,37 @@ class Detection(unittest.TestCase):
         reports = MODULE.detect(self.root, MODULE.load_manifest(), tools)
         self.assertEqual(self.report(reports, "spec-kit-community-catalog")["status"], "present")
 
+    def materialize_harness(self, runtime: str) -> None:
+        harness = next(
+            entry for entry in MODULE.load_manifest()["dependencies"]
+            if entry["id"] == "spec-kit-harness")
+        root = self.root / MODULE.SKILL_ROOT_BY_RUNTIME[runtime]
+        for command in harness["commands"]:
+            target = root / command / "SKILL.md"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("---\nname: fixture\n---\n", encoding="utf-8")
+        manifest = self.root / f".specify/integrations/{runtime}.manifest.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(json.dumps({"integration": runtime}), encoding="utf-8")
+
+    def test_explicit_runtime_wins_the_saved_project_default(self) -> None:
+        self.materialize_harness("codex")
+        integration = self.root / ".specify/integration.json"
+        integration.parent.mkdir(parents=True, exist_ok=True)
+        integration.write_text(json.dumps({"default_integration": "claude"}), encoding="utf-8")
+        reports = MODULE.detect(self.root, MODULE.load_manifest(), StubToolchain(), runtime="codex")
+        harness = self.report(reports, "spec-kit-harness")
+        self.assertEqual(harness["status"], "present")
+        self.assertEqual(harness["source"], str(self.root / ".agents/skills"))
+
+    def test_selected_harness_never_falls_back_to_the_other_runtime(self) -> None:
+        self.materialize_harness("claude")
+        reports = MODULE.detect(self.root, MODULE.load_manifest(), StubToolchain(), runtime="codex")
+        harness = self.report(reports, "spec-kit-harness")
+        self.assertEqual((harness["status"], harness["code"]), ("missing", "BLOCKED_CAPABILITY"))
+        self.assertIn("harness codex", harness["reason"])
+        self.assertIn("--integration codex", harness["remediation"])
+
     def test_trusted_catalog_is_installed_before_the_community_extensions(self) -> None:
         order = [entry["id"] for entry in MODULE.load_manifest()["dependencies"]]
         catalog = order.index("spec-kit-community-catalog")
@@ -233,6 +264,7 @@ class InstallDelegation(unittest.TestCase):
         tools = StubToolchain()
         payload = MODULE.preflight(self.root, allow_install=False, tools=tools)
         self.assertEqual(payload["verdict"], "MISSING-DEPENDENCY")
+        self.assertEqual(payload["code"], "BLOCKED_CAPABILITY")
         self.assertNotIn("installed", payload)
         declared = {tuple(command) for entry in MODULE.load_manifest()["dependencies"] for command in entry.get("install") or []}
         for call in tools.calls:
@@ -247,6 +279,62 @@ class InstallDelegation(unittest.TestCase):
         self.assertTrue(installers)
         self.assertIn(["node", tools.installer], tools.calls)
         self.assertIn("installed", payload)
+        self.assertFalse(any(call[0] == "claude" for call in tools.calls))
+        self.assertFalse(any(call[:2] == ["codex", "exec"] for call in tools.calls))
+
+    def test_codex_install_restores_and_retains_the_claude_harness(self) -> None:
+        claude_skill = self.root / ".claude/skills/speckit-specify/SKILL.md"
+        claude_skill.parent.mkdir(parents=True)
+        claude_skill.write_text("claude-original\n", encoding="utf-8")
+        integration = self.root / ".specify/integration.json"
+        integration.parent.mkdir(parents=True)
+        integration.write_text(json.dumps({
+            "installed_integrations": ["claude"],
+            "integration_settings": {"claude": {"script": "sh"}},
+            "default_integration": "claude",
+        }), encoding="utf-8")
+        registry = self.root / MODULE.EXTENSION_REGISTRY
+        registry.parent.mkdir(parents=True, exist_ok=True)
+        registry.write_text(json.dumps({
+            "schema_version": "1.0",
+            "extensions": {"git": {
+                "enabled": True,
+                "registered_commands": {"claude": ["speckit.git.commit"]},
+            }},
+        }), encoding="utf-8")
+
+        class DestructiveSpecKit(StubToolchain):
+            def run(inner_self, argv, *, cwd=None, timeout=None):
+                inner_self.calls.append(list(argv))
+                claude_skill.unlink(missing_ok=True)
+                if argv[:2] == ["specify", "init"]:
+                    integration.write_text(json.dumps({
+                        "installed_integrations": ["codex"],
+                        "integration_settings": {"codex": {"raw_options": "--skills"}},
+                        "default_integration": "codex",
+                    }), encoding="utf-8")
+                if argv[:3] == ["specify", "extension", "add"]:
+                    registry.write_text(json.dumps({
+                        "schema_version": "1.0",
+                        "extensions": {"git": {
+                            "enabled": True,
+                            "registered_commands": {"codex": ["speckit.git.commit"]},
+                        }},
+                    }), encoding="utf-8")
+                return 0, ""
+
+        tools = DestructiveSpecKit()
+        reports = [
+            {"id": "spec-kit-harness", "status": "missing"},
+            {"id": "ext:git", "status": "missing"},
+        ]
+        MODULE.install(self.root, MODULE.load_manifest(), reports, tools, runtime="codex")
+        self.assertEqual(claude_skill.read_text(encoding="utf-8"), "claude-original\n")
+        merged = json.loads(integration.read_text(encoding="utf-8"))
+        self.assertEqual(set(merged["installed_integrations"]), {"claude", "codex"})
+        self.assertEqual(set(merged["integration_settings"]), {"claude", "codex"})
+        registered = json.loads(registry.read_text(encoding="utf-8"))["extensions"]["git"]["registered_commands"]
+        self.assertEqual(set(registered), {"claude", "codex"})
 
     def test_failed_installer_is_reported_and_stops_that_entry(self) -> None:
         tools = StubToolchain(outputs={("node", "/stub/ensure-backlogctl.js"): (1, "boom")})
@@ -284,7 +372,7 @@ class CommandLine(unittest.TestCase):
     def test_cli_emits_one_json_line_and_maps_the_verdict_to_the_exit_code(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             process = subprocess.run(
-                [sys.executable, str(SCRIPT), temporary],
+                [sys.executable, str(SCRIPT), temporary, "--runtime", "claude"],
                 capture_output=True, text=True, check=False,
                 env={"PATH": "/nonexistent-path", "HOME": temporary, "SystemRoot": "C:\\Windows"},
             )

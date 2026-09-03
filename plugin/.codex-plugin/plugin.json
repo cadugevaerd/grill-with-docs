@@ -1,6 +1,6 @@
 {
   "name": "grill-with-docs",
-  "version": "5.3.3",
+  "version": "5.3.4",
   "description": "Entrega hotfixes por uma faixa rápida e verificável; reconciliação incremental com receipts fail-closed.",
   "author": {
     "name": "Carlos Araujo",

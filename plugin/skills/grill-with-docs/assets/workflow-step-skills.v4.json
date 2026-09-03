@@ -27,8 +27,13 @@
           "source_ref": "speckit-integration:claude@0.15.1"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "speckit-specify",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:codex@0.15.1"
         },
         "hermes": {
           "resolved": false,
@@ -56,8 +61,13 @@
           "source_ref": "speckit-integration:claude@0.15.1"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "speckit-plan",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:codex@0.15.1"
         },
         "hermes": {
           "resolved": false,
@@ -85,8 +95,13 @@
           "source_ref": "speckit-integration:claude@0.15.1"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "speckit-checklist",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:codex@0.15.1"
         },
         "hermes": {
           "resolved": false,
@@ -114,8 +129,13 @@
           "source_ref": "speckit-integration:claude@0.15.1"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "speckit-tasks",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:codex@0.15.1"
         },
         "hermes": {
           "resolved": false,
@@ -143,8 +163,13 @@
           "source_ref": "speckit-integration:claude@0.15.1"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "speckit-analyze",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:codex@0.15.1"
         },
         "hermes": {
           "resolved": false,
@@ -172,8 +197,13 @@
           "source_ref": "grill-with-docs:partition@4.0.0"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "grill-with-docs:grill-partition",
+          "entrypoint_kind": "skill",
+          "minimum_version": "4.0.0",
+          "resolved": true,
+          "source_ref": "grill-with-docs:partition@4.0.0"
         },
         "hermes": {
           "resolved": false,
@@ -201,8 +231,13 @@
           "source_ref": "grill-with-docs:implement-parallel@4.0.0"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "grill-with-docs:grill-implement-parallel",
+          "entrypoint_kind": "skill",
+          "minimum_version": "4.0.0",
+          "resolved": true,
+          "source_ref": "grill-with-docs:implement-parallel@4.0.0"
         },
         "hermes": {
           "resolved": false,
@@ -230,8 +265,13 @@
           "source_ref": "speckit-integration:claude@0.15.1"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "speckit-converge",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.15.1",
+          "resolved": true,
+          "source_ref": "speckit-integration:codex@0.15.1"
         },
         "hermes": {
           "resolved": false,
@@ -259,8 +299,13 @@
           "source_ref": "speckit-extension:verify-review-ship@0.4.2"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "speckit-verify-review-ship-verify",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.4.2",
+          "resolved": true,
+          "source_ref": "speckit-extension:verify-review-ship@0.4.2"
         },
         "hermes": {
           "resolved": false,
@@ -288,8 +333,13 @@
           "source_ref": "speckit-extension:verify-review-ship@0.4.2"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "speckit-verify-review-ship-review",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.4.2",
+          "resolved": true,
+          "source_ref": "speckit-extension:verify-review-ship@0.4.2"
         },
         "hermes": {
           "resolved": false,
@@ -317,8 +367,13 @@
           "source_ref": "speckit-extension:verify-review-ship@0.4.2"
         },
         "codex": {
-          "resolved": false,
-          "unresolved_reason": "RUNTIME_ENTRYPOINT_UNPROVEN"
+          "adapter": "codex-skill/v1",
+          "catalog_id": "codex-v4-local-skills",
+          "entrypoint": "speckit-verify-review-ship-ship",
+          "entrypoint_kind": "skill",
+          "minimum_version": "0.4.2",
+          "resolved": true,
+          "source_ref": "speckit-extension:verify-review-ship@0.4.2"
         },
         "hermes": {
           "resolved": false,

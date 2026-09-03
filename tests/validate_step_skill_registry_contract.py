@@ -20,6 +20,7 @@ ASSETS = REPO / "plugin/skills/grill-with-docs/assets"
 REGISTRY = ASSETS / "workflow-step-skills.v4.json"
 TRUSTED_CATALOGS_ASSET = ASSETS / "workflow-trusted-catalogs.v4.json"
 CATALOG = REPO / "tests/fixtures/workflow-step-skills/grill-v4-catalog.json"
+CODEX_CATALOG = REPO / "tests/fixtures/workflow-step-skills/codex-v4-catalog.json"
 
 REGISTRY_V3 = ASSETS / "workflow-step-skills.json"
 TRUSTED_CATALOGS_ASSET_V3 = ASSETS / "workflow-trusted-catalogs.json"
@@ -30,7 +31,7 @@ CATALOG_V3 = REPO / "tests/fixtures/workflow-step-skills/claude-catalog.json"
 # string `sha256sum workflow-step-skills.v4.json` prints -- never a JCS digest of
 # the parsed document. Verified independently in
 # Registry.test_registry_sha256_matches_plain_sha256sum_no_jcs_involved.
-REGISTRY_SHA256 = "sha256:e3f69871406205b77725b41bf0de0b24d9dbd661c004d502f0ddb49f22209ec1"
+REGISTRY_SHA256 = "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c"
 #: v3's registry digest may never move: every v3 WORKFLOW.md materialised in a
 #: consumer repository pins it, and a change here is a fleet-wide outage.
 REGISTRY_V3_SHA256 = "sha256:9a326f32523c926f82b190dd9a08b11341614d112ad92d78c33e59fe015b478e"
@@ -53,8 +54,9 @@ def _load():
 ss = _load()
 
 
-def catalog():
-    return json.loads(CATALOG.read_text(encoding="utf-8"))
+def catalog(runtime="claude"):
+    path = CODEX_CATALOG if runtime == "codex" else CATALOG
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def registry():
@@ -94,7 +96,7 @@ class Base(unittest.TestCase):
     def resolve(self, step="verify", runtime="claude", sha=None, **kw):
         cat = kw.pop("catalog", None)
         if cat is None:
-            cat = catalog()
+            cat = catalog(runtime)
         kw.setdefault("registry", registry_bytes())
         if "trusted_catalogs_path" in kw:
             return ss.resolve_workflow_skill(step, runtime, sha or REGISTRY_SHA256, catalog=cat, **kw)
@@ -230,16 +232,16 @@ class Registry(Base):
             self.assertIs(entry["required"], True, step)
             self.assertIs(entry["human_authorization_required"], step == "ship", step)
 
-    def test_three_runtimes_and_only_claude_is_proven(self):
+    def test_three_runtimes_and_both_supported_harnesses_are_proven(self):
         document = registry()
         self.assertEqual(document["runtimes"], ["hermes", "claude", "codex"])
         for step in STEPS:
             res = document["steps"][step]["resolutions"]
             self.assertEqual(set(res), set(ss.RUNTIMES))
             self.assertIs(res["claude"]["resolved"], True, step)
-            for runtime in ("hermes", "codex"):
-                self.assertIs(res[runtime]["resolved"], False, (step, runtime))
-                self.assertIn(res[runtime]["unresolved_reason"], ss.UNRESOLVED_REASONS)
+            self.assertIs(res["codex"]["resolved"], True, step)
+            self.assertIs(res["hermes"]["resolved"], False, step)
+            self.assertIn(res["hermes"]["unresolved_reason"], ss.UNRESOLVED_REASONS)
 
     def test_registry_never_freezes_the_unproven_plan_literals_as_entrypoints(self):
         """Plan 4.1 skill ids are the PROPOSED logical contract; phase 0 resolved the real ones."""
@@ -256,6 +258,12 @@ class Registry(Base):
         observed = {e["entrypoint"] for e in catalog()["entries"]}
         for step in STEPS:
             self.assertIn(document["steps"][step]["resolutions"]["claude"]["entrypoint"], observed, step)
+
+    def test_every_codex_entrypoint_is_a_real_observed_skill(self):
+        document = registry()
+        observed = {e["entrypoint"] for e in catalog("codex")["entries"]}
+        for step in STEPS:
+            self.assertIn(document["steps"][step]["resolutions"]["codex"]["entrypoint"], observed, step)
 
 
 # --------------------------------------------------------------------------
@@ -339,9 +347,9 @@ class RegistrySchema(Base):
 
     def test_unresolved_entry_rejects_extra_fields_and_unknown_reasons(self):
         def smuggle(d):
-            d["steps"]["ship"]["resolutions"]["codex"]["entrypoint"] = "ship.sh"
+            d["steps"]["ship"]["resolutions"]["hermes"]["entrypoint"] = "ship.sh"
         self.assertEqual(self.mutate(smuggle), "REGISTRY_RESOLUTION_INVALID")
-        self.assertEqual(self.mutate(lambda d: d["steps"]["ship"]["resolutions"]["codex"].update(
+        self.assertEqual(self.mutate(lambda d: d["steps"]["ship"]["resolutions"]["hermes"].update(
             {"unresolved_reason": "BEST_EFFORT"})), "REGISTRY_UNRESOLVED_REASON")
 
     def test_duplicate_json_keys_and_bom_are_refused(self):
@@ -411,6 +419,13 @@ class ResolverHappyPath(Base):
             self.assertTrue(out["capability_preflight"]["native_invocation"])
             self.assertTrue(ss.verify_resolution_digest(out), step)
 
+    def test_every_step_resolves_natively_for_codex(self):
+        for step in STEPS:
+            out = self.resolve(step=step, runtime="codex")
+            self.assertEqual(out["runtime"], "codex")
+            self.assertEqual(out["adapter"], "codex-skill/v1")
+            self.assertTrue(ss.verify_resolution_digest(out), step)
+
     def test_resolution_carries_every_field_section_4_1_demands(self):
         out = self.resolve(step="ship")
         for field in ("skill_id", "runtime", "adapter", "entrypoint", "skill_version", "source_ref",
@@ -447,7 +462,7 @@ class ResolverFailsClosed(Base):
         self.blocked("UNKNOWN_RUNTIME", runtime="cursor")
 
     def test_runtime_without_a_proven_entrypoint_blocks_every_step(self):
-        for runtime in ("hermes", "codex"):
+        for runtime in ("hermes",):
             for step in STEPS:
                 self.blocked("RUNTIME_ENTRYPOINT_UNPROVEN", step=step, runtime=runtime)
 
@@ -873,7 +888,7 @@ class InvocationEnvelope(Base):
             "skill_id": "totally.made.up",
             "required": True,
             "human_authorization_required": True,
-            "runtime": "codex",
+            "runtime": "hermes",
             "adapter": "evil-adapter/v1",
             "entrypoint": "rm-rf-slash",
             "entrypoint_kind": "command",
@@ -1002,16 +1017,16 @@ class InvocationEnvelope(Base):
         self.assertEqual(ctx.exception.detail["field"], "skill_id")
 
     def test_receipt_for_an_unresolved_runtime_cannot_be_attested(self):
-        """probe3: runtime='codex' has no resolution at all in this registry --
-        nothing can legitimately attest a codex invocation, and an envelope that
-        merely claims runtime='codex' while reusing claude's resolution fields
+        """probe3: runtime='hermes' has no resolution at all in this registry --
+        nothing can legitimately attest a Hermes invocation, and an envelope that
+        merely claims runtime='hermes' while reusing claude's resolution fields
         must be rejected, not accepted for lack of a codex resolution to compare."""
         with self.assertRaises(ss.SkillResolutionError) as ctx:
-            self.resolve(step="verify", runtime="codex")
+            self.resolve(step="verify", runtime="hermes")
         self.assertEqual((ctx.exception.code, ctx.exception.reason),
                          (ss.BLOCKED_CAPABILITY, "RUNTIME_ENTRYPOINT_UNPROVEN"))
 
-        doc = self.envelope(runtime="codex")  # self-consistent lie: adapter/entrypoint are claude's
+        doc = self.envelope(runtime="hermes")  # self-consistent lie: adapter/entrypoint are claude's
         with self.assertRaises(ss.SkillResolutionError) as ctx:
             self.validate(doc)
         self.assertEqual(ctx.exception.code, ss.UNATTESTED_STEP_OUTPUT)
@@ -1082,7 +1097,7 @@ class InvocationEnvelope(Base):
     # ----------------------------------------------------------------------
     def test_registry_anchored_forgery_is_rejected_and_agrees_with_resolve_workflow_skill(self):
         """The round-2 attack, verbatim: skill_id='totally.made.up',
-        entrypoint='rm-rf-slash', runtime='codex', a skill_resolution_sha256
+        entrypoint='rm-rf-slash', runtime='hermes', a skill_resolution_sha256
         that verifies, and a COMPLETED receipt for step_id='ship' built to
         match it exactly. Also proves the legitimate path agrees: the same
         (step_id, runtime) pair is blocked by resolve_workflow_skill in the
@@ -1097,13 +1112,13 @@ class InvocationEnvelope(Base):
         self.assertEqual(ctx.exception.reason, "RESOLUTION_SKILL_ID_MISMATCH")
 
         with self.assertRaises(ss.SkillResolutionError) as ctx:
-            self.resolve(step="ship", runtime="codex")
+            self.resolve(step="ship", runtime="hermes")
         self.assertEqual((ctx.exception.code, ctx.exception.reason),
                          (ss.BLOCKED_CAPABILITY, "RUNTIME_ENTRYPOINT_UNPROVEN"))
 
     def test_forged_resolution_with_the_real_skill_id_still_blocks_on_unresolved_runtime(self):
         """Fix the skill_id to the registry's real value for 'ship' -- the
-        forgery still has to clear runtime resolution, and codex is
+        forgery still has to clear runtime resolution, and Hermes is
         unresolved for every step."""
         real_skill_id = registry()["steps"]["ship"]["skill_id"]
         forged_resolution = self._forged_resolution(skill_id=real_skill_id)

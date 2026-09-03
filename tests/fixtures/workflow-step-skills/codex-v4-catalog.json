@@ -1,0 +1,140 @@
+{
+  "catalog_id": "codex-v4-local-skills",
+  "catalog_sha256": "sha256:a0887d1be953c353adc4780b3e55aca45c580af8892937b1f1118dec55a993dc",
+  "entries": [
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:89f1ee45d1f66e5eb72e5abc9226fad90aa6c96195ddff8710b67ad2bab5a4ef",
+      "entrypoint": "grill-with-docs:grill-implement-parallel",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:907ab525074e68d53728244305e1155c24afd40c34e1b66ca5e240bd0722afbd",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/grill-with-docs:grill-implement-parallel",
+      "source_ref": "grill-with-docs:implement-parallel@4.0.0",
+      "version": "4.0.0"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:ee1e648becb61d3ad58eefd3bb1a985fd02c210d4d7d2d642f92c54b5d5f4a25",
+      "entrypoint": "grill-with-docs:grill-partition",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:907ab525074e68d53728244305e1155c24afd40c34e1b66ca5e240bd0722afbd",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/grill-with-docs:grill-partition",
+      "source_ref": "grill-with-docs:partition@4.0.0",
+      "version": "4.0.0"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:a84a54c4701706a711bf23c59817bc659bd6e484488fd7402a908496992af217",
+      "entrypoint": "speckit-analyze",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:7af8d1b0331665e35d0de7a497dcf976d14ddcb04c1433d6d257e9e32d4bccba",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/speckit-analyze",
+      "source_ref": "speckit-integration:codex@0.15.1",
+      "version": "0.15.1"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:2a10245ed6772e5e5c52bd723aab1e3eb975617fa9121610e72f4329b1dd1635",
+      "entrypoint": "speckit-checklist",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:7af8d1b0331665e35d0de7a497dcf976d14ddcb04c1433d6d257e9e32d4bccba",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/speckit-checklist",
+      "source_ref": "speckit-integration:codex@0.15.1",
+      "version": "0.15.1"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:466e51121a590e3abd409fda063db6361c9a7e2b2cef927a75f5afb130c1eb88",
+      "entrypoint": "speckit-converge",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:7af8d1b0331665e35d0de7a497dcf976d14ddcb04c1433d6d257e9e32d4bccba",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/speckit-converge",
+      "source_ref": "speckit-integration:codex@0.15.1",
+      "version": "0.15.1"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:1fc2cfc294a05b6a18d2dbbf7d37a63f2992f7f65e2bea8f022e169aab317fa4",
+      "entrypoint": "speckit-implement",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:7af8d1b0331665e35d0de7a497dcf976d14ddcb04c1433d6d257e9e32d4bccba",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/speckit-implement",
+      "source_ref": "speckit-integration:codex@0.15.1",
+      "version": "0.15.1"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:b3dca1c679a2452e8e3aa84c96b42fc5cee42e8b0cb3c30fa77a60ff83db6d4d",
+      "entrypoint": "speckit-plan",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:7af8d1b0331665e35d0de7a497dcf976d14ddcb04c1433d6d257e9e32d4bccba",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/speckit-plan",
+      "source_ref": "speckit-integration:codex@0.15.1",
+      "version": "0.15.1"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:88d7fab201de66297f16b6c271a418a0f2c198d714456dfd707e623348ec47c1",
+      "entrypoint": "speckit-specify",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:7af8d1b0331665e35d0de7a497dcf976d14ddcb04c1433d6d257e9e32d4bccba",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/speckit-specify",
+      "source_ref": "speckit-integration:codex@0.15.1",
+      "version": "0.15.1"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:e89dd51b27d0deeab99bad94233bbec57e2fcb053e21857eeb92cbef2d9b5be9",
+      "entrypoint": "speckit-tasks",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:7af8d1b0331665e35d0de7a497dcf976d14ddcb04c1433d6d257e9e32d4bccba",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/speckit-tasks",
+      "source_ref": "speckit-integration:codex@0.15.1",
+      "version": "0.15.1"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:77d61d87dc9ae69d86c2c6c74e232c9803a27aa9a37ea79706f8c16a5758a4da",
+      "entrypoint": "speckit-verify-review-ship-review",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:a2fec37a41b24f6ecffdfab721c1227bb7df25eb14fb3e6b979e87b45033d6e1",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/speckit-verify-review-ship-review",
+      "source_ref": "speckit-extension:verify-review-ship@0.4.2",
+      "version": "0.4.2"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:b0b7b7001d2bb19bbfbdfa3236e49c172da9d23e8622f111224ff2646db9fd33",
+      "entrypoint": "speckit-verify-review-ship-ship",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:a2fec37a41b24f6ecffdfab721c1227bb7df25eb14fb3e6b979e87b45033d6e1",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/speckit-verify-review-ship-ship",
+      "source_ref": "speckit-extension:verify-review-ship@0.4.2",
+      "version": "0.4.2"
+    },
+    {
+      "adapter": "codex-skill/v1",
+      "content_sha256": "sha256:8d640d9b5474d5a034203004f9eaacb317733ecb7d9a2b2f8472332fef1c27f8",
+      "entrypoint": "speckit-verify-review-ship-verify",
+      "entrypoint_kind": "skill",
+      "manifest_sha256": "sha256:a2fec37a41b24f6ecffdfab721c1227bb7df25eb14fb3e6b979e87b45033d6e1",
+      "native_invocation": true,
+      "preflight_ref": "preflight:codex-skill/speckit-verify-review-ship-verify",
+      "source_ref": "speckit-extension:verify-review-ship@0.4.2",
+      "version": "0.4.2"
+    }
+  ],
+  "runtime": "codex",
+  "schema": "skill-catalog/v1"
+}

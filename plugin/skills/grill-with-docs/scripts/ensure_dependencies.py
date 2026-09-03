@@ -14,13 +14,16 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
 HERE = Path(__file__).resolve()
 MANIFEST = HERE.parents[1] / "assets/dependencies.json"
 SCHEMA = "grill-dependencies/v1"
-KINDS = {"runtime", "binary", "path", "specify-extension"}
+KINDS = {"runtime", "binary", "path", "harness", "specify-extension"}
+RUNTIMES = ("claude", "codex")
+SKILL_ROOT_BY_RUNTIME = {"claude": ".claude/skills", "codex": ".agents/skills"}
 EXTENSION_REGISTRY = ".specify/extensions/.registry"
 REGISTRY_SCHEMA = "1."
 PROBE_TIMEOUT = 15
@@ -129,7 +132,7 @@ def resolve_binary(entry: dict[str, Any], tools: Toolchain) -> str | None:
     return None
 
 
-def expand(command: list[str], tools: Toolchain) -> list[str] | None:
+def expand(command: list[str], tools: Toolchain, *, runtime: str | None = "claude") -> list[str] | None:
     resolved: list[str] = []
     for part in command:
         if part == BACKLOG_INSTALLER:
@@ -137,12 +140,20 @@ def expand(command: list[str], tools: Toolchain) -> list[str] | None:
             if installer is None:
                 return None
             resolved.append(installer)
+        elif part == "${GRILL_RUNTIME}":
+            if runtime not in RUNTIMES:
+                return None
+            resolved.append(runtime)
+        elif part == "${GRILL_INTEGRATION_OPTIONS}":
+            if runtime == "codex":
+                resolved.append("--integration-options=--skills")
         else:
             resolved.append(part)
     return resolved
 
 
-def remediation(entry: dict[str, Any], tools: Toolchain, field: str = "install") -> str | None:
+def remediation(entry: dict[str, Any], tools: Toolchain, field: str = "install", *,
+                runtime: str | None = None) -> str | None:
     """Render the fix for the observed reason, not a fixed one per dependency.
 
     An extension that is registered but disabled needs ``enable``, not ``add``;
@@ -155,7 +166,7 @@ def remediation(entry: dict[str, Any], tools: Toolchain, field: str = "install")
         return literal if isinstance(literal, str) and literal else None
     rendered = []
     for command in commands if isinstance(commands[0], list) else [commands]:
-        expanded = expand(command, tools)
+        expanded = expand(command, tools, runtime=runtime)
         rendered.append(" ".join(expanded if expanded else command))
     return " && ".join(rendered)
 
@@ -208,7 +219,9 @@ def extension_state(registry: dict[str, Any] | None, slug: str) -> tuple[str, st
 _UNREAD = object()
 
 
-def detect(root: Path, manifest: dict[str, Any], tools: Toolchain) -> list[dict[str, Any]]:
+def detect(root: Path, manifest: dict[str, Any], tools: Toolchain, *, runtime: str = "claude") -> list[dict[str, Any]]:
+    if runtime not in RUNTIMES:
+        raise ManifestError(f"unsupported runtime: {runtime!r}")
     reports: list[dict[str, Any]] = []
     specify_path: str | None = None
     # ``None`` is a meaningful registry state, so the "not yet read" sentinel
@@ -249,6 +262,22 @@ def detect(root: Path, manifest: dict[str, Any], tools: Toolchain) -> list[dict[
             if target.exists() and (not expected or expected in read_text(target)) and readable:
                 report["status"] = "present"
                 report["source"] = str(target)
+        elif kind == "harness":
+            skill_root = root / SKILL_ROOT_BY_RUNTIME[runtime]
+            commands = entry.get("commands") or []
+            missing_commands = [
+                command for command in commands
+                if not (skill_root / command / "SKILL.md").is_file()
+            ]
+            integration_manifest = root / f".specify/integrations/{runtime}.manifest.json"
+            if integration_manifest.is_file() and not missing_commands:
+                report["status"] = "present"
+                report["source"] = str(skill_root)
+            elif missing_commands:
+                report["code"] = "BLOCKED_CAPABILITY"
+                report["reason"] = (
+                    f"skills ausentes no harness {runtime}: " + ",".join(missing_commands)
+                )
         elif kind == "specify-extension":
             if extensions is _UNREAD:
                 extensions = extension_registry(root)
@@ -256,7 +285,26 @@ def detect(root: Path, manifest: dict[str, Any], tools: Toolchain) -> list[dict[
             report["status"] = status
             report["version"] = version
             if status == "present":
-                report["source"] = str(root / EXTENSION_REGISTRY)
+                registered = (extensions.get(entry["extension"], {}).get("registered_commands")
+                              if isinstance(extensions, dict) else None)
+                expected = entry.get("commands") or []
+                observed_commands = registered.get(runtime, []) if isinstance(registered, dict) else []
+                skill_root = root / SKILL_ROOT_BY_RUNTIME[runtime]
+                absent_files = ([
+                    command for command in expected
+                    if not (skill_root / command.replace(".", "-") / "SKILL.md").is_file()
+                ] if isinstance(registered, dict) else [])
+                if isinstance(registered, dict) and (
+                    not set(expected).issubset(set(observed_commands)) or absent_files
+                ):
+                    report["status"] = "missing"
+                    report["code"] = "BLOCKED_CAPABILITY"
+                    report["reason"] = (
+                        f"extensao nao materializada para o harness {runtime}"
+                    )
+                    observed[entry["id"]] = report["reason"]
+                else:
+                    report["source"] = str(root / EXTENSION_REGISTRY)
             elif reason:
                 observed[entry["id"]] = reason
         if report["status"] == "undetermined":
@@ -265,15 +313,107 @@ def detect(root: Path, manifest: dict[str, Any], tools: Toolchain) -> list[dict[
             report["reason"] = f"registro de extensoes ilegivel: {EXTENSION_REGISTRY}"
         elif report["status"] != "present":
             field = "enable" if "desabilitada" in observed.get(entry["id"], "") else "install"
-            report["remediation"] = remediation(entry, tools, field)
-            report["reason"] = observed.get(entry["id"]) or entry.get("reason") or report.get("reason")
+            report["remediation"] = remediation(entry, tools, field, runtime=runtime)
+            report["reason"] = observed.get(entry["id"]) or report.get("reason") or entry.get("reason")
             if report["reason"] is None:
                 report.pop("reason")
         reports.append(report)
     return reports
 
 
-def install(root: Path, manifest: dict[str, Any], reports: Iterable[dict[str, Any]], tools: Toolchain) -> list[dict[str, Any]]:
+def _read_json(path: Path) -> dict[str, Any] | None:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _atomic_json(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, staging = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(staging, path)
+    except BaseException:
+        try:
+            os.unlink(staging)
+        except OSError:
+            pass
+        raise
+
+
+def _merge_harness_state(root: Path, integration_before: dict[str, Any] | None,
+                         registry_before: dict[str, Any] | None) -> None:
+    integration_path = root / ".specify/integration.json"
+    integration = _read_json(integration_path)
+    if integration is not None and integration_before is not None:
+        installed = integration_before.get("installed_integrations", [])
+        current = integration.get("installed_integrations", [])
+        integration["installed_integrations"] = sorted(set(installed) | set(current))
+        settings = dict(integration_before.get("integration_settings") or {})
+        settings.update(integration.get("integration_settings") or {})
+        integration["integration_settings"] = settings
+        _atomic_json(integration_path, integration)
+
+    registry_path = root / EXTENSION_REGISTRY
+    registry = _read_json(registry_path)
+    if registry is not None and registry_before is not None:
+        old_extensions = registry_before.get("extensions") or {}
+        extensions = registry.get("extensions") or {}
+        for slug, old in old_extensions.items():
+            if slug not in extensions:
+                extensions[slug] = old
+                continue
+            current = extensions[slug]
+            if not isinstance(old, dict) or not isinstance(current, dict):
+                continue
+            commands = dict(old.get("registered_commands") or {})
+            commands.update(current.get("registered_commands") or {})
+            current["registered_commands"] = commands
+        registry["extensions"] = extensions
+        _atomic_json(registry_path, registry)
+
+
+def _snapshot_other_harness(root: Path, runtime: str) -> dict[Path, tuple[bytes, int]]:
+    snapshots: dict[Path, tuple[bytes, int]] = {}
+    for other, relative in SKILL_ROOT_BY_RUNTIME.items():
+        if other == runtime:
+            continue
+        base = root / relative
+        if not base.is_dir():
+            continue
+        for path in base.glob("speckit-*/SKILL.md"):
+            if path.is_file() and not path.is_symlink():
+                snapshots[path] = (path.read_bytes(), path.stat().st_mode & 0o777)
+    return snapshots
+
+
+def _restore_other_harness(snapshots: dict[Path, tuple[bytes, int]]) -> None:
+    for path, (data, mode) in snapshots.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, staging = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.chmod(staging, mode)
+            os.replace(staging, path)
+        except BaseException:
+            try:
+                os.unlink(staging)
+            except OSError:
+                pass
+            raise
+
+
+def install(root: Path, manifest: dict[str, Any], reports: Iterable[dict[str, Any]], tools: Toolchain,
+            *, runtime: str = "claude") -> list[dict[str, Any]]:
     """Run only the commands declared in the manifest, for entries not present."""
     by_id = {entry["id"]: entry for entry in manifest["dependencies"]}
     # An undetermined entry is deliberately excluded: mutating the operator's
@@ -283,29 +423,48 @@ def install(root: Path, manifest: dict[str, Any], reports: Iterable[dict[str, An
     pending = [report["id"] for report in reports if report["status"] not in ("present", "undetermined")]
     registry = extension_registry(root)
     results: list[dict[str, Any]] = []
-    for identifier in pending:
-        entry = by_id[identifier]
-        commands = entry.get("install") or []
-        if entry["kind"] == "specify-extension":
-            record = (registry or {}).get(entry["extension"])
-            if isinstance(record, dict) and not record.get("enabled"):
-                commands = [entry["enable"]]
-        if not commands:
-            results.append({"id": identifier, "status": "SKIPPED", "reason": "no declared installer"})
-            continue
-        outcome = {"id": identifier, "status": "INSTALLED", "commands": []}
-        for command in commands:
-            expanded = expand(command, tools)
-            if expanded is None:
-                outcome["status"] = "BLOCKED"
-                outcome["reason"] = "unresolved installer placeholder"
-                break
-            code, output = tools.run(expanded, cwd=root, timeout=INSTALL_TIMEOUT)
-            outcome["commands"].append({"argv": expanded, "returncode": code, "output": output[-2048:]})
-            if code != 0:
-                outcome["status"] = "FAILED"
-                break
-        results.append(outcome)
+    integration_before = _read_json(root / ".specify/integration.json")
+    registry_before = _read_json(root / EXTENSION_REGISTRY)
+    snapshots = _snapshot_other_harness(root, runtime)
+    try:
+        for identifier in pending:
+            entry = by_id[identifier]
+            commands = entry.get("install") or []
+            if entry["kind"] == "specify-extension":
+                record = (registry or {}).get(entry["extension"])
+                if isinstance(record, dict) and not record.get("enabled"):
+                    commands = [entry["enable"]]
+            if not commands:
+                results.append({"id": identifier, "status": "SKIPPED", "reason": "no declared installer"})
+                continue
+            outcome = {"id": identifier, "status": "INSTALLED", "commands": []}
+            for command in commands:
+                expanded = expand(command, tools, runtime=runtime)
+                temporary: tempfile.TemporaryDirectory[str] | None = None
+                if entry["kind"] == "specify-extension" and command == entry.get("install", [None])[0]:
+                    source = root / ".specify/extensions" / entry["extension"]
+                    if source.is_dir():
+                        temporary = tempfile.TemporaryDirectory()
+                        copied = Path(temporary.name) / entry["extension"]
+                        shutil.copytree(source, copied)
+                        expanded = ["specify", "extension", "add", str(copied), "--dev", "--force"]
+                if expanded is None:
+                    outcome["status"] = "BLOCKED"
+                    outcome["reason"] = "unresolved installer placeholder"
+                    if temporary is not None:
+                        temporary.cleanup()
+                    break
+                code, output = tools.run(expanded, cwd=root, timeout=INSTALL_TIMEOUT)
+                if temporary is not None:
+                    temporary.cleanup()
+                outcome["commands"].append({"argv": expanded, "returncode": code, "output": output[-2048:]})
+                if code != 0:
+                    outcome["status"] = "FAILED"
+                    break
+            results.append(outcome)
+    finally:
+        _restore_other_harness(snapshots)
+        _merge_harness_state(root, integration_before, registry_before)
     return results
 
 
@@ -374,7 +533,7 @@ def remove_shadowed_skill(entry: dict[str, Any]) -> dict[str, Any]:
     return {**entry, "removed": True}
 
 
-def preflight(root: Path, *, allow_install: bool = False, tools: Toolchain | None = None,
+def preflight(root: Path, *, runtime: str = "claude", allow_install: bool = False, tools: Toolchain | None = None,
               manifest: dict[str, Any] | None = None, remove_shadows: bool = False) -> dict[str, Any]:
     tools = tools or Toolchain()
     if tools.environ.get(SKIP_ENV) == "1":
@@ -382,11 +541,11 @@ def preflight(root: Path, *, allow_install: bool = False, tools: Toolchain | Non
         # so --require-dependencies still refuses to proceed on it.
         return {"schema": SCHEMA, "verdict": "SKIPPED", "dependencies": [], "missing_required": []}
     manifest = manifest or load_manifest()
-    reports = detect(root, manifest, tools)
+    reports = detect(root, manifest, tools, runtime=runtime)
     payload: dict[str, Any] = {"schema": SCHEMA, "dependencies": reports}
     if allow_install and any(report["status"] != "present" for report in reports):
-        payload["installed"] = install(root, manifest, reports, tools)
-        payload["dependencies"] = reports = detect(root, manifest, tools)
+        payload["installed"] = install(root, manifest, reports, tools, runtime=runtime)
+        payload["dependencies"] = reports = detect(root, manifest, tools, runtime=runtime)
     shadows = detect_shadowed_skills(root, tools.environ)
     if shadows:
         # Reported, never blocking: a shadow breaks the session command, but
@@ -400,6 +559,9 @@ def preflight(root: Path, *, allow_install: bool = False, tools: Toolchain | Non
         payload["shadowed_skills"] = [remove_shadowed_skill(entry) for entry in shadows] if remove_shadows else shadows
     missing = [report["id"] for report in reports if report["required"] and report["status"] != "present"]
     payload["missing_required"] = missing
+    payload["runtime"] = runtime
+    if any(report.get("code") == "BLOCKED_CAPABILITY" for report in reports):
+        payload["code"] = "BLOCKED_CAPABILITY"
     payload["verdict"] = "MISSING-DEPENDENCY" if missing else "OK"
     return payload
 
@@ -407,12 +569,14 @@ def preflight(root: Path, *, allow_install: bool = False, tools: Toolchain | Non
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("root")
+    parser.add_argument("--runtime", choices=RUNTIMES, required=True)
     parser.add_argument("--allow-install", action="store_true")
     parser.add_argument("--remove-shadowed-skills", action="store_true", dest="remove_shadows")
     arguments = parser.parse_args(argv)
     root = Path(arguments.root).expanduser().resolve()
     try:
-        payload = preflight(root, allow_install=arguments.allow_install, remove_shadows=arguments.remove_shadows)
+        payload = preflight(root, runtime=arguments.runtime, allow_install=arguments.allow_install,
+                            remove_shadows=arguments.remove_shadows)
     except (ManifestError, OSError, json.JSONDecodeError) as error:
         payload = {"schema": SCHEMA, "verdict": "BLOCKED", "error": type(error).__name__, "detail": str(error)}
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")))

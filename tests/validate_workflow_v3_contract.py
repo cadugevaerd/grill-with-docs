@@ -242,7 +242,7 @@ class Migration(Base):
   ensured=ensure(self.root); self.assertEqual(ensured.returncode,0,ensured.stdout+ensured.stderr)
   ensured_body=json.loads(ensured.stdout)
   self.assertEqual(ensured_body['status'],'REUSED'); self.assertEqual(ensured_body['version'],'v3'); self.assertEqual(ensured_body['sha256'],sha(written))
-  init=subprocess.run([sys.executable,str(GRILL_WORKSPACE),'init',str(self.root),'--type','feature','--slug','consumer-demo-v3','--skip-backlog'],
+  init=subprocess.run([sys.executable,str(GRILL_WORKSPACE),'init',str(self.root),'--runtime','claude','--type','feature','--slug','consumer-demo-v3','--skip-backlog'],
                        text=True,capture_output=True,env={**os.environ,'GRILL_SKIP_DEPENDENCIES':'1'})
   self.assertEqual(init.returncode,0,init.stdout+init.stderr); init_body=json.loads(init.stdout.splitlines()[0])
   self.assertNotEqual(init_body.get('code'),'WORKFLOW-UNAVAILABLE'); self.assertEqual(init_body.get('status'),'CREATED')

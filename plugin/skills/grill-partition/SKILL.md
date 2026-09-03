@@ -1,7 +1,7 @@
 ---
 name: grill-partition
 description: Particiona tasks.md em subfases file-disjuntas e emite o Execution DAG versionado da etapa partition, de forma determinística e sem julgamento de modelo.
-argument-hint: "<git-root> --work-id <id> --feature <NNN-slug>"
+argument-hint: "<git-root> --runtime <claude|codex> --work-id <id> --feature <NNN-slug>"
 ---
 # Grill Partition v4.0.0
 
@@ -56,7 +56,7 @@ O agrupamento **não é decisão sua**. Ele vive em `grill_core/partition.py` e 
 
    ```bash
    python3 <plugin>/scripts/grill_workspace.py gauntlet-init ROOT \
-       --work-id ID --max-workers MAX_WORKERS_DO_DAG
+       --runtime RUNTIME_DA_SESSAO --work-id ID --max-workers MAX_WORKERS_DO_DAG
    python3 <plugin>/scripts/grill_workspace.py gauntlet-run ROOT \
        --work-id ID
    ```

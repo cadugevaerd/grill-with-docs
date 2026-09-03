@@ -1,6 +1,6 @@
 # grill-with-docs
 
-**v5.3.3 · MIT**
+**v5.3.4 · MIT**
 
 Plugin de planejamento arquitetural e entrega **Delivery First**: entrevista decisões, mantém work items isolados, valida a Constituição e produz evidência auditável. O plugin é plan-only para feature/fix (`PLAN_ONLY_STOP`); hotfix/incident segue uma faixa rápida, explícita e fail-closed (`HOTFIX-GO`). Auditoria e reconciliação não substituem o ship externo.
 
@@ -28,15 +28,15 @@ O bundle instalado contém a skill `grill-with-docs`, hooks de inicialização e
 
 ```bash
 CORE="$PLUGIN_ROOT/skills/grill-with-docs/scripts/grill_workspace.py"
-python3 "$CORE" preflight "$PWD"
-python3 "$CORE" init "$PWD" --type feature --slug minha-feature
+python3 "$CORE" preflight "$PWD" --runtime codex
+python3 "$CORE" init "$PWD" --runtime codex --type feature --slug minha-feature
 python3 "$CORE" status "$PWD"
 python3 "$CORE" status "$PWD" --format markdown
 ```
 
 O formato padrão é JSON para automações. `--format markdown` produz a resposta humana canônica: `all good` quando não há pendências ou uma tabela estável de work items pendentes.
 
-O `init` fixa o `WORKFLOW.md` project-wide e reporta o estado das dependências externas (Spec Kit e extensões, `backlogctl`). Por padrão ele apenas relata; `--allow-install` autoriza a instalação delegada e o bind do repositório ao backlog, e `--require-dependencies` torna o gate fail-closed. O plugin nunca baixa binários por conta própria.
+O `init` fixa o `WORKFLOW.md` project-wide e reporta o estado das dependências externas (Spec Kit e extensões, `backlogctl`). `--runtime claude|codex` é obrigatório e seleciona o harness da sessão, independentemente do default salvo pelo Spec Kit. Por padrão ele apenas relata; `--allow-install` autoriza a materialização da integração e extensões nesse harness sem remover o outro, e `--require-dependencies` torna o gate fail-closed. O plugin nunca baixa binários por conta própria.
 
 Feature/fix terminam em `PLAN_ONLY_STOP`; a implementação deve ocorrer fora do plugin. Para incidentes, use os comandos de hotfix documentados em `skills/grill-with-docs/SKILL.md`, sempre com reprodução, evidência, teste de correção, rollback e evidência constitucional.
 

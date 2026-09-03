@@ -56,6 +56,9 @@ def load_workspace_module():
 
 
 def invoke(*args: object) -> tuple[subprocess.CompletedProcess[str], dict]:
+    args = tuple(args)
+    if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
+        args += ("--runtime", "claude")
     process = subprocess.run(
         [sys.executable, str(SCRIPT), *(str(arg) for arg in args)],
         text=True,
@@ -109,6 +112,19 @@ class WorkspaceV2Contract(unittest.TestCase):
         (root / "WORKFLOW.md").write_bytes(WORKFLOW_TEMPLATE.read_bytes())
         git(root, "add", "WORKFLOW.md")
         git(root, "commit", "-q", "-m", "initial workflow")
+
+    def test_runtime_is_required_at_every_harness_selection_boundary(self) -> None:
+        commands = (
+            ("init", self.root, "--type", "feature", "--slug", "missing-runtime", "--skip-backlog"),
+            ("preflight", self.root, "--skip-backlog"),
+            ("gauntlet-init", self.root, "--work-id", "missing-runtime", "--max-workers", "1"),
+        )
+        for arguments in commands:
+            process = subprocess.run(
+                [sys.executable, str(SCRIPT), *(str(value) for value in arguments)],
+                text=True, capture_output=True, check=False)
+            payload = json.loads(process.stdout)
+            self.assertEqual((process.returncode, payload["code"]), (2, "INVALID-ARGUMENTS"), arguments)
 
     def _new_repo(self) -> Path:
         temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
@@ -228,7 +244,7 @@ class WorkspaceV2Contract(unittest.TestCase):
         with mock.patch.object(module, "init_command", side_effect=error), mock.patch.object(module, "build_parser") as parser:
             parser.return_value.parse_args.return_value.command = "init"
             with mock.patch("builtins.print") as output:
-                self.assertEqual(module.main(["init", str(self.root), "--type", "feature", "--slug", "alpha", "--skip-backlog"]), module.EXIT_BLOCKED)
+                self.assertEqual(module.main(["init", str(self.root), "--runtime", "claude", "--type", "feature", "--slug", "alpha", "--skip-backlog"]), module.EXIT_BLOCKED)
             payload = json.loads(output.call_args.args[0])
         self.assertEqual(payload, {"verdict": "BLOCKED", "code": "FILESYSTEM", "error": "[Errno 13] denied: 'source' -> 'target'", "errno": 13, "path": "source", "path2": "target"})
 
@@ -238,7 +254,7 @@ class WorkspaceV2Contract(unittest.TestCase):
         with mock.patch.object(module, "init_command", side_effect=error), mock.patch.object(module, "build_parser") as parser:
             parser.return_value.parse_args.return_value.command = "init"
             with mock.patch("builtins.print") as output:
-                self.assertEqual(module.main(["init", str(self.root), "--type", "feature", "--slug", "alpha", "--skip-backlog"]), module.EXIT_BLOCKED)
+                self.assertEqual(module.main(["init", str(self.root), "--runtime", "claude", "--type", "feature", "--slug", "alpha", "--skip-backlog"]), module.EXIT_BLOCKED)
             line = output.call_args.args[0]
         payload = json.loads(line)
         self.assertEqual(payload["path"], "\\xffsource")

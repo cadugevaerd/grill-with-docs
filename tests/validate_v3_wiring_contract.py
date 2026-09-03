@@ -76,6 +76,9 @@ def git(root: Path, *args: str) -> str:
 
 
 def invoke(*args: object) -> tuple[subprocess.CompletedProcess[str], dict]:
+    args = tuple(args)
+    if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
+        args += ("--runtime", "claude")
     process = subprocess.run(
         [sys.executable, str(WORKSPACE), *(str(a) for a in args)], text=True, capture_output=True, check=False,
     )
@@ -633,6 +636,8 @@ class CheckpointAttestationWiringContract(WiringHarness):
     def setUp(self) -> None:
         super().setUp()
         (self.root / "WORKFLOW.md").write_bytes(render_v3_workflow_bytes())
+        git(self.root, "add", "WORKFLOW.md")
+        git(self.root, "commit", "-q", "-m", "workflow v3")
 
     def _start_specify(self) -> None:
         process, payload = invoke(
@@ -844,6 +849,54 @@ class CheckpointAttestationWiringContract(WiringHarness):
         replaced = json.loads(accepted.read_text())["step_output"]
         corrected = self.root / "corrigido.md"
         corrected.write_text("artefato corrigido depois do selo\n", encoding="utf-8")
+
+        # Minting a new V4 receipt now requires an immutable activation. Bring
+        # this legacy fixture through the public metadata/workflow migrations;
+        # its already accepted V3 receipt remains untouched.
+        process, payload = invoke("migrate-v3", self.root, "--work-id", "wa", "--apply")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "APPLIED"), payload)
+        migrator = GRILL_CORE / "workflow_v4.py"
+        preview_process = subprocess.run(
+            [sys.executable, str(migrator), "migrate", str(self.root)],
+            text=True, capture_output=True, check=False)
+        preview = json.loads(preview_process.stdout)
+        self.assertEqual((preview_process.returncode, preview["verdict"]), (0, "PREVIEW"), preview)
+        apply_process = subprocess.run(
+            [sys.executable, str(migrator), "migrate", str(self.root), "--apply",
+             "--expected-sha256", preview.get("current_sha256", preview.get("sha256")),
+             "--allow-local-edits"],
+            text=True, capture_output=True, check=False)
+        applied = json.loads(apply_process.stdout)
+        self.assertEqual((apply_process.returncode, applied["verdict"]), (0, "APPLIED"), applied)
+        process, payload = invoke(
+            "migrate-v3", self.root, "--work-id", "wa", "--rebind-workflow", "--apply")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "APPLIED"), payload)
+        process, payload = invoke(
+            "gauntlet-init", self.root, "--work-id", "wa", "--max-workers", "1",
+            "--runtime", "claude")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "ACTIVATED"), payload)
+
+        process, payload = invoke(
+            "attest", self.root, "--work-id", "wa", "--step", "specify",
+            "--artifact", "corrigido.md", "--out", "receipts/runtime-divergent.json",
+            "--runtime", "codex", "--supersedes", accepted.relative_to(self.root))
+        self.assertEqual((process.returncode, payload["code"]),
+                         (2, "ACTIVATION-RUNTIME-DIVERGENT"), payload)
+        self.assertFalse((self.root / "receipts/runtime-divergent.json").exists())
+
+        config_path = self.root / ".grill/gauntlet.yaml"
+        sealed_config = config_path.read_bytes()
+        config = json.loads(sealed_config)
+        config["activations"]["wa"]["catalog"]["resolution_sha256"] = "sha256:" + "0" * 64
+        config_path.write_text(json.dumps(config, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+                               encoding="utf-8")
+        process, payload = invoke(
+            "attest", self.root, "--work-id", "wa", "--step", "specify",
+            "--artifact", "corrigido.md", "--out", "receipts/catalog-divergent.json",
+            "--supersedes", accepted.relative_to(self.root))
+        self.assertEqual((process.returncode, payload["code"]), (2, "IDENTITY-STALE"), payload)
+        self.assertFalse((self.root / "receipts/catalog-divergent.json").exists())
+        config_path.write_bytes(sealed_config)
 
         process, payload = invoke(
             "attest", self.root, "--work-id", "wa", "--step", "specify",

@@ -113,6 +113,9 @@ def strict_json_bytes(value: bytes, *, source: str) -> dict:
 
 
 def invoke(program: Path, *args: object) -> tuple[subprocess.CompletedProcess[str], dict]:
+    args = tuple(args)
+    if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
+        args += ("--runtime", "claude")
     process = subprocess.run(
         [sys.executable, str(program), *(str(value) for value in args)],
         text=True,
@@ -152,6 +155,9 @@ CLI = load_workspace_module()
 
 def invoke_module_in_process(module, *args: object) -> tuple[int, dict, str]:
     """Exercise the public parser/main boundary while deterministic faults are patched."""
+    args = tuple(args)
+    if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
+        args += ("--runtime", "claude")
     output = io.StringIO()
     errors = io.StringIO()
     with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
@@ -676,7 +682,7 @@ class GauntletInitContract(unittest.TestCase):
         def activate_first() -> None:
             try:
                 first["result"] = CLI.gauntlet_init_command(
-                    SimpleNamespace(root=self.root, work_id=WORK_ID, max_workers=2)
+                    SimpleNamespace(root=self.root, work_id=WORK_ID, max_workers=2, runtime="claude")
                 )
             except BaseException as exc:  # surfaced in the main test thread
                 first["error"] = exc
@@ -984,16 +990,31 @@ class GauntletInitContract(unittest.TestCase):
         process, payload = self.activate(3)
         self.assert_blocked_unchanged(self.root, before, process, payload, "WORK-ITEM-V3-REQUIRED")
 
-    def test_codex_and_hermes_are_not_accepted_or_fallen_back_to_claude(self) -> None:
+    def test_codex_is_accepted_and_hermes_is_not_fallen_back_to_claude(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:
             parent = Path(temporary)
-            for runtime in ("codex", "hermes"):
-                with self.subTest(runtime=runtime):
-                    root = self.fresh_copy(parent, runtime)
-                    before = file_snapshot(root)
-                    process, payload = self.activate(3, root=root, extra_args=("--runtime", runtime))
-                    self.assert_blocked_unchanged(root, before, process, payload, "INVALID-ARGUMENTS")
-                    self.assertNotIn(payload.get("runtime"), {"claude", runtime})
+            codex_root = self.fresh_copy(parent, "codex")
+            process, payload = self.activate(3, root=codex_root, extra_args=("--runtime", "codex"))
+            self.assertEqual((process.returncode, payload.get("verdict"), payload.get("runtime")),
+                             (0, "ACTIVATED", "codex"), payload)
+            record = self.read_config(codex_root)["activations"][WORK_ID]
+            self.assertEqual(record["runtime"], {"id": "codex", "adapter": "codex-skill/v1"})
+            self.assertEqual(record["catalog"]["id"], "codex-v4-local-skills")
+
+            hermes_root = self.fresh_copy(parent, "hermes")
+            before = file_snapshot(hermes_root)
+            process, payload = self.activate(3, root=hermes_root, extra_args=("--runtime", "hermes"))
+            self.assert_blocked_unchanged(hermes_root, before, process, payload, "INVALID-ARGUMENTS")
+
+    def test_an_existing_claude_activation_cannot_be_rebound_to_codex(self) -> None:
+        process, payload = self.activate(3)
+        self.assertEqual((process.returncode, payload.get("verdict")), (0, "ACTIVATED"), payload)
+        before = self.config.read_bytes()
+        process, payload = self.activate(3, extra_args=("--runtime", "codex"))
+        self.assertEqual((process.returncode, payload.get("code")), (2, "ACTIVATION-CONFLICT"), payload)
+        self.assertEqual(self.config.read_bytes(), before)
+        record = self.read_config()["activations"][WORK_ID]
+        self.assertEqual(record["runtime"], {"id": "claude", "adapter": "claude-code-skill/v1"})
 
     def test_invalid_max_workers_inputs_are_one_json_and_write_nothing(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:

@@ -8,7 +8,10 @@ SCRIPT=PLUGIN/'skills/grill-with-docs/scripts/grill_workspace.py'
 TEMPLATE=PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.template.md'
 STEPS = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
 
-def run(*a): return subprocess.run([sys.executable,str(SCRIPT),*map(str,a)],text=True,capture_output=True)
+def run(*a):
+ a=tuple(a)
+ if a and a[0] in {"init","preflight","gauntlet-init"} and "--runtime" not in a: a += ("--runtime","claude")
+ return subprocess.run([sys.executable,str(SCRIPT),*map(str,a)],text=True,capture_output=True)
 class CheckpointContract(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.r=Path(self.t.name); subprocess.run(['git','init','-q','-b','main',str(self.r)],check=True); (self.r/'WORKFLOW.md').write_bytes(TEMPLATE.read_bytes())

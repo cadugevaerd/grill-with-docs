@@ -286,6 +286,7 @@ class WorkItemSealBoundary(unittest.TestCase):
             result = subprocess.run(
                 [
                     sys.executable, str(GRILL_WORKSPACE), "init", str(root),
+                    "--runtime", "claude",
                     "--type", "feature", "--slug", "goal-seal-check",
                     "--work-id", "goal-seal-check", "--skip-backlog",
                 ],

@@ -1,5 +1,19 @@
 # Changelog
 
+## 5.3.4
+
+- O ciclo v4 passa a exigir `--runtime claude|codex` no `preflight`, `init` e
+  `gauntlet-init`, sem inferir o harness pelo default do projeto.
+- A integração Codex do Spec Kit e suas extensões são versionadas em
+  `.agents/skills`; o preflight pode materializar o harness selecionado sem
+  remover os arquivos ou registros do outro runtime.
+- Catálogos v4 separados resolvem as 11 etapas com `claude-code-skill/v1` ou
+  `codex-skill/v1`. Ativação, tier-model binding e atestação herdam o runtime
+  imutável escolhido na ativação.
+- As instruções exigem invocação nativa na sessão ativa (`$speckit-*` no Codex,
+  `/speckit-*` no Claude) e proíbem `specify workflow run`, `claude` e
+  `codex exec` como despacho de etapa.
+
 ## 5.3.3
 
 - `ensure_workflow.py` passa a declarar `WORKFLOW.v4.template.md` como seu

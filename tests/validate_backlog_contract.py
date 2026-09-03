@@ -857,6 +857,9 @@ def git(root: Path, *args: str) -> None:
 
 
 def workspace(*args: object) -> tuple[int, dict]:
+    args = tuple(args)
+    if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
+        args += ("--runtime", "claude")
     process = subprocess.run(
         [sys.executable, str(WORKSPACE), *(str(arg) for arg in args)],
         text=True, capture_output=True, check=False,

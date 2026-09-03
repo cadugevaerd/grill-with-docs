@@ -185,9 +185,33 @@ CATALOG_FILENAME_BY_VERSION = {
     "v4": "grill-v4-local-skills.catalog.json",
 }
 
+# Runtime-specific catalogue selection.  The legacy scalar map above remains
+# the Claude projection so old v3 readers and receipts keep their exact asset
+# identity.  New activation code uses this table and therefore never falls
+# across runtimes when the selected harness is absent.
+CATALOG_FILENAME_BY_VERSION_RUNTIME = {
+    "v3": {
+        "claude": "claude-code-local-skills.catalog.json",
+    },
+    "v4": {
+        "claude": "grill-v4-local-skills.catalog.json",
+        "codex": "codex-v4-local-skills.catalog.json",
+    },
+}
+
 CATALOG_ID_BY_VERSION = {
     "v3": "claude-code-local-skills",
     "v4": "grill-v4-local-skills",
+}
+
+CATALOG_ID_BY_VERSION_RUNTIME = {
+    "v3": {
+        "claude": "claude-code-local-skills",
+    },
+    "v4": {
+        "claude": "grill-v4-local-skills",
+        "codex": "codex-v4-local-skills",
+    },
 }
 
 TRUSTED_CATALOGS_FILENAME_BY_VERSION = {

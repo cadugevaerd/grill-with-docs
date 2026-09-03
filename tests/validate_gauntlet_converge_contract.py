@@ -108,6 +108,9 @@ def strict_json_bytes(value: bytes, *, source: str) -> dict[str, Any]:
 
 
 def invoke(program: Path, *args: object) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
+    args = tuple(args)
+    if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
+        args += ("--runtime", "claude")
     """Run one public command and require exactly one JSON object on stdout."""
     process = subprocess.run(
         [sys.executable, str(program), *(str(value) for value in args)],

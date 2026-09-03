@@ -1197,7 +1197,7 @@ def ensure_project_goal(root: Path) -> dict[str, Any]:
     return block
 
 
-def dependency_report(root: Path, *, allow_install: bool, remove_shadows: bool = False) -> dict[str, Any]:
+def dependency_report(root: Path, *, runtime: str, allow_install: bool, remove_shadows: bool = False) -> dict[str, Any]:
     """Detect the external toolchain; install only when explicitly authorised.
 
     ``remove_shadows`` is separate from ``allow_install`` on purpose: deleting a
@@ -1205,7 +1205,9 @@ def dependency_report(root: Path, *, allow_install: bool, remove_shadows: bool =
     """
     dependencies = sibling("ensure_dependencies")
     try:
-        return dependencies.preflight(root, allow_install=allow_install, remove_shadows=remove_shadows)
+        return dependencies.preflight(
+            root, runtime=runtime, allow_install=allow_install, remove_shadows=remove_shadows
+        )
     except (dependencies.ManifestError, OSError, json.JSONDecodeError) as error:
         return {"schema": dependencies.SCHEMA, "verdict": "BLOCKED", "error": type(error).__name__}
 
@@ -1229,12 +1231,15 @@ def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     payload = {
         "schema": "grill-preflight/v1",
         "workflow": ensure_project_workflow(root),
-        "dependencies": dependency_report(root, allow_install=args.allow_install,
+        "runtime": args.runtime,
+        "dependencies": dependency_report(root, runtime=args.runtime, allow_install=args.allow_install,
                                           remove_shadows=getattr(args, "remove_shadows", False)),
     }
     if not args.skip_backlog:
         payload["backlog"] = backlog_report(root, apply=args.allow_install, db=getattr(args, "db", None))
     payload["verdict"] = payload["dependencies"].get("verdict", "BLOCKED")
+    if payload["dependencies"].get("code"):
+        payload["code"] = payload["dependencies"]["code"]
     return payload, EXIT_OK if payload["verdict"] == "OK" else EXIT_BLOCKED
 
 
@@ -1468,11 +1473,13 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", work_id)
     workflow = ensure_project_workflow(root)
     goal = ensure_project_goal(root)
-    dependencies = dependency_report(root, allow_install=getattr(args, "allow_install", False))
+    dependencies = dependency_report(
+        root, runtime=args.runtime, allow_install=getattr(args, "allow_install", False)
+    )
     if getattr(args, "require_dependencies", False) and dependencies.get("verdict") != "OK":
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "MISSING-DEPENDENCY",
                          ",".join(dependencies.get("missing_required") or ["unknown"]))
-    environment = {"workflow": workflow, "goal": goal, "dependencies": dependencies}
+    environment = {"workflow": workflow, "goal": goal, "runtime": args.runtime, "dependencies": dependencies}
     skipped_backlog = bool(getattr(args, "skip_backlog", False))
     if not skipped_backlog:
         # Binding no longer waits for --allow-install: the prerequisite is the
@@ -2498,6 +2505,7 @@ def gauntlet_init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int
                 workflow_gate=workflow_gate,
                 work_item_v3=work_item_v3,
                 step_skills=step_skills,
+                runtime=args.runtime,
             )
         except gauntlet.GauntletError as error:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
@@ -2507,7 +2515,7 @@ def gauntlet_init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int
             "config": ".grill/gauntlet.yaml",
             "max_workers": args.max_workers,
             "stall_minutes": 15,
-            "runtime": "claude",
+            "runtime": args.runtime,
         }, EXIT_OK
     finally:
         if item_fd is not None:
@@ -2647,15 +2655,20 @@ def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[st
             code = "ACTIVATION-REQUIRED" if state == "ELIGIBLE" else (reason or "ACTIVATION-REQUIRED")
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, "a current Gauntlet activation is required", extra={"work_id": args.work_id})
         try:
+            config, config_bytes, _ = gauntlet._read_config(grill_fd)
+            record = config["activations"].get(args.work_id)
+            if record is None:
+                raise gauntlet.GauntletError(
+                    "ACTIVATION-REQUIRED", "a current Gauntlet activation is required", work_id=args.work_id
+                )
             proof = gauntlet.current_activation(
                 root=root, work_id=args.work_id, item_dir_fd=item_fd, workflow_bytes=workflow_bytes,
                 workflow_text=workflow_text, workflow_gate=workflow_gate,
                 work_item_v3=work_item_v3, step_skills=step_skills,
+                runtime=record["runtime"]["id"],
             )
-            config, config_bytes, _ = gauntlet._read_config(grill_fd)
         except gauntlet.GauntletError as error:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
-        record = config["activations"].get(args.work_id)
         identity = {key: proof[key] for key in ("work_item_id", "work_item", "workflow", "runtime", "catalog")}
         if config_bytes is None or record is None:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-REQUIRED", "a current Gauntlet activation is required", extra={"work_id": args.work_id})
@@ -3030,6 +3043,7 @@ def gauntlet_worker_declare_command(args: argparse.Namespace) -> tuple[dict[str,
         return gauntlet_runs.declare_worker(
             root, args.work_id, args.run_id, args.node_id, args.wave_id, args.tier, args.files, args.dag, admission,
             agent_execute_floor=agent_execute_floor, markdown_floor=markdown_floor,
+            runtime=record["runtime"]["id"],
         ), EXIT_OK
     except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
         code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
@@ -3427,6 +3441,7 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     versions = grill_core_module("workflow_versions")
     step_skills_module = grill_core_module("step_skills")
     store = grill_core_module("store")
+    gauntlet = grill_core_module("gauntlet")
 
     _, state = read_development_state(root, item, args.work_id)
     development = state.get("development") or {}
@@ -3457,6 +3472,31 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
 
     project_id = store.project_identity(root)["project_id"]
 
+    if workflow_version == "v4":
+        config_fd: int | None = None
+        try:
+            config_fd = gauntlet.open_config_directory(root)
+            activation = gauntlet.require_activation(config_fd, args.work_id)
+        except gauntlet.GauntletError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message, extra=error.extra or None) from error
+        finally:
+            if config_fd is not None:
+                os.close(config_fd)
+        runtime = activation["runtime"]["id"]
+        if args.runtime is not None and args.runtime != runtime:
+            raise CliFailure(
+                EXIT_BLOCKED,
+                "BLOCKED",
+                "ACTIVATION-RUNTIME-DIVERGENT",
+                "--runtime may only confirm the immutable activation runtime",
+                extra={"expected": runtime, "actual": args.runtime, "work_id": args.work_id},
+            )
+    else:
+        # V3 predates Gauntlet activation and its only shipped capability proof
+        # is Claude.  Keep minting legacy successor receipts readable without
+        # retroactively requiring an activation V3 cannot create.
+        runtime = args.runtime or "claude"
+
     # Compose the shipped asset paths from the versioned SSOT, the same way the
     # Gauntlet composes them -- not by importing the Gauntlet. Its resolver
     # bindings are a closed set on purpose, and widening that set to reach a
@@ -3464,10 +3504,11 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     assets = Path(__file__).resolve().parent.parent / "assets"
     try:
         registry_bytes = (assets / versions.REGISTRY_FILENAME_BY_VERSION[workflow_version]).read_bytes()
-        catalog = step_skills_module.parse_strict(
-            (assets / versions.CATALOG_FILENAME_BY_VERSION[workflow_version]).read_bytes())
-        resolutions, _ = step_skills_module.resolve_shipped_workflow_skills(
-            (args.step,), args.runtime, step_skills_module.registry_sha256(registry_bytes),
+        catalog_filename = versions.CATALOG_FILENAME_BY_VERSION_RUNTIME[workflow_version][runtime]
+        catalog_bytes = (assets / catalog_filename).read_bytes()
+        catalog = step_skills_module.parse_strict(catalog_bytes)
+        resolutions, trusted_catalogs_bytes = step_skills_module.resolve_shipped_workflow_skills(
+            (args.step,), runtime, step_skills_module.registry_sha256(registry_bytes),
             registry=registry_bytes, catalog=catalog,
             trusted_catalogs_path=assets / versions.TRUSTED_CATALOGS_FILENAME_BY_VERSION[workflow_version],
         )
@@ -3478,6 +3519,37 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SKILL-RESOLUTION-FAILED",
                          str(error), extra={"work_id": args.work_id, "step": args.step}) from error
     resolution = resolutions[0]
+
+    if workflow_version == "v4":
+        activation_identity = {
+            "work_item": {
+                "document_sha256": hashlib.sha256(
+                    safe_read_regular_fd(root, item / "WORK-ITEM.json")
+                ).hexdigest(),
+            },
+            "workflow": {
+                "version": workflow_version,
+                "sha256": hashlib.sha256(
+                    safe_read_regular_fd(root, root / "WORKFLOW.md")
+                ).hexdigest(),
+                "registry_sha256": step_skills_module.registry_sha256(registry_bytes),
+            },
+            "runtime": {"id": runtime, "adapter": resolution["adapter"]},
+            "catalog": {
+                "id": catalog["catalog_id"],
+                "document_sha256": hashlib.sha256(catalog_bytes).hexdigest(),
+                "resolution_sha256": catalog["catalog_sha256"],
+                "trusted_asset_document_sha256": hashlib.sha256(trusted_catalogs_bytes).hexdigest(),
+            },
+        }
+        if any(activation.get(key) != value for key, value in activation_identity.items()):
+            raise CliFailure(
+                EXIT_BLOCKED,
+                "BLOCKED",
+                "IDENTITY-STALE",
+                "attestation inputs differ from the immutable Gauntlet activation",
+                extra={"work_id": args.work_id, "step": args.step},
+            )
 
     # The authorization is read, not minted: it is a human artefact that exists
     # before the chain. `ship` is the only step whose resolution demands one,
@@ -3920,6 +3992,7 @@ def build_parser() -> JsonParser:
     init_parser.add_argument("--slug", required=True)
     init_parser.add_argument("--work-id")
     init_parser.add_argument("--base-ref")
+    init_parser.add_argument("--runtime", choices=("claude", "codex"), required=True)
     init_parser.add_argument("--allow-install", action="store_true", dest="allow_install")
     init_parser.add_argument("--require-dependencies", action="store_true", dest="require_dependencies")
     init_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
@@ -3929,6 +4002,7 @@ def build_parser() -> JsonParser:
     init_parser.add_argument("--db")
     preflight_parser = subparsers.add_parser("preflight")
     preflight_parser.add_argument("root")
+    preflight_parser.add_argument("--runtime", choices=("claude", "codex"), required=True)
     preflight_parser.add_argument("--allow-install", action="store_true", dest="allow_install")
     preflight_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
     preflight_parser.add_argument("--db")
@@ -4023,6 +4097,7 @@ def build_parser() -> JsonParser:
     gauntlet_init_parser.add_argument("root")
     gauntlet_init_parser.add_argument("--work-id", required=True)
     gauntlet_init_parser.add_argument("--max-workers", type=int, required=True)
+    gauntlet_init_parser.add_argument("--runtime", choices=("claude", "codex"), required=True)
     for command in ("gauntlet-status", "gauntlet-run", "gauntlet-cleanup"):
         control_parser = subparsers.add_parser(command)
         control_parser.add_argument("root")
@@ -4118,7 +4193,7 @@ def build_parser() -> JsonParser:
     attest_parser.add_argument("--out", required=True,
                                help="project-relative path to write the attestation bundle to")
     attest_parser.add_argument("--run-id", default=None)
-    attest_parser.add_argument("--runtime", default="claude")
+    attest_parser.add_argument("--runtime", choices=("claude", "codex"), default=None)
     attest_parser.add_argument("--supersedes", default=None,
                                help="project-relative path to the accepted bundle this one replaces")
     attest_parser.add_argument("--authorization", default=None,

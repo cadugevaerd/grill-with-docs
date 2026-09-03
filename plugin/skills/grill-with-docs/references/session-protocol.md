@@ -1,10 +1,10 @@
-# Protocolo de sessão v5.3.3
+# Protocolo de sessão v5.3.4
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
 ## Fluxo e checkpoints
 
-`grill_workspace.py init` cria a Constituição gerenciada somente quando ausente, sem clobber, com fsync/readback; arquivo existente preserva bytes. Ausência não é `not-present`: é bootstrap pendente e deve ser resolvida no init. Symlink, ancestor symlink, UTF-8 inválido ou corrida insegura falham fechado.
+`grill_workspace.py init --runtime claude|codex` cria a Constituição gerenciada somente quando ausente, sem clobber, com fsync/readback; arquivo existente preserva bytes. O runtime é obrigatório e identifica o harness da sessão ativa. Ausência não é `not-present`: é bootstrap pendente e deve ser resolvida no init. Symlink, ancestor symlink, UTF-8 inválido ou corrida insegura falham fechado.
 
 Após init, avance somente pela matriz persistente de 11 passos: `specify → plan → checklist → tasks → analyze → partition → implement-parallel → converge → verify → review → ship`. Use `grill_workspace.py checkpoint ROOT --work-id ID --step STEP --state in-progress|complete|blocked [--evidence PATH] [--reason TEXT]`. Não há saltos; `complete` exige evidência regular segura com SHA-256, `blocked` exige razão, retry parte de blocked e `ship` exige verify+review completos. Eventos idênticos retornam `REUSED`; divergência retorna `STATE-DIVERGENCE`. Legado retorna `LEGACY-UNTRACKED` e só pode ser inicializado explicitamente com `--initialize-legacy --from-step STEP`, decisão e evidência.
 
@@ -33,7 +33,8 @@ ship externo → state complete/GO → reconcile preview → apply na integraç�
 - [ ] Se o trabalho nasce de um problema relatado, invocar `code-debug` **antes** de escolher o tipo; sem laudo de causa raiz não há como distinguir incidente de defeito nem defeito de funcionalidade faltante.
 - [ ] Executar `grill_workspace.py triage ROOT --report LAUDO.md --route ...` em preview, conferir a rota e só então repetir com `--apply`; fixar o `triage_id` retornado.
 - [ ] Aceitar `TRIAGE-RECORDED|TRIAGE-PREVIEW|REUSED`. `ROOT-CAUSE-UNPROVEN` significa investigação incompleta, não documento malformado: volte ao `code-debug`, não edite o laudo.
-- [ ] Executar `grill_workspace.py init ROOT --type ... --slug ...`; ele fixa o `WORKFLOW.md` project-wide e aceita somente `CREATED|REUSED` no campo `workflow`.
+- [ ] Executar `grill_workspace.py init ROOT --runtime claude|codex --type ... --slug ...`; ele fixa o `WORKFLOW.md` project-wide e aceita somente `CREATED|REUSED` no campo `workflow`.
+- [ ] Invocar cada canonical skill diretamente nesta sessão: `$speckit-*` no Codex ou `/speckit-*` no Claude. Nunca usar `specify workflow run`, `claude`, `codex exec` ou outro processo de agente.
 - [ ] Ler o campo `dependencies` do retorno; usar `--allow-install` para instalação delegada e `--require-dependencies` quando o gate precisar ser fail-closed.
 - [ ] Fixar o `work_id` retornado e usar somente `.grill/work-items/<work-id>/`.
 - [ ] Confirmar `WORK-ITEM.json`, metadata imutável e hash canônico.

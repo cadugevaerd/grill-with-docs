@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v5.3.3
+# Grill with Docs v5.3.4
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -62,7 +62,7 @@ Crie o namespace isolado:
 
 ```text
 python3 "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/grill-with-docs/scripts/grill_workspace.py" \
-  init ROOT --type feature|fix|hotfix --slug SLUG [--work-id WORK_ID] [--base-ref REF] \
+  init ROOT --runtime claude|codex --type feature|fix|hotfix --slug SLUG [--work-id WORK_ID] [--base-ref REF] \
   [--allow-install] [--require-dependencies] [--skip-backlog]
 ```
 
@@ -77,7 +77,7 @@ Duas das extensões exigidas (`bugfix`, `verify-review-ship`) vivem no catálogo
 O backlog operacional é **exigido** desde a 3.0.0: `init` recusa com `BACKLOG-REQUIRED` sem backlog resolvido e vinculado — e vincula apenas a backlog **existente**, nunca provisionando um novo, porque criar o que se deveria verificar não é verificar, e o bind deixou de depender de `--allow-install`. `--skip-backlog` é a única saída, fica **carimbada** no `state.json` do work item e aparece em toda auditoria como `backlog_skipped` — um bundle criado por ela não pode parecer conforme com um pré-requisito que contornou. `backlog-adopt` limpa o carimbo depois que o repositório é vinculado, para que a saída não vire cela. As demais dependências continuam apenas detectadas e reportadas; `--allow-install` segue autorizando a instalação delegada. `--require-dependencies` transforma a falta em `MISSING-DEPENDENCY` fail-closed. `GRILL_SKIP_DEPENDENCIES=1` desliga a detecção em ambiente air-gapped e nunca é reportado como `OK`.
 
 ```text
-python3 .../grill_workspace.py preflight ROOT [--allow-install] [--skip-backlog]
+python3 .../grill_workspace.py preflight ROOT --runtime claude|codex [--allow-install] [--skip-backlog]
 python3 .../grill_workspace.py backlog-sync    ROOT --work-id ID [--apply] [--db PATH]
 python3 .../grill_workspace.py backlog-project ROOT --work-id ID [--apply] [--db PATH]
 python3 .../grill_workspace.py backlog-verify  ROOT --work-id ID [--db PATH]
@@ -251,6 +251,14 @@ O bundle substituído é provado contra três valores gravados na aceitação �
 `development.attested_executions[step]`. Os dois primeiros não dependem da
 execução: duas cadeias da mesma etapa e do mesmo artefato, diferindo só no índice
 de onda, os carregam idênticos.
+
+## Execução nativa pelo harness
+
+O ciclo posterior invoca cada canonical skill na sessão ativa: Codex usa
+`$speckit-*`; Claude Code usa `/speckit-*`. Nunca despache uma etapa por
+`specify workflow run`, `claude`, `codex exec` ou outro processo de agente. O
+runtime explícito da ativação seleciona catálogo, adapter e tier-model binding;
+o default de `.specify/integration.json` não substitui essa escolha.
 
 ## Auditoria read-only
 
