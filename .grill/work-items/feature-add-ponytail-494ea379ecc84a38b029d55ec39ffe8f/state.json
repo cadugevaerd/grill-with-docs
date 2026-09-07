@@ -29,10 +29,10 @@
       "implement-parallel": "se-85f8c7b2b1d1d32df45795b21170b8d40bf565fdf4b33fe36b8c965d708a41b6",
       "partition": "se-ea98a8a01e389f683894b71ac318ce4e754c6e4acfcf39ae499829ecb233e079",
       "plan": "se-1137d2b4434f7f4b4bc15f778e1bb099798279216e9a3a26adc22bfeb8eb1dd7",
-      "review": "se-5786586346f73a911c18fe7335456ab0b782fc48e2f07c278550f8302a9c8ee4",
+      "review": "se-8349694028140c1aa922393afbebbe33736238e58f7aef65fb0b0ad2cf3614b1",
       "specify": "se-679a75475754ed4a7b8dfbef96e8d38f538e809037fba507a5441e9a508f9975",
       "tasks": "se-1328b31353b3d071ce59b564badf078673196df7e1513b0b3215d934d446346c",
-      "verify": "se-209e316e1bc4c6dcd955bd9c2bad4615ae2eeb6627e19162ce17df82ce62caf9"
+      "verify": "se-b1172b32ef558f39a74eea384cc6d7850e4c06c58bdec05f5fe787a7110671fa"
     },
     "attested_outputs": {
       "analyze": {
@@ -72,9 +72,9 @@
         "step_id": "plan"
       },
       "review": {
-        "output_sha256": "sha256:c5f567408cb29dcd64abbef0f1ee6a8806ad1c8532771c6d76ca2c6985c610b4",
+        "output_sha256": "sha256:83778e8fdfddafe89806a496baa901d630f9e71609df818c000be9ffdb35c89c",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
         "step_id": "review"
       },
       "specify": {
@@ -90,9 +90,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:a67613f832a74b5691bda1ac685c9df610509c7c242fdbe050baad353f1bccd2",
+        "output_sha256": "sha256:6bf3546deccb787cfde8fb1c2e48d4113329390e25fe3b2c2ef2e25c389f5b97",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
         "step_id": "verify"
       }
     },
@@ -358,6 +358,36 @@
         "reason": "ship aguarda autorização humana (HOLD-V4-01)",
         "state": "in-progress",
         "step": "ship"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/verify.md",
+            "sha256": "6bf3546deccb787cfde8fb1c2e48d4113329390e25fe3b2c2ef2e25c389f5b97"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "revalidação após learning commit 6f02757: suíte 28/28 OK, distribution OK, fingerprint tree ccc4c974",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/028-verify.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/review.md",
+            "sha256": "83778e8fdfddafe89806a496baa901d630f9e71609df818c000be9ffdb35c89c"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "re-selagem por cascata após verify sucedido; APPROVE mantido, diff adicional só prosa em CLAUDE.md",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/attestations/028-review.json"
       }
     ],
     "chain_stale": [],
@@ -434,6 +464,20 @@
           "superseded_by_step_execution_id": "se-ea98a8a01e389f683894b71ac318ce4e754c6e4acfcf39ae499829ecb233e079"
         }
       ],
+      "review": [
+        {
+          "attempt_id": "review-1",
+          "attestation": ".grill/attestations/028-review.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:c5f567408cb29dcd64abbef0f1ee6a8806ad1c8532771c6d76ca2c6985c610b4",
+          "provenance": "current-generation",
+          "reason": "re-selagem por cascata após verify sucedido; APPROVE mantido, diff adicional só prosa em CLAUDE.md",
+          "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+          "step_execution_id": "se-5786586346f73a911c18fe7335456ab0b782fc48e2f07c278550f8302a9c8ee4",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-8349694028140c1aa922393afbebbe33736238e58f7aef65fb0b0ad2cf3614b1"
+        }
+      ],
       "tasks": [
         {
           "attempt_id": "tasks-1",
@@ -446,6 +490,20 @@
           "step_execution_id": "se-c5d7a4690a957fac34f78c688160970d2a65978756b91c6ae0b99014c7ec7f22",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-1328b31353b3d071ce59b564badf078673196df7e1513b0b3215d934d446346c"
+        }
+      ],
+      "verify": [
+        {
+          "attempt_id": "verify-1",
+          "attestation": ".grill/attestations/028-verify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:a67613f832a74b5691bda1ac685c9df610509c7c242fdbe050baad353f1bccd2",
+          "provenance": "current-generation",
+          "reason": "revalidação após learning commit 6f02757: suíte 28/28 OK, distribution OK, fingerprint tree ccc4c974",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+          "step_execution_id": "se-209e316e1bc4c6dcd955bd9c2bad4615ae2eeb6627e19162ce17df82ce62caf9",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-b1172b32ef558f39a74eea384cc6d7850e4c06c58bdec05f5fe787a7110671fa"
         }
       ]
     },

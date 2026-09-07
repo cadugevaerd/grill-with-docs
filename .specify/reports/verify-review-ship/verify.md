@@ -1,13 +1,13 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree b2af05b110c2e740283874518964ba2253412df2478d55fbc9256d97e687591e / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 7a9332aeedf9791bcdbcc4d25fa47f3f13b218274ae0d6145f86a4e777c9ccca   (gate reports excluded)
-Converge: CONVERGED — `/speckit-converge` nesta sessão devolveu `tasks_appended` (T015); após T015 a reavaliação não achou lacuna, `tasks.md` 15/15 e inalterado desde então (plan hash acima). Feature: `specs/028-add-ponytail`, branch `cadugevaerd/chore-add-ponytail`, HEAD `79fd397`, worktree limpo.
+Source fingerprint: tree ccc4c9746a6088650aaaa7744e8611b5afa804e358e4cd11eeead25883222c11 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 7a9332aeedf9791bcdbcc4d25fa47f3f13b218274ae0d6145f86a4e777c9ccca   (gate reports excluded)
+Converge: CONVERGED — `/speckit-converge` nesta sessão devolveu `tasks_appended` (T015); após T015 a reavaliação não achou lacuna, `tasks.md` 15/15 e inalterado desde então (plan hash acima). Feature: `specs/028-add-ponytail`, branch `cadugevaerd/chore-add-ponytail`, HEAD `6f02757` (revalidação após `docs(ship): capture approved project learnings`, que só acrescentou 3 linhas a `CLAUDE.md` § Project Learnings), worktree limpo.
 
 ### Operational Gates
 | Gate | Command | Result | Evidence | Validator |
 |---|---|---|---|---|
-| tests (suíte canônica) | `python3 tests/run_validators.py` | PASS | 28 validadores (`==>`), `OK (skipped=1)`, exit 0, 8m19s; sem rede, sem `claude`/`codex` reais | leader (sequential fallback, read-only) |
+| tests (suíte canônica) | `python3 tests/run_validators.py` | PASS | 28 validadores (`==>`), `OK (skipped=1)`, exit 0, reexecutada em 6f02757; sem rede, sem `claude`/`codex` reais | leader (sequential fallback, read-only) |
 | tests (unidade da feature) | `python3 tests/validate_dependencies_contract.py` | PASS | `Ran 63 tests`, OK | leader |
 | tests (T015) | `python3 tests/validate_attestation_emitter_contract.py` | PASS | `Ran 55 tests`, OK — work item resolvido por descoberta | leader |
 | build/distribution | `python3 tests/validate_distribution.py` | PASS | `distribution: OK`; 8 pontos em 5.4.0 (4 manifests, `VERSION`, 3 headings) | leader |

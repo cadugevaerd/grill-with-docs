@@ -1,8 +1,8 @@
 ## Review Report
 
 Verdict: APPROVE
-Source fingerprint: tree b2af05b110c2e740283874518964ba2253412df2478d55fbc9256d97e687591e / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 7a9332aeedf9791bcdbcc4d25fa47f3f13b218274ae0d6145f86a4e777c9ccca
-                    (idêntico ao de Converge/Verify; `source-fingerprint.sh specs/028-add-ponytail` em HEAD `430b854`)
+Source fingerprint: tree ccc4c9746a6088650aaaa7744e8611b5afa804e358e4cd11eeead25883222c11 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 7a9332aeedf9791bcdbcc4d25fa47f3f13b218274ae0d6145f86a4e777c9ccca
+                    (idêntico ao de Converge/Verify; `source-fingerprint.sh specs/028-add-ponytail` em HEAD `6f02757`, revalidado após o commit de learnings; diff adicional = 3 linhas de prosa em CLAUDE.md, sem código)
 
 Escopo revisado: `plugin/skills/grill-with-docs/scripts/ensure_dependencies.py` (+104/−5), `assets/dependencies.json` (+21), `tests/validate_dependencies_contract.py` (+311, 25 testes novos + 1 reescrito), `tests/validate_attestation_emitter_contract.py` (T015), 4 manifests, `SKILL.md`, `session-protocol.md`, `README.md`, `CHANGELOG.md`, `CLAUDE.md`, `AGENTS.md`, `.claude/settings.json`, `tests/validate_distribution.py`. Revisor único em fallback sequencial (leader, read-only); Orca disponível mas o diff é pequeno e sem paralelismo útil.
 
