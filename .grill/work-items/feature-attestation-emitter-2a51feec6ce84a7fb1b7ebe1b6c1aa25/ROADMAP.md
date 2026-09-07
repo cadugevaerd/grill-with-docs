@@ -3,7 +3,7 @@
 - execution-order: FASE-001
 
 ## FASE-001 — Emissor da cadeia de atestação
-- state: ready-for-specify
+- state: complete
 - objetivo: Concluir uma etapa do ciclo passa a ser possível sem fabricar evidência: quem conduz a etapa obtém a cadeia emitida a partir do que o núcleo já sabe, ancorada no artefato produzido.
 - scope-in: Classe de execução por etapa como tabela congelada; concessão de lease ao leader pelo mecanismo já existente; emissor que monta os quatro elos e sela o digest do artefato; recusa nomeada para artefato ausente, ilegível ou fora do projeto; validador do contrato do emissor.
 - scope-out: Proveniência criptográfica, defesa contra executor malicioso e acoplamento ao formato de rastro de qualquer runtime de agente — todos declarados fora de escopo pelo desenho original da atestação.
