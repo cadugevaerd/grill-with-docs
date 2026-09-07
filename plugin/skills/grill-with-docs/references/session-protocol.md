@@ -1,4 +1,4 @@
-# Protocolo de sessão v5.3.4
+# Protocolo de sessão v5.4.0
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -35,7 +35,7 @@ ship externo → state complete/GO → reconcile preview → apply na integraç�
 - [ ] Aceitar `TRIAGE-RECORDED|TRIAGE-PREVIEW|REUSED`. `ROOT-CAUSE-UNPROVEN` significa investigação incompleta, não documento malformado: volte ao `code-debug`, não edite o laudo.
 - [ ] Executar `grill_workspace.py init ROOT --runtime claude|codex --type ... --slug ...`; ele fixa o `WORKFLOW.md` project-wide e aceita somente `CREATED|REUSED` no campo `workflow`.
 - [ ] Invocar cada canonical skill diretamente nesta sessão: `$speckit-*` no Codex ou `/speckit-*` no Claude. Nunca usar `specify workflow run`, `claude`, `codex exec` ou outro processo de agente.
-- [ ] Ler o campo `dependencies` do retorno; usar `--allow-install` para instalação delegada e `--require-dependencies` quando o gate precisar ser fail-closed.
+- [ ] Ler o campo `dependencies` do retorno; usar `--allow-install` para instalação delegada e `--require-dependencies` quando o gate precisar ser fail-closed; o plugin `ponytail` (kind `harness-plugin`, mínimo 4.9.0) aparece nesse campo e é instalado pela CLI do harness sob `--allow-install`, nunca pelo core.
 - [ ] Fixar o `work_id` retornado e usar somente `.grill/work-items/<work-id>/`.
 - [ ] Confirmar `WORK-ITEM.json`, metadata imutável e hash canônico.
 - [ ] Reler `WORKFLOW.md` project-wide e seu hash.
