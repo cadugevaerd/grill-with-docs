@@ -30,7 +30,8 @@
       "partition": "se-ea98a8a01e389f683894b71ac318ce4e754c6e4acfcf39ae499829ecb233e079",
       "plan": "se-1137d2b4434f7f4b4bc15f778e1bb099798279216e9a3a26adc22bfeb8eb1dd7",
       "specify": "se-679a75475754ed4a7b8dfbef96e8d38f538e809037fba507a5441e9a508f9975",
-      "tasks": "se-1328b31353b3d071ce59b564badf078673196df7e1513b0b3215d934d446346c"
+      "tasks": "se-1328b31353b3d071ce59b564badf078673196df7e1513b0b3215d934d446346c",
+      "verify": "se-209e316e1bc4c6dcd955bd9c2bad4615ae2eeb6627e19162ce17df82ce62caf9"
     },
     "attested_outputs": {
       "analyze": {
@@ -80,6 +81,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
         "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:a67613f832a74b5691bda1ac685c9df610509c7c242fdbe050baad353f1bccd2",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "step_id": "verify"
       }
     },
     "audit": [
@@ -299,10 +306,29 @@
         "reason": "speckit-converge: 1 finding contradicts (teste acoplado a bundle vivo) fechado como T015 pelo leader; suíte completa verde (28 validadores, 1 skipped); 15/15 tarefas",
         "state": "complete",
         "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "invocando /speckit-verify-review-ship-verify",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/verify.md",
+            "sha256": "a67613f832a74b5691bda1ac685c9df610509c7c242fdbe050baad353f1bccd2"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "VERIFY PASS: 28 validadores OK, distribution OK, detecção real nos dois runtimes, higiene limpa",
+        "state": "complete",
+        "step": "verify"
       }
     ],
     "chain_stale": [],
-    "current_step": "verify",
+    "current_step": "review",
     "execution_branch": "cadugevaerd/chore-add-ponytail",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -330,7 +356,7 @@
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "complete"
     },
     "superseded_outputs": {
       "analyze": [
