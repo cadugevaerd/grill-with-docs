@@ -252,6 +252,300 @@ class Detection(unittest.TestCase):
         self.assertIn(MODULE.BACKLOG_INSTALLER, self.report(reports, "backlogctl")["remediation"])
 
 
+CLAUDE_REMEDIATION = ("claude plugin marketplace add DietrichGebert/ponytail && "
+                      "claude plugin install ponytail@ponytail")
+CODEX_REMEDIATION = ("codex plugin marketplace add DietrichGebert/ponytail && "
+                     "codex plugin add ponytail@ponytail")
+
+
+class HarnessPluginClaudeDetection(unittest.TestCase):
+    """T005 — the Claude side of the new `harness-plugin` kind."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name) / "repo"
+        self.home = Path(self.temporary.name) / "home"
+        self.root.mkdir()
+        self.home.mkdir()
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def report(self, tools) -> dict:
+        reports = MODULE.detect(self.root, MODULE.load_manifest(), tools, runtime="claude")
+        return next(item for item in reports if item["id"] == "ponytail")
+
+    def registry_path(self, base: Path) -> Path:
+        target = base / "plugins/installed_plugins.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        return target
+
+    def write_registry(self, base: Path, payload) -> Path:
+        target = self.registry_path(base)
+        target.write_text(json.dumps(payload), encoding="utf-8")
+        return target
+
+    def test_present_reads_version_and_source_from_the_installed_plugins_registry(self) -> None:
+        target = self.write_registry(self.home / ".claude", {
+            "plugins": {"ponytail@ponytail": [{"version": "4.9.0"}]},
+        })
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "present")
+        self.assertEqual(found["version"], "4.9.0")
+        self.assertEqual(found["source"], str(target))
+
+    def test_outdated_names_the_minimum_in_the_reason(self) -> None:
+        self.write_registry(self.home / ".claude", {
+            "plugins": {"ponytail@ponytail": [{"version": "4.8.0"}]},
+        })
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "outdated")
+        self.assertIn("4.9.0", found["reason"])
+        self.assertIn("4.8.0", found["reason"])
+
+    def test_missing_when_the_registry_file_is_absent(self) -> None:
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "missing")
+        self.assertEqual(found["remediation"], CLAUDE_REMEDIATION)
+
+    def test_missing_when_the_registry_exists_but_the_key_is_absent(self) -> None:
+        self.write_registry(self.home / ".claude", {"plugins": {"other@other": [{"version": "1.0.0"}]}})
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "missing")
+        self.assertEqual(found["remediation"], CLAUDE_REMEDIATION)
+
+    def test_undetermined_when_the_registry_is_invalid_json(self) -> None:
+        target = self.registry_path(self.home / ".claude")
+        target.write_text("{not json", encoding="utf-8")
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "undetermined")
+        self.assertTrue(found["reason"].startswith("registro de plugins ilegivel:"))
+        self.assertNotIn("remediation", found)
+
+    def test_detect_never_spawns_a_subprocess_for_the_harness_plugin_kind(self) -> None:
+        self.write_registry(self.home / ".claude", {
+            "plugins": {"ponytail@ponytail": [{"version": "4.9.0"}]},
+        })
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        self.report(tools)
+        self.assertEqual(tools.calls, [])
+
+    def test_claude_config_dir_relocates_the_registry_root(self) -> None:
+        alternate = Path(self.temporary.name) / "alt-claude-home"
+        self.write_registry(alternate, {"plugins": {"ponytail@ponytail": [{"version": "4.9.0"}]}})
+        tools = StubToolchain(environ={"HOME": str(self.home), "CLAUDE_CONFIG_DIR": str(alternate)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "present")
+        self.assertEqual(found["source"], str(alternate / "plugins/installed_plugins.json"))
+
+
+class HarnessPluginCodexDetection(unittest.TestCase):
+    """T006 — the Codex side of the new `harness-plugin` kind."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name) / "repo"
+        self.home = Path(self.temporary.name) / "home"
+        self.root.mkdir()
+        self.home.mkdir()
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def report(self, tools) -> dict:
+        reports = MODULE.detect(self.root, MODULE.load_manifest(), tools, runtime="codex")
+        return next(item for item in reports if item["id"] == "ponytail")
+
+    def cache_root(self, base: Path) -> Path:
+        return base / "plugins/cache/ponytail/ponytail"
+
+    def write_plugin_json(self, base: Path, version_dir: str, payload) -> Path:
+        target = self.cache_root(base) / version_dir / ".codex-plugin/plugin.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload), encoding="utf-8")
+        return target
+
+    def test_present_reads_version_and_source_from_the_plugin_json(self) -> None:
+        target = self.write_plugin_json(self.home / ".codex", "4.9.0", {"version": "4.9.0"})
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "present")
+        self.assertEqual(found["version"], "4.9.0")
+        self.assertEqual(found["source"], str(target))
+
+    def test_the_highest_version_directory_wins(self) -> None:
+        self.write_plugin_json(self.home / ".codex", "4.8.0", {"version": "4.8.0"})
+        self.write_plugin_json(self.home / ".codex", "4.9.0", {"version": "4.9.0"})
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "present")
+        self.assertEqual(found["version"], "4.9.0")
+
+    def test_the_version_declared_in_json_prevails_over_the_directory_name(self) -> None:
+        self.write_plugin_json(self.home / ".codex", "1.0.0", {"version": "4.9.0"})
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        found = self.report(tools)
+        self.assertEqual(found["version"], "4.9.0")
+
+    def test_missing_when_the_cache_directory_is_absent(self) -> None:
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "missing")
+        self.assertEqual(found["remediation"], CODEX_REMEDIATION)
+
+    def test_undetermined_when_the_plugin_json_is_unreadable(self) -> None:
+        target = self.cache_root(self.home / ".codex") / "4.9.0" / ".codex-plugin/plugin.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("{not json", encoding="utf-8")
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "undetermined")
+        self.assertTrue(found["reason"].startswith("registro de plugins ilegivel:"))
+        self.assertNotIn("remediation", found)
+
+    def test_codex_home_relocates_the_cache_root(self) -> None:
+        alternate = Path(self.temporary.name) / "alt-codex-home"
+        self.write_plugin_json(alternate, "4.9.0", {"version": "4.9.0"})
+        tools = StubToolchain(environ={"HOME": str(self.home), "CODEX_HOME": str(alternate)})
+        found = self.report(tools)
+        self.assertEqual(found["status"], "present")
+
+
+class HarnessPluginInstallDelegation(unittest.TestCase):
+    """T007 — delegated install of the harness-plugin kind, per active runtime."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name) / "repo"
+        self.home = Path(self.temporary.name) / "home"
+        self.root.mkdir()
+        self.home.mkdir()
+        self.manifest = MODULE.load_manifest()
+        self.ponytail = next(e for e in self.manifest["dependencies"] if e["id"] == "ponytail")
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def harness_calls(self, tools) -> list:
+        return [call for call in tools.calls if call and call[0] in ("claude", "codex")]
+
+    def test_allowed_install_runs_exactly_the_declared_claude_sequence_in_order(self) -> None:
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        reports = MODULE.detect(self.root, self.manifest, tools, runtime="claude")
+        MODULE.install(self.root, self.manifest, reports, tools, runtime="claude")
+        self.assertEqual(self.harness_calls(tools), MODULE.declared_install(self.ponytail, "claude"))
+
+    def test_allowed_install_runs_exactly_the_declared_codex_sequence_in_order(self) -> None:
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        reports = MODULE.detect(self.root, self.manifest, tools, runtime="codex")
+        MODULE.install(self.root, self.manifest, reports, tools, runtime="codex")
+        self.assertEqual(self.harness_calls(tools), MODULE.declared_install(self.ponytail, "codex"))
+
+    def test_without_allow_install_no_harness_process_ever_runs(self) -> None:
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        payload = MODULE.preflight(self.root, runtime="claude", allow_install=False, tools=tools)
+        self.assertNotIn("installed", payload)
+        self.assertEqual(self.harness_calls(tools), [])
+
+    def test_a_failed_first_command_stops_the_entry_as_failed_and_the_report_stays_missing(self) -> None:
+        first = tuple(MODULE.declared_install(self.ponytail, "claude")[0])
+        tools = StubToolchain(environ={"HOME": str(self.home)}, outputs={first: (1, "boom")})
+        reports = MODULE.detect(self.root, self.manifest, tools, runtime="claude")
+        results = MODULE.install(self.root, self.manifest, reports, tools, runtime="claude")
+        ponytail_result = next(item for item in results if item["id"] == "ponytail")
+        self.assertEqual(ponytail_result["status"], "FAILED")
+        self.assertEqual(len(ponytail_result["commands"]), 1)
+        self.assertEqual(ponytail_result["commands"][0]["returncode"], 1)
+        final = MODULE.detect(self.root, self.manifest, tools, runtime="claude")
+        self.assertEqual(next(item for item in final if item["id"] == "ponytail")["status"], "missing")
+
+    def test_an_undetermined_ponytail_never_appears_in_installed(self) -> None:
+        target = self.home / ".claude/plugins/installed_plugins.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("{not json", encoding="utf-8")
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        payload = MODULE.preflight(self.root, runtime="claude", allow_install=True, tools=tools)
+        installed_ids = [item["id"] for item in payload.get("installed", [])]
+        self.assertNotIn("ponytail", installed_ids)
+
+
+class HarnessPluginInvarianceAndManifest(unittest.TestCase):
+    """T008 — the new kind changes nothing about the kinds that already existed."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name) / "repo"
+        self.home = Path(self.temporary.name) / "home"
+        self.root.mkdir()
+        self.home.mkdir()
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def test_every_pre_existing_kind_reports_identically_with_or_without_ponytail(self) -> None:
+        full_manifest = MODULE.load_manifest()
+        without_ponytail = json.loads(json.dumps(full_manifest))
+        without_ponytail["dependencies"] = [
+            entry for entry in without_ponytail["dependencies"] if entry["id"] != "ponytail"
+        ]
+        with_ponytail_reports = MODULE.detect(
+            self.root, full_manifest, StubToolchain(environ={"HOME": str(self.home)}), runtime="claude")
+        without_ponytail_reports = MODULE.detect(
+            self.root, without_ponytail, StubToolchain(environ={"HOME": str(self.home)}), runtime="claude")
+        filtered = [report for report in with_ponytail_reports if report["id"] != "ponytail"]
+        self.assertEqual(filtered, without_ponytail_reports)
+
+    def test_load_manifest_accepts_the_bundled_manifest(self) -> None:
+        MODULE.load_manifest()
+
+    def test_load_manifest_rejects_a_runtime_key_outside_runtimes(self) -> None:
+        data = manifest()
+        ponytail = next(e for e in data["dependencies"] if e["id"] == "ponytail")
+        ponytail["install_by_runtime"] = {"bogus-runtime": [["claude", "plugin", "install", "x"]]}
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "dependencies.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaises(MODULE.ManifestError):
+                MODULE.load_manifest(path)
+
+    def test_load_manifest_rejects_a_non_list_argv_in_install_by_runtime(self) -> None:
+        data = manifest()
+        ponytail = next(e for e in data["dependencies"] if e["id"] == "ponytail")
+        ponytail["install_by_runtime"] = {"claude": ["not-a-list"]}
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "dependencies.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaises(MODULE.ManifestError):
+                MODULE.load_manifest(path)
+
+    def test_load_manifest_rejects_a_harness_plugin_entry_missing_plugin_or_marketplace(self) -> None:
+        for missing_field in ("plugin", "marketplace"):
+            data = manifest()
+            ponytail = next(e for e in data["dependencies"] if e["id"] == "ponytail")
+            del ponytail[missing_field]
+            with tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "dependencies.json"
+                path.write_text(json.dumps(data), encoding="utf-8")
+                with self.assertRaises(MODULE.ManifestError):
+                    MODULE.load_manifest(path)
+
+    def test_preflight_lists_ponytail_as_missing_required_with_missing_dependency_verdict(self) -> None:
+        tools = StubToolchain(environ={"HOME": str(self.home)})
+        payload = MODULE.preflight(self.root, runtime="claude", tools=tools)
+        self.assertIn("ponytail", payload["missing_required"])
+        self.assertEqual(payload["verdict"], "MISSING-DEPENDENCY")
+
+    def test_grill_skip_dependencies_short_circuits_to_skipped(self) -> None:
+        tools = StubToolchain(environ={"HOME": str(self.home), MODULE.SKIP_ENV: "1"})
+        payload = MODULE.preflight(self.root, runtime="claude", tools=tools)
+        self.assertEqual(payload["verdict"], "SKIPPED")
+
+
 class InstallDelegation(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -279,8 +573,23 @@ class InstallDelegation(unittest.TestCase):
         self.assertTrue(installers)
         self.assertIn(["node", tools.installer], tools.calls)
         self.assertIn("installed", payload)
-        self.assertFalse(any(call[0] == "claude" for call in tools.calls))
+        # Preflight ran on the default runtime ("claude"): every call whose
+        # argv[0] is a harness binary must be a *declared* plugin installer for
+        # that runtime, never an agent invocation of the harness itself (R1).
+        declared_plugin_calls = {
+            tuple(command)
+            for entry in MODULE.load_manifest()["dependencies"]
+            for command in MODULE.declared_install(entry, "claude")
+        }
+        for call in tools.calls:
+            if call and call[0] in ("claude", "codex"):
+                self.assertEqual(call[:2], ["claude", "plugin"])
+                self.assertIn(tuple(call), declared_plugin_calls)
         self.assertFalse(any(call[:2] == ["codex", "exec"] for call in tools.calls))
+        self.assertFalse(any(
+            call and call[0] == "claude" and (len(call) == 1 or call[1] in ("-p", "--print"))
+            for call in tools.calls
+        ))
 
     def test_codex_install_restores_and_retains_the_claude_harness(self) -> None:
         claude_skill = self.root / ".claude/skills/speckit-specify/SKILL.md"
