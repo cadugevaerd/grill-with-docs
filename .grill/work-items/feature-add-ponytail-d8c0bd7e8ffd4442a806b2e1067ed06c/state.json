@@ -13,8 +13,49 @@
     "state": "present"
   },
   "development": {
-    "audit": [],
-    "current_step": "specify",
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:cbab98bd3edbfb610b1b6357e67f5f4ea79ac7662b482f4b47b6cb2a63be7e18",
+      "recovery_generation_id": "rg-4af962d3fbbed0804fa17c21ec0fd2cf70d9441252be76557dbf121d3b8a3629",
+      "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+      "run_id": "leader-feature-add-ponytail-d8c0bd7e8ffd4442a806b2e1067ed06c",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "specify": "se-d51b3e5726a35f3cf2f5f22666c0946e6e3a4d931613ca4dcce97a917df1f904"
+    },
+    "attested_outputs": {
+      "specify": {
+        "output_sha256": "sha256:fd1197640f706211a1408e9e8c3857757a220dd28624752f5026daedea2b4049",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "step_id": "specify"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "invocando /speckit-specify para a FASE-001",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/spec.md",
+            "sha256": "fd1197640f706211a1408e9e8c3857757a220dd28624752f5026daedea2b4049"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "spec 028 da FASE-001 conduzida por /speckit-specify e atestada",
+        "state": "complete",
+        "step": "specify"
+      }
+    ],
+    "current_step": "plan",
+    "execution_branch": "cadugevaerd/chore-add-ponytail",
     "renamed_from": {},
     "schema": "grill-development/v2",
     "sequence": [
@@ -39,7 +80,7 @@
       "plan": "pending",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
+      "specify": "complete",
       "tasks": "pending",
       "verify": "pending"
     },

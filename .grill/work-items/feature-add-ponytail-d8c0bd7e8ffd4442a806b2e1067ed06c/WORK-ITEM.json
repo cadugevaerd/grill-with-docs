@@ -16,16 +16,19 @@
       "state": "present"
     },
     "head": "911838fc257359fbfbb65047f48d596a60af5432",
-    "schema": "grill-work-item/v2",
+    "parent_work_id": null,
+    "schema": "grill-work-item/v3",
     "slug": "add-ponytail",
+    "source": null,
     "type": "feature",
     "work_id": "feature-add-ponytail-d8c0bd7e8ffd4442a806b2e1067ed06c",
     "workflow": {
       "path": "WORKFLOW.md",
       "sha256": "d2c4ea0806ea5e8235678582154aedaeb0ba686641bd836934bffe133db60ab5"
-    }
+    },
+    "worktree_key": "wt-feature-add-ponytail-d8c0bd7e8ffd4442a806b2e1067ed06c"
   },
-  "immutable_sha256": "5c4d0c361e955fba27918face867aca1d78d71b74a9bf3c007fb8161c0127842",
+  "immutable_sha256": "2bf0a7effe688b833892da1c3e74d2659ee68e50ca67452140a0ff93aaaa0f7a",
   "initial_artifacts": {
     "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
     "CONSTITUTION-CHECK.md": "70982f65169d6155e958ce6e8f7479ff88cff948d5f70133ccf1d91354ae7ea2",
@@ -39,7 +42,10 @@
     "handoffs/FASE-001-SPECIFY-HANDOFF.md": "3cfe46ee546a9c46cf78fd7bf59ca897df07d24431a46ab4b61bf147fe919a58",
     "state.json": "14557857b7cc2b8459f66b72a5f809a3d83bc50384e92421c62c453106f28988"
   },
-  "schema": "grill-work-item/v2",
+  "orchestration": {
+    "schema": "grill-orchestrator/v1"
+  },
+  "schema": "grill-work-item/v3",
   "scope": {
     "paths": []
   }
