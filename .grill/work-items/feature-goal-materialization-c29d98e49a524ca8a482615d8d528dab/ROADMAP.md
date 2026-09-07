@@ -3,7 +3,7 @@
 - execution-order: FASE-001
 
 ## FASE-001 — Materialização e validação do goal.md
-- state: blocked
+- state: complete
 - objetivo: Todo projeto que executa `init` passa a ter o `goal.md` fixado na raiz, no-clobber, com marcador versionado e hash reportado; e o contrato desse documento fica travado por teste na suíte canônica.
 - scope-in: SSOT do documento em `grill_core`, script fino de materialização, fixação pelo `init` com reporte de estado, preservação byte-intacta de documento humano incompatível, validador novo na suíte, bump SemVer sincronizado.
 - scope-out: O texto normativo do `goal.md`, entregue pelo work item `feature-goal-autopilot`.

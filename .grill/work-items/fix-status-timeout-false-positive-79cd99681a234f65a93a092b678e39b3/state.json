@@ -1,6 +1,6 @@
 {
-  "active_phase": "FASE-001",
-  "audit_verdict": "pending",
+  "active_phase": null,
+  "audit_verdict": "GO",
   "capability": {
     "name": "module-decomposition",
     "schema": "v1",
@@ -1208,11 +1208,11 @@
     "max_questions_per_run": 25,
     "max_scope_growth_streak": 3
   },
-  "milestone_status": "in-progress",
+  "milestone_status": "completed",
   "second_pass": {
     "new_material_dqs": 0
   },
-  "status": "ready",
+  "status": "complete",
   "version": "1.2.0",
   "work_id": "fix-status-timeout-false-positive-79cd99681a234f65a93a092b678e39b3",
   "workflow": {

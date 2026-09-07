@@ -1,7 +1,7 @@
 # FASE-001 — Sucessão explícita de escopo reconciliado
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: recibo histórico, sucessão explícita, sobreposição concorrente, ownership perpétuo
 - ADRs: ADR-0001

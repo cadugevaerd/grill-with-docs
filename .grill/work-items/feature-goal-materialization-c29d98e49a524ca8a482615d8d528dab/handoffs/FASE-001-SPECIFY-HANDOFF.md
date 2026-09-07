@@ -1,7 +1,7 @@
 # FASE-001 — Materialização e validação do goal.md
 
 - phase: FASE-001
-- state: blocked
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: goal.md, materialização, marcador, tupla ESSENTIAL, SSOT de documento, no-clobber
 - ADRs: ADR-0101, ADR-0102

@@ -3,7 +3,7 @@
 - execution-order: FASE-001
 
 ## FASE-001 — Sucessão explícita de escopo reconciliado
-- state: ready-for-specify
+- state: complete
 - objetivo: distinguir reutilização sequencial autorizada de sobreposição concorrente sem transformar recibos históricos em ownership perpétuo.
 - scope-in: dependência direta que autoriza reutilização de escopo nos reconciliadores completo e targeted; preservação fail-closed dos demais conflitos.
 - scope-out: autorização transitiva, liberação por mera conclusão e alteração do schema dos recibos.

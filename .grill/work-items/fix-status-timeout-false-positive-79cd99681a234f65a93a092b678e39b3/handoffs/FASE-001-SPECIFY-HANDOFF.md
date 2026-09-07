@@ -1,7 +1,7 @@
 # FASE-001 — Probes Git por worktree e timeout público suficiente
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: STATUS-TIMEOUT, probe Git por worktree, timeout público suficiente
 - ADRs: ADR-0001
