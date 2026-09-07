@@ -1,0 +1,30 @@
+{
+  "worker": "p01-a",
+  "feature": "028-add-ponytail",
+  "completed": ["T002", "T003", "T004"],
+  "tasks": {
+    "T002": {
+      "status": "done",
+      "summary": "Acrescentado 'harness-plugin' a KINDS; load_manifest valida install_by_runtime (chaves subconjunto de RUNTIMES, valores lista de argv de strings, erro 'invalid install command for <id>') e exige plugin+marketplace em entradas harness-plugin (erro 'invalid harness-plugin entry for <id>').",
+      "evidence": "plugin/skills/grill-with-docs/scripts/ensure_dependencies.py linhas KINDS e load_manifest"
+    },
+    "T003": {
+      "status": "done",
+      "summary": "declared_install(entry, runtime) devolve install_by_runtime[runtime] quando existe, senao install (ou []); usado em remediation() (campo install) e install(), preservando o ramo de 'enable' das specify-extension e a comparacao command == entry.get('install', [None])[0] para o dev copy.",
+      "evidence": "plugin/skills/grill-with-docs/scripts/ensure_dependencies.py funcoes declared_install, remediation, install"
+    },
+    "T004": {
+      "status": "done",
+      "summary": "plugin_registry_state(entry, tools, runtime) le installed_plugins.json (Claude) ou o cache de plugins (Codex, maior versao por parse_version, fallback ao nome do diretorio), decide present/outdated via meets(); ramo harness-plugin em detect() preenche status/version/source/reason; pos-processamento de undetermined preserva reason ja definido em vez de sobrescrever com o texto generico de extensoes.",
+      "evidence": "plugin/skills/grill-with-docs/scripts/ensure_dependencies.py funcao plugin_registry_state e ramo harness-plugin em detect()"
+    }
+  },
+  "checks": [
+    "python3 tests/validate_dependencies_contract.py -> OK (38 tests)",
+    "python3 plugin/skills/grill-with-docs/scripts/ensure_dependencies.py . --runtime claude -> exit 0, verdict OK",
+    "python3 plugin/skills/grill-with-docs/scripts/ensure_dependencies.py . --runtime codex -> exit 0, verdict OK",
+    "self-check com manifesto tmp (entrada ponytail do contracts/dependency-manifest-entry.md): detect() runtime=claude -> status present, version 4.9.0, source ~/.claude/plugins/installed_plugins.json",
+    "self-check com manifesto tmp: detect() runtime=codex -> status present, version 4.9.0, source ~/.codex/plugins/cache/ponytail/ponytail/4.9.0/.codex-plugin/plugin.json",
+    "self-check com HOME=/tmp/empty-home: detect() runtime=claude -> status missing, remediation 'claude plugin marketplace add DietrichGebert/ponytail && claude plugin install ponytail@ponytail'"
+  ]
+}
