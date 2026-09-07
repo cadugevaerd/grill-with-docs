@@ -1,5 +1,21 @@
 # Changelog
 
+## 5.4.0
+
+- Ponytail entra na stack oficial: `dependencies.json` ganha o kind `harness-plugin`
+  e a entrada `ponytail` (`required: true`, mínimo 4.9.0). A detecção lê apenas o
+  registro de plugins em disco do runtime ativo — `installed_plugins.json` no
+  Claude Code, cache de plugins no Codex — sem subprocesso, e distingue
+  `missing` de `undetermined`.
+- `install_by_runtime` declara a sequência de instalação por harness
+  (`claude plugin marketplace add` + `claude plugin install`; `codex plugin
+  marketplace add` + `codex plugin add`), executada só sob `--allow-install` e
+  sempre pela CLI do harness. A confiança no marketplace `DietrichGebert/ponytail`
+  fica declarada no manifesto.
+- Limite documentado: no Codex, "instalado" não prova "habilitado".
+- Dogfooding: `CLAUDE.md` ganha a seção "Ponytail na stack", nasce `AGENTS.md`
+  para o Codex e `.claude/settings.json` versionado habilita `ponytail@ponytail`.
+
 ## 5.3.4
 
 - O ciclo v4 passa a exigir `--runtime claude|codex` no `preflight`, `init` e

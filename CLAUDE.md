@@ -47,6 +47,15 @@ A ordem canônica de cada versão vive em `grill_core/workflow_versions.py`, que
 
 Subcomandos auxiliares: `preflight ROOT --runtime claude|codex [--allow-install] [--skip-backlog]` e `backlog-sync ROOT --work-id ID [--apply] [--db PATH]`.
 
+## Ponytail na stack
+
+O plugin [ponytail](https://github.com/DietrichGebert/ponytail) é o modo de trabalho oficial deste projeto (lazy senior dev: YAGNI, stdlib primeiro, menor diff correto) e faz parte da stack oficial desde a 5.4.0, declarado em `dependencies.json` como `kind: harness-plugin`, `required: true`, mínimo `4.9.0`.
+
+- **O que o preflight verifica**: só instalação e versão, lendo o registro em disco do runtime ativo sem subprocesso — Claude Code em `~/.claude/plugins/installed_plugins.json` (chave `ponytail@ponytail`), Codex em `~/.codex/plugins/cache/ponytail/ponytail/<versão>/`. Resultado `present|outdated|missing|undetermined`; registro ilegível é `undetermined`, nunca `missing`. "Instalado" não prova "habilitado": no Codex não há registro estruturado para isso, e no Claude o `enabledPlugins` não é lido.
+- **Como instalar**: Claude Code `claude plugin marketplace add DietrichGebert/ponytail && claude plugin install ponytail@ponytail`; Codex `codex plugin marketplace add DietrichGebert/ponytail && codex plugin add ponytail@ponytail`. Com `--allow-install` o preflight executa exatamente essa sequência pela CLI do harness (escopo `user`); o core nunca baixa bytes. A confiança nesse marketplace de terceiro está declarada no manifesto e é revisável no diff.
+- **Neste repositório**: `.claude/settings.json` versionado habilita `ponytail@ponytail` para o projeto no Claude Code; `AGENTS.md` leva a mesma seção e o texto de modo do ponytail para o Codex.
+- **Hooks exigem `node` no PATH** para a ativação automática; sem `node` as skills continuam disponíveis e a ativação fica muda. Não é dependência declarada, só documentada.
+
 ## Triagem e rotas
 
 `triage ROOT --report LAUDO.md --route bugfix|hotfix|feature|module --severity ... [--apply]` é pré-ciclo como o `preflight` e sela a decisão de rota em `.grill/triage/<id>.json`. O core **não classifica linguagem natural** — quem interpreta o problema é a skill `code-debug`, que emite o laudo; o core verifica que o laudo declara `causa raiz comprovada` e que a evidência exigida pela rota está presente. Sem isso, `ROOT-CAUSE-UNPROVEN` e nenhuma rota abre.
