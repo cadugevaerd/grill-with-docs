@@ -21,7 +21,7 @@ from typing import Any, Iterable
 HERE = Path(__file__).resolve()
 MANIFEST = HERE.parents[1] / "assets/dependencies.json"
 SCHEMA = "grill-dependencies/v1"
-KINDS = {"runtime", "binary", "path", "harness", "specify-extension"}
+KINDS = {"runtime", "binary", "path", "harness", "specify-extension", "harness-plugin"}
 RUNTIMES = ("claude", "codex")
 SKILL_ROOT_BY_RUNTIME = {"claude": ".claude/skills", "codex": ".agents/skills"}
 EXTENSION_REGISTRY = ".specify/extensions/.registry"
@@ -57,6 +57,21 @@ def load_manifest(path: Path = MANIFEST) -> dict[str, Any]:
         for command in entry.get("install") or []:
             if not isinstance(command, list) or not command or not all(isinstance(part, str) for part in command):
                 raise ManifestError(f"invalid install command for {identifier}")
+        by_runtime = entry.get("install_by_runtime")
+        if by_runtime is not None:
+            if not isinstance(by_runtime, dict) or not set(by_runtime) <= set(RUNTIMES):
+                raise ManifestError(f"invalid install command for {identifier}")
+            for commands in by_runtime.values():
+                if not isinstance(commands, list):
+                    raise ManifestError(f"invalid install command for {identifier}")
+                for command in commands:
+                    if not isinstance(command, list) or not command or not all(isinstance(part, str) for part in command):
+                        raise ManifestError(f"invalid install command for {identifier}")
+        if entry.get("kind") == "harness-plugin":
+            plugin_name, marketplace_name = entry.get("plugin"), entry.get("marketplace")
+            if (not isinstance(plugin_name, str) or not plugin_name
+                    or not isinstance(marketplace_name, str) or not marketplace_name):
+                raise ManifestError(f"invalid harness-plugin entry for {identifier}")
     return manifest
 
 
@@ -152,6 +167,19 @@ def expand(command: list[str], tools: Toolchain, *, runtime: str | None = "claud
     return resolved
 
 
+def declared_install(entry: dict[str, Any], runtime: str | None) -> list[list[str]]:
+    """The install commands for one runtime, preferring the per-runtime form.
+
+    ``install_by_runtime`` exists because the verb itself differs across
+    harnesses (Claude ``install`` vs Codex ``add``), not just an argument;
+    every entry without it keeps using the single ``install`` list unchanged.
+    """
+    by_runtime = entry.get("install_by_runtime") or {}
+    if runtime in by_runtime:
+        return by_runtime[runtime]
+    return entry.get("install") or []
+
+
 def remediation(entry: dict[str, Any], tools: Toolchain, field: str = "install", *,
                 runtime: str | None = None) -> str | None:
     """Render the fix for the observed reason, not a fixed one per dependency.
@@ -161,7 +189,7 @@ def remediation(entry: dict[str, Any], tools: Toolchain, field: str = "install",
     family of error this module exists to stop making.
     """
     literal = entry.get("remediation")
-    commands = entry.get(field) or []
+    commands = declared_install(entry, runtime) if field == "install" else (entry.get(field) or [])
     if not commands:
         return literal if isinstance(literal, str) and literal else None
     rendered = []
@@ -214,6 +242,67 @@ def extension_state(registry: dict[str, Any] | None, slug: str) -> tuple[str, st
         return "missing", reason, None
     version = record.get("version")
     return "present", None, version if isinstance(version, str) else None
+
+
+def plugin_registry_state(entry: dict[str, Any], tools: Toolchain, runtime: str) -> tuple[str, str | None, str | None, str | None]:
+    """Read one harness's on-disk plugin registry. Never a subprocess (R1).
+
+    ``missing`` (root or key not there) and ``undetermined`` (something is
+    there but cannot be trusted) stay distinct on purpose (R5): a corrupt
+    registry must never be reported as "plugin not installed", because that
+    would license installing over whatever may already exist.
+    """
+    home = Path(tools.environ.get("HOME", "~")).expanduser()
+    plugin, marketplace = entry.get("plugin"), entry.get("marketplace")
+    if runtime == "claude":
+        config_root = tools.environ.get("CLAUDE_CONFIG_DIR")
+        root = Path(config_root) if config_root else home / ".claude"
+        registry_path = root / "plugins/installed_plugins.json"
+        if not registry_path.is_file():
+            return "missing", None, None, None
+        payload = _read_json(registry_path)
+        plugins = payload.get("plugins") if isinstance(payload, dict) else None
+        if not isinstance(plugins, dict):
+            return "undetermined", None, None, f"registro de plugins ilegivel: {registry_path}"
+        key = f"{plugin}@{marketplace}"
+        if key not in plugins:
+            return "missing", None, None, None
+        records = plugins[key]
+        if (not isinstance(records, list) or not records or not isinstance(records[0], dict)
+                or not isinstance(records[0].get("version"), str)):
+            return "undetermined", None, None, f"registro de plugins ilegivel: {registry_path}"
+        version, source = records[0]["version"], str(registry_path)
+    else:
+        config_root = tools.environ.get("CODEX_HOME")
+        root = Path(config_root) if config_root else home / ".codex"
+        cache = root / "plugins/cache" / str(marketplace) / str(plugin)
+        if not cache.is_dir():
+            return "missing", None, None, None
+        best: tuple[int, ...] | None = None
+        version = source = None
+        unreadable: str | None = None
+        for candidate in sorted(item for item in cache.iterdir() if item.is_dir()):
+            plugin_json = candidate / ".codex-plugin/plugin.json"
+            if not plugin_json.is_file():
+                continue
+            payload = _read_json(plugin_json)
+            if payload is None:
+                unreadable = str(plugin_json)
+                continue
+            declared = payload.get("version")
+            text = declared if isinstance(declared, str) else candidate.name
+            parsed = parse_version(text)
+            if parsed is None:
+                continue
+            if best is None or parsed > best:
+                best, version, source = parsed, text, str(plugin_json)
+        if best is None:
+            if unreadable is not None:
+                return "undetermined", None, None, f"registro de plugins ilegivel: {unreadable}"
+            return "missing", None, None, None
+    if meets(parse_version(version), entry.get("min")):
+        return "present", version, source, None
+    return "outdated", version, source, f"versao {version} abaixo do minimo {entry.get('min')}"
 
 
 _UNREAD = object()
@@ -307,10 +396,20 @@ def detect(root: Path, manifest: dict[str, Any], tools: Toolchain, *, runtime: s
                     report["source"] = str(root / EXTENSION_REGISTRY)
             elif reason:
                 observed[entry["id"]] = reason
+        elif kind == "harness-plugin":
+            status, version, source, reason = plugin_registry_state(entry, tools, runtime)
+            report["status"] = status
+            report["version"] = version
+            report["source"] = source
+            if reason is not None:
+                report["reason"] = reason
         if report["status"] == "undetermined":
             # Nothing was observed, so there is nothing to propose installing.
-            # "I do not know" must not be dressed up as "it is not there".
-            report["reason"] = f"registro de extensoes ilegivel: {EXTENSION_REGISTRY}"
+            # "I do not know" must not be dressed up as "it is not there". A
+            # kind that already pinned down *what* is unreadable (harness-plugin)
+            # keeps that reason instead of the generic extension-registry text.
+            if "reason" not in report:
+                report["reason"] = f"registro de extensoes ilegivel: {EXTENSION_REGISTRY}"
         elif report["status"] != "present":
             field = "enable" if "desabilitada" in observed.get(entry["id"], "") else "install"
             report["remediation"] = remediation(entry, tools, field, runtime=runtime)
@@ -429,7 +528,7 @@ def install(root: Path, manifest: dict[str, Any], reports: Iterable[dict[str, An
     try:
         for identifier in pending:
             entry = by_id[identifier]
-            commands = entry.get("install") or []
+            commands = declared_install(entry, runtime)
             if entry["kind"] == "specify-extension":
                 record = (registry or {}).get(entry["extension"])
                 if isinstance(record, dict) and not record.get("enabled"):
