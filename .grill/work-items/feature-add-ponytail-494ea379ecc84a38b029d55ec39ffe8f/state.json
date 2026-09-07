@@ -29,6 +29,7 @@
       "implement-parallel": "se-85f8c7b2b1d1d32df45795b21170b8d40bf565fdf4b33fe36b8c965d708a41b6",
       "partition": "se-ea98a8a01e389f683894b71ac318ce4e754c6e4acfcf39ae499829ecb233e079",
       "plan": "se-1137d2b4434f7f4b4bc15f778e1bb099798279216e9a3a26adc22bfeb8eb1dd7",
+      "review": "se-5786586346f73a911c18fe7335456ab0b782fc48e2f07c278550f8302a9c8ee4",
       "specify": "se-679a75475754ed4a7b8dfbef96e8d38f538e809037fba507a5441e9a508f9975",
       "tasks": "se-1328b31353b3d071ce59b564badf078673196df7e1513b0b3215d934d446346c",
       "verify": "se-209e316e1bc4c6dcd955bd9c2bad4615ae2eeb6627e19162ce17df82ce62caf9"
@@ -69,6 +70,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
         "step_id": "plan"
+      },
+      "review": {
+        "output_sha256": "sha256:c5f567408cb29dcd64abbef0f1ee6a8806ad1c8532771c6d76ca2c6985c610b4",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "step_id": "review"
       },
       "specify": {
         "output_sha256": "sha256:0a011dbbe1547d5ecf7110d6db564fc0617dca811f4f5db75b51eef40249f7ba",
@@ -325,10 +332,29 @@
         "reason": "VERIFY PASS: 28 validadores OK, distribution OK, detecção real nos dois runtimes, higiene limpa",
         "state": "complete",
         "step": "verify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "invocando /speckit-verify-review-ship-review",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/review.md",
+            "sha256": "c5f567408cb29dcd64abbef0f1ee6a8806ad1c8532771c6d76ca2c6985c610b4"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "REVIEW APPROVE: zero Critical/Important; 3 minors documentados",
+        "state": "complete",
+        "step": "review"
       }
     ],
     "chain_stale": [],
-    "current_step": "review",
+    "current_step": "ship",
     "execution_branch": "cadugevaerd/chore-add-ponytail",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -352,7 +378,7 @@
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
-      "review": "pending",
+      "review": "complete",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
