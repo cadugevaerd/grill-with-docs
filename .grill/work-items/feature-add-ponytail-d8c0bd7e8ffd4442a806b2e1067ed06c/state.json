@@ -23,10 +23,17 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "checklist": "se-52f466aa98663b067b15664bac6bf51d9f791bdd9f9253674c659e4a2ab5bfdd",
       "plan": "se-907ddfc6ee09f11e0a7237e113cce7449b9f1c5b74c92d302f7b14b25fb23964",
       "specify": "se-d51b3e5726a35f3cf2f5f22666c0946e6e3a4d931613ca4dcce97a917df1f904"
     },
     "attested_outputs": {
+      "checklist": {
+        "output_sha256": "sha256:950b81fd29232101ac4dc4279624a28e6f009b83ab1d505a5494c3d1f0bc9145",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
       "plan": {
         "output_sha256": "sha256:a7777efa5bbeb8ee5e4469d32928c49310b88d0b979dca773b090e573b514137",
         "provenance": "current-generation",
@@ -78,9 +85,28 @@
         "reason": "plan.md com research, data-model, dois contratos e quickstart; Constitution Check sem violação",
         "state": "complete",
         "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "invocando /speckit-checklist",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/checklists/dependency-preflight.md",
+            "sha256": "950b81fd29232101ac4dc4279624a28e6f009b83ab1d505a5494c3d1f0bc9145"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "checklist de qualidade dos requisitos, 33 itens em 9 dimensões, todos aprovados",
+        "state": "complete",
+        "step": "checklist"
       }
     ],
-    "current_step": "checklist",
+    "current_step": "tasks",
     "execution_branch": "cadugevaerd/chore-add-ponytail",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -99,7 +125,7 @@
     ],
     "steps": {
       "analyze": "pending",
-      "checklist": "pending",
+      "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
