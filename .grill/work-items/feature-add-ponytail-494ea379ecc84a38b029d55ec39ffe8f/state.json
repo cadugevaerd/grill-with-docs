@@ -23,19 +23,20 @@
       "runtime": "claude"
     },
     "attested_executions": {
-      "analyze": "se-3aec9ec3d46b66cbf8418cbb7f1020e4845ab76df3ed056486b77e5d7095ce9b",
+      "analyze": "se-e0b0fdd67b19a1a0957c0dffab100fe20b9a3c5aac41df818d817bd4c4239494",
       "checklist": "se-f07ce3116ad45da9d519750b93fbe34f84ec002c01ce4f4e9609b9a7dcada87b",
-      "implement-parallel": "se-1404b81e194af9a635d9ab5b2dffcad840a59c05df1227fad28cfb5785019eb0",
-      "partition": "se-3f81ae573fb44a0cca396e180d8a8f4b5c9b9163eda2849e163cc98e44306268",
+      "converge": "se-726e7d00dadc3d2c7d499d132ac666f095796b3c9d474590c7235c2baa94f20a",
+      "implement-parallel": "se-85f8c7b2b1d1d32df45795b21170b8d40bf565fdf4b33fe36b8c965d708a41b6",
+      "partition": "se-ea98a8a01e389f683894b71ac318ce4e754c6e4acfcf39ae499829ecb233e079",
       "plan": "se-1137d2b4434f7f4b4bc15f778e1bb099798279216e9a3a26adc22bfeb8eb1dd7",
       "specify": "se-679a75475754ed4a7b8dfbef96e8d38f538e809037fba507a5441e9a508f9975",
-      "tasks": "se-c5d7a4690a957fac34f78c688160970d2a65978756b91c6ae0b99014c7ec7f22"
+      "tasks": "se-1328b31353b3d071ce59b564badf078673196df7e1513b0b3215d934d446346c"
     },
     "attested_outputs": {
       "analyze": {
         "output_sha256": "sha256:962f0891238f82e9c050648100a2a6d5b91cc5223a2f82c60dfc12d4fa2b4e51",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-2.terminal.json",
         "step_id": "analyze"
       },
       "checklist": {
@@ -44,16 +45,22 @@
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
       },
-      "implement-parallel": {
-        "output_sha256": "sha256:4af4b2466bd4f91d3aa8b974b76c934b92dd8348256c1f1ac63427f282ca32cf",
+      "converge": {
+        "output_sha256": "sha256:7a9332aeedf9791bcdbcc4d25fa47f3f13b218274ae0d6145f86a4e777c9ccca",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+        "step_id": "converge"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:7a9332aeedf9791bcdbcc4d25fa47f3f13b218274ae0d6145f86a4e777c9ccca",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-2.terminal.json",
         "step_id": "implement-parallel"
       },
       "partition": {
         "output_sha256": "sha256:a93153c409478471e6b4394790016c6a719706833b3211993e5aab4f2cf287a1",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-2.terminal.json",
         "step_id": "partition"
       },
       "plan": {
@@ -69,9 +76,9 @@
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:8d6c8b7ff877301d18f94e29489dc05c005f27b0174dfb390127f17ea2d3eac3",
+        "output_sha256": "sha256:7a9332aeedf9791bcdbcc4d25fa47f3f13b218274ae0d6145f86a4e777c9ccca",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -208,9 +215,94 @@
         "reason": "run-c51c59be87f9b89a6b41f1e9 COMPLETE: 2 waves, 5 workers convergidos (sonnet, tier medium), T001-T013 reconciliados por sidecar, T014 pelo leader; worktrees removidos após convergência",
         "state": "complete",
         "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "invocando /speckit-converge",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/tasks.md",
+            "sha256": "7a9332aeedf9791bcdbcc4d25fa47f3f13b218274ae0d6145f86a4e777c9ccca"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "tasks.md sucedido após gauntlet-tasks-reconcile (T001-T013), T014 do leader e Phase 4 Convergence (T015)",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/028-tasks.json"
+      },
+      {
+        "chain_stale": [
+          "partition",
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/analysis.md",
+            "sha256": "962f0891238f82e9c050648100a2a6d5b91cc5223a2f82c60dfc12d4fa2b4e51"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "re-selagem por cascata: predecessor tasks sucedido; artefato byte-idêntico",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/attestations/028-analyze.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/execution-dag.json",
+            "sha256": "a93153c409478471e6b4394790016c6a719706833b3211993e5aab4f2cf287a1"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "re-selagem por cascata: predecessor analyze sucedido; DAG byte-idêntico",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/028-partition.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/tasks.md",
+            "sha256": "7a9332aeedf9791bcdbcc4d25fa47f3f13b218274ae0d6145f86a4e777c9ccca"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "re-selagem por cascata sobre o tasks.md corrente; run-c51c59be87f9b89a6b41f1e9 COMPLETE",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/028-implement-parallel.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/tasks.md",
+            "sha256": "7a9332aeedf9791bcdbcc4d25fa47f3f13b218274ae0d6145f86a4e777c9ccca"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "speckit-converge: 1 finding contradicts (teste acoplado a bundle vivo) fechado como T015 pelo leader; suíte completa verde (28 validadores, 1 skipped); 15/15 tarefas",
+        "state": "complete",
+        "step": "converge"
       }
     ],
-    "current_step": "converge",
+    "chain_stale": [],
+    "current_step": "verify",
     "execution_branch": "cadugevaerd/chore-add-ponytail",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -230,7 +322,7 @@
     "steps": {
       "analyze": "complete",
       "checklist": "complete",
-      "converge": "pending",
+      "converge": "complete",
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
@@ -239,6 +331,64 @@
       "specify": "complete",
       "tasks": "complete",
       "verify": "pending"
+    },
+    "superseded_outputs": {
+      "analyze": [
+        {
+          "attempt_id": "analyze-1",
+          "attestation": ".grill/attestations/028-analyze.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:962f0891238f82e9c050648100a2a6d5b91cc5223a2f82c60dfc12d4fa2b4e51",
+          "provenance": "current-generation",
+          "reason": "re-selagem por cascata: predecessor tasks sucedido; artefato byte-idêntico",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+          "step_execution_id": "se-3aec9ec3d46b66cbf8418cbb7f1020e4845ab76df3ed056486b77e5d7095ce9b",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-e0b0fdd67b19a1a0957c0dffab100fe20b9a3c5aac41df818d817bd4c4239494"
+        }
+      ],
+      "implement-parallel": [
+        {
+          "attempt_id": "implement-parallel-1",
+          "attestation": ".grill/attestations/028-implement-parallel.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:4af4b2466bd4f91d3aa8b974b76c934b92dd8348256c1f1ac63427f282ca32cf",
+          "provenance": "current-generation",
+          "reason": "re-selagem por cascata sobre o tasks.md corrente; run-c51c59be87f9b89a6b41f1e9 COMPLETE",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+          "step_execution_id": "se-1404b81e194af9a635d9ab5b2dffcad840a59c05df1227fad28cfb5785019eb0",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-85f8c7b2b1d1d32df45795b21170b8d40bf565fdf4b33fe36b8c965d708a41b6"
+        }
+      ],
+      "partition": [
+        {
+          "attempt_id": "partition-1",
+          "attestation": ".grill/attestations/028-partition.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:a93153c409478471e6b4394790016c6a719706833b3211993e5aab4f2cf287a1",
+          "provenance": "current-generation",
+          "reason": "re-selagem por cascata: predecessor analyze sucedido; DAG byte-idêntico",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+          "step_execution_id": "se-3f81ae573fb44a0cca396e180d8a8f4b5c9b9163eda2849e163cc98e44306268",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-ea98a8a01e389f683894b71ac318ce4e754c6e4acfcf39ae499829ecb233e079"
+        }
+      ],
+      "tasks": [
+        {
+          "attempt_id": "tasks-1",
+          "attestation": ".grill/attestations/028-tasks.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:8d6c8b7ff877301d18f94e29489dc05c005f27b0174dfb390127f17ea2d3eac3",
+          "provenance": "current-generation",
+          "reason": "tasks.md sucedido após gauntlet-tasks-reconcile (T001-T013), T014 do leader e Phase 4 Convergence (T015)",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+          "step_execution_id": "se-c5d7a4690a957fac34f78c688160970d2a65978756b91c6ae0b99014c7ec7f22",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-1328b31353b3d071ce59b564badf078673196df7e1513b0b3215d934d446346c"
+        }
+      ]
     },
     "workflow_version": "v4"
   },

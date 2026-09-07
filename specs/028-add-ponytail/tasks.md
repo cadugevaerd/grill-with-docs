@@ -139,3 +139,14 @@ MVP = Phase 1 + T005 + T006 + T008. Isso entrega a detecção nos dois harnesses
 T007 fecha a instalação delegada. T009..T014 são a obrigação de distribuição da
 cláusula *Bump obrigatório do plugin* e a documentação; não podem faltar no
 merge.
+
+---
+
+## Phase 4: Convergence
+
+**Purpose**: Fechar a única lacuna que a avaliação do código contra spec, plan e tasks
+encontrou. Não é cobertura da 028: é a suíte de validação, que a cláusula
+*Verify/review antes de ship* exige verde, presa a um bundle vivo que este branch
+removeu de propósito.
+
+- [X] T015 Desacoplar `tests/validate_attestation_emitter_contract.py` de um work item vivo: substituir a constante `WORK_ID` hardcoded (`feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25`, bundle ausente neste branch) por descoberta determinística — o primeiro diretório de `.grill/work-items/` cujo id tenha ativação em `.grill/gauntlet.yaml` — mantendo o literal como fallback para as classes que só usam o id como string em cadeias mintadas, de modo que `CliRefusesBeforeReading` volte a obter `ARTEFACT_UNREADABLE`/`WORKER_EXECUTION_UNPROVEN` em vez de `WORK-ITEM-MISSING` per SC-003, Constitution "Verify/review antes de ship" (contradicts)
