@@ -170,6 +170,13 @@
         "reason": "análise cruzada: cobertura 100%, zero críticos, P1 remediado com sucessão de tasks",
         "state": "complete",
         "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "invocando /grill-partition",
+        "state": "in-progress",
+        "step": "partition"
       }
     ],
     "chain_stale": [],
@@ -195,7 +202,7 @@
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
-      "partition": "pending",
+      "partition": "in-progress",
       "plan": "complete",
       "review": "pending",
       "ship": "pending",
