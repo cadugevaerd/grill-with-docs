@@ -23,9 +23,16 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "plan": "se-907ddfc6ee09f11e0a7237e113cce7449b9f1c5b74c92d302f7b14b25fb23964",
       "specify": "se-d51b3e5726a35f3cf2f5f22666c0946e6e3a4d931613ca4dcce97a917df1f904"
     },
     "attested_outputs": {
+      "plan": {
+        "output_sha256": "sha256:a7777efa5bbeb8ee5e4469d32928c49310b88d0b979dca773b090e573b514137",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
       "specify": {
         "output_sha256": "sha256:fd1197640f706211a1408e9e8c3857757a220dd28624752f5026daedea2b4049",
         "provenance": "current-generation",
@@ -52,9 +59,28 @@
         "reason": "spec 028 da FASE-001 conduzida por /speckit-specify e atestada",
         "state": "complete",
         "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "invocando /speckit-plan",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/plan.md",
+            "sha256": "a7777efa5bbeb8ee5e4469d32928c49310b88d0b979dca773b090e573b514137"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "plan.md com research, data-model, dois contratos e quickstart; Constitution Check sem violação",
+        "state": "complete",
+        "step": "plan"
       }
     ],
-    "current_step": "plan",
+    "current_step": "checklist",
     "execution_branch": "cadugevaerd/chore-add-ponytail",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -77,7 +103,7 @@
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
-      "plan": "pending",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
