@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v5.3.4
+# Grill with Docs v5.4.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -71,6 +71,8 @@ Sem `--work-id`, o core gera uma identidade collision-resistant. `--work-id` exp
 ## Dependências e backlog
 
 O preflight é declarado em `assets/dependencies.json` e executado por `scripts/ensure_dependencies.py`: Python >=3.10, `git`, Spec Kit (CLI >=0.11.2, scaffold `.specify/` e as extensões `git`, `agent-assign`, `bugfix`, `verify-review-ship`) e `backlogctl`. O core nunca baixa bytes: cada instalação é delegada a quem é dono do artefato — `uv`, `specify` e o instalador verificado do plugin `backlog` — e a verificação é por versão resolvida, nunca por hash de tarball.
+
+O plugin `ponytail` (`DietrichGebert/ponytail`, mínimo 4.9.0) integra a stack oficial como `harness-plugin`, com `required: true` e a mesma semântica de obrigatoriedade do Spec Kit — é o modo de trabalho oficial do projeto. A detecção lê somente o registro de plugins em disco do runtime ativo, sem subprocesso: no Claude Code, `installed_plugins.json`; no Codex, o cache de plugins; o resultado é `present`, `outdated`, `missing` ou `undetermined`. Com `--allow-install` a instalação é delegada à CLI do harness — `claude plugin marketplace add DietrichGebert/ponytail` seguido de `claude plugin install ponytail@ponytail`, ou os equivalentes `codex plugin marketplace add`/`codex plugin add` —, nunca pelo core, e a confiança nesse marketplace de terceiros é declarada no manifesto. No Codex, "instalado" não prova "habilitado": a ativação depende de configuração própria do runtime que a detecção não cobre. Os hooks do ponytail exigem `node` no PATH para ativação automática; sem ele as skills continuam funcionando.
 
 Duas das extensões exigidas (`bugfix`, `verify-review-ship`) vivem no catálogo `community` do Spec Kit, que é discovery-only. Instalar por `--from <archive-url>` exige confirmação interativa de fonte não confiável, que um instalador automatizado não deve responder no lugar do humano. Por isso `--allow-install` registra o catálogo community como confiável em `.specify/extension-catalogs.yml` (`install_allowed: true`) e instala pelo nome. Essa é uma decisão de confiança explícita, versionada no repositório e revisável: a partir dela, `specify extension add` passa a instalar extensões de terceiros desse catálogo sem novo aviso.
 
