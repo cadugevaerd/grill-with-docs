@@ -351,6 +351,13 @@
         "reason": "REVIEW APPROVE: zero Critical/Important; 3 minors documentados",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "ship aguarda autorização humana (HOLD-V4-01)",
+        "state": "in-progress",
+        "step": "ship"
       }
     ],
     "chain_stale": [],
@@ -379,7 +386,7 @@
       "partition": "complete",
       "plan": "complete",
       "review": "complete",
-      "ship": "pending",
+      "ship": "in-progress",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
