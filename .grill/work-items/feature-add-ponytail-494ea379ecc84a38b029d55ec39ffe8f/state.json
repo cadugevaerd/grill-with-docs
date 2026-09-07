@@ -25,6 +25,7 @@
     "attested_executions": {
       "analyze": "se-3aec9ec3d46b66cbf8418cbb7f1020e4845ab76df3ed056486b77e5d7095ce9b",
       "checklist": "se-f07ce3116ad45da9d519750b93fbe34f84ec002c01ce4f4e9609b9a7dcada87b",
+      "implement-parallel": "se-1404b81e194af9a635d9ab5b2dffcad840a59c05df1227fad28cfb5785019eb0",
       "partition": "se-3f81ae573fb44a0cca396e180d8a8f4b5c9b9163eda2849e163cc98e44306268",
       "plan": "se-1137d2b4434f7f4b4bc15f778e1bb099798279216e9a3a26adc22bfeb8eb1dd7",
       "specify": "se-679a75475754ed4a7b8dfbef96e8d38f538e809037fba507a5441e9a508f9975",
@@ -42,6 +43,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:4af4b2466bd4f91d3aa8b974b76c934b92dd8348256c1f1ac63427f282ca32cf",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "step_id": "implement-parallel"
       },
       "partition": {
         "output_sha256": "sha256:a93153c409478471e6b4394790016c6a719706833b3211993e5aab4f2cf287a1",
@@ -189,9 +196,21 @@
         "reason": "invocando /grill-implement-parallel em run-af616cae18582defbb451298",
         "state": "in-progress",
         "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/028-add-ponytail/tasks.md",
+            "sha256": "4af4b2466bd4f91d3aa8b974b76c934b92dd8348256c1f1ac63427f282ca32cf"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-add-ponytail",
+        "reason": "run-c51c59be87f9b89a6b41f1e9 COMPLETE: 2 waves, 5 workers convergidos (sonnet, tier medium), T001-T013 reconciliados por sidecar, T014 pelo leader; worktrees removidos após convergência",
+        "state": "complete",
+        "step": "implement-parallel"
       }
     ],
-    "current_step": "implement-parallel",
+    "current_step": "converge",
     "execution_branch": "cadugevaerd/chore-add-ponytail",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -212,7 +231,7 @@
       "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
-      "implement-parallel": "in-progress",
+      "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
       "review": "pending",
