@@ -1,7 +1,7 @@
 # FASE-001 — Ponytail na stack oficial: detecção, instalação delegada e documentação
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: ponytail, stack oficial, preflight, dono do artefato, registro de plugins do harness, kind de dependência, documentação do agente, decisão de confiança
 - ADRs: ADR-0001, ADR-0002, ADR-0003, ADR-0004

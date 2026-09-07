@@ -1,0 +1,8 @@
+{
+  "authorized_by": "carlos.araujo@civilmaster.com.br",
+  "content_sha256": "sha256:7e7295697f3027ea7adbdcab747c5e85c8ed060237a8b33190d952d55880d565",
+  "decision": "APPROVED",
+  "receipt_ref": "resposta literal do usuario nesta sessao (2026-09-07): \"Sim, abandonar\" a run run-af616cae18582defbb451298, substituida por run-c51c59be87f9b89a6b41f1e9 apos grant malformado; trabalho transportado por cherry-pick e integrado em main 5a37b42",
+  "schema": "human-authorization/v1",
+  "scope": "run-af616cae18582defbb451298"
+}

@@ -3,7 +3,7 @@
 - execution-order: FASE-001
 
 ## FASE-001 — Ponytail na stack oficial: detecção, instalação delegada e documentação
-- state: ready-for-specify
+- state: complete
 - objetivo: `preflight`/`init` detectam o plugin ponytail no runtime ativo (Claude Code ou Codex), nomeiam a remediação quando ausente ou desatualizado, instalam pela CLI do harness sob `--allow-install`; e este repositório documenta o ponytail como parte da stack em `CLAUDE.md` e num `AGENTS.md` novo, com ativação versionada em `.claude/settings.json`.
 - scope-in: kind `harness-plugin` em `dependencies.json`/`ensure_dependencies.py`; entrada `ponytail` (`required: true`, `min: 4.9.0`, `install` por runtime, marketplace `DietrichGebert/ponytail`); testes por runtime em `tests/validate_dependencies_contract.py`; menção em `SKILL.md` e `README.md`; `CLAUDE.md`, `AGENTS.md` e `.claude/settings.json` deste repositório; bump SemVer minor com os oito pontos de versão.
 - scope-out: escrita em `CLAUDE.md`/`AGENTS.md`/`.claude/settings.json` de projeto consumidor; verificação de plugin habilitado; gate incondicional; detecção via CLI do harness; suporte a outros harnesses do ponytail (Copilot, Cursor etc.).
