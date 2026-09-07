@@ -1,0 +1,8 @@
+{
+  "authorized_by": "carlos.araujo@civilmaster.com.br",
+  "content_sha256": "sha256:c5f567408cb29dcd64abbef0f1ee6a8806ad1c8532771c6d76ca2c6985c610b4",
+  "decision": "APPROVED",
+  "receipt_ref": "instrucao literal do usuario nesta sessao apos GOAL-HOLD HOLD-V4-01: \"ship\" (2026-09-07), sobre review.md APPROVE em 630d04d; autoriza invocar /speckit-verify-review-ship-ship (merge --no-ff em main, push, release 5.4.0)",
+  "schema": "human-authorization/v1",
+  "scope": "ship"
+}

@@ -28,8 +28,31 @@ if str(SCRIPTS) not in sys.path:
 from grill_core import attestation as A  # noqa: E402
 from grill_core import workflow_versions as WV  # noqa: E402
 
-#: The work item this contract exercises the CLI against; it exists in-tree.
-WORK_ID = "feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25"
+def _activated_work_id() -> str:
+    """The work item this contract exercises the CLI against.
+
+    Discovered, never hardcoded: a bundle named in the source can be closed and
+    removed from the tree, and the CLI then answers ``WORK-ITEM-MISSING`` before
+    the refusal under test is ever reached. Any in-tree bundle with a Gauntlet
+    activation serves, because the two CLI cases only need the verb to get past
+    the work-item lookup; the literal below is the fallback for a checkout with
+    no activation at all, where the CLI refusal is still a refusal.
+    """
+    import json
+    activations: set[str] = set()
+    try:
+        document = json.loads((REPO / ".grill/gauntlet.yaml").read_text(encoding="utf-8"))
+        activations = set(document.get("activations", {}))
+    except (OSError, ValueError, AttributeError):
+        pass
+    items = REPO / ".grill/work-items"
+    for entry in sorted(items.iterdir()) if items.is_dir() else []:
+        if entry.is_dir() and entry.name in activations:
+            return entry.name
+    return "feature-attestation-emitter-2a51feec6ce84a7fb1b7ebe1b6c1aa25"
+
+
+WORK_ID = _activated_work_id()
 
 
 def read_bytes_of(path: str) -> bytes:

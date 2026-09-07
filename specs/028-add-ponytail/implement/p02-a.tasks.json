@@ -1,0 +1,63 @@
+{
+  "worker": "p02-a",
+  "feature": "028-add-ponytail",
+  "completed": ["T005", "T006", "T007", "T008"],
+  "tasks": {
+    "T005": {
+      "status": "done",
+      "summary": "HarnessPluginClaudeDetection: present (versao e source == installed_plugins.json), outdated (reason cita 4.9.0 e 4.8.0), missing por arquivo ausente e por chave ausente (remediation exata 'claude plugin marketplace add DietrichGebert/ponytail && claude plugin install ponytail@ponytail'), undetermined por JSON invalido (reason comeca com 'registro de plugins ilegivel:', sem chave remediation), tools.calls == [] apos detect(), e CLAUDE_CONFIG_DIR relocando a raiz do registro.",
+      "tests_added": [
+        "test_present_reads_version_and_source_from_the_installed_plugins_registry",
+        "test_outdated_names_the_minimum_in_the_reason",
+        "test_missing_when_the_registry_file_is_absent",
+        "test_missing_when_the_registry_exists_but_the_key_is_absent",
+        "test_undetermined_when_the_registry_is_invalid_json",
+        "test_detect_never_spawns_a_subprocess_for_the_harness_plugin_kind",
+        "test_claude_config_dir_relocates_the_registry_root"
+      ]
+    },
+    "T006": {
+      "status": "done",
+      "summary": "HarnessPluginCodexDetection: present, maior versao entre diretorios 4.8.0/4.9.0 vence, versao do JSON prevalece sobre nome do diretorio, missing por cache ausente (remediation exata dos dois comandos codex), undetermined por plugin.json ilegivel, e CODEX_HOME relocando a raiz do cache.",
+      "tests_added": [
+        "test_present_reads_version_and_source_from_the_plugin_json",
+        "test_the_highest_version_directory_wins",
+        "test_the_version_declared_in_json_prevails_over_the_directory_name",
+        "test_missing_when_the_cache_directory_is_absent",
+        "test_undetermined_when_the_plugin_json_is_unreadable",
+        "test_codex_home_relocates_the_cache_root"
+      ]
+    },
+    "T007": {
+      "status": "done",
+      "summary": "HarnessPluginInstallDelegation: com allow_install a sequencia declarada de install_by_runtime roda na ordem exata para claude e para codex (filtrando tools.calls por argv[0] em claude/codex); sem allow_install nenhuma chamada; falha no primeiro comando declarado interrompe com status FAILED e commands de tamanho 1, e o detect() seguinte continua reportando missing; entrada undetermined (registro ilegivel) nunca aparece em payload['installed'].",
+      "tests_added": [
+        "test_allowed_install_runs_exactly_the_declared_claude_sequence_in_order",
+        "test_allowed_install_runs_exactly_the_declared_codex_sequence_in_order",
+        "test_without_allow_install_no_harness_process_ever_runs",
+        "test_a_failed_first_command_stops_the_entry_as_failed_and_the_report_stays_missing",
+        "test_an_undetermined_ponytail_never_appears_in_installed"
+      ]
+    },
+    "T008": {
+      "status": "done",
+      "summary": "HarnessPluginInvarianceAndManifest: relatorio dos kinds pre-existentes e identico com e sem a entrada ponytail (deep copy via json roundtrip, comparacao excluindo o item ponytail); load_manifest aceita o manifesto bundled e recusa install_by_runtime com chave fora de RUNTIMES, argv nao-lista, e harness-plugin sem 'plugin' ou sem 'marketplace' (ManifestError nos tres casos); preflight com ponytail ausente lista 'ponytail' em missing_required com verdict MISSING-DEPENDENCY; GRILL_SKIP_DEPENDENCIES=1 devolve SKIPPED.",
+      "tests_added": [
+        "test_every_pre_existing_kind_reports_identically_with_or_without_ponytail",
+        "test_load_manifest_accepts_the_bundled_manifest",
+        "test_load_manifest_rejects_a_runtime_key_outside_runtimes",
+        "test_load_manifest_rejects_a_non_list_argv_in_install_by_runtime",
+        "test_load_manifest_rejects_a_harness_plugin_entry_missing_plugin_or_marketplace",
+        "test_preflight_lists_ponytail_as_missing_required_with_missing_dependency_verdict",
+        "test_grill_skip_dependencies_short_circuits_to_skipped"
+      ]
+    }
+  },
+  "fixed_before_starting": {
+    "test_install_runs_only_manifest_commands_and_expands_the_placeholder": "A asserção antiga ('not any(call[0] == claude)') quebrava com o novo installer harness-plugin. Reescrita para: todo call cujo argv[0] seja claude/codex precisa ter argv[:2] == ['claude','plugin'] ou ['codex','plugin'] e estar em MODULE.declared_install(entry, 'claude') para algum entry do manifesto; mantida a recusa de ['codex','exec',...] e de invocacao agent-style (argv[1] em ('-p','--print') ou len(argv)==1)."
+  },
+  "checks": [
+    "python3 tests/validate_dependencies_contract.py -> OK (63 tests)",
+    "run_validators: tests/validate_dependencies_contract.py individualmente -> exit 0; a suite completa (run_validators.py) para na primeira falha, que e tests/validate_attestation_emitter_contract.py (2 failures, codigo WORK-ITEM-MISSING vs ARTEFACT_UNREADABLE) -- pre-existente, fora do meu grant, diff confirma que so tests/validate_dependencies_contract.py foi tocado por mim; tests/validate_distribution.py rodou isoladamente com exit 0 (versao ja alinhada nesta worktree)"
+  ]
+}

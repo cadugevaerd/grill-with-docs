@@ -47,6 +47,15 @@ A ordem canônica de cada versão vive em `grill_core/workflow_versions.py`, que
 
 Subcomandos auxiliares: `preflight ROOT --runtime claude|codex [--allow-install] [--skip-backlog]` e `backlog-sync ROOT --work-id ID [--apply] [--db PATH]`.
 
+## Ponytail na stack
+
+O plugin [ponytail](https://github.com/DietrichGebert/ponytail) é o modo de trabalho oficial deste projeto (lazy senior dev: YAGNI, stdlib primeiro, menor diff correto) e faz parte da stack oficial desde a 5.4.0, declarado em `dependencies.json` como `kind: harness-plugin`, `required: true`, mínimo `4.9.0`.
+
+- **O que o preflight verifica**: só instalação e versão, lendo o registro em disco do runtime ativo sem subprocesso — Claude Code em `~/.claude/plugins/installed_plugins.json` (chave `ponytail@ponytail`), Codex em `~/.codex/plugins/cache/ponytail/ponytail/<versão>/`. Resultado `present|outdated|missing|undetermined`; registro ilegível é `undetermined`, nunca `missing`. "Instalado" não prova "habilitado": no Codex não há registro estruturado para isso, e no Claude o `enabledPlugins` não é lido.
+- **Como instalar**: Claude Code `claude plugin marketplace add DietrichGebert/ponytail && claude plugin install ponytail@ponytail`; Codex `codex plugin marketplace add DietrichGebert/ponytail && codex plugin add ponytail@ponytail`. Com `--allow-install` o preflight executa exatamente essa sequência pela CLI do harness (escopo `user`); o core nunca baixa bytes. A confiança nesse marketplace de terceiro está declarada no manifesto e é revisável no diff.
+- **Neste repositório**: `.claude/settings.json` versionado habilita `ponytail@ponytail` para o projeto no Claude Code; `AGENTS.md` leva a mesma seção e o texto de modo do ponytail para o Codex.
+- **Hooks exigem `node` no PATH** para a ativação automática; sem `node` as skills continuam disponíveis e a ativação fica muda. Não é dependência declarada, só documentada.
+
 ## Triagem e rotas
 
 `triage ROOT --report LAUDO.md --route bugfix|hotfix|feature|module --severity ... [--apply]` é pré-ciclo como o `preflight` e sela a decisão de rota em `.grill/triage/<id>.json`. O core **não classifica linguagem natural** — quem interpreta o problema é a skill `code-debug`, que emite o laudo; o core verifica que o laudo declara `causa raiz comprovada` e que a evidência exigida pela rota está presente. Sem isso, `ROOT-CAUSE-UNPROVEN` e nenhuma rota abre.
@@ -113,3 +122,6 @@ Os três headings existem porque derivavam silenciosamente dos manifests; o vali
 
 - **`EXIT_BLOCKED=2` com payload ≠ exit 2 puro do argparse**: argparse usa exit code 2 para os próprios erros de parsing. Um contrato de CLI que espera `EXIT_BLOCKED=2` precisa checar o payload, não só o código de saída — senão confunde bloqueio legítimo com erro de parsing (`specs/025-status-timeout-false-positive/tasks.md`, T005/T006).
 - **Estado Git live resolve uma vez por worktree, não uma vez por work item**: comandos que iteram work items e precisam de estado Git (branches, status) devem resolver esse estado uma vez por worktree e passá-lo por parâmetro, não reconsultar por item — custo O(items) de subprocessos Git é o bug a evitar (`plugin/skills/grill-with-docs/scripts/grill_core/grill_status.py`).
+- **Stash com untracked desvia o `project_id`**: `store.project_identity` é o hash dos root commits de `git rev-list --max-parents=0 --all`, e `git stash push -u` cria um commit sem pai para os untracked, visível por `refs/stash`. Uma stash esquecida faz `gauntlet-run` recusar com `PROJECT-IDENTITY-DIVERGENCE` e sela a campanha de atestação numa identidade falsa, sem verbo de re-selagem no core (work item `feature-add-ponytail`, commit `3f718f7`). Antes de ativar o Gauntlet: `git stash list` vazio, ou drop com backup por SHA.
+- **`gauntlet-worker-declare --files` é uma flag por arquivo** (`action=append`): uma única string com vírgulas vira um grant de um token só e `gauntlet-converge` recusa o worker com `GRANT-SCOPE-VIOLATION` mesmo que ele tenha escrito exatamente os arquivos do nó. Worker terminal não é redeclarável; o remédio é uma run nova no HEAD corrente (`run-af616…` → `run-c51c59be…`).
+- **Validador não fixa work item vivo por nome**: `tests/validate_attestation_emitter_contract.py` apontava por literal um bundle de `.grill/work-items/` que foi removido ao encerrar o item, e passou a reprovar com `WORK-ITEM-MISSING` antes da recusa sob teste. Resolver o id por descoberta (`.grill/gauntlet.yaml` → primeiro bundle ativado), com o literal só como fallback (T015 da spec 028, commit `79fd397`).

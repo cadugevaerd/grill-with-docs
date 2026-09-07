@@ -220,6 +220,27 @@
           "${BACKLOG_INSTALLER}"
         ]
       ]
+    },
+    {
+      "id": "ponytail",
+      "kind": "harness-plugin",
+      "required": true,
+      "plugin": "ponytail",
+      "marketplace": "ponytail",
+      "marketplace_source": "DietrichGebert/ponytail",
+      "min": "4.9.0",
+      "owner": "plugin ponytail",
+      "reason": "modo de trabalho oficial do projeto (lazy senior dev); hooks exigem node no PATH para ativacao automatica",
+      "install_by_runtime": {
+        "claude": [
+          ["claude", "plugin", "marketplace", "add", "DietrichGebert/ponytail"],
+          ["claude", "plugin", "install", "ponytail@ponytail"]
+        ],
+        "codex": [
+          ["codex", "plugin", "marketplace", "add", "DietrichGebert/ponytail"],
+          ["codex", "plugin", "add", "ponytail@ponytail"]
+        ]
+      }
     }
   ]
 }

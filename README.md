@@ -1,6 +1,6 @@
 # grill-with-docs
 
-**v5.3.4 · MIT**
+**v5.4.0 · MIT**
 
 Plugin de planejamento arquitetural e entrega **Delivery First**: entrevista decisões, mantém work items isolados, valida a Constituição e produz evidência auditável. O plugin é plan-only para feature/fix (`PLAN_ONLY_STOP`); hotfix/incident segue uma faixa rápida, explícita e fail-closed (`HOTFIX-GO`). Auditoria e reconciliação não substituem o ship externo.
 
@@ -36,7 +36,7 @@ python3 "$CORE" status "$PWD" --format markdown
 
 O formato padrão é JSON para automações. `--format markdown` produz a resposta humana canônica: `all good` quando não há pendências ou uma tabela estável de work items pendentes.
 
-O `init` fixa o `WORKFLOW.md` project-wide e reporta o estado das dependências externas (Spec Kit e extensões, `backlogctl`). `--runtime claude|codex` é obrigatório e seleciona o harness da sessão, independentemente do default salvo pelo Spec Kit. Por padrão ele apenas relata; `--allow-install` autoriza a materialização da integração e extensões nesse harness sem remover o outro, e `--require-dependencies` torna o gate fail-closed. O plugin nunca baixa binários por conta própria.
+O `init` fixa o `WORKFLOW.md` project-wide e reporta o estado das dependências externas (Spec Kit e extensões, `backlogctl` e, desde a 5.4.0, o plugin `ponytail` como `harness-plugin`, mínimo 4.9.0, detectado pelo registro em disco do harness ativo e instalado pela CLI do harness sob `--allow-install`; no Codex, "instalado" não prova "habilitado"). `--runtime claude|codex` é obrigatório e seleciona o harness da sessão, independentemente do default salvo pelo Spec Kit. Por padrão ele apenas relata; `--allow-install` autoriza a materialização da integração e extensões nesse harness sem remover o outro, e `--require-dependencies` torna o gate fail-closed. O plugin nunca baixa binários por conta própria.
 
 Feature/fix terminam em `PLAN_ONLY_STOP`; a implementação deve ocorrer fora do plugin. Para incidentes, use os comandos de hotfix documentados em `skills/grill-with-docs/SKILL.md`, sempre com reprodução, evidência, teste de correção, rollback e evidência constitucional.
 

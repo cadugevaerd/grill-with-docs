@@ -1,0 +1,26 @@
+{
+  "worker": "p02-b",
+  "feature": "028-add-ponytail",
+  "completed": ["T009", "T011", "T013"],
+  "tasks": {
+    "T009": {
+      "status": "done",
+      "summary": "VERSION atualizado de 5.3.4 para 5.4.0 em tests/validate_distribution.py, sem outras mudanças no arquivo."
+    },
+    "T011": {
+      "status": "done",
+      "summary": "Heading atualizado para '# Grill with Docs v5.4.0' (única ocorrência confirmada). Parágrafo novo adicionado em 'Dependências e backlog', logo após o parágrafo do preflight/dependencies.json, declarando o ponytail como harness-plugin oficial, detecção sem subprocesso, instalação delegada via CLI do harness sob --allow-install, limite 'instalado' != 'habilitado' no Codex, e a exigência de node no PATH para ativação automática dos hooks."
+    },
+    "T013": {
+      "status": "done",
+      "summary": ".claude/settings.json criado com {\"enabledPlugins\": {\"ponytail@ponytail\": true}}, 2 espaços de indentação, newline final. Arquivo não está em .gitignore (git check-ignore retornou exit 1); adicionado normalmente sem -f."
+    }
+  },
+  "checks": [
+    "python3 -c \"import json;json.load(open('.claude/settings.json'))\" -> OK",
+    "grep -c \"Grill with Docs v\" plugin/skills/grill-with-docs/SKILL.md -> 1",
+    "grep -n \"5.4.0\" tests/validate_distribution.py -> linha 8",
+    "python3 tests/validate_distribution.py (informativo, não-gate) -> falha em outros pontos de versão (manifestos), fora do meu escopo"
+  ],
+  "deviations": []
+}

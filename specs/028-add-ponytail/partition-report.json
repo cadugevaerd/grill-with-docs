@@ -1,0 +1,90 @@
+{
+  "deferred_to_leader": [
+    "T014"
+  ],
+  "dispatchable_tasks": 13,
+  "feature": "028-add-ponytail",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "id": "p01-a",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T002",
+        "T003",
+        "T004"
+      ]
+    },
+    {
+      "id": "p01-b",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T001"
+      ]
+    },
+    {
+      "id": "p02-a",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T005",
+        "T006",
+        "T007",
+        "T008"
+      ]
+    },
+    {
+      "id": "p02-b",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T009",
+        "T011",
+        "T013"
+      ]
+    },
+    {
+      "id": "p02-c",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T010",
+        "T012"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "achieved_groups": 2,
+      "phase": 1,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 4,
+      "title": "Fundação — manifesto e detector",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 3,
+      "phase": 2,
+      "reasons": [],
+      "requested_groups": 3,
+      "tasks": 9,
+      "title": "Cobertura e distribuição",
+      "unmapped_tasks": 0
+    }
+  ],
+  "requested_groups": 3,
+  "schema": "grill-partition-report/v1",
+  "tasks": 14,
+  "unmapped_task_ids": [],
+  "verdict": "PARTITION-DEGRADED"
+}
