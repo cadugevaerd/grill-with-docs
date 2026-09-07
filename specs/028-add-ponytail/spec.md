@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: Handoff `FASE-001-SPECIFY-HANDOFF.md` do work item `feature-add-ponytail-d8c0bd7e8ffd4442a806b2e1067ed06c`
+**Input**: Handoff `FASE-001-SPECIFY-HANDOFF.md` do work item `feature-add-ponytail-494ea379ecc84a38b029d55ec39ffe8f`
 
 ## User Scenarios & Testing *(mandatory)*
 

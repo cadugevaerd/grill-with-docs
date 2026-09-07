@@ -1,5 +1,50 @@
 {
   "activations": {
+    "feature-add-ponytail-494ea379ecc84a38b029d55ec39ffe8f": {
+      "catalog": {
+        "document_sha256": "c968445f1ddaad2a299f6e3255ffe387554368c6b5600fe5082a166f43624fb8",
+        "id": "grill-v4-local-skills",
+        "resolution_sha256": "sha256:410d5e0bb0920e98558de5e6c399f3a37905a37f0744452f108372c6fdeb4f26",
+        "trusted_asset_document_sha256": "8d0cbaa044a67599b053eb4d8f07e81fa2537fece290f643b24f616dade91048"
+      },
+      "limits": {
+        "max_workers": 3,
+        "stall_minutes": 15
+      },
+      "runtime": {
+        "adapter": "claude-code-skill/v1",
+        "id": "claude"
+      },
+      "tier_policy": {
+        "adapter": "claude-code-skill/v1",
+        "minimum_by_step": {
+          "analyze": "large",
+          "checklist": "small",
+          "converge": "medium",
+          "implement-parallel": "medium",
+          "partition": "medium",
+          "plan": "large",
+          "review": "large",
+          "ship": "large",
+          "specify": "large",
+          "tasks": "medium",
+          "verify": "medium"
+        },
+        "promotions": [],
+        "supplemental": {
+          "markdown-maintenance": "small"
+        }
+      },
+      "work_item": {
+        "document_sha256": "f3d2cf564fbbb5a16dbdf29781879ec2b15fb477cb48f59468126b7c1e188b49"
+      },
+      "work_item_id": "feature-add-ponytail-494ea379ecc84a38b029d55ec39ffe8f",
+      "workflow": {
+        "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+        "sha256": "d2c4ea0806ea5e8235678582154aedaeb0ba686641bd836934bffe133db60ab5",
+        "version": "v4"
+      }
+    },
     "feature-add-ponytail-d8c0bd7e8ffd4442a806b2e1067ed06c": {
       "catalog": {
         "document_sha256": "c968445f1ddaad2a299f6e3255ffe387554368c6b5600fe5082a166f43624fb8",

@@ -19,11 +19,11 @@
       "evidence": [
         "WORK-ITEM.json",
         "state.json#work_id",
-        "git status: único caminho novo é .grill/work-items/feature-add-ponytail-d8c0bd7e8ffd4442a806b2e1067ed06c/"
+        "git status: único caminho novo é .grill/work-items/feature-add-ponytail-494ea379ecc84a38b029d55ec39ffe8f/"
       ],
       "heading": "Work item isolado e ownership",
       "id": "work-item-isolado-e-ownership",
-      "justification": "Bundle próprio com identidade imutável feature-add-ponytail-d8c0bd7e8ffd4442a806b2e1067ed06c, em worktree e branch dedicadas (cadugevaerd/chore-add-ponytail). Nenhum byte escrito fora do bundle nem em outro work item.",
+      "justification": "Bundle próprio com identidade imutável feature-add-ponytail-494ea379ecc84a38b029d55ec39ffe8f, em worktree e branch dedicadas (cadugevaerd/chore-add-ponytail). Nenhum byte escrito fora do bundle nem em outro work item.",
       "status": "PASS"
     },
     {

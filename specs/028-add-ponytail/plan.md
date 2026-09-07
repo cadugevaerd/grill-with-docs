@@ -2,7 +2,7 @@
 
 **Branch**: `cadugevaerd/chore-add-ponytail` | **Date**: 2026-09-07 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/028-add-ponytail/spec.md`; HOW selado no work item `feature-add-ponytail-d8c0bd7e8ffd4442a806b2e1067ed06c` (`PLAN-CONTEXT.md`, ADR-0001..ADR-0004).
+**Input**: Feature specification from `/specs/028-add-ponytail/spec.md`; HOW selado no work item `feature-add-ponytail-494ea379ecc84a38b029d55ec39ffe8f` (`PLAN-CONTEXT.md`, ADR-0001..ADR-0004).
 
 ## Summary
 
@@ -35,7 +35,7 @@ Declarar o plugin ponytail como dependência obrigatória do preflight, com um k
 | Cláusula | Estado | Evidência |
 |---|---|---|
 | Evidência antes de afirmação | PASS | Caminhos de registro e CLIs verificados em sessão (ADR-0003, ADR-0004); research.md cita fonte por decisão |
-| Work item isolado e ownership | PASS | Tudo sob `feature-add-ponytail-d8c0bd7e8ffd4442a806b2e1067ed06c`, branch `cadugevaerd/chore-add-ponytail` |
+| Work item isolado e ownership | PASS | Tudo sob `feature-add-ponytail-494ea379ecc84a38b029d55ec39ffe8f`, branch `cadugevaerd/chore-add-ponytail` |
 | Feature/fix plan-only | PASS | Este plano é artefato da etapa `plan` do ciclo executor; o PLAN_ONLY_STOP da entrevista já foi atravessado por ato humano (`/goal`) |
 | Sequência obrigatória do desenvolvimento | PASS | `specify` atestada e selada (`.grill/attestations/028-specify.json`); `plan` em andamento |
 | Verify/review antes de ship | PASS | Sem ship neste plano; ordem canônica mantida |

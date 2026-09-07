@@ -78,7 +78,7 @@ reprova em `README.md` até a Phase 3.
 conferência. Tarefa de evidência de coordenador — `partition` a devolve em
 `deferred_to_leader` e nenhum worker a executa.
 
-- [ ] T014 [US3] Acrescentar a seção `## Ponytail na stack` em CLAUDE.md (o que é, o que o preflight verifica — instalado e ≥ 4.9.0, não "habilitado" —, comandos por harness, hooks exigem `node`), criar AGENTS.md com a mesma seção mais o texto de modo do ponytail (fonte `AGENTS.md` do plugin 4.9.0, MIT), sincronizar o heading `**v5.4.0` e uma frase sobre o ponytail em README.md, abrir a entrada `## 5.4.0` em CHANGELOG.md, e registrar a conferência dos oito pontos de distribuição em `.grill/work-items/feature-add-ponytail-d8c0bd7e8ffd4442a806b2e1067ed06c/AUDIT.md` (FR-011, FR-012, FR-014, FR-015, SC-005, Research R7, R9)
+- [ ] T014 [US3] Acrescentar a seção `## Ponytail na stack` em CLAUDE.md (o que é, o que o preflight verifica — instalado e ≥ 4.9.0, não "habilitado" —, comandos por harness, hooks exigem `node`), criar AGENTS.md com a mesma seção mais o texto de modo do ponytail (fonte `AGENTS.md` do plugin 4.9.0, MIT), sincronizar o heading `**v5.4.0` e uma frase sobre o ponytail em README.md, abrir a entrada `## 5.4.0` em CHANGELOG.md, e registrar a conferência dos oito pontos de distribuição em `.grill/work-items/feature-add-ponytail-494ea379ecc84a38b029d55ec39ffe8f/AUDIT.md` (FR-011, FR-012, FR-014, FR-015, SC-005, Research R7, R9)
 
 **Checkpoint**: os oito pontos concordam; `python3 tests/run_validators.py`
 fecha em exit 0; `grep -n "Ponytail na stack" CLAUDE.md AGENTS.md` acha os dois.
