@@ -29,6 +29,7 @@
       "implement-parallel": "se-22b5672f7e2ab4e9d4a8639646b167d4a29b229a6ba83a84dd6545635782459b",
       "partition": "se-fa869ddf98235e1ade598d8d12cc8895787c21958c840f2baa9899cfd94cfe31",
       "plan": "se-eae6c12c6a73b7939974be61f0ad03c53b69ac177b551aed835b455e4f86e400",
+      "review": "se-337782719ee7fe8e76eb967e3db798aaeb1f87eb78967a6f1ff86eb0c4859f92",
       "specify": "se-77584069d741f4fb680684f4c1a9b5cf3feec5f8dfa314864162e1e1d9a09c01",
       "tasks": "se-34d67224f4a8a1ce0c3f59093783f66a6256466fee8fe4ef45e5e6f1ff1613dc",
       "verify": "se-de99c9b5daf3c20377e7119fd093eaf573f695f926ca26daad53c4182cb1f4e3"
@@ -69,6 +70,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
         "step_id": "plan"
+      },
+      "review": {
+        "output_sha256": "sha256:9ae829d9e0480bdd7abb29377b6068d6ecf732debffdeaeff2ae2e4ad103a910",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "step_id": "review"
       },
       "specify": {
         "output_sha256": "sha256:d3e5e5e4d8fdca04325e586047937370dd42bfabb505bad2b54fa62a7e2bf756",
@@ -274,10 +281,29 @@
         "reason": "PASS: suíte 28 validadores/1380 testes exit 0; contrato 110; distribuição OK; preflight BOUND SGD; sem segredos",
         "state": "complete",
         "step": "verify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "review conduzido via /speckit-verify-review-ship-review",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/review.md",
+            "sha256": "9ae829d9e0480bdd7abb29377b6068d6ecf732debffdeaeff2ae2e4ad103a910"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "APPROVE: 0 Critical, 0 Important, 3 minors; fingerprint idêntico ao de converge/verify",
+        "state": "complete",
+        "step": "review"
       }
     ],
     "chain_stale": [],
-    "current_step": "review",
+    "current_step": "ship",
     "execution_branch": "cadugevaerd/chore-fix-backlog",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -301,7 +327,7 @@
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
-      "review": "pending",
+      "review": "complete",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
