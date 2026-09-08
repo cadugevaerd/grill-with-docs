@@ -1,8 +1,8 @@
 ## Verify Report
 
 Verdict: PASS
-Source fingerprint: tree d647adc7ec018384ff1bfe781f6ecaaa6e23b9e6465fb75fd35d04b6fce7771e / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00   (gate reports excluded)
-Converge: CONVERGED — `/speckit-converge` nesta sessão devolveu `converged` (zero findings; `tasks.md` byte-idêntico, 12/12 marcadas), atestado em `.grill/attestations/029-converge.json` e selado. Feature: `specs/029-backlog-bind-worktree`, branch `cadugevaerd/chore-fix-backlog`, HEAD `fb3166e`, worktree limpo.
+Source fingerprint: tree efc4e7c1a4eb5a6011afe82594ec0d7d09a4a8adf57dffdc468572ad5c284c0a / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00   (gate reports excluded)
+Converge: CONVERGED — `/speckit-converge` nesta sessão devolveu `converged` (zero findings; `tasks.md` byte-idêntico, 12/12 marcadas), atestado em `.grill/attestations/029-converge.json` e selado. Feature: `specs/029-backlog-bind-worktree`, branch `cadugevaerd/chore-fix-backlog`, HEAD `b5613ef` (revalidação após `docs(ship): capture approved project learnings`, que só acrescentou 1 bullet a `CLAUDE.md` § Project Learnings; gates reexecutados: distribution OK, contrato 110 OK, compile OK; suíte completa executada sobre a mesma árvore de código), worktree limpo.
 
 ### Operational Gates
 | Gate | Command | Result | Evidence | Validator |

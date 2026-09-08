@@ -1,8 +1,8 @@
 ## Review Report
 
 Verdict: APPROVE
-Source fingerprint: tree d647adc7ec018384ff1bfe781f6ecaaa6e23b9e6465fb75fd35d04b6fce7771e / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00
-                    (idêntico ao de Converge/Verify; `source-fingerprint.sh specs/029-backlog-bind-worktree` em HEAD `1160e35`; gate reports excluídos)
+Source fingerprint: tree efc4e7c1a4eb5a6011afe82594ec0d7d09a4a8adf57dffdc468572ad5c284c0a / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00
+                    (idêntico ao de Converge/Verify; `source-fingerprint.sh specs/029-backlog-bind-worktree` em HEAD `b5613ef`, revalidado após o commit de learnings; diff adicional = 1 bullet de prosa em CLAUDE.md, sem código; gate reports excluídos)
 
 Escopo revisado: `plugin/skills/grill-with-docs/scripts/backlog_bridge.py` (+44/−10), `tests/validate_backlog_contract.py` (+167, 11 testes novos + stub estendido), 4 manifests, `SKILL.md`, `session-protocol.md`, `README.md`, `CHANGELOG.md`, `CLAUDE.md`, `tests/validate_distribution.py`. Revisor único em fallback sequencial (leader, read-only); Orca disponível mas o diff é pequeno e sem paralelismo útil.
 

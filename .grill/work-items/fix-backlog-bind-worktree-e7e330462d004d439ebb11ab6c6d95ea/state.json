@@ -29,10 +29,10 @@
       "implement-parallel": "se-22b5672f7e2ab4e9d4a8639646b167d4a29b229a6ba83a84dd6545635782459b",
       "partition": "se-fa869ddf98235e1ade598d8d12cc8895787c21958c840f2baa9899cfd94cfe31",
       "plan": "se-eae6c12c6a73b7939974be61f0ad03c53b69ac177b551aed835b455e4f86e400",
-      "review": "se-337782719ee7fe8e76eb967e3db798aaeb1f87eb78967a6f1ff86eb0c4859f92",
+      "review": "se-89e2b3b8e423c314ef7debfaf724ea7444691d23355bb1ed5264b5bbad6f13df",
       "specify": "se-77584069d741f4fb680684f4c1a9b5cf3feec5f8dfa314864162e1e1d9a09c01",
       "tasks": "se-34d67224f4a8a1ce0c3f59093783f66a6256466fee8fe4ef45e5e6f1ff1613dc",
-      "verify": "se-de99c9b5daf3c20377e7119fd093eaf573f695f926ca26daad53c4182cb1f4e3"
+      "verify": "se-e3b48bc3bbfdb1fb4da46b2c8945a1922d8ea1d1bd023252f8c7b496a296340f"
     },
     "attested_outputs": {
       "analyze": {
@@ -72,9 +72,9 @@
         "step_id": "plan"
       },
       "review": {
-        "output_sha256": "sha256:9ae829d9e0480bdd7abb29377b6068d6ecf732debffdeaeff2ae2e4ad103a910",
+        "output_sha256": "sha256:2d88a03b12a18aeb15ca9776e504a15bd6df3fc8cf33f68784d5ee81bf243759",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
         "step_id": "review"
       },
       "specify": {
@@ -90,9 +90,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:e51fa081b304131d38b3ded28ddf1a8b1a91e9983e1eefc9824f63fb58493bc7",
+        "output_sha256": "sha256:a65f1ae45fb01d2996b2bef94840b85da5cc2835610463b937ccd015bda79dbf",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
         "step_id": "verify"
       }
     },
@@ -307,6 +307,36 @@
         "reason": "ship aguardando autorização humana (HOLD-V4-01); verify PASS e review APPROVE selados",
         "state": "in-progress",
         "step": "ship"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/verify.md",
+            "sha256": "a65f1ae45fb01d2996b2bef94840b85da5cc2835610463b937ccd015bda79dbf"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "revalidação após commit de learnings (CLAUDE.md, prosa); gates reexecutados verdes",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/029-verify.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/review.md",
+            "sha256": "2d88a03b12a18aeb15ca9776e504a15bd6df3fc8cf33f68784d5ee81bf243759"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "revalidação após commit de learnings; APPROVE mantido, diff adicional é prosa",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/attestations/029-review.json"
       }
     ],
     "chain_stale": [],
@@ -341,6 +371,20 @@
       "verify": "complete"
     },
     "superseded_outputs": {
+      "review": [
+        {
+          "attempt_id": "review-1",
+          "attestation": ".grill/attestations/029-review.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:9ae829d9e0480bdd7abb29377b6068d6ecf732debffdeaeff2ae2e4ad103a910",
+          "provenance": "current-generation",
+          "reason": "revalidação após commit de learnings; APPROVE mantido, diff adicional é prosa",
+          "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+          "step_execution_id": "se-337782719ee7fe8e76eb967e3db798aaeb1f87eb78967a6f1ff86eb0c4859f92",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-89e2b3b8e423c314ef7debfaf724ea7444691d23355bb1ed5264b5bbad6f13df"
+        }
+      ],
       "tasks": [
         {
           "attempt_id": "tasks-1",
@@ -353,6 +397,20 @@
           "step_execution_id": "se-552c82661ba3eace1e0aa6ca8a0457e4c234708c7a118c56a5e3adbb4b90808c",
           "step_id": "tasks",
           "superseded_by_step_execution_id": "se-34d67224f4a8a1ce0c3f59093783f66a6256466fee8fe4ef45e5e6f1ff1613dc"
+        }
+      ],
+      "verify": [
+        {
+          "attempt_id": "verify-1",
+          "attestation": ".grill/attestations/029-verify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:e51fa081b304131d38b3ded28ddf1a8b1a91e9983e1eefc9824f63fb58493bc7",
+          "provenance": "current-generation",
+          "reason": "revalidação após commit de learnings (CLAUDE.md, prosa); gates reexecutados verdes",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+          "step_execution_id": "se-de99c9b5daf3c20377e7119fd093eaf573f695f926ca26daad53c4182cb1f4e3",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-e3b48bc3bbfdb1fb4da46b2c8945a1922d8ea1d1bd023252f8c7b496a296340f"
         }
       ]
     },
