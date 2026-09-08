@@ -1,0 +1,22 @@
+{
+  "worker": "p01-a",
+  "feature": "029-backlog-bind-worktree",
+  "completed": ["T001", "T002", "T003"],
+  "tasks": {
+    "T001": {
+      "status": "done",
+      "summary": "worktree_candidates(root, tools) lista worktrees via 'git worktree list --porcelain' (um subprocesso via tools.run, cwd=root), realpath por linha 'worktree ', sem duplicatas, na ordem; realpath(root) acrescentado ao fim se ausente; code != 0 ou sem linhas -> [realpath(root)]; nunca lança.",
+      "evidence": "plugin/skills/grill-with-docs/scripts/backlog_bridge.py: nova função worktree_candidates"
+    },
+    "T002": {
+      "status": "done",
+      "summary": "resolve_backlog reescrita para usar candidates = worktree_candidates(root, tools), target = candidates[0], known = set(candidates); bound = itens com realpath(bound_path) em known; >1 code distinto -> BacklogUnavailable com a mensagem do contrato; 1 bound -> BOUND com bound_path real do item (requested divergente ainda recusa); sem bound -> NEEDS-BIND/NEEDS-CREATE com bound_path=target, casamento de unbound por Path(target).name e derive_identity(Path(target), taken); docstring documenta a regra do conjunto.",
+      "evidence": "plugin/skills/grill-with-docs/scripts/backlog_bridge.py: resolve_backlog"
+    },
+    "T003": {
+      "status": "done",
+      "summary": "ensure_bind chama backlog bind --path resolution[\"bound_path\"] em vez de str(root); create, preview-first e re-resolução final mantidos.",
+      "evidence": "plugin/skills/grill-with-docs/scripts/backlog_bridge.py: ensure_bind, chamada 'backlog bind'"
+    }
+  }
+}

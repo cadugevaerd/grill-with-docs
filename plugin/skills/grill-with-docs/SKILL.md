@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v5.4.0
+# Grill with Docs v5.4.1
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -87,7 +87,7 @@ python3 .../grill_workspace.py backlog-adopt   ROOT --work-id ID [--apply]
 python3 .../grill_workspace.py backlog-migrate ROOT --work-id ID [--apply] [--db PATH]
 ```
 
-O código do backlog raramente coincide com o nome do diretório, então `backlog_bridge.py ROOT --code CODE [--apply]` vincula um backlog existente explicitamente. Repositório já vinculado a outro código, ou código já vinculado a outro caminho, falha fechado em vez de revincular em silêncio.
+O código do backlog raramente coincide com o nome do diretório, então `backlog_bridge.py ROOT --code CODE [--apply]` vincula um backlog existente explicitamente. Repositório já vinculado a outro código, ou código já vinculado a outro caminho, falha fechado em vez de revincular em silêncio. O vínculo é reconhecido a partir de qualquer worktree registrada do repositório (a ponte compara o caminho vinculado com o conjunto de `git worktree list`), e um vínculo novo grava o caminho da worktree de controle.
 
 `backlog-sync` espelha os `BL-NNNN` do work item, **em qualquer estado**, como itens do backlog vinculado ao repositório. Preview é o padrão e não muta; `--apply` executa. A ponte fala somente `backlogctl --json` e nunca lê SQLite direto. Sem backlog vinculado, o sync retorna `BACKLOG-NOT-BOUND`.
 

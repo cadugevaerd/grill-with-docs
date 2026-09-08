@@ -1,0 +1,443 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "GO",
+  "backlog_skipped": true,
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+    "state": "present"
+  },
+  "development": {
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-daaac117ef5beda8433777f25acfb985dd309806c858ab5e1a9b3179e76b2a67",
+      "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+      "run_id": "leader-fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "analyze": "se-5420414d7c96d4fd36312e4aa6d2e901d59f4ef4856e29f77abdd1fe3b38456d",
+      "checklist": "se-766c08cc53bff7f9bdf4fac11f7ffc31db4c58de5c66e30194b194b6a0baaa7d",
+      "converge": "se-e61d49ebe938e051a869c74a350332cb62c5e5cc5ba5ef0ed0e67a280169097c",
+      "implement-parallel": "se-22b5672f7e2ab4e9d4a8639646b167d4a29b229a6ba83a84dd6545635782459b",
+      "partition": "se-fa869ddf98235e1ade598d8d12cc8895787c21958c840f2baa9899cfd94cfe31",
+      "plan": "se-eae6c12c6a73b7939974be61f0ad03c53b69ac177b551aed835b455e4f86e400",
+      "review": "se-89e2b3b8e423c314ef7debfaf724ea7444691d23355bb1ed5264b5bbad6f13df",
+      "specify": "se-77584069d741f4fb680684f4c1a9b5cf3feec5f8dfa314864162e1e1d9a09c01",
+      "tasks": "se-34d67224f4a8a1ce0c3f59093783f66a6256466fee8fe4ef45e5e6f1ff1613dc",
+      "verify": "se-e3b48bc3bbfdb1fb4da46b2c8945a1922d8ea1d1bd023252f8c7b496a296340f"
+    },
+    "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:f2583855e95e121be10bedf0ae7f711c755ea6c3018dbad9f464b4641cb45f91",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "step_id": "analyze"
+      },
+      "checklist": {
+        "output_sha256": "sha256:6292c895ce0bddbaf1dfd8f1766bbeb055ed31524d3ac17934cd8718c6dd8350",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
+      "converge": {
+        "output_sha256": "sha256:66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+        "step_id": "converge"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "step_id": "implement-parallel"
+      },
+      "partition": {
+        "output_sha256": "sha256:75d6ccf7427d7e0ec994dd303dbd3d241b83d55a7dd0727b6f08e274c5db2d6a",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "step_id": "partition"
+      },
+      "plan": {
+        "output_sha256": "sha256:81c50de69b813f2b03a3ce6dd65c478ac96f89a556930d8cb2e2a39f208a8e34",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
+      "review": {
+        "output_sha256": "sha256:2d88a03b12a18aeb15ca9776e504a15bd6df3fc8cf33f68784d5ee81bf243759",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
+        "step_id": "review"
+      },
+      "specify": {
+        "output_sha256": "sha256:d3e5e5e4d8fdca04325e586047937370dd42bfabb505bad2b54fa62a7e2bf756",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:35cb8724c15ed411ba54a0d673a606ee5ae7c204ab3e862d58f41ba590509c5a",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
+        "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:a65f1ae45fb01d2996b2bef94840b85da5cc2835610463b937ccd015bda79dbf",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
+        "step_id": "verify"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "specify iniciado via /speckit-specify",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/spec.md",
+            "sha256": "d3e5e5e4d8fdca04325e586047937370dd42bfabb505bad2b54fa62a7e2bf756"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "plan conduzido via /speckit-plan",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/plan.md",
+            "sha256": "81c50de69b813f2b03a3ce6dd65c478ac96f89a556930d8cb2e2a39f208a8e34"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "plan.md com research, data-model, dois contratos e quickstart; Constitution Check sem violação",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "checklist conduzido via /speckit-checklist",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/checklists/backlog-resolution.md",
+            "sha256": "6292c895ce0bddbaf1dfd8f1766bbeb055ed31524d3ac17934cd8718c6dd8350"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "38 itens de qualidade de requisitos, todos satisfeitos",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "tasks conduzido via /speckit-tasks",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/tasks.md",
+            "sha256": "4ea09e08cb7033cb08cd0fc81e37cdc7b7124bfdf73dff9c1a9296c7d2ae07d8"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "12 tarefas em 3 fases; Phase 3 é do leader (arquivos da raiz + AUDIT.md)",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/tasks.md",
+            "sha256": "35cb8724c15ed411ba54a0d673a606ee5ae7c204ab3e862d58f41ba590509c5a"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "analyze: tokens com barra fora de caminho (T002, T005, T007) vazavam para os grants do partition; linhas reescritas",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/029-tasks.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "analyze conduzido via /speckit-analyze",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/analysis.md",
+            "sha256": "f2583855e95e121be10bedf0ae7f711c755ea6c3018dbad9f464b4641cb45f91"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "cobertura 100%, zero críticos; P1 remediado nas tasks (grants limpos)",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "partition conduzido via /grill-partition; run run-38e8773207b7f3de7623cff3 admitida",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/execution-dag.json",
+            "sha256": "75d6ccf7427d7e0ec994dd303dbd3d241b83d55a7dd0727b6f08e274c5db2d6a"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "DAG-VALID em run-38e8773207b7f3de7623cff3: 4 nós (p01-a; p02-a, p02-b, p02-c), max_workers 3, PARTITION-DEGRADED aceito (fase 1 com 1 grupo), T012 devolvido ao leader",
+        "state": "complete",
+        "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "implement-parallel conduzido via /grill-implement-parallel; run run-38e8773207b7f3de7623cff3, 2 waves, 4 workers",
+        "state": "in-progress",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/tasks.md",
+            "sha256": "66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "run run-38e8773207b7f3de7623cff3: wave-0001 (p01-a) e wave-0002 (p02-a, p02-b, p02-c) convergidas, 11 tarefas reconciliadas, T012 pelo leader; distribuição OK; preflight BOUND SGD",
+        "state": "complete",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "converge conduzido via /speckit-converge",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/tasks.md",
+            "sha256": "66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "converged: zero findings; 12 FR, 5 SC, 12 cenários e 11 cláusulas checados; tasks.md byte-idêntico",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "verify conduzido via /speckit-verify-review-ship-verify",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/verify.md",
+            "sha256": "e51fa081b304131d38b3ded28ddf1a8b1a91e9983e1eefc9824f63fb58493bc7"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "PASS: suíte 28 validadores/1380 testes exit 0; contrato 110; distribuição OK; preflight BOUND SGD; sem segredos",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "review conduzido via /speckit-verify-review-ship-review",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/review.md",
+            "sha256": "9ae829d9e0480bdd7abb29377b6068d6ecf732debffdeaeff2ae2e4ad103a910"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "APPROVE: 0 Critical, 0 Important, 3 minors; fingerprint idêntico ao de converge/verify",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "ship aguardando autorização humana (HOLD-V4-01); verify PASS e review APPROVE selados",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/verify.md",
+            "sha256": "a65f1ae45fb01d2996b2bef94840b85da5cc2835610463b937ccd015bda79dbf"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "revalidação após commit de learnings (CLAUDE.md, prosa); gates reexecutados verdes",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/029-verify.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/review.md",
+            "sha256": "2d88a03b12a18aeb15ca9776e504a15bd6df3fc8cf33f68784d5ee81bf243759"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "revalidação após commit de learnings; APPROVE mantido, diff adicional é prosa",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/attestations/029-review.json"
+      }
+    ],
+    "chain_stale": [],
+    "current_step": "ship",
+    "execution_branch": "cadugevaerd/chore-fix-backlog",
+    "renamed_from": {},
+    "schema": "grill-development/v2",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "partition",
+      "implement-parallel",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "implement-parallel": "complete",
+      "partition": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "in-progress",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    },
+    "superseded_outputs": {
+      "review": [
+        {
+          "attempt_id": "review-1",
+          "attestation": ".grill/attestations/029-review.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:9ae829d9e0480bdd7abb29377b6068d6ecf732debffdeaeff2ae2e4ad103a910",
+          "provenance": "current-generation",
+          "reason": "revalidação após commit de learnings; APPROVE mantido, diff adicional é prosa",
+          "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+          "step_execution_id": "se-337782719ee7fe8e76eb967e3db798aaeb1f87eb78967a6f1ff86eb0c4859f92",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-89e2b3b8e423c314ef7debfaf724ea7444691d23355bb1ed5264b5bbad6f13df"
+        }
+      ],
+      "tasks": [
+        {
+          "attempt_id": "tasks-1",
+          "attestation": ".grill/attestations/029-tasks.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:4ea09e08cb7033cb08cd0fc81e37cdc7b7124bfdf73dff9c1a9296c7d2ae07d8",
+          "provenance": "current-generation",
+          "reason": "analyze: tokens com barra fora de caminho (T002, T005, T007) vazavam para os grants do partition; linhas reescritas",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+          "step_execution_id": "se-552c82661ba3eace1e0aa6ca8a0457e4c234708c7a118c56a5e3adbb4b90808c",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-34d67224f4a8a1ce0c3f59093783f66a6256466fee8fe4ef45e5e6f1ff1613dc"
+        }
+      ],
+      "verify": [
+        {
+          "attempt_id": "verify-1",
+          "attestation": ".grill/attestations/029-verify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:e51fa081b304131d38b3ded28ddf1a8b1a91e9983e1eefc9824f63fb58493bc7",
+          "provenance": "current-generation",
+          "reason": "revalidação após commit de learnings (CLAUDE.md, prosa); gates reexecutados verdes",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+          "step_execution_id": "se-de99c9b5daf3c20377e7119fd093eaf573f695f926ca26daad53c4182cb1f4e3",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-e3b48bc3bbfdb1fb4da46b2c8945a1922d8ea1d1bd023252f8c7b496a296340f"
+        }
+      ]
+    },
+    "workflow_version": "v4"
+  },
+  "goal": {
+    "path": "goal.md",
+    "sha256": "af97e2899ddd6668c5fc80eef153cd94b7d88ea92235650370572770e5b291d1",
+    "status": "REUSED"
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "in-progress",
+  "version": "1.2.0",
+  "work_id": "fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "schema": "v2",
+    "sha256": "d2c4ea0806ea5e8235678582154aedaeb0ba686641bd836934bffe133db60ab5"
+  }
+}
