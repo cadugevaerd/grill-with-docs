@@ -8,6 +8,7 @@ Generated deterministically from reconciled work items.
 - **feature-status-markdown-e0bd896a3cad48eb8f102ac0caa70f34** (feature): status-markdown
 - **feature-triage-routing-5bbd6b9f7fc1463282b4134cdd9977b4** (feature): triage-routing
 - **feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473** (feature): workflow-v3
+- **fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea** (fix): backlog-bind-worktree
 - **fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0** (fix): high-defects
 - **fix-preflight-ansi-09d77024258a45ecbe612a8d22ffea95** (fix): preflight-ansi
 
@@ -172,6 +173,21 @@ Generated deterministically from reconciled work items.
 - `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/R-0003`
 - `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/R-0004`
 - `feature-workflow-v3-7dc283c84fb54e6b8f10a9c4546cd473/R-0005`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/ADR-0001`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/ADR-0002`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/DQ-0001`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/DQ-0002`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/DQ-0003`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/DQ-0004`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/DQ-0005`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/DQ-0006`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/FASE-001`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/R-0001`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/R-0002`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/R-0003`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/R-0004`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/R-0005`
+- `fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea/R-0006`
 - `fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/ADR-0001`
 - `fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/ADR-0002`
 - `fix-high-defects-f03b31bb4b194b0683eee8f3a62493d0/ADR-0003`
