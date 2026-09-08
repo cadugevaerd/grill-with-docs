@@ -1,0 +1,17 @@
+{
+  "worker": "p02-c",
+  "feature": "029-backlog-bind-worktree",
+  "completed": ["T009", "T011"],
+  "tasks": {
+    "T009": {
+      "status": "done",
+      "summary": "Bump de 5.4.0 para 5.4.1 nos quatro manifests (plugin/.claude-plugin/plugin.json, plugin/.codex-plugin/plugin.json, .claude-plugin/marketplace.json, .agents/plugins/marketplace.json)",
+      "evidence": "grep -rn 5.4.0 nos quatro arquivos: sem match; python3 json.load nos quatro: OK"
+    },
+    "T011": {
+      "status": "done",
+      "summary": "Heading '# Protocolo de sessão v5.4.0' -> 'v5.4.1' em plugin/skills/grill-with-docs/references/session-protocol.md",
+      "evidence": "grep -n 5.4.0 no arquivo: sem match"
+    }
+  }
+}
