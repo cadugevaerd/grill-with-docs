@@ -1,5 +1,21 @@
 # Changelog
 
+## 5.4.1
+
+- Fix: o vínculo do backlog passa a ser reconhecido a partir de qualquer worktree
+  registrada do repositório. `resolve_backlog` compara o `bound_path` com o
+  conjunto de `git worktree list --porcelain` (caminhos reais), em vez de com o
+  toplevel da worktree em que o comando roda; antes, `preflight` e `init` numa
+  worktree linkada propunham `NEEDS-CREATE` mesmo com o repositório vinculado, e
+  todo work item em worktree exigia `--skip-backlog`.
+- Vínculo novo grava o caminho da worktree de controle, e nome/código propostos
+  derivam dela, não do diretório da worktree.
+- Dois backlogs de códigos distintos apontando a worktrees do mesmo repositório
+  recusam com `BACKLOG-UNAVAILABLE` nomeando ambos; nenhum vínculo existente é
+  re-apontado. Enumeração indisponível mantém o comportamento anterior.
+- Cobertura: casos com stub do seam e um caso com `git worktree add` real em
+  `tests/validate_backlog_contract.py`.
+
 ## 5.4.0
 
 - Ponytail entra na stack oficial: `dependencies.json` ganha o kind `harness-plugin`

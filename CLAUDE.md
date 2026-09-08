@@ -38,6 +38,7 @@ A ordem canônica de cada versão vive em `grill_core/workflow_versions.py`, que
 `grill_workspace.py init` fixa o `WORKFLOW.md` antes de montar o bundle e reporta o estado das dependências externas em `dependencies`. O preflight é declarado em `plugin/skills/grill-with-docs/assets/dependencies.json`.
 
 - **backlogctl é exigido desde a 3.0.0**: `init` recusa com `BACKLOG-REQUIRED` sem backlog vinculado;
+- **o vínculo é resolvido pelo conjunto de worktrees do repositório** (desde a 5.4.1): `preflight`, `init` e os verbos `backlog-*` encontram o mesmo backlog `BOUND` em qualquer worktree registrada, e um vínculo novo grava o caminho da worktree de controle. `--skip-backlog` deixou de ser necessário para trabalhar em worktree;
 - `--runtime claude|codex` é obrigatório e seleciona o harness da sessão sem consultar o default salvo em `.specify/integration.json`;
 - demais dependências: só detecta e reporta, nunca bloqueia;
 - `--allow-install`: autoriza a instalação delegada e a criação/bind do backlog. Essa flag é a confirmação explícita que o contrato do backlog exige;
