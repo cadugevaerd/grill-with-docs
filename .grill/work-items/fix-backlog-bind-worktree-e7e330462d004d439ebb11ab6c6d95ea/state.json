@@ -23,12 +23,19 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "analyze": "se-5420414d7c96d4fd36312e4aa6d2e901d59f4ef4856e29f77abdd1fe3b38456d",
       "checklist": "se-766c08cc53bff7f9bdf4fac11f7ffc31db4c58de5c66e30194b194b6a0baaa7d",
       "plan": "se-eae6c12c6a73b7939974be61f0ad03c53b69ac177b551aed835b455e4f86e400",
       "specify": "se-77584069d741f4fb680684f4c1a9b5cf3feec5f8dfa314864162e1e1d9a09c01",
-      "tasks": "se-552c82661ba3eace1e0aa6ca8a0457e4c234708c7a118c56a5e3adbb4b90808c"
+      "tasks": "se-34d67224f4a8a1ce0c3f59093783f66a6256466fee8fe4ef45e5e6f1ff1613dc"
     },
     "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:f2583855e95e121be10bedf0ae7f711c755ea6c3018dbad9f464b4641cb45f91",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "step_id": "analyze"
+      },
       "checklist": {
         "output_sha256": "sha256:6292c895ce0bddbaf1dfd8f1766bbeb055ed31524d3ac17934cd8718c6dd8350",
         "provenance": "current-generation",
@@ -48,9 +55,9 @@
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:4ea09e08cb7033cb08cd0fc81e37cdc7b7124bfdf73dff9c1a9296c7d2ae07d8",
+        "output_sha256": "sha256:35cb8724c15ed411ba54a0d673a606ee5ae7c204ab3e862d58f41ba590509c5a",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -130,9 +137,43 @@
         "reason": "12 tarefas em 3 fases; Phase 3 é do leader (arquivos da raiz + AUDIT.md)",
         "state": "complete",
         "step": "tasks"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/tasks.md",
+            "sha256": "35cb8724c15ed411ba54a0d673a606ee5ae7c204ab3e862d58f41ba590509c5a"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "analyze: tokens com barra fora de caminho (T002, T005, T007) vazavam para os grants do partition; linhas reescritas",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/attestations/029-tasks.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "analyze conduzido via /speckit-analyze",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/analysis.md",
+            "sha256": "f2583855e95e121be10bedf0ae7f711c755ea6c3018dbad9f464b4641cb45f91"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "cobertura 100%, zero críticos; P1 remediado nas tasks (grants limpos)",
+        "state": "complete",
+        "step": "analyze"
       }
     ],
-    "current_step": "analyze",
+    "chain_stale": [],
+    "current_step": "partition",
     "execution_branch": "cadugevaerd/chore-fix-backlog",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -150,7 +191,7 @@
       "ship"
     ],
     "steps": {
-      "analyze": "pending",
+      "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
@@ -161,6 +202,22 @@
       "specify": "complete",
       "tasks": "complete",
       "verify": "pending"
+    },
+    "superseded_outputs": {
+      "tasks": [
+        {
+          "attempt_id": "tasks-1",
+          "attestation": ".grill/attestations/029-tasks.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:4ea09e08cb7033cb08cd0fc81e37cdc7b7124bfdf73dff9c1a9296c7d2ae07d8",
+          "provenance": "current-generation",
+          "reason": "analyze: tokens com barra fora de caminho (T002, T005, T007) vazavam para os grants do partition; linhas reescritas",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+          "step_execution_id": "se-552c82661ba3eace1e0aa6ca8a0457e4c234708c7a118c56a5e3adbb4b90808c",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-34d67224f4a8a1ce0c3f59093783f66a6256466fee8fe4ef45e5e6f1ff1613dc"
+        }
+      ]
     },
     "workflow_version": "v4"
   },
