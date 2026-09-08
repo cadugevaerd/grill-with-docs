@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -111,19 +112,52 @@ def derive_identity(root: Path, taken: set[str]) -> tuple[str, str]:
     raise BacklogUnavailable("no free backlog code derived from the repository name")
 
 
+def worktree_candidates(root: Path, tools: Any) -> list[str]:
+    """List every worktree of this checkout, control included.
+
+    A backlog binds one worktree's realpath, but a linked worktree is still
+    the same repository, so a bind made from any of them has to match. git
+    failing or answering nothing degrades to just the control root, which is
+    always present; the function never raises for a git failure.
+    """
+    code, output = tools.run(["git", "worktree", "list", "--porcelain"], cwd=root)
+    candidates: list[str] = []
+    if code == 0:
+        for line in output.splitlines():
+            if line.startswith("worktree "):
+                path = os.path.realpath(line[len("worktree "):])
+                if path not in candidates:
+                    candidates.append(path)
+    target = os.path.realpath(root)
+    if target not in candidates:
+        candidates.append(target)
+    return candidates
+
+
 def resolve_backlog(root: Path, cli: str, tools: Any, db: str, requested: str | None = None) -> dict[str, Any]:
     """Decide which backlog owns this repository.
 
     A repository name rarely matches the backlog code it inherited, so an
-    explicit ``requested`` code wins over every derivation.
+    explicit ``requested`` code wins over every derivation. ``bound_path``
+    matches against the whole set of this checkout's worktrees, not just the
+    one path the caller happened to resolve from, so a bind made from a
+    linked worktree is still found from the control root and vice versa.
     """
     backlogs = call(cli, tools, db, ["backlog", "list"]).get("data") or []
-    target = str(root)
-    bound = next((item for item in backlogs if item.get("bound_path") == target), None)
-    if bound is not None:
-        if requested and bound["code"] != requested:
-            raise BacklogUnavailable(f"{target} is already bound to {bound['code']}, not {requested}")
-        return {"status": "BOUND", "code": bound["code"], "name": bound.get("name"), "bound_path": target}
+    candidates = worktree_candidates(root, tools)
+    target = candidates[0]
+    known = set(candidates)
+    bound = [item for item in backlogs if item.get("bound_path") and os.path.realpath(item["bound_path"]) in known]
+    if bound:
+        codes = {item["code"] for item in bound}
+        if len(codes) > 1:
+            detail = ", ".join(f"{item['code']} at {item['bound_path']}" for item in bound)
+            raise BacklogUnavailable(f"{target} matches more than one backlog: {detail}")
+        matched = bound[0]
+        if requested and matched["code"] != requested:
+            raise BacklogUnavailable(f"{target} is already bound to {matched['code']}, not {requested}")
+        return {"status": "BOUND", "code": matched["code"], "name": matched.get("name"),
+                "bound_path": matched["bound_path"]}
     if requested:
         declared = next((item for item in backlogs if item.get("code") == requested), None)
         if declared is not None and declared.get("bound_path"):
@@ -135,10 +169,10 @@ def resolve_backlog(root: Path, cli: str, tools: Any, db: str, requested: str | 
             "bound_path": target,
         }
     taken = {item.get("code") for item in backlogs if item.get("code")}
-    unbound = next((item for item in backlogs if item.get("name") == root.name and not item.get("bound_path")), None)
+    unbound = next((item for item in backlogs if item.get("name") == Path(target).name and not item.get("bound_path")), None)
     if unbound is not None:
         return {"status": "NEEDS-BIND", "code": unbound["code"], "name": unbound.get("name"), "bound_path": target}
-    code, name = derive_identity(root, taken)
+    code, name = derive_identity(Path(target), taken)
     return {"status": "NEEDS-CREATE", "code": code, "name": name, "bound_path": target}
 
 
@@ -165,7 +199,7 @@ def ensure_bind(root: Path, *, apply: bool = False, db: str | None = None, tools
             return payload
         call(cli, tools, store, ["backlog", "create", "--code", resolution["code"],
                                  "--name", resolution["name"], "--profile", "software"])
-    call(cli, tools, store, ["backlog", "bind", "--code", resolution["code"], "--path", str(root)])
+    call(cli, tools, store, ["backlog", "bind", "--code", resolution["code"], "--path", resolution["bound_path"]])
     payload["backlog"] = resolve_backlog(root, cli, tools, store, code)
     payload["changed"] = True
     payload["verdict"] = "APPLIED"
