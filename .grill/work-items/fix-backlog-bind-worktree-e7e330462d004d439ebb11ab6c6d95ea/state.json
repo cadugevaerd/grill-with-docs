@@ -25,6 +25,7 @@
     "attested_executions": {
       "analyze": "se-5420414d7c96d4fd36312e4aa6d2e901d59f4ef4856e29f77abdd1fe3b38456d",
       "checklist": "se-766c08cc53bff7f9bdf4fac11f7ffc31db4c58de5c66e30194b194b6a0baaa7d",
+      "converge": "se-e61d49ebe938e051a869c74a350332cb62c5e5cc5ba5ef0ed0e67a280169097c",
       "implement-parallel": "se-22b5672f7e2ab4e9d4a8639646b167d4a29b229a6ba83a84dd6545635782459b",
       "partition": "se-fa869ddf98235e1ade598d8d12cc8895787c21958c840f2baa9899cfd94cfe31",
       "plan": "se-eae6c12c6a73b7939974be61f0ad03c53b69ac177b551aed835b455e4f86e400",
@@ -43,6 +44,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
+      },
+      "converge": {
+        "output_sha256": "sha256:66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+        "step_id": "converge"
       },
       "implement-parallel": {
         "output_sha256": "sha256:66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00",
@@ -222,10 +229,29 @@
         "reason": "run run-38e8773207b7f3de7623cff3: wave-0001 (p01-a) e wave-0002 (p02-a, p02-b, p02-c) convergidas, 11 tarefas reconciliadas, T012 pelo leader; distribuição OK; preflight BOUND SGD",
         "state": "complete",
         "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "converge conduzido via /speckit-converge",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/tasks.md",
+            "sha256": "66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "converged: zero findings; 12 FR, 5 SC, 12 cenários e 11 cláusulas checados; tasks.md byte-idêntico",
+        "state": "complete",
+        "step": "converge"
       }
     ],
     "chain_stale": [],
-    "current_step": "converge",
+    "current_step": "verify",
     "execution_branch": "cadugevaerd/chore-fix-backlog",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -245,7 +271,7 @@
     "steps": {
       "analyze": "complete",
       "checklist": "complete",
-      "converge": "pending",
+      "converge": "complete",
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
