@@ -30,7 +30,8 @@
       "partition": "se-fa869ddf98235e1ade598d8d12cc8895787c21958c840f2baa9899cfd94cfe31",
       "plan": "se-eae6c12c6a73b7939974be61f0ad03c53b69ac177b551aed835b455e4f86e400",
       "specify": "se-77584069d741f4fb680684f4c1a9b5cf3feec5f8dfa314864162e1e1d9a09c01",
-      "tasks": "se-34d67224f4a8a1ce0c3f59093783f66a6256466fee8fe4ef45e5e6f1ff1613dc"
+      "tasks": "se-34d67224f4a8a1ce0c3f59093783f66a6256466fee8fe4ef45e5e6f1ff1613dc",
+      "verify": "se-de99c9b5daf3c20377e7119fd093eaf573f695f926ca26daad53c4182cb1f4e3"
     },
     "attested_outputs": {
       "analyze": {
@@ -80,6 +81,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
         "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:e51fa081b304131d38b3ded28ddf1a8b1a91e9983e1eefc9824f63fb58493bc7",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "step_id": "verify"
       }
     },
     "audit": [
@@ -248,10 +255,29 @@
         "reason": "converged: zero findings; 12 FR, 5 SC, 12 cenários e 11 cláusulas checados; tasks.md byte-idêntico",
         "state": "complete",
         "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "verify conduzido via /speckit-verify-review-ship-verify",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/verify.md",
+            "sha256": "e51fa081b304131d38b3ded28ddf1a8b1a91e9983e1eefc9824f63fb58493bc7"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "PASS: suíte 28 validadores/1380 testes exit 0; contrato 110; distribuição OK; preflight BOUND SGD; sem segredos",
+        "state": "complete",
+        "step": "verify"
       }
     ],
     "chain_stale": [],
-    "current_step": "verify",
+    "current_step": "review",
     "execution_branch": "cadugevaerd/chore-fix-backlog",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -279,7 +305,7 @@
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "complete"
     },
     "superseded_outputs": {
       "tasks": [
