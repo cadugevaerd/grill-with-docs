@@ -25,6 +25,7 @@
     "attested_executions": {
       "analyze": "se-5420414d7c96d4fd36312e4aa6d2e901d59f4ef4856e29f77abdd1fe3b38456d",
       "checklist": "se-766c08cc53bff7f9bdf4fac11f7ffc31db4c58de5c66e30194b194b6a0baaa7d",
+      "implement-parallel": "se-22b5672f7e2ab4e9d4a8639646b167d4a29b229a6ba83a84dd6545635782459b",
       "partition": "se-fa869ddf98235e1ade598d8d12cc8895787c21958c840f2baa9899cfd94cfe31",
       "plan": "se-eae6c12c6a73b7939974be61f0ad03c53b69ac177b551aed835b455e4f86e400",
       "specify": "se-77584069d741f4fb680684f4c1a9b5cf3feec5f8dfa314864162e1e1d9a09c01",
@@ -42,6 +43,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "step_id": "implement-parallel"
       },
       "partition": {
         "output_sha256": "sha256:75d6ccf7427d7e0ec994dd303dbd3d241b83d55a7dd0727b6f08e274c5db2d6a",
@@ -196,10 +203,29 @@
         "reason": "DAG-VALID em run-38e8773207b7f3de7623cff3: 4 nós (p01-a; p02-a, p02-b, p02-c), max_workers 3, PARTITION-DEGRADED aceito (fase 1 com 1 grupo), T012 devolvido ao leader",
         "state": "complete",
         "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "implement-parallel conduzido via /grill-implement-parallel; run run-38e8773207b7f3de7623cff3, 2 waves, 4 workers",
+        "state": "in-progress",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/tasks.md",
+            "sha256": "66021123d28c2a7315ffb78ad5bf88679f160e339569b2498da731510c5e1a00"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "run run-38e8773207b7f3de7623cff3: wave-0001 (p01-a) e wave-0002 (p02-a, p02-b, p02-c) convergidas, 11 tarefas reconciliadas, T012 pelo leader; distribuição OK; preflight BOUND SGD",
+        "state": "complete",
+        "step": "implement-parallel"
       }
     ],
     "chain_stale": [],
-    "current_step": "implement-parallel",
+    "current_step": "converge",
     "execution_branch": "cadugevaerd/chore-fix-backlog",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -220,7 +246,7 @@
       "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
-      "implement-parallel": "pending",
+      "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
       "review": "pending",
