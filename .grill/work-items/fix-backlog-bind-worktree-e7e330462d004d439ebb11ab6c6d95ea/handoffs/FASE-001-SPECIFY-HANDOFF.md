@@ -1,7 +1,7 @@
 # FASE-001 — Resolver o backlog vinculado de qualquer worktree do repositório
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: worktree de controle, worktree linkada, caminho vinculado, conjunto de candidatos, resolução do backlog, seam de toolchain, carimbo de escape
 - ADRs: ADR-0001, ADR-0002

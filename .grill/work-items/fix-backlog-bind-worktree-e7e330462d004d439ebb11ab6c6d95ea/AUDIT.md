@@ -1,9 +1,9 @@
 # AUDIT — 2026-09-08
 
 - scope: /home/carlosaraujo/orca/workspaces/grill-with-docs/chore-fix-backlog
-- verdict: GO
-- selected-phase: FASE-001
-- selected-handoff: handoffs/FASE-001-SPECIFY-HANDOFF.md
+- verdict: MILESTONE-COMPLETE
+- selected-phase: none (milestone completo)
+- selected-handoff: none
 - constitution: .specify/memory/constitution.md + 54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569
 - workflow: WORKFLOW.md + d2c4ea0806ea5e8235678582154aedaeb0ba686641bd836934bffe133db60ab5 + v2
 - second-pass-new-material-dqs: 0
@@ -38,3 +38,10 @@
 **Run do gauntlet** `run-38e8773207b7f3de7623cff3`: wave-0001 (p01-a) e wave-0002 (p02-a, p02-b, p02-c) convergidas; 11 tarefas reconciliadas por sidecar; worktrees de worker removidos.
 
 > O comando `auditar` é read-only. Código 0=GO, 1=NO-GO, 2=BLOCKED, 3=BLOCKED-CONSTITUTION (gate constitucional).
+
+## Fechamento (2026-09-08)
+
+- FASE-001 `complete`; ship MERGED em `main 9bdab586` (`--no-ff`, push verificado), release `v5.4.1` publicada pelo pipeline (`publish.yml` success).
+- Run `run-38e8773207b7f3de7623cff3` COMPLETE (2 waves, 4 workers); worktrees e branches de worker removidos.
+- `backlog_skipped` limpo por `backlog-adopt` executado **nesta worktree linkada** — o próprio fix tornou isso possível sem merge prévio.
+- Learnings: LRN-001 em CLAUDE.md (`b5613ef`); LRN-002 na memória do harness.
