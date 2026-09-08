@@ -16,16 +16,19 @@
       "state": "present"
     },
     "head": "44c958f317eda267f3e82031bd8ba626c8cb81a1",
-    "schema": "grill-work-item/v2",
+    "parent_work_id": null,
+    "schema": "grill-work-item/v3",
     "slug": "backlog-bind-worktree",
+    "source": null,
     "type": "fix",
     "work_id": "fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea",
     "workflow": {
       "path": "WORKFLOW.md",
       "sha256": "d2c4ea0806ea5e8235678582154aedaeb0ba686641bd836934bffe133db60ab5"
-    }
+    },
+    "worktree_key": "wt-fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea"
   },
-  "immutable_sha256": "b1591b7384b8e0e9f304ffdf74eb9bf05bd64bb6253e5ae6c6a6f1339f7ce15c",
+  "immutable_sha256": "073d708af20b4b90665da6f3d2689a80fe4c3e5009bf9f1167d0050e2a847d55",
   "initial_artifacts": {
     "AUDIT.md": "1e93b76958d3b3c79c8289c143a44deb1bd839955c40ba6df70aff0e80e7779c",
     "CONSTITUTION-CHECK.md": "70982f65169d6155e958ce6e8f7479ff88cff948d5f70133ccf1d91354ae7ea2",
@@ -39,7 +42,10 @@
     "handoffs/FASE-001-SPECIFY-HANDOFF.md": "3cfe46ee546a9c46cf78fd7bf59ca897df07d24431a46ab4b61bf147fe919a58",
     "state.json": "88e019f6571e6d8fbe85f655cc39c77e9d8db22085097f7d7e802a427298cfe4"
   },
-  "schema": "grill-work-item/v2",
+  "orchestration": {
+    "schema": "grill-orchestrator/v1"
+  },
+  "schema": "grill-work-item/v3",
   "scope": {
     "paths": []
   }

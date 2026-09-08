@@ -13,8 +13,49 @@
     "state": "present"
   },
   "development": {
-    "audit": [],
-    "current_step": "specify",
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-daaac117ef5beda8433777f25acfb985dd309806c858ab5e1a9b3179e76b2a67",
+      "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+      "run_id": "leader-fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "specify": "se-77584069d741f4fb680684f4c1a9b5cf3feec5f8dfa314864162e1e1d9a09c01"
+    },
+    "attested_outputs": {
+      "specify": {
+        "output_sha256": "sha256:d3e5e5e4d8fdca04325e586047937370dd42bfabb505bad2b54fa62a7e2bf756",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "step_id": "specify"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "specify iniciado via /speckit-specify",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/spec.md",
+            "sha256": "d3e5e5e4d8fdca04325e586047937370dd42bfabb505bad2b54fa62a7e2bf756"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      }
+    ],
+    "current_step": "plan",
+    "execution_branch": "cadugevaerd/chore-fix-backlog",
     "renamed_from": {},
     "schema": "grill-development/v2",
     "sequence": [
@@ -39,7 +80,7 @@
       "plan": "pending",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
+      "specify": "complete",
       "tasks": "pending",
       "verify": "pending"
     },
