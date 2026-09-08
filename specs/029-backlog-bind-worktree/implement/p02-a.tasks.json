@@ -1,0 +1,27 @@
+{
+  "worker": "p02-a",
+  "feature": "029-backlog-bind-worktree",
+  "completed": ["T004", "T005", "T006", "T007"],
+  "tasks": {
+    "T004": {
+      "status": "done",
+      "summary": "StubToolchain.run passa a casar argv[0]=='git' contra a chave tuple(argv[1:]); helper porcelain(*paths) monta a saida do git worktree list; casos novos em Resolution: bound_path=controle com resolve a partir da linkada -> BOUND com o codigo do vinculo; bound_path=linkada com resolve a partir da controle -> BOUND com bound_path igual a linkada (sem reapontar).",
+      "evidence": "tests/validate_backlog_contract.py: test_bound_from_a_linked_worktree_matches_the_control_bind, test_a_bind_made_from_a_linked_worktree_is_not_repointed_from_the_control"
+    },
+    "T005": {
+      "status": "done",
+      "summary": "Resolution ganha NEEDS-CREATE a partir da linkada com nome/codigo derivados de Path(controle).name e bound_path=controle; NEEDS-BIND para backlog unbound com o nome da controle; requested vinculado fora do conjunto -> BacklogUnavailable. BindLifecycle ganha ensure_bind(linkada, apply=True) que emite backlog bind --path=controle.",
+      "evidence": "tests/validate_backlog_contract.py: test_needs_create_from_a_linked_worktree_derives_from_the_control, test_unbound_backlog_named_after_the_control_needs_bind_from_a_linked_worktree, test_requested_code_bound_outside_the_worktree_set_fails_closed, test_apply_from_a_linked_worktree_binds_the_control_path"
+    },
+    "T006": {
+      "status": "done",
+      "summary": "Resolution ganha: dois backlogs de codigos distintos vinculados a controle e linkada -> BacklogUnavailable com os dois codigos na mensagem e tools.mutations() vazio; git respondendo code=1 mantem o comportamento atual (bound_path==str(root) casa, outro caminho nao); porcelain com caminho duplicado e grafia nao normalizada (/./) colapsa a um so candidato via worktree_candidates.",
+      "evidence": "tests/validate_backlog_contract.py: test_two_backlogs_bound_to_different_worktrees_of_the_same_repo_refuse, test_git_failure_falls_back_to_the_bare_root, test_git_failure_does_not_match_a_different_path, test_porcelain_duplicates_and_unnormalised_paths_collapse_to_one_candidate"
+    },
+    "T007": {
+      "status": "done",
+      "summary": "Classe RealWorktree(unittest.TestCase): cria repositorio git real em tempdir com worktree linkada (git worktree add -b linked), skipTest se git ausente; toolchain hibrido responde backlog list pelo stub e delega git a subprocess.run real; resolve_backlog a partir da worktree linkada real -> BOUND.",
+      "evidence": "tests/validate_backlog_contract.py: RealWorktree.test_resolve_from_the_real_linked_worktree_is_bound"
+    }
+  }
+}

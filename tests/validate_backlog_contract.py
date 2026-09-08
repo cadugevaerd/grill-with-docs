@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -37,6 +38,11 @@ def envelope(data, *, operation="op", changed=False) -> str:
     })
 
 
+def porcelain(*paths) -> str:
+    """Build a `git worktree list --porcelain` answer for the given paths."""
+    return "".join(f"worktree {path}\nHEAD 0000000\nbranch refs/heads/x\n\n" for path in paths)
+
+
 class StubToolchain:
     """Records every backlogctl invocation and answers from a scripted table."""
 
@@ -50,6 +56,14 @@ class StubToolchain:
 
     def run(self, argv, *, cwd=None, timeout=None):
         self.calls.append(list(argv))
+        if argv[0] == "git":
+            # git calls carry no CLI/--json prefix, so the scripted key is the
+            # whole tail (e.g. ("worktree", "list", "--porcelain")).
+            key = tuple(argv[1:])
+            for prefix, answer in self.answers.items():
+                if key[:len(prefix)] == prefix:
+                    return answer
+            return 0, envelope([])
         for prefix, answer in self.answers.items():
             if tuple(argv[2:2 + len(prefix)]) == prefix:
                 return answer
@@ -140,6 +154,97 @@ class Resolution(unittest.TestCase):
         with self.assertRaises(MODULE.BacklogUnavailable):
             MODULE.resolve_backlog(self.root, CLI, tools, DB, "SGD")
 
+    # T004 — resolução por conjunto de worktrees (US1).
+
+    def tools_worktrees(self, backlogs, *paths):
+        return StubToolchain({
+            ("worktree", "list", "--porcelain"): (0, porcelain(*paths)),
+            ("backlog", "list"): (0, envelope(backlogs)),
+        })
+
+    def test_bound_from_a_linked_worktree_matches_the_control_bind(self) -> None:
+        linked = self.root / "linked"
+        tools = self.tools_worktrees(
+            [{"code": "AAA", "name": "n", "bound_path": str(self.root)}], self.root, linked)
+        resolution = MODULE.resolve_backlog(linked, CLI, tools, DB)
+        self.assertEqual(resolution["status"], "BOUND")
+        self.assertEqual(resolution["code"], "AAA")
+
+    def test_a_bind_made_from_a_linked_worktree_is_not_repointed_from_the_control(self) -> None:
+        linked = self.root / "linked"
+        tools = self.tools_worktrees(
+            [{"code": "AAA", "name": "n", "bound_path": str(linked)}], self.root, linked)
+        resolution = MODULE.resolve_backlog(self.root, CLI, tools, DB)
+        self.assertEqual(resolution["status"], "BOUND")
+        self.assertEqual(resolution["bound_path"], str(linked))
+
+    # T005 — alvo de bind derivado da controle (US2).
+
+    def test_needs_create_from_a_linked_worktree_derives_from_the_control(self) -> None:
+        linked = self.root / "linked"
+        tools = self.tools_worktrees([], self.root, linked)
+        resolution = MODULE.resolve_backlog(linked, CLI, tools, DB)
+        expected_code, expected_name = MODULE.derive_identity(self.root, set())
+        self.assertEqual(resolution["status"], "NEEDS-CREATE")
+        self.assertEqual(resolution["name"], expected_name)
+        self.assertEqual(resolution["code"], expected_code)
+        self.assertEqual(resolution["bound_path"], str(self.root))
+
+    def test_unbound_backlog_named_after_the_control_needs_bind_from_a_linked_worktree(self) -> None:
+        linked = self.root / "linked"
+        tools = self.tools_worktrees(
+            [{"code": "BBB", "name": self.root.name, "bound_path": ""}], self.root, linked)
+        resolution = MODULE.resolve_backlog(linked, CLI, tools, DB)
+        self.assertEqual(resolution["status"], "NEEDS-BIND")
+        self.assertEqual(resolution["bound_path"], str(self.root))
+
+    def test_requested_code_bound_outside_the_worktree_set_fails_closed(self) -> None:
+        linked = self.root / "linked"
+        tools = self.tools_worktrees(
+            [{"code": "SGD", "name": "n", "bound_path": "/other/repo"}], self.root, linked)
+        with self.assertRaises(MODULE.BacklogUnavailable):
+            MODULE.resolve_backlog(self.root, CLI, tools, DB, "SGD")
+
+    # T006 — ambiguidade e normalização (US3).
+
+    def test_two_backlogs_bound_to_different_worktrees_of_the_same_repo_refuse(self) -> None:
+        linked = self.root / "linked"
+        tools = self.tools_worktrees([
+            {"code": "AAA", "name": "n1", "bound_path": str(self.root)},
+            {"code": "BBB", "name": "n2", "bound_path": str(linked)},
+        ], self.root, linked)
+        with self.assertRaises(MODULE.BacklogUnavailable) as raised:
+            MODULE.resolve_backlog(self.root, CLI, tools, DB)
+        message = str(raised.exception)
+        self.assertIn("AAA", message)
+        self.assertIn("BBB", message)
+        self.assertEqual(tools.mutations(), [])
+
+    def test_git_failure_falls_back_to_the_bare_root(self) -> None:
+        tools = StubToolchain({
+            ("worktree", "list", "--porcelain"): (1, ""),
+            ("backlog", "list"): (0, envelope([{"code": "AAA", "name": "n", "bound_path": str(self.root)}])),
+        })
+        resolution = MODULE.resolve_backlog(self.root, CLI, tools, DB)
+        self.assertEqual(resolution["status"], "BOUND")
+
+    def test_git_failure_does_not_match_a_different_path(self) -> None:
+        other = self.root / "other"
+        tools = StubToolchain({
+            ("worktree", "list", "--porcelain"): (1, ""),
+            ("backlog", "list"): (0, envelope([{"code": "AAA", "name": "n", "bound_path": str(other)}])),
+        })
+        resolution = MODULE.resolve_backlog(self.root, CLI, tools, DB)
+        self.assertNotEqual(resolution["status"], "BOUND")
+
+    def test_porcelain_duplicates_and_unnormalised_paths_collapse_to_one_candidate(self) -> None:
+        messy = f"{self.root}/./"
+        tools = StubToolchain({
+            ("worktree", "list", "--porcelain"): (0, porcelain(self.root, messy, self.root)),
+        })
+        candidates = MODULE.worktree_candidates(self.root, tools)
+        self.assertEqual(candidates, [str(self.root)])
+
 
 class BindLifecycle(unittest.TestCase):
     def setUp(self) -> None:
@@ -188,6 +293,68 @@ class BindLifecycle(unittest.TestCase):
         with contextlib.redirect_stdout(captured):
             self.assertEqual(MODULE.main([str(self.root)]), 2)
         self.assertEqual(json.loads(captured.getvalue())["code"], "BACKLOG-UNAVAILABLE")
+
+    def test_apply_from_a_linked_worktree_binds_the_control_path(self) -> None:
+        # T005 — a starting point far from the control still ends up creating
+        # and binding the backlog to the control's own path, never the linked one.
+        linked = self.root / "linked"
+        tools = StubToolchain({
+            ("worktree", "list", "--porcelain"): (0, porcelain(self.root, linked)),
+            ("backlog", "list"): (0, envelope([])),
+        })
+        self.inject(tools)
+        MODULE.ensure_bind(linked, apply=True, db=DB)
+        bind_call = next(call for call in tools.calls if call[2:4] == ["backlog", "bind"])
+        self.assertEqual(bind_call[bind_call.index("--path") + 1], str(self.root))
+
+
+class RealWorktree(unittest.TestCase):
+    """T007 — a stub can be wrong about git's own output format; prove it against
+    a real repository with a real linked worktree."""
+
+    def setUp(self) -> None:
+        if shutil.which("git") is None:
+            self.skipTest("git not available")
+        self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.tmp = Path(self.temporary.name).resolve()
+        self.repo = self.tmp / "repo"
+        self.repo.mkdir()
+        self._git("init", "-q")
+        self._git("-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false",
+                  "commit", "-q", "--allow-empty", "-m", "init")
+        self.linked = self.tmp / "linked"
+        self._git("worktree", "add", "-q", str(self.linked), "-b", "linked")
+
+    def tearDown(self) -> None:
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "remove", "--force", str(self.linked)],
+                       capture_output=True, text=True)
+        self.temporary.cleanup()
+
+    def _git(self, *args: str) -> None:
+        subprocess.run(["git", *args], cwd=self.repo, check=True, capture_output=True, text=True)
+
+    class Hybrid:
+        """Answers backlogctl from a stub table, delegates git to the real binary."""
+
+        def __init__(self, answers):
+            self.answers = answers
+
+        def run(self, argv, *, cwd=None, timeout=None):
+            if argv[0] == "git":
+                result = subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
+                return result.returncode, result.stdout
+            for prefix, answer in self.answers.items():
+                if tuple(argv[2:2 + len(prefix)]) == prefix:
+                    return answer
+            return 0, envelope([])
+
+    def test_resolve_from_the_real_linked_worktree_is_bound(self) -> None:
+        tools = self.Hybrid({("backlog", "list"): (0, envelope([
+            {"code": "AAA", "name": "n", "bound_path": os.path.realpath(self.repo)},
+        ]))})
+        resolution = MODULE.resolve_backlog(self.linked, CLI, tools, DB)
+        self.assertEqual(resolution["status"], "BOUND")
+        self.assertEqual(resolution["code"], "AAA")
 
 
 class ItemSync(unittest.TestCase):
