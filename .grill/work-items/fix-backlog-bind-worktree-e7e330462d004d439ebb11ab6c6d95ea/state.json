@@ -23,9 +23,16 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "plan": "se-eae6c12c6a73b7939974be61f0ad03c53b69ac177b551aed835b455e4f86e400",
       "specify": "se-77584069d741f4fb680684f4c1a9b5cf3feec5f8dfa314864162e1e1d9a09c01"
     },
     "attested_outputs": {
+      "plan": {
+        "output_sha256": "sha256:81c50de69b813f2b03a3ce6dd65c478ac96f89a556930d8cb2e2a39f208a8e34",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
       "specify": {
         "output_sha256": "sha256:d3e5e5e4d8fdca04325e586047937370dd42bfabb505bad2b54fa62a7e2bf756",
         "provenance": "current-generation",
@@ -52,9 +59,28 @@
         "reason": "",
         "state": "complete",
         "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "plan conduzido via /speckit-plan",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/029-backlog-bind-worktree/plan.md",
+            "sha256": "81c50de69b813f2b03a3ce6dd65c478ac96f89a556930d8cb2e2a39f208a8e34"
+          }
+        ],
+        "execution_branch": "cadugevaerd/chore-fix-backlog",
+        "reason": "plan.md com research, data-model, dois contratos e quickstart; Constitution Check sem violação",
+        "state": "complete",
+        "step": "plan"
       }
     ],
-    "current_step": "plan",
+    "current_step": "checklist",
     "execution_branch": "cadugevaerd/chore-fix-backlog",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -77,7 +103,7 @@
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
-      "plan": "pending",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
