@@ -1,0 +1,69 @@
+{
+  "schema": "grill-agent-orchestration-policy/v1",
+  "policy_version": "1",
+  "contract": "grill-agent-orchestration/v1",
+  "entrypoint": {
+    "kind": "canonical-skill",
+    "rule": "resolve-and-invoke",
+    "supplement_is_not": ["alias", "macrostep", "registry-entry", "skill-invocation"]
+  },
+  "roles": {
+    "codex": {
+      "leader_recommendation": "Sol",
+      "author": {"model": "gpt-6-astra", "reasoning_effort": "xhigh"},
+      "reviewer": {"model": "gpt-6-astra", "reasoning_effort": "high"}
+    },
+    "claude": {
+      "leader_recommendation": "Opus",
+      "author": {"model": "fable", "reasoning_effort": "xhigh"},
+      "reviewer": {"model": "fable", "reasoning_effort": "high"}
+    },
+    "worker": {"frontier_allowed": false}
+  },
+  "activity_matrix": {
+    "specify": {"required": ["reviewer"], "author_for_new_how": true, "leader": ["setup", "load_handoff", "record_output"]},
+    "plan": {"required": ["author", "reviewer"], "frontend": ["design_author", "design_reviewer"], "leader": ["resolution", "setup", "gates", "record", "present_preview"]},
+    "checklist": {"required": ["reviewer"], "leader": ["deterministic_check"]},
+    "tasks": {"required": ["author", "reviewer"], "leader": ["setup", "format_check"]},
+    "analyze": {"required": ["reviewer"], "author_for_redesign": true, "leader": ["deterministic_check"]},
+    "partition": {"required": [], "leader": ["parse", "group", "validate_dag"]},
+    "implement-parallel": {"required": ["workers"], "author_for_new_decision": true, "reviewer_for_judgment": true, "leader": ["dispatch", "receipts", "mechanical_apply"]},
+    "converge": {"required": ["reviewer"], "author_for_additional_plan": true, "leader": ["diff", "ancestry", "mechanical_reconcile"]},
+    "verify": {"required": ["reviewer_if_judgment"], "leader": ["run_gates", "collect_evidence"]},
+    "review": {"required": ["reviewer_independent_of_all_authors"], "leader": ["record_findings", "record_verdict"]},
+    "ship": {"required": ["author_and_reviewer_for_new_judgment", "human_authorization"], "leader": ["canonical_skill_effects"]}
+  },
+  "interview": {"activity_scope": "interview", "step_id": null, "plan_only_stop": true, "roles": ["author", "reviewer"]},
+  "capabilities": {
+    "required_before_payload": ["session_identity", "effective_model", "effective_reasoning_effort", "close_confirmation", "separate_bootstrap_transport"],
+    "block_on": ["missing", "unproven_alias", "incomplete_observation", "shared_bootstrap_and_payload"]
+  },
+  "classification": {
+    "sources": ["handoff", "du", "plan_context"],
+    "platform_devops_without_surface": "NOT_APPLICABLE",
+    "contradiction": "BLOCKED",
+    "frontend_gate": ["html_preview", "png_captures", "byte_manifest", "independent_design_author", "independent_design_reviewer", "human_approval_current_digest"]
+  },
+  "task_contract": {
+    "marker": "grill-task-files:v1",
+    "result_per_writing_task": true,
+    "result_must_be_declared_in_files": true,
+    "phase_order": "workers_then_read_only_or_deferred",
+    "no_workers": "PARTITION-NO-WORKERS",
+    "adoption_required": true
+  },
+  "references": {
+    "protocol": {"path": "plugin/skills/grill-with-docs/references/agent-orchestration.md", "sha256": "sha256:c42b59d025becab2c6e0d493c2262cfe1ad40e632665367d4b4ad877a0225dab"},
+    "task_files_template": {"path": "plugin/skills/grill-with-docs/assets/task-files.v1.template.md", "sha256": "sha256:1f6d1d5ced9a10b21245f619b50bcb5f4bef5b00de4af8b011aea6584d45449f"}
+  },
+  "presentation": {
+    "schema": "grill-gwd-presentation/v1",
+    "component": "i-have-adhd@i-have-adhd",
+    "minimum_version": "0.3.0",
+    "approved": [{"version": "0.3.0", "skill_sha256": "sha256:3170b16ace00aecb0dd7feb54c0b5aa642e7502acda06ecd24fd89a11c7127e9"}],
+    "loader": "gwd-reference/v1",
+    "scope": "gwd",
+    "application": {"default": "active", "suspend_command": "stop adhd mode", "new_session": "active", "out_of_scope": "out_of_scope"},
+    "invariants": ["read_full_approved_bytes", "preserve_higher_instructions", "preserve_requested_content", "preserve_ponytail", "no_upstream_invocation", "no_global_flag", "no_global_config_or_cache_write"]
+  }
+}

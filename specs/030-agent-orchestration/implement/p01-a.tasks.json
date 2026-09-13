@@ -1,0 +1,12 @@
+{
+  "worker": "p01-a",
+  "feature": "030-agent-orchestration",
+  "completed": ["T001"],
+  "tasks": {
+    "T001": {
+      "status": "done",
+      "summary": "Added the versioned agent-orchestration policy, task-files/v1 authoring template, and supplemental protocol. The policy fixes local protocol/template refs and SHA-256 values, role/runtime and eleven-step/interview matrix, capability and classification gates, and approved i-have-adhd 0.3.0 bytes without copying upstream content. The protocol keeps canonical skill invocation distinct from delivered context and limits Files/Result and phase-ordered deferred semantics to an adopted candidate contract.",
+      "evidence": "PYTHONDONTWRITEBYTECODE=1 python3 focused stdlib policy/template/protocol validation: strict JSON and duplicate-key rejection; local references and SHA-256 values verified; template Result rule and protocol invocation distinction verified."
+    }
+  }
+}
