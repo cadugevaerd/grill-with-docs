@@ -1,19 +1,52 @@
 #!/usr/bin/env python3
-import contextlib, hashlib, io, json, subprocess, sys, tempfile, unittest
+"""Offline contract checks for the native Orca observation seam."""
+import contextlib
+import copy
+import io
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "plugin/skills/grill-with-docs/scripts"
 sys.path.insert(0, str(SCRIPTS))
-from grill_core.agent_runtime import RuntimeBoundary, RuntimeError
+from grill_core.agent_runtime import RuntimeBoundary, RuntimeError, validate_observation
 from grill_core import store
 import grill_workspace
 
+ORCA_CAPABILITIES = {
+    "orchestration.worker-launch-preferences.v1",
+    "orchestration.federation-structured-read.v1",
+    "orchestration.federation-lifecycle-settlement.v1",
+    "orchestration.federation-release-archive.v1",
+}
 
-def observation(**changes):
-    source = b"provider observation"
-    data = {"schema":"grill-agent-observation/v1","adapter":"orca","provider":"orca","handle":"h","incarnation":"i","runtime_instance":"r","host":"host","owner_dispatch":"d","source_ref":"source","source_sha256":"","requested_model":"gpt-6-astra","requested_effort":"high","effective_model":"gpt-6-astra","effective_effort":"high","resolved_model_id":"gpt-6-astra","activity":"idle","close":"not_requested"}
-    data.update(changes); data["source_sha256"] = hashlib.sha256(source).hexdigest()
-    return source, json.dumps(data, sort_keys=True, separators=(",", ":")).encode()
+
+def pack(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+
+
+def native_sources(released=False):
+    dispatch = "ctx-1"; task = "task-1"; worktree = "worktree-1"; handle = "term-1"
+    launch = {"ok": True, "result": {
+        "dispatchId": dispatch,
+        "launch": {"requested": {"agent": "codex", "model": "gpt-6-astra", "effort": "high"}, "effective": {"agent": "codex", "model": "gpt-6-astra", "effort": "high"}},
+        "prompt": {"processIncarnation": "inc-1"},
+    }}
+    show = {"ok": True, "result": {
+        "dispatch": {"id": dispatch, "taskId": task, "hostScope": {"hostId": "host-1"}, "status": "completed" if released else "dispatched"},
+        "worker": {"dispatchId": dispatch, "runtimeEpoch": "runtime-1", "worktreeId": worktree, "agentTerminalHandle": handle, "state": "succeeded" if released else "ready", "stage": "settled" if released else "input_accepted", "startOptions": {"launch": copy.deepcopy(launch["result"]["launch"])}},
+        "terminalResource": {"terminalHandle": handle, "worktreeId": worktree, "endpointId": "runtime-1", "endpointIncarnation": "dispatch-inc-1", "ownerDispatchId": dispatch, "releaseState": "released" if released else "not_requested"},
+        "projection": {"taskId": task, "provider": {"id": "codex"}, "host": {"id": "host-1"}, "liveness": {"verdict": "exited" if released else "live", "source": "resource_release" if released else "agent_status"}, "resource": {"ownerDispatchId": dispatch, "releaseState": "released" if released else "not_requested"}},
+        "terminal": None if released else {"handle": handle, "incarnationId": "inc-1", "worktreeId": worktree, "executionHostId": "host-1"},
+    }}
+    return pack(launch), pack(show)
+
+
+def release_source(dispatch="ctx-1"):
+    return pack({"ok": True, "result": {"dispatchId": dispatch, "state": "released", "processAction": "closed_agent_terminal", "archive": {"status": "captured"}}})
 
 
 class AgentOrchestrationContract(unittest.TestCase):
@@ -50,12 +83,104 @@ class AgentOrchestrationContract(unittest.TestCase):
             self.assertIsNone(context["activation"]); self.assertIsNone(context["campaign"]); self.assertEqual(context["scheduler_runs"], {})
             stale = self.run_cli(*args, "--scope-file", "src/b.py", "--apply", "--expected-sha256", preview["expected_sha256"])
             self.assertEqual(stale[0], 2)
+    def boundary(self, probe=None, after=None, release=None, adapter="orca", capabilities=None, calls=None):
+        probe = probe or native_sources()
+        after = after or native_sources(released=True)
+        release = release or release_source()
+        calls = calls if calls is not None else []
+        return RuntimeBoundary(adapter, "orca:worker-show:ctx-1", capabilities or ORCA_CAPABILITIES, lambda: (calls.append("probe") or probe), lambda: (calls.append("observe") or probe), lambda: (calls.append("release") or release), lambda: (calls.append("readback") or after)), calls
 
-    def test_runtime_requires_actual_observation_and_full_identity(self):
-        raw = observation(); boundary = RuntimeBoundary(lambda:raw, lambda:raw, lambda:raw, lambda:observation(close="closed", activity="exited"))
-        self.assertEqual(boundary.verified("gpt-6-astra", "high")["effective_model"], "gpt-6-astra")
-        bad = observation(adapter="invented", effective_model="unresolved-alias")
-        with self.assertRaises(RuntimeError): RuntimeBoundary(lambda:bad, lambda:bad, lambda:bad, lambda:bad).verified("gpt-6-astra", "high")
+    def verified(self):
+        boundary, calls = self.boundary()
+        return boundary, boundary.verified("gpt-6-astra", "high"), calls
+
+    def test_native_bytes_prove_effective_pair_and_full_identity(self):
+        boundary, observed, calls = self.verified()
+        self.assertEqual(calls, ["probe", "observe"])
+        self.assertEqual(observed["effective_model"], "gpt-6-astra")
+        self.assertEqual(observed["effective_effort"], "high")
+        self.assertEqual(observed["incarnation"], "inc-1")
+        self.assertEqual(observed["dispatch_incarnation"], "dispatch-inc-1")
+        self.assertEqual(observed["task_id"], "task-1")
+        self.assertEqual(observed["worktree_id"], "worktree-1")
+
+    def test_unrelated_or_invented_native_source_is_refused_before_payload(self):
+        boundary, calls = self.boundary(probe=(b"unrelated bytes", native_sources()[1]))
+        with self.assertRaises(RuntimeError):
+            boundary.verified("gpt-6-astra", "high")
+        self.assertEqual(calls, ["probe"])
+        boundary, calls = self.boundary(adapter="invented", capabilities=ORCA_CAPABILITIES)
+        with self.assertRaisesRegex(RuntimeError, "SPECIALIST-CAPABILITY-UNPROVEN"):
+            boundary.verified("gpt-6-astra", "high")
+        self.assertEqual(calls, [])
+
+    def test_claimed_digest_without_the_observed_bytes_is_refused(self):
+        boundary, observed, _ = self.verified()
+        observed["source_sha256"] = "0" * 64
+        with self.assertRaisesRegex(RuntimeError, "digest mismatch"):
+            validate_observation(observed, native_sources())
+
+    def test_missing_effective_or_unresolved_alias_is_refused_before_payload(self):
+        launch, show = native_sources()
+        invalid = json.loads(show); del invalid["result"]["worker"]["startOptions"]["launch"]["effective"]["effort"]
+        boundary, calls = self.boundary(probe=(launch, pack(invalid)))
+        with self.assertRaises(RuntimeError):
+            boundary.verified("gpt-6-astra", "high")
+        self.assertEqual(calls, ["probe"])
+        alias_launch = json.loads(launch); alias_show = json.loads(show)
+        alias_launch["result"]["launch"]["requested"]["model"] = "astra"
+        alias_show["result"]["worker"]["startOptions"]["launch"]["requested"]["model"] = "astra"
+        boundary, calls = self.boundary(probe=(pack(alias_launch), pack(alias_show)))
+        with self.assertRaisesRegex(RuntimeError, "SPECIALIST-CAPABILITY-UNPROVEN"):
+            boundary.verified("astra", "high")
+        self.assertEqual(calls, ["probe", "observe"])
+
+    def test_close_requires_correlated_release_and_readback_once(self):
+        boundary, observed, calls = self.verified()
+        closed = boundary.close(observed)
+        self.assertEqual(closed["close"], "closed")
+        self.assertEqual(calls, ["probe", "observe", "release", "readback"])
+        with self.assertRaises(RuntimeError):
+            boundary.close(observed)
+        self.assertEqual(calls, ["probe", "observe", "release", "readback"])
+
+    def test_missing_readback_cannot_close(self):
+        boundary, observed, calls = self.verified()
+        boundary.read_after_close = lambda calls=calls: (calls.append("readback") or (b"", b""))
+        with self.assertRaises(RuntimeError):
+            boundary.close(observed)
+        self.assertEqual(calls, ["probe", "observe", "release", "readback"])
+
+    def test_close_refuses_pending_unknown_and_changed_identity(self):
+        for change in (
+            ("releaseState", "release_pending"),
+            ("agentWait", None),
+            ("runtimeEpoch", "runtime-2"),
+            ("host", "host-2"),
+            ("dispatch", "ctx-2"),
+            ("incarnation", "inc-2"),
+        ):
+            launch, after = native_sources(released=True)
+            after_value = json.loads(after)
+            key, value = change
+            if key == "releaseState":
+                after_value["result"]["terminalResource"]["releaseState"] = value
+            elif key == "agentWait":
+                after_value["result"]["worker"][key] = value
+            elif key == "runtimeEpoch":
+                after_value["result"]["worker"][key] = value
+            elif key == "host":
+                after_value["result"]["dispatch"]["hostScope"]["hostId"] = value
+            elif key == "dispatch":
+                after_value["result"]["terminalResource"]["ownerDispatchId"] = value
+            else:
+                launch_value = json.loads(launch); launch_value["result"]["prompt"]["processIncarnation"] = value; launch = pack(launch_value)
+            boundary, observed, calls = self.verified()
+            boundary.read_after_close = lambda launch=launch, after=pack(after_value), calls=calls: (calls.append("readback") or (launch, after))
+            with self.assertRaises(RuntimeError):
+                boundary.close(observed)
+            self.assertEqual(calls, ["probe", "observe", "release", "readback"])
 
 
-if __name__ == "__main__": unittest.main()
+if __name__ == "__main__":
+    unittest.main()
