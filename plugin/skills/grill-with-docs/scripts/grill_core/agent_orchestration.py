@@ -23,6 +23,9 @@ _OPERATION_STATES = {"INTENT", "APPLIED", "CONFIRMED", "UNKNOWN", "REFUSED"}
 _LEADER_STATES = {"ACTIVE", "RELEASING", "RELEASED"}
 _ACTIVITY_STATES = {"DECLARED", "BOOTSTRAPPING", "VERIFIED", "DISPATCHED", "RESULT_RECORDED", "ACCEPTED", "BLOCKED", "FAILED"}
 _RESOURCE_STATES = {"REGISTERED", "CLOSE_PENDING", "REMOVE_PENDING", "CLOSED", "REMOVED", "PRESERVED", "UNKNOWN"}
+_OPERATION_EDGES = {"INTENT": {"INTENT", "APPLIED", "UNKNOWN", "REFUSED"}, "APPLIED": {"APPLIED", "CONFIRMED", "UNKNOWN"}, "CONFIRMED": {"CONFIRMED"}, "UNKNOWN": {"UNKNOWN"}, "REFUSED": {"REFUSED"}}
+_ACTIVITY_EDGES = {"DECLARED": {"DECLARED", "BOOTSTRAPPING", "BLOCKED"}, "BOOTSTRAPPING": {"BOOTSTRAPPING", "VERIFIED", "BLOCKED"}, "VERIFIED": {"VERIFIED", "DISPATCHED", "BLOCKED"}, "DISPATCHED": {"DISPATCHED", "RESULT_RECORDED", "FAILED"}, "RESULT_RECORDED": {"RESULT_RECORDED", "ACCEPTED"}, "ACCEPTED": {"ACCEPTED"}, "BLOCKED": {"BLOCKED"}, "FAILED": {"FAILED"}}
+_RESOURCE_EDGES = {"REGISTERED": {"REGISTERED", "CLOSE_PENDING", "REMOVE_PENDING", "PRESERVED", "UNKNOWN"}, "CLOSE_PENDING": {"CLOSE_PENDING", "CLOSED", "PRESERVED", "UNKNOWN"}, "REMOVE_PENDING": {"REMOVE_PENDING", "REMOVED", "PRESERVED", "UNKNOWN"}, "PRESERVED": {"PRESERVED", "CLOSE_PENDING", "REMOVE_PENDING"}, "UNKNOWN": {"UNKNOWN", "CLOSE_PENDING", "REMOVE_PENDING"}, "CLOSED": {"CLOSED"}, "REMOVED": {"REMOVED"}}
 
 
 class OrchestrationError(ValueError):
@@ -186,23 +189,37 @@ def _operation(operation_id: str, value: Any) -> None:
     _json(value["intended_after"], "operation intended_after")
 
 
+def _checkpoint_digest(value: dict[str, Any]) -> str:
+    try:
+        from .store import jcs_sha256
+    except ImportError:
+        from grill_core.store import jcs_sha256
+    payload = copy.deepcopy(value)
+    del payload["checkpoint_sha256"]
+    return jcs_sha256(payload)
+
+
 def _checkpoint(checkpoint_id: str, value: Any) -> None:
     _id(checkpoint_id, "checkpoint id")
     required = {"schema", "checkpoint_id", "context_id", "previous_checkpoint_id", "worktree_identity", "created_at", "store_revision", "journal_anchor", "state_sha256", "inputs_manifest", "workflow_sha256", "constitution_sha256", "policy_sha256", "activation", "campaign", "development_sequence", "current_step", "step_states", "accepted_outputs", "accepted_executions", "pending_attempts", "scheduler_runs", "operations", "cleanup_obligations", "preserved_resources", "blocking_activity", "visual_state", "presentation", "checkpoint_sha256"}
     value = _object(value, required, set(), "checkpoint")
-    if value["schema"] != CHECKPOINT_SCHEMA or value["checkpoint_id"] != checkpoint_id or type(value["store_revision"]) is not int:
+    if value["schema"] != CHECKPOINT_SCHEMA or value["checkpoint_id"] != checkpoint_id or type(value["store_revision"]) is not int or value["store_revision"] < 0:
         _fail("invalid checkpoint")
     _id(value["context_id"], "checkpoint context")
     _text(value["previous_checkpoint_id"], "checkpoint previous_checkpoint_id", nullable=True)
     _text(value["created_at"], "checkpoint created_at")
     for key in ("state_sha256", "workflow_sha256", "constitution_sha256", "policy_sha256", "checkpoint_sha256"):
         _digest(value[key], f"checkpoint {key}")
-    for key in ("worktree_identity", "journal_anchor", "inputs_manifest", "activation", "campaign", "development_sequence", "step_states", "accepted_outputs", "accepted_executions", "pending_attempts", "scheduler_runs", "operations", "cleanup_obligations", "preserved_resources", "visual_state"):
+    for key in ("worktree_identity", "journal_anchor", "inputs_manifest", "development_sequence", "step_states", "accepted_outputs", "accepted_executions", "pending_attempts", "scheduler_runs", "operations", "cleanup_obligations", "preserved_resources", "visual_state"):
         if not isinstance(value[key], dict): _fail(f"invalid checkpoint {key}")
+        _json(value[key], f"checkpoint {key}")
+    for key in ("activation", "campaign"):
+        if value[key] is not None and not isinstance(value[key], dict): _fail(f"invalid checkpoint {key}")
         _json(value[key], f"checkpoint {key}")
     _text(value["current_step"], "checkpoint current_step", nullable=True)
     _text(value["blocking_activity"], "checkpoint blocking_activity", nullable=True)
     if value["presentation"] is not None: _presentation(value["presentation"])
+    if value["checkpoint_sha256"] != _checkpoint_digest(value): _fail("checkpoint digest mismatch")
 
 
 def _activity(activity_id: str, value: Any, contexts: dict[str, Any]) -> None:
@@ -323,13 +340,25 @@ def validate_block(block: Any) -> dict[str, Any]:
             _scheduler_runs(context["scheduler_runs"], item["contexts"])
         if not isinstance(item["operations"], dict) or not isinstance(item["checkpoints"], dict):
             _fail("invalid operations or checkpoints")
+        idempotency = {}
         for operation_id, operation in item["operations"].items():
             _operation(operation_id, operation)
             if operation["context_id"] not in item["contexts"]: _fail("operation has unknown context")
+            if operation["fence"] != item["contexts"][operation["context_id"]]["leader"]["fence"]: _fail("operation fence does not match context authority")
+            identity = (operation["kind"], operation["context_id"], tuple(operation["subject_ids"]), operation["input_sha256"])
+            prior = idempotency.setdefault(operation["idempotency_key"], identity)
+            if prior != identity: _fail("idempotency key collides with different operation")
         for checkpoint_id, checkpoint in item["checkpoints"].items():
             _checkpoint(checkpoint_id, checkpoint)
             if checkpoint["context_id"] not in item["contexts"] or (checkpoint["previous_checkpoint_id"] is not None and checkpoint["previous_checkpoint_id"] not in item["checkpoints"]):
                 _fail("checkpoint has unknown reference")
+        for checkpoint_id in item["checkpoints"]:
+            seen = set()
+            cursor = checkpoint_id
+            while cursor is not None:
+                if cursor in seen: _fail("checkpoint predecessor cycle")
+                seen.add(cursor)
+                cursor = item["checkpoints"][cursor]["previous_checkpoint_id"]
         if item["checkpoint_head"] is not None and item["checkpoint_head"] not in item["checkpoints"]:
             _fail("unknown checkpoint head")
         for activity_id, activity in item["activities"].items():
@@ -392,20 +421,45 @@ def validate_transition(previous: Any, candidate: Any) -> None:
             if context_id not in old["contexts"] and context["epoch"] <= old_max: _fail("context epoch regression")
         old_current, new_current = old["current_context_id"], new["current_context_id"]
         if old_current != new_current:
-            if new_current is None or new_current in old["contexts"]: _fail("current context epoch regression")
+            if new_current is None: _fail("current context epoch regression")
             destination = new["contexts"][new_current]
             if old_current is None:
-                if destination["predecessor_context_id"] is not None or destination["state"] != "ACTIVE": _fail("invalid first context binding")
-            elif destination["predecessor_context_id"] != old_current or destination["continuity_ref"] is None or destination["state"] != "ACTIVE" or new["contexts"][old_current]["state"] != "SUPERSEDED":
+                if new_current in old["contexts"] or destination["predecessor_context_id"] is not None or destination["state"] != "ACTIVE": _fail("invalid first context binding")
+            elif destination["predecessor_context_id"] != old_current or destination["continuity_ref"] is None or destination["state"] != "ACTIVE" or new["contexts"][old_current]["state"] != "SUPERSEDED" or destination["epoch"] <= new["contexts"][old_current]["epoch"]:
                 _fail("current context requires superseded successor")
+            elif new_current in old["contexts"] and old["contexts"][new_current]["state"] != "PREPARED":
+                _fail("current context requires prepared successor")
         for operation_id, operation in old["operations"].items():
             if operation_id not in new["operations"]: _fail("operation removed")
             later = new["operations"][operation_id]
             for key in ("kind", "context_id", "fence", "subject_ids", "input_sha256", "expected_before", "intended_after", "idempotency_key"):
                 if later[key] != operation[key]: _fail("operation identity changed")
-            if operation["state"] == "CONFIRMED" and later != operation: _fail("confirmed operation changed")
+            if later["state"] not in _OPERATION_EDGES[operation["state"]]: _fail("invalid operation transition")
+        activity_identity = {"activity_id", "context_id", "step_id", "activity_scope", "activity_type", "role", "attempt", "author_activity_ids", "input_manifest", "input_sha256", "task_binding", "runtime", "requested_model", "requested_effort", "policy_sha256", "write_files"}
+        if not set(old["activities"]).issubset(new["activities"]): _fail("activity history removed")
+        for activity_id, activity in old["activities"].items():
+            later = new["activities"][activity_id]
+            if any(later[key] != activity[key] for key in activity_identity): _fail("activity identity changed")
+            if later["state"] not in _ACTIVITY_EDGES[activity["state"]]: _fail("invalid activity transition")
+        resource_identity = {"kind", "agent_id", "activity_id", "scheduler_run_id", "worker_id", "wave_id", "origin_context_id", "identity", "creation_observation"}
+        if not set(old["resources"]).issubset(new["resources"]): _fail("resource history removed")
+        for resource_id, resource in old["resources"].items():
+            later = new["resources"][resource_id]
+            if any(later[key] != resource[key] for key in resource_identity): _fail("resource identity changed")
+            if later["state"] not in _RESOURCE_EDGES[resource["state"]]: _fail("invalid resource transition")
+        if not set(old["visual_decisions"]).issubset(new["visual_decisions"]): _fail("visual decision history removed")
+        for decision_id, decision in old["visual_decisions"].items():
+            if new["visual_decisions"][decision_id] != decision: _fail("visual decision history changed")
         for checkpoint_id, checkpoint in old["checkpoints"].items():
             if new["checkpoints"].get(checkpoint_id) != checkpoint: _fail("checkpoint immutable")
+        old_head, new_head = old["checkpoint_head"], new["checkpoint_head"]
+        if old_head is not None:
+            if new_head is None: _fail("checkpoint head cannot be cleared")
+            cursor = new_head
+            while cursor != old_head:
+                predecessor = new["checkpoints"][cursor]["previous_checkpoint_id"]
+                if predecessor is None: _fail("checkpoint head regression")
+                cursor = predecessor
 
 
 def require_authority(item: dict[str, Any], context_id: str, epoch: int, session_ref: str) -> dict[str, Any]:

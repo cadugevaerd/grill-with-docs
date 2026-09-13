@@ -31,7 +31,7 @@ def pack(value):
 def native_sources(released=False):
     dispatch = "ctx-1"; task = "task-1"; worktree = "worktree-1"; handle = "term-1"
     launch = {"ok": True, "result": {
-        "dispatchId": dispatch,
+        "dispatchId": dispatch, "taskId": task,
         "launch": {"requested": {"agent": "codex", "model": "gpt-6-astra", "effort": "high"}, "effective": {"agent": "codex", "model": "gpt-6-astra", "effort": "high"}},
         "prompt": {"processIncarnation": "inc-1"},
     }}
@@ -150,6 +150,43 @@ class AgentOrchestrationContract(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             boundary.close(observed)
         self.assertEqual(calls, ["probe", "observe", "release", "readback"])
+
+    def test_launch_and_current_incarnation_must_correlate_to_worker_show(self):
+        for key, value in (("dispatchId", "ctx-other"), ("taskId", "task-other")):
+            launch, show = native_sources(); changed = json.loads(launch); changed["result"][key] = value
+            boundary, calls = self.boundary(probe=(pack(changed), show))
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                boundary.verified("gpt-6-astra", "high")
+            self.assertEqual(calls, ["probe"])
+        launch, show = native_sources(); changed = json.loads(show); changed["result"]["terminal"] = None
+        boundary, calls = self.boundary(probe=(launch, pack(changed)))
+        with self.assertRaisesRegex(RuntimeError, "current session incarnation unproven"):
+            boundary.verified("gpt-6-astra", "high")
+        self.assertEqual(calls, ["probe"])
+
+    def test_liveness_is_authoritative_and_unknown_or_exited_cannot_verify(self):
+        for mutation in (
+            lambda value: value["result"]["projection"].update(liveness={"verdict": "unverifiable"}),
+            lambda value: value["result"]["worker"].pop("state"),
+            lambda value: (value["result"]["projection"].update(liveness={"verdict": "exited", "source": "agent_status"}), value["result"]["terminal"].update(status="live")),
+        ):
+            launch, show = native_sources(); changed = json.loads(show); mutation(changed)
+            boundary, calls = self.boundary(probe=(launch, pack(changed)))
+            with self.assertRaisesRegex(RuntimeError, "SPECIALIST-CAPABILITY-UNPROVEN"):
+                boundary.verified("gpt-6-astra", "high")
+            self.assertEqual(calls, ["probe", "observe"])
+        launch, show = native_sources(); idle = json.loads(show); idle["result"]["worker"]["state"] = "idle"
+        boundary, calls = self.boundary(probe=(launch, pack(idle)))
+        self.assertEqual(boundary.verified("gpt-6-astra", "high")["activity"], "idle")
+        self.assertEqual(calls, ["probe", "observe"])
+
+    def test_unknown_close_readback_reconciles_before_another_release(self):
+        boundary, observed, calls = self.verified(); after = [(b"", b""), native_sources(released=True)]
+        boundary.read_after_close = lambda: (calls.append("readback") or after.pop(0))
+        with self.assertRaises(RuntimeError):
+            boundary.close(observed)
+        closed = boundary.close(observed)
+        self.assertEqual((closed["close"], calls.count("release"), calls), ("closed", 1, ["probe", "observe", "release", "readback", "readback"]))
 
     def test_close_refuses_pending_unknown_and_changed_identity(self):
         for change in (

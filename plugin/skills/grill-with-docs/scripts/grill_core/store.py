@@ -1689,6 +1689,22 @@ def transact_with_event(root: str | Path, mutate: Callable[[dict[str, Any]], dic
             if _read_regular(receipt_target) != jcs(receipt_payload) + b"\n":
                 _fail(STATE_DIVERGENCE, f"receipt collision with different bytes: {receipt_target}")
         current = _require(paths)
+        if event.get("schema") == "grill-orchestration-event/v1":
+            matches = [record for record in _validated_journal_records(paths) if record.get("event") == event["event"] and all(record.get(key) == value for key, value in event.items() if key not in {"event", "receipt_sha256"})]
+            if len(matches) > 1:
+                _fail(STATE_DIVERGENCE, "duplicate semantic event")
+            if matches:
+                if matches[0].get("receipt_sha256") != event["receipt_sha256"]:
+                    _fail(STATE_DIVERGENCE, "inconsistent orchestration event replay")
+                proposed = mutate(copy.deepcopy(current.document))
+                try:
+                    item = current.document["agent_orchestration"]["work_items"][event["work_id"]]
+                    replayed = (proposed == current.document and item.get("last_transition") == {"event_sequence": matches[0]["sequence"], "receipt_sha256": event["receipt_sha256"], "operation_id": event["operation_id"]})
+                except (KeyError, TypeError):
+                    replayed = False
+                if not replayed:
+                    _fail(STATE_DIVERGENCE, "inconsistent orchestration event replay")
+                return current
         proposed = mutate(copy.deepcopy(current.document))
         if not isinstance(proposed, dict) or proposed.get("revision") != current.revision: _fail(STATE_DIVERGENCE, "transition mutation carries a stale revision")
         # The next semantic record is known under the global lock and is part

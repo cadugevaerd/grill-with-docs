@@ -1,1 +1,22 @@
-{"schema":"grill-task-result/v1","worker":"p02-a-r1","completed":["T002","T003"],"requires_fixes":["T004"],"evidence":{"T003":{"adapter":"orca","capabilities":["orchestration.worker-launch-preferences.v1","orchestration.federation-structured-read.v1","orchestration.federation-lifecycle-settlement.v1","orchestration.federation-release-archive.v1"],"checks":{"agent_orchestration_contract":{"command":"PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py","exit_code":0},"native_orca_source_shapes":{"exit_code":0,"sources":["p02-t002-fix/launch.json","runtime-source-shapes/worker-show-selected.json","p02-t002-fix/release.json","runtime-source-shapes/worker-show-after-release.json"]},"orchestrator_store_contract":{"command":"PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py","exit_code":0}}},"pending":["T005"]}}
+{
+  "schema": "grill-task-result/v1",
+  "worker": "p02-a-r1",
+  "completed": [],
+  "review_required": {"T002": ["R1", "independent-review"], "T003": ["independent-review"]},
+  "requires_fixes": ["T004"],
+  "pending": ["T005"],
+  "fixed_findings": {"T002": ["R2", "R3", "R4", "R5", "R9"], "T003": ["R6", "R7", "R8"]},
+  "evidence": {
+    "finding_checks": {
+      "R2": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": 84130, "expected": "PREPARED successor promotes by CAS; used context cannot become current"},
+      "R3": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": 84130, "expected": "operation edges, idempotency and context fence hold in Store and recovery"},
+      "R4": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": 84130, "expected": "legal lifecycles preserve resource, activity and visual history; terminals do not reopen"},
+      "R5": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": 84130, "expected": "checkpoint digest, references, acyclic chain and committed head are structural invariants"},
+      "R9": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": 84130, "expected": "exact operation event replay returns before WAL; inconsistent replay fails"},
+      "R6": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py", "exit_code": 0, "session_id": 52879, "expected": "launch dispatch/task and current incarnation must correlate to native worker-show"},
+      "R7": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py", "exit_code": 0, "session_id": 52879, "expected": "only authoritative live/known worker state verifies; unknown and exited refuse payload"},
+      "R8": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py", "exit_code": 0, "session_id": 52879, "expected": "unknown close readback reconciles before another release request"}
+    },
+    "limitation": "R8 pending attempt is process-local; durable operation recovery remains T005."
+  }
+}

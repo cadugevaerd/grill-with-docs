@@ -133,17 +133,18 @@ def _orca_observation(source_ref: str, launch_raw: bytes, show_raw: bytes) -> di
     if terminal is not None and not isinstance(terminal, dict):
         _fail("invalid terminal")
     requested_model, requested_effort, effective_model, effective_effort, provider = _launch_pair(launch, worker)
-    dispatch_id = _same("dispatch", dispatch.get("id"), worker.get("dispatchId"), resource.get("ownerDispatchId"))
+    dispatch_id = _same("dispatch", launch.get("dispatchId"), dispatch.get("id"), worker.get("dispatchId"), resource.get("ownerDispatchId"))
     if dispatch_id not in source_ref:
         _fail("uncorrelated observation source")
     projection = _mapping(show.get("projection"), "projection")
-    task_id = _same("task", dispatch.get("taskId"), projection.get("taskId"))
+    task_id = _same("task", launch.get("taskId"), dispatch.get("taskId"), projection.get("taskId"))
     worktree_id = _same("worktree", worker.get("worktreeId"), resource.get("worktreeId"))
     runtime_instance = _same("runtime instance", worker.get("runtimeEpoch"), resource.get("endpointId"))
     dispatch_incarnation = _string(resource.get("endpointIncarnation"), "dispatch incarnation")
     incarnation = _string(_mapping(launch.get("prompt"), "launch prompt").get("processIncarnation"), "launch process incarnation")
     handle = _same("terminal handle", worker.get("agentTerminalHandle"), resource.get("terminalHandle"))
     host = _string(host_scope.get("hostId"), "host")
+    liveness = projection.get("liveness")
     if terminal is not None:
         _same("terminal handle", handle, terminal.get("handle"))
         _same("worktree", worktree_id, terminal.get("worktreeId"))
@@ -155,16 +156,24 @@ def _orca_observation(source_ref: str, launch_raw: bytes, show_raw: bytes) -> di
     projection_host = projection.get("host")
     if projection_host is not None:
         _same("host", host, _mapping(projection_host, "projection host").get("id"))
+    closed = (resource.get("releaseState") == "released" and isinstance(liveness, dict)
+              and worker.get("agentWait", object()) is not None and dispatch.get("status") == "completed"
+              and worker.get("stage") == "settled" and worker.get("state") in {"succeeded", "failed"}
+              and liveness.get("verdict") == "exited" and liveness.get("source") == "resource_release"
+              and _mapping(projection.get("resource"), "release resource").get("releaseState") == "released"
+              and _mapping(projection.get("resource"), "release resource").get("ownerDispatchId") == dispatch_id)
+    if terminal is None and not closed:
+        _fail("current session incarnation unproven")
     close, activity = "not_requested", "unknown"
     if resource.get("releaseState") == "not_requested":
-        activity = "active" if worker.get("state") in {"ready", "running"} else "idle"
+        if isinstance(liveness, dict) and liveness.get("verdict") == "exited":
+            activity = "exited"
+        elif isinstance(liveness, dict) and liveness.get("verdict") == "live" and liveness.get("source") == "agent_status":
+            activity = {"ready": "active", "running": "active", "idle": "idle"}.get(worker.get("state"), "unknown")
     elif resource.get("releaseState") in {"release_pending", "pending"}:
         close = "pending"
     elif resource.get("releaseState") == "released":
-        liveness = _mapping(projection.get("liveness"), "release liveness")
-        resource_projection = _mapping(projection.get("resource"), "release resource")
-        agent_wait = worker.get("agentWait", object())
-        if agent_wait is not None and dispatch.get("status") == "completed" and worker.get("stage") == "settled" and worker.get("state") in {"succeeded", "failed"} and liveness.get("verdict") == "exited" and liveness.get("source") == "resource_release" and resource_projection.get("releaseState") == "released" and resource_projection.get("ownerDispatchId") == dispatch_id:
+        if closed:
             close, activity = "closed", "exited"
         else:
             close = "unknown"
@@ -193,6 +202,8 @@ class RuntimeBoundary:
     request_close: Callable[[], bytes]
     read_after_close: Callable[[], tuple[bytes, bytes]]
     _closed: bool = field(default=False, init=False)
+    # Process-local only; T005 owns durable operation recovery across boundaries.
+    _close_pending: bool = field(default=False, init=False)
 
     def _supported(self) -> None:
         if self.adapter != "orca" or not isinstance(self.source_ref, str) or not self.source_ref or not _ORCA_CAPABILITIES.issubset(self.capabilities):
@@ -210,7 +221,7 @@ class RuntimeBoundary:
         observation = self._read(self.observe)
         if _identity(probed) != _identity(observation):
             _fail("SPECIALIST-CAPABILITY-UNPROVEN")
-        if not isinstance(requested_model, str) or not requested_model or not isinstance(requested_effort, str) or not requested_effort or observation["effective_model"] != requested_model or observation["effective_effort"] != requested_effort or observation["resolved_model_id"] != observation["effective_model"]:
+        if not isinstance(requested_model, str) or not requested_model or not isinstance(requested_effort, str) or not requested_effort or observation["effective_model"] != requested_model or observation["effective_effort"] != requested_effort or observation["resolved_model_id"] != observation["effective_model"] or observation["activity"] not in {"active", "idle"} or observation["close"] != "not_requested":
             _fail("SPECIALIST-CAPABILITY-UNPROVEN")
         return observation
 
@@ -219,11 +230,14 @@ class RuntimeBoundary:
             _fail("runtime close already confirmed")
         expected = validate_observation(expected)
         self._supported()
-        release = _object(self.request_close(), "Orca worker-release")
-        if release.get("dispatchId") != expected["owner_dispatch"] or release.get("state") != "released" or release.get("processAction") != "closed_agent_terminal" or _mapping(release.get("archive"), "release archive").get("status") != "captured":
-            _fail("runtime close unconfirmed")
+        if not self._close_pending:
+            self._close_pending = True
+            release = _object(self.request_close(), "Orca worker-release")
+            if release.get("dispatchId") != expected["owner_dispatch"] or release.get("state") != "released" or release.get("processAction") != "closed_agent_terminal" or _mapping(release.get("archive"), "release archive").get("status") != "captured":
+                _fail("runtime close unconfirmed")
         observed = self._read(self.read_after_close)
         if _identity(observed) != _identity(expected) or observed["close"] != "closed" or observed["activity"] != "exited":
             _fail("runtime close unconfirmed")
         self._closed = True
+        self._close_pending = False
         return observed
