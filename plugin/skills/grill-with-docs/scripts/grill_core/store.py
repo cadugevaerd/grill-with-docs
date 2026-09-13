@@ -1531,19 +1531,19 @@ def _remove_pending(paths: StorePaths) -> None:
 def _transition_fields(event: Any, receipt: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     if not isinstance(event, dict) or not isinstance(receipt, dict): _invalid("transition event and receipt must be objects")
     if event.get("schema") == "grill-orchestration-event/v1":
-        required = {"schema", "event", "work_id", "context_id", "input_sha256", "output_sha256", "receipt_sha256"}
+        required = {"schema", "event", "work_id", "context_id", "operation_id", "input_sha256", "output_sha256", "receipt_sha256"}
         if set(event) != required or not isinstance(event["event"], str) or not event["event"].startswith("agent.orchestration."):
             _invalid("invalid agent orchestration event keys")
         _id = lambda value, label: isinstance(value, str) and SAFE_NAME_RE.match(value)
-        if not _id(event["work_id"], "work_id") or not _id(event["context_id"], "context_id"):
+        if not _id(event["work_id"], "work_id") or not _id(event["context_id"], "context_id") or not _id(event["operation_id"], "operation_id"):
             _invalid("invalid agent orchestration event identity")
         for key in ("input_sha256", "receipt_sha256"):
             if not isinstance(event[key], str) or not HEX64_RE.match(event[key]): _invalid(f"invalid agent orchestration {key}")
         if event["output_sha256"] is not None and (not isinstance(event["output_sha256"], str) or not HEX64_RE.match(event["output_sha256"])): _invalid("invalid agent orchestration output_sha256")
-        receipt_required = {"schema", "category", "name", "work_id", "context_id", "input_sha256", "output_sha256"}
+        receipt_required = {"schema", "category", "name", "work_id", "context_id", "operation_id", "input_sha256", "output_sha256"}
         if set(receipt) != receipt_required or receipt.get("schema") != "grill-orchestration-receipt/v1" or receipt.get("category") not in RECEIPT_CATEGORIES or not _id(receipt.get("name"), "name"):
             _invalid("invalid agent orchestration receipt keys")
-        for key in ("work_id", "context_id", "input_sha256", "output_sha256"):
+        for key in ("work_id", "context_id", "operation_id", "input_sha256", "output_sha256"):
             if receipt.get(key) != event[key]: _invalid(f"receipt/event correlation mismatch: {key}")
         return copy.deepcopy(event), copy.deepcopy(receipt)
     required = {"event", "work_id", "run_id", "wave_id", "base_commit", "input_sha256", "output_sha256", "receipt_sha256"}
@@ -1619,9 +1619,11 @@ def _candidate_transition(candidate: dict[str, Any], event: dict[str, Any], sequ
         try:
             item = candidate["agent_orchestration"]["work_items"][event["work_id"]]
             if item["current_context_id"] != event["context_id"]: raise KeyError
+            operation = item["operations"][event["operation_id"]]
+            if operation["context_id"] != event["context_id"] or operation["input_sha256"] != event["input_sha256"] or operation["result_sha256"] != event["output_sha256"]: raise KeyError
         except (KeyError, TypeError):
-            _invalid("transition does not name a candidate orchestration context")
-        item["last_transition"] = {"event_sequence": sequence, "receipt_sha256": event["receipt_sha256"]}
+            _invalid("transition does not correlate candidate orchestration operation")
+        item["last_transition"] = {"event_sequence": sequence, "receipt_sha256": event["receipt_sha256"], "operation_id": event["operation_id"]}
         return stamp(candidate, candidate["revision"], _now(now))
     try:
         run = candidate["work_items"][event["work_id"]]["gauntlet"]["runs"][event["run_id"]]
@@ -1642,7 +1644,10 @@ def _validate_candidate_transition(candidate: dict[str, Any], event: dict[str, A
     if event.get("schema") == "grill-orchestration-event/v1":
         try:
             item = candidate["agent_orchestration"]["work_items"][event["work_id"]]
-            valid = item["current_context_id"] == event["context_id"] and item.get("last_transition") == {"event_sequence": sequence, "receipt_sha256": event["receipt_sha256"]}
+            operation = item["operations"][event["operation_id"]]
+            valid = (item["current_context_id"] == event["context_id"] and operation["context_id"] == event["context_id"]
+                     and operation["input_sha256"] == event["input_sha256"] and operation["result_sha256"] == event["output_sha256"]
+                     and item.get("last_transition") == {"event_sequence": sequence, "receipt_sha256": event["receipt_sha256"], "operation_id": event["operation_id"]})
         except (KeyError, TypeError): valid = False
         if not valid: _fail(STATE_DIVERGENCE, "pending orchestration transition correlation diverges")
         return
@@ -1732,6 +1737,21 @@ def _recover_pending_transition_locked(paths: StorePaths, root: str | Path, *, n
     if not isinstance(intent, dict) or set(intent) != {"schema", "candidate", "event", "receipt"} or intent["schema"] != "grill-transition-wal/v1": _invalid("invalid pending transition intent")
     event, receipt = _transition_fields(intent["event"], intent["receipt"]); event = _bind_receipt_hash(event, receipt)
     candidate = _validate_document(intent["candidate"], paths.orchestrator)
+    # A fault after the commit anchor makes the old snapshot intentionally
+    # fail its normal tail-anchor check.  Recovery reads that snapshot raw,
+    # validates its structure, and applies the same transition gate before
+    # publishing a still-pending candidate.
+    current = _snapshot_from(_read_regular(paths.orchestrator), paths.orchestrator)
+    if current.revision == candidate["revision"]:
+        if current.content_sha256 != candidate["content_sha256"]:
+            _fail(STATE_DIVERGENCE, "published snapshot differs from pending candidate")
+    else:
+        if current.revision != candidate["revision"] - 1:
+            _fail(STATE_DIVERGENCE, "pending candidate revision is not the next revision")
+        _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
+        _validate_orchestration_transition(current.document, candidate)
+        if jcs(candidate["project"]) != jcs(current.document["project"]):
+            _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
     records = _validated_journal_records(paths)
     matches = [r for r in records if r.get("event") == event["event"] and all(r.get(k) == v for k, v in event.items() if k != "event")]
     if len(matches) > 1: _fail(STATE_DIVERGENCE, "duplicate semantic event in pending transition")
@@ -1741,8 +1761,6 @@ def _recover_pending_transition_locked(paths: StorePaths, root: str | Path, *, n
     receipt_file = receipt_path(root, receipt["category"], receipt["name"])
     _verify_transition_receipt(receipt_file, event, receipt)
     _validate_candidate_transition(candidate, event, matches[0]["sequence"])
-    current = _snapshot_from(_read_regular(paths.orchestrator), paths.orchestrator)
-    _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
     if current.revision == candidate["revision"]:
         if current.content_sha256 != candidate["content_sha256"]: _fail(STATE_DIVERGENCE, "published snapshot differs from pending candidate")
         _remove_pending(paths); return _require(paths)

@@ -15,6 +15,13 @@ from grill_core import store
 POSIX=os.name=='posix'
 LINUX=sys.platform.startswith('linux')
 CLOCK=lambda: '2026-01-01T00:00:00Z'
+ORCHESTRATION_ORIGIN={'state_sha256':'1'*64,'metadata_sha256':'2'*64,'activation':None,'campaign':None,'lifecycle':'ACTIVE','worktree':{'root':'/fixture','branch':'main'}}
+def ORCHESTRATION_CONTEXT(context_id='ctx-1',epoch=1,predecessor=None,continuity=None,state='ACTIVE',leader_state='ACTIVE'):
+ return {'context_id':context_id,'epoch':epoch,'predecessor_context_id':predecessor,'continuity_ref':continuity,'runtime':'codex','adapter':'codex','activation':None,'campaign':None,'scheduler_runs':{},'leader':{'owner_id':context_id,'session_ref':'session-1','incarnation':None,'fence':epoch,'epoch':epoch,'state':leader_state,'observation_ref':None,'observation_sha256':None},'state':state,'policy_sha256':'a'*64,'inputs_sha256':'b'*64}
+def ORCHESTRATION_OPERATION(operation_id='op-1',context_id='ctx-1',result_sha256=None):
+ return {'kind':'checkpoint','context_id':context_id,'fence':1,'subject_ids':['subject-1'],'input_sha256':'3'*64,'expected_before':{},'intended_after':{},'idempotency_key':'key-1','state':'INTENT','result_ref':None,'result_sha256':result_sha256,'observation_ref':None,'error':None}
+def ORCHESTRATION_ITEM(contexts=None,operations=None):
+ return {'policy_ref':'policy/v1','policy_sha256':'a'*64,'adopted_at':CLOCK(),'origin':dict(ORCHESTRATION_ORIGIN),'current_context_id':None if contexts is None else 'ctx-1','contexts':{} if contexts is None else contexts,'activities':{},'resources':{},'operations':{} if operations is None else operations,'checkpoints':{},'checkpoint_head':None,'visual_decisions':{},'scope_files':['specs/result.json'],'scope_revision':1,'scope_history':[{'revision':1,'files':['specs/result.json'],'inputs_sha256':'4'*64}],'last_transition':None}
 def WORK_ITEM(lifecycle='ACTIVE',slug='auth',type_='feature',worktree=None,monitoring=None):
  return {'type':type_,'slug':slug,'lifecycle':lifecycle,'worktree':worktree,'monitoring':monitoring}
 def GAUNTLET_RECEIPT(input_sha256='1'*64,name='gauntlet-run-alpha-1',base_commit='e'*40,wave_id='wave-0001'):
@@ -137,13 +144,64 @@ class StoreContract(unittest.TestCase):
 
  def test_agent_orchestration_is_top_level_write_once_and_wal_backed(self):
   self.register()
-  item={'policy_ref':'policy/v1','policy_sha256':'a'*64,'adopted_at':CLOCK(),'origin':{},'current_context_id':None,'contexts':{},'activities':{},'resources':{},'operations':{},'checkpoints':{},'checkpoint_head':None,'visual_decisions':{},'scope_files':['specs/result.json'],'scope_revision':1,'scope_history':[],'last_transition':None}
+  item=ORCHESTRATION_ITEM()
   def adopt(doc):
    doc['agent_orchestration']={'schema':'grill-agent-orchestration/v1','work_items':{'orchestration-work':item}}; return doc
   snap=store.transact(self.r,adopt,now=CLOCK)
   self.assertIn('agent_orchestration',snap.document)
   with self.assertRaises(store.StoreError):
    store.transact(self.r,lambda doc: (doc.pop('agent_orchestration'),doc)[1],now=CLOCK)
+
+ def _orchestration_doc(self, contexts=None, operations=None):
+  return {'schema':'grill-agent-orchestration/v1','work_items':{'orchestration-work':ORCHESTRATION_ITEM(contexts,operations)}}
+
+ def test_orchestration_rejects_closed_nested_entities_and_uncorrelated_refs(self):
+  self.register()
+  for field, value in (('activities', {'bad':{'state':'INVENTED','unknown':True}}), ('resources', {'bad':False}), ('visual_decisions', {'bad':False})):
+   def mutate(document, field=field, value=value):
+    document['agent_orchestration']=self._orchestration_doc(); document['agent_orchestration']['work_items']['orchestration-work'][field]=value; return document
+   with self.subTest(field=field), self.assertRaises(store.StoreError) as ctx: store.transact(self.r,mutate,now=CLOCK)
+   self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID')
+  def bad_context(document):
+   document['agent_orchestration']=self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()}); document['agent_orchestration']['work_items']['orchestration-work']['current_context_id']='ctx-unknown'; return document
+  with self.assertRaises(store.StoreError): store.transact(self.r,bad_context,now=CLOCK)
+
+ def test_orchestration_epochs_scope_and_first_binding_have_closed_transitions(self):
+  self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}
+  store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc(contexts)},now=CLOCK)
+  def successor(document):
+   item=document['agent_orchestration']['work_items']['orchestration-work']; item['contexts']['ctx-1']['state']='SUPERSEDED'; item['contexts']['ctx-2']=ORCHESTRATION_CONTEXT('ctx-2',2,'ctx-1','receipts/continuity-1',state='ACTIVE'); item['current_context_id']='ctx-2'; return document
+  store.transact(self.r,successor,now=CLOCK)
+  def regress(document): document['agent_orchestration']['work_items']['orchestration-work']['current_context_id']='ctx-1'; return document
+  with self.assertRaises(store.StoreError): store.transact(self.r,regress,now=CLOCK)
+  def silent_scope(document): document['agent_orchestration']['work_items']['orchestration-work']['scope_files']=['specs/other.json']; return document
+  with self.assertRaises(store.StoreError): store.transact(self.r,silent_scope,now=CLOCK)
+  self.tearDown(); self.setUp(); self.register()
+  store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
+  def bind(document):
+   context=document['agent_orchestration']['work_items']['orchestration-work']['contexts']['ctx-1']; context['activation']={'run':'first'}; context['campaign']={'run':'first'}; context['leader']['state']='RELEASING'; return document
+  self.assertEqual(store.transact(self.r,bind,now=CLOCK).revision,3)
+
+ def test_orchestration_event_operation_id_replays_and_recovery_keeps_origin_write_once(self):
+  class InjectedFault(RuntimeError): pass
+  self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}; operations={'op-1':ORCHESTRATION_OPERATION()}
+  store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc(contexts,operations)},now=CLOCK)
+  receipt={'schema':'grill-orchestration-receipt/v1','category':'runtime','name':'orchestration-op-1','work_id':'orchestration-work','context_id':'ctx-1','operation_id':'op-1','input_sha256':'3'*64,'output_sha256':None}
+  event={'schema':'grill-orchestration-event/v1','event':'agent.orchestration.recorded','work_id':'orchestration-work','context_id':'ctx-1','operation_id':'op-1','input_sha256':'3'*64,'output_sha256':None,'receipt_sha256':store.jcs_sha256(receipt)}
+  def interrupt(point):
+   if point=='after-event': raise InjectedFault(point)
+  with self.assertRaises(InjectedFault): store.append_agent_orchestration_event(self.r,lambda document: document,event=event,receipt=receipt,now=CLOCK,fault=interrupt)
+  self.assertEqual(store.recover_pending_transition(self.r,now=CLOCK).revision,3)
+  self.assertEqual(store.read_snapshot(self.r).document['agent_orchestration']['work_items']['orchestration-work']['last_transition']['operation_id'],'op-1')
+  broken=dict(event); broken.pop('operation_id')
+  with self.assertRaises(store.StoreError): store.append_agent_orchestration_event(self.r,lambda document: document,event=broken,receipt=receipt,now=CLOCK)
+  self.tearDown(); self.setUp(); self.register(); store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc(contexts,operations)},now=CLOCK)
+  with self.assertRaises(InjectedFault): store.append_agent_orchestration_event(self.r,lambda document: document,event=event,receipt=receipt,now=CLOCK,fault=interrupt)
+  pending=self.paths().locks/store.PENDING_TRANSITION_NAME; intent=json.loads(pending.read_text(encoding='utf-8'))
+  intent['candidate']['agent_orchestration']['work_items']['orchestration-work']['origin']['state_sha256']='0'*64
+  intent['candidate'].pop('content_sha256',None); intent['candidate']['content_sha256']=store.content_hash(intent['candidate']); pending.write_bytes(store.jcs(intent)+b'\n')
+  with self.assertRaises(store.StoreError) as ctx: store.recover_pending_transition(self.r,now=CLOCK)
+  self.assertEqual(ctx.exception.code,'STORE_RECOVERY_REQUIRED')
 
  # --- 5.5.1 bootstrap -------------------------------------------------
  def test_bootstrap_writes_revision_one_under_git_common_dir(self):
