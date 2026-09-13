@@ -180,6 +180,51 @@
         "version": "v4"
       }
     },
+    "feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa": {
+      "catalog": {
+        "document_sha256": "c74a6722b6029551d2a8378fe00b0aa1eb18d7f45c2022fed846765dd93e45e0",
+        "id": "codex-v4-local-skills",
+        "resolution_sha256": "sha256:a0887d1be953c353adc4780b3e55aca45c580af8892937b1f1118dec55a993dc",
+        "trusted_asset_document_sha256": "8d0cbaa044a67599b053eb4d8f07e81fa2537fece290f643b24f616dade91048"
+      },
+      "limits": {
+        "max_workers": 3,
+        "stall_minutes": 15
+      },
+      "runtime": {
+        "adapter": "codex-skill/v1",
+        "id": "codex"
+      },
+      "tier_policy": {
+        "adapter": "codex-skill/v1",
+        "minimum_by_step": {
+          "analyze": "large",
+          "checklist": "small",
+          "converge": "medium",
+          "implement-parallel": "medium",
+          "partition": "medium",
+          "plan": "large",
+          "review": "large",
+          "ship": "large",
+          "specify": "large",
+          "tasks": "medium",
+          "verify": "medium"
+        },
+        "promotions": [],
+        "supplemental": {
+          "markdown-maintenance": "small"
+        }
+      },
+      "work_item": {
+        "document_sha256": "837e7410c5040bf24b1da838bb22d8c2cd3234027267b1ff0fffdf999f29ea3b"
+      },
+      "work_item_id": "feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa",
+      "workflow": {
+        "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+        "sha256": "d2c4ea0806ea5e8235678582154aedaeb0ba686641bd836934bffe133db60ab5",
+        "version": "v4"
+      }
+    },
     "fix-backlog-bind-worktree-e7e330462d004d439ebb11ab6c6d95ea": {
       "catalog": {
         "document_sha256": "c968445f1ddaad2a299f6e3255ffe387554368c6b5600fe5082a166f43624fb8",

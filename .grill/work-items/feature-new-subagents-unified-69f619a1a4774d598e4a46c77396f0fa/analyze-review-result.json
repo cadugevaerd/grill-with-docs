@@ -1,0 +1,43 @@
+{
+  "id": "21bde769-4569-40cb-b64c-279053e3d09f",
+  "ok": true,
+  "result": {
+    "runId": "run_d025d446e826",
+    "deliveryId": "delivery_2e855d5d95d4",
+    "messages": [
+      {
+        "id": "msg_f5f7548a4ca9",
+        "run_id": "run_d025d446e826",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_355c7ddd-e585-4e0a-8115-9f388c00215b",
+        "to_handle": "run:run_d025d446e826",
+        "subject": "GO: an\u00e1lise cruzada completa, 32/32 cobertos",
+        "body": "Revisei somente leitura os tr\u00eas artefatos e refer\u00eancias pertinentes nos seis passes e enviei o relat\u00f3rio Markdown completo em msg_5b2d353f62ff, sem arquivos, testes futuros, baseline, rede, instala\u00e7\u00e3o, commit, macroetapa, atesta\u00e7\u00e3o ou subagentes. Veredito GO com cobertura 24FR/8SC/8US e zero tasks sem v\u00ednculo ou viola\u00e7\u00f5es constitucionais; I1 MEDIUM registra a receita hist\u00f3rica de init com largura1 versus ativa\u00e7\u00e3o imut\u00e1vel3, cuja recupera\u00e7\u00e3o p\u00fablica conserva a ativa\u00e7\u00e3o existente e cap efetivo1 sem mudar pins. Resta ao l\u00edder registrar essa condi\u00e7\u00e3o operacional ao concluir analyze e seguir partition e todas as tasks/gates/live dos dois runtimes at\u00e9 ship autorizado, preservando o bootstrap5.4.1 e os oito resultados integrais.",
+        "type": "worker_done",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_e17d1e04f87a\",\"dispatchId\":\"ctx_5e22b8a268ee\",\"outcome\":\"succeeded\"}",
+        "created_at": "2026-09-13T20:38:18Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": true,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "c4909220-f219-42f0-ae9a-2730479ff241",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "d5fbd9ae-4707-4a7c-ae42-c0e165c7ad4d"
+  },
+  "cleanup": {
+    "state": "released",
+    "processAction": "closed_agent_terminal",
+    "archive": "captured"
+  }
+}

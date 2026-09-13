@@ -1,0 +1,31 @@
+{
+  "task_id": "task_4ffdf87ea131",
+  "dispatch_id": "ctx_520db6486c00",
+  "requested": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "effective": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "state": "failed",
+  "stage": "agent_readiness",
+  "error": "Agent startup blocked: codex-hooks-review-prompt",
+  "task_executed": false,
+  "terminal": "term_20808179-5f34-4bf3-af17-7552c8ccb9ee",
+  "observed_prompt": "Hooks need review: 1 hook is new or changed. Review hooks / Trust all and continue / Continue without trusting",
+  "review_navigation": {
+    "result": "agent_prompt_blocked",
+    "request_id": "d78dc19f-0066-471a-80ab-0c22ffea1bc8",
+    "input_accepted": false
+  },
+  "next_action": "Review new hook through Codex native trust UI, then retry same task with --retry-of ctx_520db6486c00. No trust bypass or global mode enabled.",
+  "cleanup": {
+    "state": "released",
+    "processAction": "closed_agent_terminal",
+    "archive": "captured"
+  }
+}

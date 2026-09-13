@@ -1,0 +1,314 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "GO",
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+    "state": "present"
+  },
+  "development": {
+    "attestation_campaign": {
+      "adapter": "codex-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-0f112cbb5f514d22b7b962c5d234de3cbbf520c92bd3769d1470042e63928ac1",
+      "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+      "run_id": "run-b12537dfc4dca1621cc1f08d",
+      "runtime": "codex"
+    },
+    "attested_executions": {
+      "analyze": "se-f9a7b640a30d14ccc0fc1ef74cebbe42773374c6a65e2a4415ec0c1e860b46cc",
+      "checklist": "se-b78e66b7fc9e4b9ca7ecd57d3d9c08d307ee0f5682b2be336b4da055863e5302",
+      "partition": "se-285ae0b685eb35cffcbfc6cd614068098572ebd9ce97ab80af078fc738530c37",
+      "plan": "se-5eec4c655290cdcf2310850791dd7af0777c5c080d4d8a2ca60bdc2dd3eb3fcf",
+      "specify": "se-b7e91b3ead1cb4ef994ac5e8541ae2c81ade98d1aeb3e684d0095d6a308f1a7e",
+      "tasks": "se-0d31b507090cbcb0591ac78c7450a85b915f215b7523e95431a1542c0b0f742f"
+    },
+    "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:42c45d75a9cf5ba14023a8f60faef468e6ff2977d630ff6ed9ac286610a64e1e",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "step_id": "analyze"
+      },
+      "checklist": {
+        "output_sha256": "sha256:e10977fb3004917c5c7c427e7b831b7bbf3e0a0b414c8e32ca14ff581da53e09",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
+      "partition": {
+        "output_sha256": "sha256:748abdc506985b6d2979ff85bba66eed72c001bb2d56d7763097cdf5e1b14c6e",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "step_id": "partition"
+      },
+      "plan": {
+        "output_sha256": "sha256:78fe45fc8af6feeee8d46f897b6a70365cb3cae81fe4ae25613adf1bd369f66a",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
+      "specify": {
+        "output_sha256": "sha256:54d217cfb218cecc3990b9dbe29fffb9277177fe92aea447f0743955fdca44a7",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
+        "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:946a43207a2e9e5768371dc7ab43e51e7e6427de8c375d96b5091bc50183dc3d",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "step_id": "tasks"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+            "sha256": "91f329bce4653d11519686f2e8ae64869afc34c362bf9652f42d4544a5a14910"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Ciclo externo autorizado pelo pedido de executar a próxima etapa; skill speckit-specify, hook git.feature na branch existente e handoff aprovado.",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/030-agent-orchestration/spec.md",
+            "sha256": "eb694bdff374a05dfd0dc9e6021f4140f236b9479d487014eccd0c22158f4367"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-specify concluída: sete requisitos do handoff, checklist 16/16 e revisão independente GO; hook obrigatório git.feature executado na branch vinculada; hook opcional de commit não executado.",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/030-agent-orchestration/spec.md",
+            "sha256": "eb694bdff374a05dfd0dc9e6021f4140f236b9479d487014eccd0c22158f4367"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Ciclo completo autorizado; speckit-plan invocada pelo líder, setup-plan executado, elaboração técnica delegada a especialista xhigh.",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/STACK-I-HAVE-ADHD.md",
+            "sha256": "023511f7500d3299a02257908833958541592398a3cc2d6ee06b82fa4035cdcb"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Ampliação explícita para requisito 8: i-have-adhd obrigatório em Codex/Claude, default e prova funcional; revalidar handoff/specify e alcance do padrão antes de concluir plan.",
+        "state": "blocked",
+        "step": "plan"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/030-agent-orchestration/spec.md",
+            "sha256": "54d217cfb218cecc3990b9dbe29fffb9277177fe92aea447f0743955fdca44a7"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Ampliação explícita requisito 8 i-have-adhd: oito histórias, FR-001..024 e SC-001..008, checklist 16/16 e revisão independente GO. Skill specify invocada; cadeia anterior preservada.",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/specify-attestation.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/030-agent-orchestration/spec.md",
+            "sha256": "54d217cfb218cecc3990b9dbe29fffb9277177fe92aea447f0743955fdca44a7"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Specify sucessora aceita; speckit-plan retomada para integrar requisito 8 i-have-adhd ao desenho completo dos oito requisitos, com autoria xhigh e revisão independente high.",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/030-agent-orchestration/plan.md",
+            "sha256": "78fe45fc8af6feeee8d46f897b6a70365cb3cae81fe4ae25613adf1bd369f66a"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Canonical speckit-plan resumed and completed by leader; seven HOW artifacts authored Astra/xhigh and independently reviewed Astra/high GO R2; optional git hooks skipped under auto_commit false; no implementation evidence claimed.",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Leader invokes canonical speckit-checklist after accepted plan; requirements-quality review across eight approved outcomes; optional git hook skipped auto_commit false.",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/030-agent-orchestration/checklists/orchestration.md",
+            "sha256": "e10977fb3004917c5c7c427e7b831b7bbf3e0a0b414c8e32ca14ff581da53e09"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Canonical speckit-checklist completed by leader; independent Astra/high review GO 27/27 quality questions, all marked from observed report; optional git hooks skipped auto_commit false.",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Leader invokes canonical speckit-tasks after accepted checklist; setup-tasks resolved template and feature; HOW generation delegated Astra/xhigh with distinct high review to follow.",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/030-agent-orchestration/tasks.md",
+            "sha256": "946a43207a2e9e5768371dc7ab43e51e7e6427de8c375d96b5091bc50183dc3d"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Canonical speckit-tasks completed by leader with Astra/xhigh author and distinct Astra/high GO; 30 tasks, 24FR/8SC/8US, historical bootstrap simulated; optional git hooks skipped false and agent-assign skipped because worker binding is canonical.",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Leader invokes canonical speckit-analyze after accepted tasks; read-only cross-artifact analysis with independent frontier/high judgment, optional git hooks skipped auto_commit false.",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/ANALYZE-REPORT.md",
+            "sha256": "42c45d75a9cf5ba14023a8f60faef468e6ff2977d630ff6ed9ac286610a64e1e"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Canonical read-only speckit-analyze completed: independent Astra/high GO 32/32 covered, zero HIGH/CRITICAL; I1 MEDIUM handled by public existing-activation reuse with DAG cap, no input edits; report persisted only as leader coordination evidence.",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Leader invokes canonical grill-partition after accepted analyze; deterministic historical toolchain and public existing-activation recovery for I1.",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/030-agent-orchestration/execution-dag.json",
+            "sha256": "748abdc506985b6d2979ff85bba66eed72c001bb2d56d7763097cdf5e1b14c6e"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Canonical grill-partition: migrations reused, preview/apply emitted11nodes width1, activation3 publicly reused after conflict1, RUN-REUSED run-b12537dfc4dca1621cc1f08d, final DAG-VALID; partition-execution.json records run/digests/recovery; four final leader tasks and no unmapped.",
+        "state": "complete",
+        "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Leader invokes canonical grill-implement-parallel; 43/43 checklist PASS, no mandatory fanout hooks, bundle58files intact; preflight verifies historical worktree base and publication of read-only planning inputs before first worker.",
+        "state": "in-progress",
+        "step": "implement-parallel"
+      }
+    ],
+    "chain_stale": [],
+    "current_step": "implement-parallel",
+    "execution_branch": "cadugevaerd/feat-new-subagents",
+    "renamed_from": {},
+    "schema": "grill-development/v2",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "partition",
+      "implement-parallel",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "pending",
+      "implement-parallel": "in-progress",
+      "partition": "complete",
+      "plan": "complete",
+      "review": "pending",
+      "ship": "pending",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "pending"
+    },
+    "superseded_outputs": {
+      "specify": [
+        {
+          "attempt_id": "specify-1",
+          "attestation": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/specify-attestation.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:eb694bdff374a05dfd0dc9e6021f4140f236b9479d487014eccd0c22158f4367",
+          "provenance": "current-generation",
+          "reason": "Ampliação explícita requisito 8 i-have-adhd: oito histórias, FR-001..024 e SC-001..008, checklist 16/16 e revisão independente GO. Skill specify invocada; cadeia anterior preservada.",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+          "step_execution_id": "se-438bc69fd77b8c639469e213b08c916b030a6d71ae49c1e22a418f78efe7d4da",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-b7e91b3ead1cb4ef994ac5e8541ae2c81ade98d1aeb3e684d0095d6a308f1a7e"
+        }
+      ]
+    },
+    "workflow_version": "v4"
+  },
+  "goal": {
+    "path": "goal.md",
+    "sha256": "af97e2899ddd6668c5fc80eef153cd94b7d88ea92235650370572770e5b291d1",
+    "status": "REUSED"
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "ready",
+  "version": "1.2.0",
+  "work_id": "feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "schema": "v2",
+    "sha256": "d2c4ea0806ea5e8235678582154aedaeb0ba686641bd836934bffe133db60ab5"
+  }
+}

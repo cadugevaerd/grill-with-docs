@@ -1,0 +1,18 @@
+# Execução da etapa specify — 2026-09-13
+
+- Pedido: implementar a próxima etapa do GWD conforme goal.md; estado inicial indicava specify pending e handoff com auditoria GO. O pedido inicia o ciclo externo após o pré-ciclo entregue; escopo deste avanço é specify.
+- Skill: `.agents/skills/speckit-specify/SKILL.md`; entrada exclusiva de escopo: `handoffs/FASE-001-SPECIFY-HANDOFF.md`. Constituição lida como governança.
+- Pré-requisito: migrate-v3 em preview seguido de apply; metadata passou de grill-work-item/v2 para v3. gauntlet-init ativou Codex com max-workers 3; run `run-b12537dfc4dca1621cc1f08d` criada no commit `6ad0dc2807c74fe37af52207700620dd02e8cbd0`. Auditoria repetida: GO, onze cláusulas cobertas.
+- Hook before_specify: `speckit.git.feature` invocado; script canônico executado com branch existente `cadugevaerd/feat-new-subagents`, via `GIT_BRANCH_NAME` e `--allow-existing-branch`. Retorno JSON confirmou a mesma branch; nenhuma troca de ownership.
+- Template resolvido pela função canônica resolve_template: `.specify/templates/spec-template.md`; copiado como ponto de partida da spec.
+- Saída: `specs/030-agent-orchestration/spec.md`; ponteiro `.specify/feature.json` atualizado; checklist em `specs/030-agent-orchestration/checklists/requirements.md` com 16/16 critérios atendidos. Sete histórias, vinte requisitos funcionais, sete critérios mensuráveis e rastreabilidade aos sete requisitos do handoff.
+- Validação: `python3 tests/run_validators.py` terminou exit 0, cobrindo os 28 validadores; um skip por ausência do alias macOS `/var -> /private/var`. Verificação estrutural da spec, link ao handoff, numeração e ponteiro da feature passou; `git diff --check` passou. A suíte é baseline do repositório, não evidência de que os requisitos futuros foram implementados.
+- Revisão independente somente leitura: GO sem findings materiais; Orca run `run_f4b23ef9d650`, task `task_1139afe047a0`, dispatch `ctx_3cd9131334cc`, mensagem `msg_65f26c050b5b`; modelo `gpt-6-astra`, esforço `high`, requested/effective coincidentes. Líder registrou o resultado antes de liberar a sessão.
+- Limpeza da revisão: worker-release retornou `state: released`, `processAction: closed_agent_terminal`, `archive.status: captured`. Delivery `delivery_8f864b80a79c` reconhecida; worker-list para terminais reclaimable retornou lista vazia. Nenhuma worktree ou branch adicional foi criada para essa revisão.
+- Hook after_specify: `speckit.git.commit` é opcional; não executado, coerente com `auto_commit.after_specify.enabled: false`. Nenhum commit ou publicação realizado.
+- Atestação: `specify-attestation.json`, artefato SHA-256 `eb694bdff374a05dfd0dc9e6021f4140f236b9479d487014eccd0c22158f4367`; checkpoint aceitou a cadeia, marcou specify complete e avançou current_step para plan.
+- Próximo consumidor: `$speckit-plan`, usando a feature 030 e os contextos técnicos autorizados. As dez macroetapas restantes permanecem pending; não se afirma entrega da implementação ou execução da macroetapa review.
+
+## Cadeia sucessora — requisito 8
+
+Ciclo externo retomado pelo objetivo integral do usuário. Skill speckit-specify invocada para atualizar a mesma feature/branch. Hook git.feature já executado uma vez para esta feature, conforme registro acima e regra da própria skill; não recriar branch nem spec. Template resolvido novamente por resolve_template; estrutura preservada. Handoff e ADR-0005 aprovados originam US8, FR-021..024, SC-008; sete requisitos intactos. Checklist 16/16 e revisão independente GO em specify-successor-review.json. Snapshot anterior em specify-original-spec.md, receipt original preservado. Hook opcional de commit continua desabilitado; nenhum commit automático.

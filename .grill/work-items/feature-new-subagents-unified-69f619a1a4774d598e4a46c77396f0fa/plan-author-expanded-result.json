@@ -1,0 +1,48 @@
+{
+  "task_id": "task_2a39a526deb4",
+  "dispatch_id": "ctx_c9b5c4215c02",
+  "run_id": "run_d025d446e826",
+  "requested": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "xhigh"
+  },
+  "effective": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "xhigh"
+  },
+  "state": "succeeded",
+  "turn_started": true,
+  "grant": [
+    "specs/030-agent-orchestration/plan.md",
+    "specs/030-agent-orchestration/research.md",
+    "specs/030-agent-orchestration/data-model.md",
+    "specs/030-agent-orchestration/quickstart.md",
+    "specs/030-agent-orchestration/contracts/cli.md",
+    "specs/030-agent-orchestration/contracts/task-files.md",
+    "specs/030-agent-orchestration/contracts/integrations.md"
+  ],
+  "message_id": "msg_372bfd26ac6f",
+  "files_sha256": {
+    "specs/030-agent-orchestration/plan.md": "bdc94102e0df38bbc0cc68499dd231d7e1757f4c0a43fb97de7d002529651528",
+    "specs/030-agent-orchestration/research.md": "055e3cb82bd6a31cc8f2b57ed65b455760f7cacdc768692513caa9fdf2756a26",
+    "specs/030-agent-orchestration/data-model.md": "8b0608a383b0ecd4f5f7bb4d61b1bcbc2f8bdc386e73d314261b6c596040843e",
+    "specs/030-agent-orchestration/quickstart.md": "71f9083469351db55e493f833046e6058f96088054f0e2f9c162d553501ab522",
+    "specs/030-agent-orchestration/contracts/cli.md": "e6928c09af0c7134f0cd9e456f54643ddfba9e4665a439411df1029b44b19145",
+    "specs/030-agent-orchestration/contracts/task-files.md": "a240bf3b3694a608360d073d7749b7b4d5c2c5d87642b661ecc80d203a0e93ef",
+    "specs/030-agent-orchestration/contracts/integrations.md": "93c0c716de801a4b15faabea747551a126f2815373f1f072388a529eedf78f25"
+  },
+  "validation": "Author reports FR001..024/SC001..008 coverage, local links, fences and whitespace checks pass. No implementation or macrostep attestation.",
+  "risks": [
+    "Effective observation and configuration overrides",
+    "Context reload after compaction",
+    "Changed upstream content",
+    "Live style behavior not yet demonstrated"
+  ],
+  "cleanup": {
+    "state": "released",
+    "processAction": "closed_agent_terminal",
+    "archive": "captured"
+  }
+}

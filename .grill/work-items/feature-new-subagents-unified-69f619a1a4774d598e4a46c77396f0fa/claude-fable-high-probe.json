@@ -1,0 +1,31 @@
+{
+  "task_id": "task_4426c0c2c95c",
+  "dispatch_id": "ctx_2f46cd5d4f74",
+  "message_id": "msg_e367fe1b683a",
+  "outcome": "succeeded",
+  "requested": {
+    "agent": "claude",
+    "model": "fable",
+    "effort": "high"
+  },
+  "effective": {
+    "agent": "claude",
+    "model": "fable",
+    "effort": "high"
+  },
+  "prompt_stages": [
+    "input_accepted",
+    "turn_started"
+  ],
+  "worker_report": {
+    "model_context": "Fable 5.1 / claude-fable-5-1",
+    "effort_context": "not observable",
+    "files_modified": []
+  },
+  "limitations": "Launcher effective pair plus real turn observed. Worker report of model is contextual, not independent provider proof; effort not visible in worker context. No test of i-have-adhd or xhigh.",
+  "cleanup": {
+    "state": "retained",
+    "reason": "user_takeover",
+    "processAction": "none"
+  }
+}

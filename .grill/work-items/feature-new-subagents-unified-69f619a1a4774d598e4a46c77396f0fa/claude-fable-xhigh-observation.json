@@ -1,0 +1,217 @@
+{
+  "id": "96e34994-4eb1-46eb-aa02-8dc911364634",
+  "ok": true,
+  "result": {
+    "dispatch": {
+      "id": "ctx_a493736499ac",
+      "runId": "run_d025d446e826",
+      "taskId": "task_7a22ceaa2755",
+      "task_id": "task_7a22ceaa2755",
+      "contractVersion": 1,
+      "assigneeHandle": "term_b826bfe4-0127-4621-bc82-d4e2995be08b",
+      "assigneePaneKey": "80ec91de-d992-4c42-9a83-9aeb95f6f89c:d1726e43-f9e6-4aa3-b3f3-930c8666bef6",
+      "processIncarnation": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents@@4a5f0c09:f30c453d-aa24-4230-9c58-b6ecb4e404ed",
+      "capabilityRevokedAt": "2026-09-13T19:21:59.680Z",
+      "retryOfDispatchId": null,
+      "creatorDispatchId": null,
+      "hostScope": {
+        "kind": "local",
+        "hostId": "local"
+      },
+      "status": "completed",
+      "failureCount": 0,
+      "lastFailure": null,
+      "terminationReason": null,
+      "depth": 1,
+      "dispatchedAt": "2026-09-13 19:21:33",
+      "completedAt": "2026-09-13T19:21:59.680Z",
+      "createdAt": "2026-09-13 19:21:33",
+      "lastHeartbeatAt": null
+    },
+    "worker": {
+      "dispatchId": "ctx_a493736499ac",
+      "runtimeEpoch": "d5fbd9ae-4707-4a7c-ae42-c0e165c7ad4d",
+      "state": "succeeded",
+      "stage": "settled",
+      "worktreeId": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents",
+      "agentTerminalHandle": "term_b826bfe4-0127-4621-bc82-d4e2995be08b",
+      "setupState": "not_applicable",
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "created",
+          "id": "term_b826bfe4-0127-4621-bc82-d4e2995be08b",
+          "surface": "visible"
+        },
+        {
+          "kind": "dispatch_input",
+          "role": "agent",
+          "id": "term_b826bfe4-0127-4621-bc82-d4e2995be08b",
+          "state": "accepted"
+        }
+      ],
+      "residualResources": [
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "created",
+          "id": "term_b826bfe4-0127-4621-bc82-d4e2995be08b",
+          "surface": "visible"
+        }
+      ],
+      "startOptions": {
+        "worktree": "current",
+        "mode": {
+          "mode": "terminal",
+          "preferred": "terminal",
+          "reason": "user_default",
+          "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+        },
+        "resolvedWorktreeId": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents",
+        "name": null,
+        "repo": null,
+        "baseBranch": null,
+        "terminal": null,
+        "agent": "claude",
+        "launch": {
+          "requested": {
+            "agent": "claude",
+            "model": "fable",
+            "effort": "xhigh"
+          },
+          "effective": {
+            "agent": "claude",
+            "model": "fable",
+            "effort": "xhigh"
+          }
+        },
+        "timeoutMs": 60000,
+        "setup": "not_applicable",
+        "setupSource": "existing_worktree"
+      },
+      "lastError": null,
+      "createdAt": "2026-09-13 19:21:33",
+      "updatedAt": "2026-09-13T19:21:59.680Z"
+    },
+    "projection": {
+      "id": "ctx_a493736499ac",
+      "dispatchId": "ctx_a493736499ac",
+      "taskId": "task_7a22ceaa2755",
+      "runId": "run_d025d446e826",
+      "role": "worker",
+      "parent": null,
+      "provider": {
+        "id": "claude",
+        "model": null
+      },
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents",
+        "kind": "folder_or_worktree"
+      },
+      "stage": {
+        "worker": "succeeded",
+        "dispatch": "completed",
+        "detail": "settled",
+        "activity": "done"
+      },
+      "outcome": "succeeded",
+      "liveness": {
+        "verdict": "live",
+        "observedAt": 1789327326008,
+        "source": "agent_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "fresh",
+        "lastObservedAt": 1789327326008
+      },
+      "resource": {
+        "state": "owned",
+        "id": "wtr_7fcf8fc9def2",
+        "ownerDispatchId": "ctx_a493736499ac",
+        "releaseState": "not_requested",
+        "terminalState": "reclaimable"
+      },
+      "nextAction": {
+        "kind": "release",
+        "argv": [
+          "orchestration",
+          "worker-release",
+          "--dispatch",
+          "ctx_a493736499ac"
+        ]
+      },
+      "attention": {
+        "categories": [
+          "root_completion"
+        ],
+        "requiresAction": false
+      }
+    },
+    "terminal": {
+      "handle": "term_b826bfe4-0127-4621-bc82-d4e2995be08b",
+      "ptyId": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents@@4a5f0c09",
+      "incarnationId": "f30c453d-aa24-4230-9c58-b6ecb4e404ed",
+      "orphaned": false,
+      "worktreeId": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents",
+      "worktreePath": "/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents",
+      "branch": "refs/heads/cadugevaerd/feat-new-subagents",
+      "tabId": "80ec91de-d992-4c42-9a83-9aeb95f6f89c",
+      "leafId": "d1726e43-f9e6-4aa3-b3f3-930c8666bef6",
+      "title": "✳ Sondagem Claude fable/xhigh GWD",
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": 1789327324279,
+      "preview": "──────────────────────────────────────────────────────────────────\n📁 feat-new-subagents ⎇ cadugevaerd/feat-new-subagents* 🤖 Fable-5.1 ◈ v2.1.270 ⚡ 5h: 5% 📊 7d: 13%\n✎ caveman-stable:caveman-stable 🌱 [##------------------ 10%]\n🕐 16:22:04 ◷ 01;93m[29s]\n⏵⏵ bypass permissions on (shift+tab to cycle)",
+      "executionHostId": "local",
+      "agentIdentity": "claude",
+      "paneRuntimeId": 1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    },
+    "observation": {
+      "status": "live",
+      "exactWorker": true,
+      "agentWait": null
+    },
+    "terminalResource": {
+      "id": "wtr_7fcf8fc9def2",
+      "ownershipState": "owned",
+      "releaseState": "not_requested",
+      "retainedReason": null,
+      "terminalHandle": "term_b826bfe4-0127-4621-bc82-d4e2995be08b",
+      "worktreeId": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents",
+      "endpointId": "d5fbd9ae-4707-4a7c-ae42-c0e165c7ad4d",
+      "endpointIncarnation": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents@@4a5f0c09:f30c453d-aa24-4230-9c58-b6ecb4e404ed",
+      "originDispatchId": "ctx_a493736499ac",
+      "ownerDispatchId": "ctx_a493736499ac",
+      "releaseRequestedAt": null,
+      "releaseCompletedAt": null,
+      "releaseError": null,
+      "recoveryAttemptCount": 0,
+      "lastRecoveryAt": null,
+      "archive": {
+        "source": null,
+        "status": null
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "d5fbd9ae-4707-4a7c-ae42-c0e165c7ad4d"
+  }
+}

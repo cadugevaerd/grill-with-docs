@@ -1,0 +1,21 @@
+{
+  "task_id": "task_8e718b22a171",
+  "dispatch_id": "ctx_f103f46b70e0",
+  "run_id": "run_d025d446e826",
+  "terminal": "term_717f569a-ee3e-4776-93a6-4dec621853a1",
+  "requested": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "xhigh"
+  },
+  "effective": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "xhigh"
+  },
+  "state": "ready",
+  "turn_started": true,
+  "write_grant": [
+    "specs/030-agent-orchestration/tasks.md"
+  ]
+}

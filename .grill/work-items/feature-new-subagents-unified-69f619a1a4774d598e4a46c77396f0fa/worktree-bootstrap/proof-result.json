@@ -1,0 +1,75 @@
+{
+  "historical_bundle_files_verified": 58,
+  "historical_module": "/home/carlosaraujo/.codex/plugins/cache/grill-with-docs/grill-with-docs/5.4.1/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py",
+  "historical_sha256": "2e2b6c9c58338a356204b26e021888468ae5e6b4274fca9151b181b01ddf6f2c",
+  "checks": [
+    {
+      "check": "historical base resolves obsolete 029 without bootstrap"
+    },
+    {
+      "check": "declare replay after FF is preserved",
+      "code": "WORKSPACE-PRESERVED"
+    },
+    {
+      "check": "FF planning: own diff empty; correct 030 prerequisites clean",
+      "base": "b1f363b6df8b5a5dcc8e9fb63a683632f48a6edc",
+      "planning": "93810e441ec990ee82400cbc815bb1b894930911"
+    },
+    {
+      "check": "paths-only resolves missing dir with success and no validation"
+    },
+    {
+      "check": "divergent feature override writes tracked file"
+    },
+    {
+      "check": "phase 1 terminate/converge accepts original admission, cleanup preserves",
+      "worker": "3e16e8944055a16fd5156a794814a6b8ca9df35a",
+      "integrated": "5cf85f408a3bc8a448a6231d185a187203b59067",
+      "own_paths": [
+        "src/a.py",
+        "specs/030-agent-orchestration/implement/p01-a.tasks.json"
+      ]
+    },
+    {
+      "check": "phase 2 inherits phase 1; own diff excludes all inherited paths",
+      "worker": "aa28f9ce7acf024794967196d5d6d3cba484970d",
+      "input": "5cf85f408a3bc8a448a6231d185a187203b59067",
+      "own_paths": [
+        "src/b.py",
+        "specs/030-agent-orchestration/implement/p02-a.tasks.json"
+      ]
+    },
+    {
+      "check": "worker own protected-path change is not inheritance",
+      "code": "GRANT-SCOPE-VIOLATION"
+    },
+    {
+      "check": "net diff alone misses changed-then-reverted protected file; per-commit guard catches it"
+    },
+    {
+      "check": "ff-only after payload can succeed as no-op; exact HEAD precondition mandatory"
+    },
+    {
+      "check": "tracked control dirt blocks convergence",
+      "code": "EXECUTION-TREE-DIRTY"
+    },
+    {
+      "check": "cleanup on completed run blocked",
+      "code": "RUN-NOT-ELIGIBLE"
+    },
+    {
+      "check": "phase 2 real convergence completes; every event retains historical base",
+      "final_head": "b5079e114c8b4462ead6451784d958d552b6f2d1",
+      "project_identity": "sha256:1e54189443e6a331a3a6103dc2afa7080dccf1b0cfb792d4bd6197c1225119f8"
+    },
+    {
+      "check": "historical clean check omits ignored paths"
+    }
+  ],
+  "real_workspace_unchanged": true,
+  "temporary_git_removed": true,
+  "limitations": [
+    "Core functions use synthetic admission in disposable repository; no real activation, macrostep, worker or wave executed.",
+    "Negative control reverted only inside disposable Git; final synthetic merge intentionally demonstrates net-diff limitation, not accepted real-worker conduct."
+  ]
+}

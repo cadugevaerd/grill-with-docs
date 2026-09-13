@@ -1,0 +1,18 @@
+{
+  "task_id": "task_a6c70563f0e5",
+  "dispatch_id": "ctx_b5d622a1bd2b",
+  "run_id": "run_d025d446e826",
+  "requested": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "effective": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "state": "ready",
+  "turn_started": true,
+  "scope": "Independent read-only focused R2 review of P1/P2 and documentary regressions"
+}

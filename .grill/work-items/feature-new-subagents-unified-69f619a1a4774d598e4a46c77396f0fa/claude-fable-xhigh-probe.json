@@ -1,0 +1,31 @@
+{
+  "task_id": "task_7a22ceaa2755",
+  "dispatch_id": "ctx_a493736499ac",
+  "message_id": "msg_6e4cd3b3b9a6",
+  "outcome": "succeeded",
+  "requested": {
+    "agent": "claude",
+    "model": "fable",
+    "effort": "xhigh"
+  },
+  "effective": {
+    "agent": "claude",
+    "model": "fable",
+    "effort": "xhigh"
+  },
+  "prompt_stages": [
+    "input_accepted",
+    "turn_started"
+  ],
+  "worker_report": {
+    "model_context": "Fable 5.1 / claude-fable-5-1",
+    "effort_context": "not observable",
+    "files_modified": []
+  },
+  "limitations": "Launch pair and real turn observed locally; contextual worker report is not independent backend proof; no i-have-adhd test.",
+  "cleanup": {
+    "state": "released",
+    "processAction": "closed_agent_terminal",
+    "archive": "captured"
+  }
+}
