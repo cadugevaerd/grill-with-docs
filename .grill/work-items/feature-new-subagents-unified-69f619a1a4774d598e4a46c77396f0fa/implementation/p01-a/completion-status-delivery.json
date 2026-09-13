@@ -1,0 +1,38 @@
+{
+  "id": "bc8db3ee-843f-4bcb-82d3-49f86521b06c",
+  "ok": true,
+  "result": {
+    "runId": "run_d025d446e826",
+    "deliveryId": "delivery_f29dd4724c68",
+    "messages": [
+      {
+        "id": "msg_e66fd8fe9a37",
+        "run_id": "run_d025d446e826",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_e9a5e7d1-ce3e-46f1-b3c4-c17ed0d87b96",
+        "to_handle": "run:run_d025d446e826",
+        "subject": "T001 complete",
+        "body": "T001 concluída no commit 3bd8f65. Check focado stdlib passou: JSON estrito/sem chaves duplicadas, refs locais e SHA-256 de protocolo/template, regra Result e distinção contexto entregue versus skill invocada. Paths: plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json, plugin/skills/grill-with-docs/assets/task-files.v1.template.md, plugin/skills/grill-with-docs/references/agent-orchestration.md, specs/030-agent-orchestration/implement/p01-a.tasks.json.",
+        "type": "status",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_91b15fdc63e6\",\"dispatchId\":\"ctx_66a6e64f32a0\"}",
+        "created_at": "2026-09-13T21:10:23Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": true,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "57b2af0b-c2fd-454b-a42c-c37b2bef1dfd",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "d5fbd9ae-4707-4a7c-ae42-c0e165c7ad4d"
+  }
+}

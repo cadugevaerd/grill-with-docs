@@ -1,0 +1,3 @@
+?? plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json
+?? plugin/skills/grill-with-docs/assets/task-files.v1.template.md
+?? plugin/skills/grill-with-docs/references/agent-orchestration.md

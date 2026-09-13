@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "python3",
+    "/home/carlosaraujo/.codex/plugins/cache/grill-with-docs/grill-with-docs/5.4.1/skills/grill-with-docs/scripts/grill_workspace.py",
+    "gauntlet-worker-declare",
+    "/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents",
+    "--work-id",
+    "feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa",
+    "--run-id",
+    "run-b12537dfc4dca1621cc1f08d",
+    "--wave-id",
+    "wave-0001",
+    "--node-id",
+    "p01-a",
+    "--tier",
+    "medium",
+    "--dag",
+    "specs/030-agent-orchestration/execution-dag.json",
+    "--files",
+    "plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json",
+    "plugin/skills/grill-with-docs/assets/task-files.v1.template.md",
+    "plugin/skills/grill-with-docs/references/agent-orchestration.md",
+    "specs/030-agent-orchestration/implement/p01-a.tasks.json"
+  ],
+  "returncode": 2,
+  "stdout": "{\"code\":\"INVALID-ARGUMENTS\",\"error\":\"unrecognized arguments: plugin/skills/grill-with-docs/assets/task-files.v1.template.md plugin/skills/grill-with-docs/references/agent-orchestration.md specs/030-agent-orchestration/implement/p01-a.tasks.json\",\"verdict\":\"BLOCKED\"}\n",
+  "stderr": ""
+}

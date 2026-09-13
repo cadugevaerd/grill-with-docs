@@ -1,0 +1,31 @@
+{
+  "argv": [
+    "python3",
+    "/home/carlosaraujo/.codex/plugins/cache/grill-with-docs/grill-with-docs/5.4.1/skills/grill-with-docs/scripts/grill_workspace.py",
+    "gauntlet-worker-declare",
+    "/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents",
+    "--work-id",
+    "feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa",
+    "--run-id",
+    "run-b12537dfc4dca1621cc1f08d",
+    "--wave-id",
+    "wave-0001",
+    "--node-id",
+    "p01-a",
+    "--tier",
+    "medium",
+    "--dag",
+    "specs/030-agent-orchestration/execution-dag.json",
+    "--files",
+    "plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json",
+    "--files",
+    "plugin/skills/grill-with-docs/assets/task-files.v1.template.md",
+    "--files",
+    "plugin/skills/grill-with-docs/references/agent-orchestration.md",
+    "--files",
+    "specs/030-agent-orchestration/implement/p01-a.tasks.json"
+  ],
+  "returncode": 0,
+  "stdout": "{\"base_commit\":\"6ad0dc2807c74fe37af52207700620dd02e8cbd0\",\"model\":\"gpt-5.6-terra\",\"model_frontier\":false,\"model_runtime\":\"codex\",\"run_id\":\"run-b12537dfc4dca1621cc1f08d\",\"verdict\":\"WORKER-PREPARED\",\"work_id\":\"feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa\",\"worker_id\":\"p01-a\",\"worktree_key\":\"wt-run-b12537dfc4dca1621cc1f08d-p01-a\"}\n",
+  "stderr": ""
+}

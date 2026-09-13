@@ -1,0 +1,58 @@
+{
+  "activation_state": "ACTIVATED",
+  "run": {
+    "base_commit": "6ad0dc2807c74fe37af52207700620dd02e8cbd0",
+    "last_transition": {
+      "base_commit": "6ad0dc2807c74fe37af52207700620dd02e8cbd0",
+      "fencing_token": 1,
+      "input_sha256": "b12537dfc4dca1621cc1f08d2d35d2a2b6a3f78d9f17406fd412f62e43573c2c",
+      "lease_id": "lease-run-b12537dfc4dca1621cc1f08d-p01-a",
+      "output_sha256": null,
+      "receipt_sha256": "79128cc03b44fcc5b491e189a6e389b2abbf1cd265affce0bd93e59efc691aef",
+      "run_id": "run-b12537dfc4dca1621cc1f08d",
+      "wave_id": "wave-0001",
+      "work_id": "feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa",
+      "worker_id": "p01-a"
+    },
+    "recovery_count": 0,
+    "run_id": "run-b12537dfc4dca1621cc1f08d",
+    "state": "ADMITTED",
+    "waves": [
+      {
+        "converged_count": 0,
+        "member_count": 1,
+        "state": "ACTIVE",
+        "wave_id": "wave-0001"
+      }
+    ],
+    "workers": [
+      {
+        "failure_class": null,
+        "grant": {
+          "capabilities": [
+            "git-local",
+            "workspace-read-write"
+          ],
+          "scope_paths": [
+            "plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json",
+            "plugin/skills/grill-with-docs/assets/task-files.v1.template.md",
+            "plugin/skills/grill-with-docs/references/agent-orchestration.md",
+            "specs/030-agent-orchestration/implement/p01-a.tasks.json"
+          ]
+        },
+        "lease": {
+          "acquired_at": "2026-09-13T21:05:36Z",
+          "expires_at": "2026-09-13T22:05:36Z",
+          "fencing_token": 1,
+          "lease_id": "lease-run-b12537dfc4dca1621cc1f08d-p01-a",
+          "recovery_count": 0,
+          "state": "ACTIVE"
+        },
+        "state": "PREPARED",
+        "worker_id": "p01-a"
+      }
+    ]
+  },
+  "verdict": "STATUS",
+  "work_id": "feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa"
+}
