@@ -220,7 +220,7 @@ EVENTS_GENESIS_SHA256 = "0" * 64
 ALLOWED_TOP_LEVEL_KEYS = frozenset(
     {
         "schema", "revision", "project", "dispatch_control", "work_items",
-        "backlog_links", "updated_at", "content_sha256", "journal_head",
+        "backlog_links", "agent_orchestration", "updated_at", "content_sha256", "journal_head",
     }
 )
 
@@ -951,6 +951,15 @@ def _validate_document(document: Any, path: Path) -> dict[str, Any]:
     _validate_dispatch_control(document["dispatch_control"])
     _validate_work_items(document["work_items"])
     _validate_backlog_links(document["backlog_links"])
+    if "agent_orchestration" in document:
+        try:
+            from .agent_orchestration import OrchestrationError, validate_block
+        except ImportError:  # grill_workspace loads core modules by path.
+            from grill_core.agent_orchestration import OrchestrationError, validate_block
+        try:
+            validate_block(document["agent_orchestration"])
+        except OrchestrationError as exc:
+            _invalid(str(exc))
     if "journal_head" in document:
         _validate_journal_head(document["journal_head"])
     if not isinstance(document.get("updated_at"), str) or not RFC3339_RE.match(document["updated_at"]):
@@ -977,6 +986,24 @@ def _next_wave_id(current: str) -> str | None:
     if match is None:
         return None
     return f"wave-{int(match.group(1)) + 1:04d}"
+
+
+def _validate_orchestration_transition(previous: dict[str, Any], candidate: dict[str, Any]) -> None:
+    """The optional v1 block becomes mandatory to preserve once adopted."""
+    old = previous.get("agent_orchestration")
+    new = candidate.get("agent_orchestration")
+    if old is None and new is None:
+        return
+    if old is not None and new is None:
+        _invalid("adopted agent_orchestration cannot be removed")
+    try:
+        from .agent_orchestration import OrchestrationError, validate_transition
+    except ImportError:  # grill_workspace loads core modules by path.
+        from grill_core.agent_orchestration import OrchestrationError, validate_transition
+    try:
+        validate_transition(old, new)
+    except OrchestrationError as exc:
+        _invalid(str(exc))
 
 
 def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: dict[str, Any], *, allow_existing_gauntlet_changes: bool = False) -> None:
@@ -1449,6 +1476,7 @@ def write_snapshot(
             _fail(STATE_DIVERGENCE, "revision must increase monotonically")
         _validate_document(candidate, paths.orchestrator)
         _validate_gauntlet_state_transitions(current.document, candidate)
+        _validate_orchestration_transition(current.document, candidate)
         if jcs(candidate["project"]) != jcs(current.document["project"]):
             _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
         candidate = _finalize_commit(paths, candidate, now)
@@ -1477,6 +1505,7 @@ def transact(
         candidate = stamp(proposed, current.revision + 1, _now(now))
         _validate_document(candidate, paths.orchestrator)
         _validate_gauntlet_state_transitions(current.document, candidate)
+        _validate_orchestration_transition(current.document, candidate)
         if jcs(candidate["project"]) != jcs(current.document["project"]):
             _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
         candidate = _finalize_commit(paths, candidate, now)
@@ -1501,6 +1530,22 @@ def _remove_pending(paths: StorePaths) -> None:
 
 def _transition_fields(event: Any, receipt: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     if not isinstance(event, dict) or not isinstance(receipt, dict): _invalid("transition event and receipt must be objects")
+    if event.get("schema") == "grill-orchestration-event/v1":
+        required = {"schema", "event", "work_id", "context_id", "input_sha256", "output_sha256", "receipt_sha256"}
+        if set(event) != required or not isinstance(event["event"], str) or not event["event"].startswith("agent.orchestration."):
+            _invalid("invalid agent orchestration event keys")
+        _id = lambda value, label: isinstance(value, str) and SAFE_NAME_RE.match(value)
+        if not _id(event["work_id"], "work_id") or not _id(event["context_id"], "context_id"):
+            _invalid("invalid agent orchestration event identity")
+        for key in ("input_sha256", "receipt_sha256"):
+            if not isinstance(event[key], str) or not HEX64_RE.match(event[key]): _invalid(f"invalid agent orchestration {key}")
+        if event["output_sha256"] is not None and (not isinstance(event["output_sha256"], str) or not HEX64_RE.match(event["output_sha256"])): _invalid("invalid agent orchestration output_sha256")
+        receipt_required = {"schema", "category", "name", "work_id", "context_id", "input_sha256", "output_sha256"}
+        if set(receipt) != receipt_required or receipt.get("schema") != "grill-orchestration-receipt/v1" or receipt.get("category") not in RECEIPT_CATEGORIES or not _id(receipt.get("name"), "name"):
+            _invalid("invalid agent orchestration receipt keys")
+        for key in ("work_id", "context_id", "input_sha256", "output_sha256"):
+            if receipt.get(key) != event[key]: _invalid(f"receipt/event correlation mismatch: {key}")
+        return copy.deepcopy(event), copy.deepcopy(receipt)
     required = {"event", "work_id", "run_id", "wave_id", "base_commit", "input_sha256", "output_sha256", "receipt_sha256"}
     optional = {"worker_id", "lease_id", "fencing_token"}
     if set(event) - required - optional or not required.issubset(event): _invalid("invalid transition event keys")
@@ -1525,6 +1570,8 @@ def _transition_fields(event: Any, receipt: Any) -> tuple[dict[str, Any], dict[s
 def _receipt_payload(event: dict[str, Any], receipt: dict[str, Any]) -> dict[str, Any]:
     """The durable receipt deliberately excludes its own digest, avoiding a
     circular hash.  Its JCS SHA-256 is the authoritative receipt reference."""
+    if event.get("schema") == "grill-orchestration-event/v1":
+        return {key: receipt[key] for key in sorted(receipt)}
     return {"category": receipt["category"], "name": receipt["name"], **{key: event[key] for key in event if key not in {"event", "receipt_sha256"}}}
 
 
@@ -1568,6 +1615,14 @@ def _verify_transition_receipt(path: Path, event: dict[str, Any], receipt: dict[
 
 
 def _candidate_transition(candidate: dict[str, Any], event: dict[str, Any], sequence: int, now: Callable[[], str] | None) -> dict[str, Any]:
+    if event.get("schema") == "grill-orchestration-event/v1":
+        try:
+            item = candidate["agent_orchestration"]["work_items"][event["work_id"]]
+            if item["current_context_id"] != event["context_id"]: raise KeyError
+        except (KeyError, TypeError):
+            _invalid("transition does not name a candidate orchestration context")
+        item["last_transition"] = {"event_sequence": sequence, "receipt_sha256": event["receipt_sha256"]}
+        return stamp(candidate, candidate["revision"], _now(now))
     try:
         run = candidate["work_items"][event["work_id"]]["gauntlet"]["runs"][event["run_id"]]
     except (KeyError, TypeError):
@@ -1584,6 +1639,13 @@ def _candidate_transition(candidate: dict[str, Any], event: dict[str, Any], sequ
 
 
 def _validate_candidate_transition(candidate: dict[str, Any], event: dict[str, Any], sequence: int) -> None:
+    if event.get("schema") == "grill-orchestration-event/v1":
+        try:
+            item = candidate["agent_orchestration"]["work_items"][event["work_id"]]
+            valid = item["current_context_id"] == event["context_id"] and item.get("last_transition") == {"event_sequence": sequence, "receipt_sha256": event["receipt_sha256"]}
+        except (KeyError, TypeError): valid = False
+        if not valid: _fail(STATE_DIVERGENCE, "pending orchestration transition correlation diverges")
+        return
     try:
         run = candidate["work_items"][event["work_id"]]["gauntlet"]["runs"][event["run_id"]]
     except (KeyError, TypeError):
@@ -1631,6 +1693,7 @@ def transact_with_event(root: str | Path, mutate: Callable[[dict[str, Any]], dic
         candidate = _candidate_transition(proposed, event, sequence, now)
         _validate_document(candidate, paths.orchestrator)
         _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
+        _validate_orchestration_transition(current.document, candidate)
         if jcs(candidate["project"]) != jcs(current.document["project"]): _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
         intent = {"schema": "grill-transition-wal/v1", "candidate": candidate, "event": event, "receipt": receipt}
         _atomic_write_json(_pending_path(paths), intent); _fault(fault, "after-intent")
@@ -1648,6 +1711,13 @@ def transact_with_event(root: str | Path, mutate: Callable[[dict[str, Any]], dic
         snapshot = _write_document(paths, candidate); _fault(fault, "after-snapshot")
         _remove_pending(paths); _fault(fault, "after-intent-removal")
         return snapshot
+
+
+def append_agent_orchestration_event(root: str | Path, mutate: Callable[[dict[str, Any]], dict[str, Any]], *, event: dict[str, Any], receipt: dict[str, Any], now: Callable[[], str] | None = None, timeout: float = LOCK_TIMEOUT, fault: Callable[[str], Any] | None = None) -> Snapshot:
+    """Versioned scheduler-free event union, sharing the Store WAL exactly."""
+    if not isinstance(event, dict) or event.get("schema") != "grill-orchestration-event/v1":
+        _invalid("agent orchestration event schema required")
+    return transact_with_event(root, mutate, event=event, receipt=receipt, now=now, timeout=timeout, fault=fault)
 
 
 def _recover_pending_transition_locked(paths: StorePaths, root: str | Path, *, now: Callable[[], str] | None = None) -> Snapshot:

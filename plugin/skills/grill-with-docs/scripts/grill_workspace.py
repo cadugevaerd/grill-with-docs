@@ -1464,6 +1464,121 @@ def backlog_migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any], i
     return _projection_command(args, "migrate")
 
 
+def _orchestration_origin(root: Path, item: Path, work_id: str) -> dict[str, Any]:
+    state_path, state = read_development_state(root, item, work_id)
+    state_bytes = safe_read_regular_fd(root, state_path)
+    bundle = read_local_bundle(root, item)
+    return {
+        "state_sha256": hash_bytes(state_bytes),
+        "metadata_sha256": hash_bytes(canonical(bundle.metadata)),
+        "activation": state.get("activation"), "campaign": state.get("attestation_campaign"),
+        "lifecycle": bundle.metadata.get("lifecycle"),
+        "worktree": {"root": str(root), "branch": git_optional(root, "branch", "--show-current") or "DETACHED"},
+    }
+
+
+def _orchestration_inputs(root: Path, work_id: str, runtime: str, session_ref: str | None,
+                          scope_files: list[str]) -> tuple[Any, dict[str, Any]]:
+    item = resolve_development_item(root, work_id)
+    contract = grill_core_module("agent_orchestration")
+    try:
+        inputs = contract.adoption_inputs(work_id=work_id, runtime=runtime, session_ref=session_ref,
+                                          scope_files=scope_files, origin=_orchestration_origin(root, item, work_id))
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ORCHESTRATION-ADOPTION", str(exc)) from exc
+    return contract, inputs
+
+
+def _initialize_orchestration(root: Path, work_id: str, runtime: str, session_ref: str | None) -> dict[str, Any]:
+    """New init persists its observed session when supplied; it never invents one."""
+    contract, inputs = _orchestration_inputs(root, work_id, runtime, session_ref, [])
+    store = grill_core_module("store")
+    policy = ASSETS / "agent-orchestration.v1.json"
+    policy_bytes = policy.read_bytes()
+    policy_ref = "assets/agent-orchestration.v1.json"
+    policy_sha256 = hash_bytes(policy_bytes)
+    store.bootstrap(root)
+    try:
+        snapshot = store.transact(root, lambda document: _bind_orchestration(
+            document, work_id, contract.new_work_item(inputs, policy_ref=policy_ref,
+            policy_sha256=policy_sha256, adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            context_id=f"ctx-{contract.adoption_sha256(inputs)[:12]}" if session_ref else None)))
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    return {"store_revision": snapshot.revision, "orchestration": "INITIALIZED"}
+
+
+def _bind_orchestration(document: dict[str, Any], work_id: str, item: dict[str, Any]) -> dict[str, Any]:
+    block = document.get("agent_orchestration")
+    if block is None:
+        document["agent_orchestration"] = {"schema": "grill-agent-orchestration/v1", "work_items": {work_id: item}}
+        return document
+    existing = block["work_items"].get(work_id)
+    if existing is None:
+        block["work_items"][work_id] = item
+    return document
+
+
+def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    root = project_root(args.root)
+    contract, inputs = _orchestration_inputs(root, args.work_id, args.runtime, args.session_ref, args.scope_file or [])
+    expected = contract.adoption_sha256(inputs)
+    preview = {"verdict": "PREVIEW", "work_id": args.work_id, "expected_sha256": expected,
+               "origin": inputs["origin"], "scope_files": inputs["scope_files"],
+               "limitations": ["does not rewrite legacy state, activation, campaign or receipts"]}
+    if not args.apply:
+        return preview, EXIT_OK
+    if args.expected_sha256 != expected:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "expected_sha256 does not match reread adoption inputs")
+    store = grill_core_module("store")
+    policy = ASSETS / "agent-orchestration.v1.json"
+    policy_bytes = policy.read_bytes()
+    policy_ref, policy_sha256 = "assets/agent-orchestration.v1.json", hash_bytes(policy_bytes)
+    existing_snapshot = store.read_snapshot(root, required=False)
+    if existing_snapshot is not None:
+        existing = existing_snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
+        current = existing.get("contexts", {}).get(existing.get("current_context_id")) if isinstance(existing, dict) else None
+        if (isinstance(existing, dict) and existing.get("origin") == inputs["origin"]
+                and existing.get("policy_sha256") == policy_sha256 and existing.get("scope_files") == inputs["scope_files"]
+                and isinstance(current, dict) and current.get("runtime") == args.runtime
+                and current.get("leader", {}).get("session_ref") == args.session_ref):
+            return {"verdict": "REUSED", "work_id": args.work_id, "context_id": existing["current_context_id"],
+                    "expected_sha256": expected, "store_revision": existing_snapshot.revision}, EXIT_OK
+    store.bootstrap(root)
+    context_id = f"ctx-{expected[:12]}"
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        block = document.get("agent_orchestration")
+        if block is None or args.work_id not in block["work_items"]:
+            return _bind_orchestration(document, args.work_id, contract.new_work_item(
+                inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
+                adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), context_id=context_id))
+        item = block["work_items"][args.work_id]
+        if item["origin"] != inputs["origin"] or item["policy_sha256"] != policy_sha256:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
+        current = item.get("contexts", {}).get(item.get("current_context_id"))
+        if current is not None and (current.get("runtime") != args.runtime or current.get("leader", {}).get("session_ref") != args.session_ref):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "existing context has different runtime or session")
+        if item["scope_files"] != inputs["scope_files"]:
+            item["scope_revision"] += 1
+            item["scope_files"] = inputs["scope_files"]
+            item["scope_history"].append({"revision": item["scope_revision"], "files": inputs["scope_files"],
+                                          "inputs_sha256": expected})
+        if current is None:
+            replacement = contract.new_work_item(inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
+                                                 adopted_at=item["adopted_at"], context_id=context_id)
+            replacement["scope_revision"], replacement["scope_history"] = item["scope_revision"], item["scope_history"]
+            block["work_items"][args.work_id] = replacement
+        return document
+    try:
+        snapshot = store.transact(root, mutate)
+    except CliFailure:
+        raise
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    return {"verdict": "ORCHESTRATION-ADOPTED", "work_id": args.work_id, "context_id": context_id,
+            "expected_sha256": expected, "store_revision": snapshot.revision}, EXIT_OK
+
+
 def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     if args.type not in KINDS or not SLUG_RE.fullmatch(args.slug):
@@ -1506,7 +1621,8 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             immutable = validate_metadata(bundle.metadata, work_id)
             if immutable.get("type") != args.type or immutable.get("slug") != args.slug:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-DIVERGENCE", work_id)
-            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint, **environment}, EXIT_OK
+            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
+                    **_initialize_orchestration(root, work_id, args.runtime, getattr(args, "session_ref", None)), **environment}, EXIT_OK
         constitution_created, constitution_hash = ensure_managed_constitution(root)
         immutable = immutable_metadata(root, args, work_id)
         files = initial_files(root, work_id, immutable, goal, backlog_skipped=skipped_backlog)
@@ -1522,11 +1638,13 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             immutable = validate_metadata(bundle.metadata, work_id)
             if immutable.get("type") != args.type or immutable.get("slug") != args.slug:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-DIVERGENCE", work_id)
-            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint, **environment}, EXIT_OK
+            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
+                    **_initialize_orchestration(root, work_id, args.runtime, getattr(args, "session_ref", None)), **environment}, EXIT_OK
         bundle = read_local_bundle(root, target)
         return {"status": "CREATED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
                 "constitution": "CREATED" if constitution_created else "PRESERVED", "constitution_sha256": constitution_hash,
                 "backlog_skipped": skipped_backlog,
+                **_initialize_orchestration(root, work_id, args.runtime, getattr(args, "session_ref", None)),
                 **environment}, EXIT_OK
     finally:
         if lock is not None:
@@ -3993,6 +4111,7 @@ def build_parser() -> JsonParser:
     init_parser.add_argument("--work-id")
     init_parser.add_argument("--base-ref")
     init_parser.add_argument("--runtime", choices=("claude", "codex"), required=True)
+    init_parser.add_argument("--session-ref")
     init_parser.add_argument("--allow-install", action="store_true", dest="allow_install")
     init_parser.add_argument("--require-dependencies", action="store_true", dest="require_dependencies")
     init_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
@@ -4093,6 +4212,14 @@ def build_parser() -> JsonParser:
     migrate_v4_parser.add_argument("--apply", action="store_true")
     migrate_v4_parser.add_argument("--expected-sha256")
     migrate_v4_parser.add_argument("--allow-local-edits", action="store_true")
+    orchestration_adopt_parser = subparsers.add_parser("gauntlet-orchestration-adopt")
+    orchestration_adopt_parser.add_argument("root")
+    orchestration_adopt_parser.add_argument("--work-id", required=True)
+    orchestration_adopt_parser.add_argument("--runtime", choices=("claude", "codex"), required=True)
+    orchestration_adopt_parser.add_argument("--session-ref", required=True)
+    orchestration_adopt_parser.add_argument("--scope-file", action="append", default=[])
+    orchestration_adopt_parser.add_argument("--apply", action="store_true")
+    orchestration_adopt_parser.add_argument("--expected-sha256")
     gauntlet_init_parser = subparsers.add_parser("gauntlet-init")
     gauntlet_init_parser.add_argument("root")
     gauntlet_init_parser.add_argument("--work-id", required=True)
@@ -4244,6 +4371,7 @@ def main(argv: list[str] | None = None) -> int:
             "migrate": migrate_command,
             "migrate-v3": migrate_v3_command,
             "migrate-v4": migrate_v4_command,
+            "gauntlet-orchestration-adopt": orchestration_adopt_command,
             "gauntlet-init": gauntlet_init_command,
             "gauntlet-status": gauntlet_status_command,
             "gauntlet-run": gauntlet_run_command,

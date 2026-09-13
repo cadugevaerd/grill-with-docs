@@ -135,6 +135,16 @@ class StoreContract(unittest.TestCase):
   if rehash: document.pop('content_sha256',None); document['content_sha256']=store.content_hash(document)
   path.write_bytes(store.jcs(document)+b'\n'); return path
 
+ def test_agent_orchestration_is_top_level_write_once_and_wal_backed(self):
+  self.register()
+  item={'policy_ref':'policy/v1','policy_sha256':'a'*64,'adopted_at':CLOCK(),'origin':{},'current_context_id':None,'contexts':{},'activities':{},'resources':{},'operations':{},'checkpoints':{},'checkpoint_head':None,'visual_decisions':{},'scope_files':['specs/result.json'],'scope_revision':1,'scope_history':[],'last_transition':None}
+  def adopt(doc):
+   doc['agent_orchestration']={'schema':'grill-agent-orchestration/v1','work_items':{'orchestration-work':item}}; return doc
+  snap=store.transact(self.r,adopt,now=CLOCK)
+  self.assertIn('agent_orchestration',snap.document)
+  with self.assertRaises(store.StoreError):
+   store.transact(self.r,lambda doc: (doc.pop('agent_orchestration'),doc)[1],now=CLOCK)
+
  # --- 5.5.1 bootstrap -------------------------------------------------
  def test_bootstrap_writes_revision_one_under_git_common_dir(self):
   payload=self.register(); paths=self.paths()
