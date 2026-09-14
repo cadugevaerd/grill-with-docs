@@ -3339,26 +3339,76 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
 
 @_gauntlet_authorized
 def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    # Retain the FASE-001 control response for the legacy form.  The durable
-    # worker lifecycle is selected only by the complete run/worker pair, so
-    # an older caller cannot accidentally target a workspace.
-    if args.run_id is None and args.worker_id is None:
-        root = project_root(args.root)
+    activity_id = getattr(args, "activity_id", None)
+    context_id, epoch = getattr(args, "context_id", None), getattr(args, "epoch", None)
+    if (activity_id is not None and (args.run_id is not None or args.worker_id is not None)
+            or args.worker_id is not None and args.run_id is None
+            or (context_id is None) != (epoch is None)):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "mixed or incomplete cleanup selectors")
+    root = project_root(args.root)
+    runs = grill_core_module("gauntlet_runs")
+    contract = grill_core_module("agent_orchestration")
+    selected = activity_id is not None or context_id is not None or (args.run_id is not None and args.worker_id is None)
+    if not selected and args.run_id is None:
         resolve_gauntlet_subject(root, args.work_id)
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "cleanup is unavailable before durable scheduling", extra={"work_id": args.work_id})
-    if args.run_id is None or args.worker_id is None:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--run-id and --worker-id must be supplied together", extra={"work_id": args.work_id})
-    root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
-    try:
-        result = gauntlet_runs.cleanup_worker(root, args.work_id, args.run_id, args.worker_id, admission)
-    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
-        code = (gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code)
-                if isinstance(error, gauntlet_runs.store.StoreError) else error.code)
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
-    # PRESERVED is a deliberate, non-mutating safety result rather than a
-    # core error; preserve its diagnostic verdict but make it a blocked CLI
-    # outcome so automation cannot mistake preservation for cleanup.
-    return result, EXIT_OK if result.get("verdict") in {"CLEANED", "REUSED"} else EXIT_BLOCKED
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "cleanup needs a context or run and worker")
+    item = None
+    if selected:
+        snapshot = runs.store.read_snapshot(root, required=False)
+        item = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id) if snapshot else None
+        if not isinstance(item, dict):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-MIGRATION-REQUIRED", args.work_id)
+        try:
+            contract.require_authority(item, context_id, epoch, args.session_ref)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+        if activity_id is not None and (activity_id not in item["activities"]
+                or item["activities"][activity_id]["context_id"] != context_id):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", "activity is not owned by the selected context")
+    results = []
+    if activity_id is None:
+        if args.run_id is not None:
+            run_ids = [args.run_id]
+        else:
+            run_ids = list(item["contexts"][context_id]["scheduler_runs"])
+        if run_ids:
+            _, _, admission, _ = gauntlet_run_admission(args)
+            try:
+                targets = {run_id: runs._run_for_worker(root, args.work_id, run_id, admission, purpose="cleanup")
+                           for run_id in run_ids}
+            except (runs.GauntletRunError, runs.store.StoreError) as exc:
+                code = runs.store.KEBAB_ALIASES.get(exc.code, exc.code) if isinstance(exc, runs.store.StoreError) else exc.code
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, exc.message) from exc
+            for run_id, run in targets.items():
+                worker_ids = [args.worker_id] if args.worker_id else sorted(run["workers"])
+                for worker_id in worker_ids:
+                    try:
+                        result = runs.cleanup_worker(root, args.work_id, run_id, worker_id, admission)
+                        if not selected:
+                            return result, EXIT_OK if result.get("verdict") in {"CLEANED", "REUSED"} else EXIT_BLOCKED
+                        results.append(result)
+                    except (runs.GauntletRunError, runs.store.StoreError) as exc:
+                        code = runs.store.KEBAB_ALIASES.get(exc.code, exc.code) if isinstance(exc, runs.store.StoreError) else exc.code
+                        if not selected:
+                            raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, exc.message) from exc
+                        results.append({"run_id": run_id, "worker_id": worker_id, "verdict": "PRESERVED", "code": code})
+    if item is not None and args.run_id is None:
+        for resource_id, resource in item["resources"].items():
+            if (resource["origin_context_id"] != context_id or resource["activity_id"] is None
+                    or activity_id is not None and resource["activity_id"] != activity_id):
+                continue
+            # No session-close transport is wired here. Preserve the resource until
+            # the existing activity acceptance path records a correlated close.
+            closed = resource["state"] in {"CLOSED", "REMOVED"} and bool(resource["result_acceptance_ref"])
+            results.append({"resource_id": resource_id, "kind": resource["kind"], "identity": resource["identity"],
+                            "state": resource["state"], "verdict": "REUSED" if closed else "UNKNOWN",
+                            "code": None if closed else "SESSION-CLOSE-UNPROVEN"})
+        if activity_id is not None and not results:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", "activity has no registered resource")
+    verdict = ("UNKNOWN" if any(result["verdict"] == "UNKNOWN" for result in results) else
+               "PRESERVED" if any(result["verdict"] not in {"CLEANED", "REUSED"} for result in results) else "CLEANED")
+    return {"verdict": verdict, "work_id": args.work_id, "context_id": context_id,
+            "epoch": epoch, "resources": results}, EXIT_OK if verdict == "CLEANED" else EXIT_BLOCKED
 
 
 @_gauntlet_authorized
@@ -3630,44 +3680,66 @@ def gauntlet_tasks_reconcile_command(args: argparse.Namespace) -> tuple[dict[str
 
 
 def task_files_migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    """Preview/apply an author-reviewed task-files proposal without touching a sealed DAG."""
+    """Apply only the current, independently reviewed proposal under its authority fence."""
     root = project_root(args.root)
     resolve_gauntlet_subject(root, args.work_id)
     directory, _, _ = _feature_paths(root, args.feature)
     current_path = directory / "tasks.md"
-    if not current_path.is_file():
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-ABSENT", f"specs/{args.feature}/tasks.md does not exist")
     proposal_ref = args.proposal
-    if not isinstance(proposal_ref, str) or not re.fullmatch(r"specs/[0-9A-Za-z][0-9A-Za-z._-]{0,127}/[^\\/]+", proposal_ref):
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--proposal must be a feature-local file")
-    proposal_path = root / proposal_ref
-    if not proposal_path.is_file():
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-FILES-MISSING", "proposal is unavailable")
-    current = safe_read_regular_fd(root, current_path).decode("utf-8", errors="strict")
-    proposal = safe_read_regular_fd(root, proposal_path).decode("utf-8", errors="strict")
+    if (not isinstance(proposal_ref, str) or Path(proposal_ref).parent != directory.relative_to(root)
+            or Path(proposal_ref).name in {"", ".", "..", "tasks.md"}):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--proposal must be a separate feature-local file")
+    store = grill_core_module("store")
     contract = grill_core_module("agent_orchestration")
-    accepted = re.findall(r"^- \[[xX]\]\s+(T\d+)", current, re.MULTILINE)
-    try:
-        preview = contract.task_files_migration_preview(current, proposal, expected_sha256=args.expected_sha256,
-                                                        accepted_task_ids=accepted)
-        partition = grill_core_module("partition")
-        proposed_tasks = partition.parse_task_files(proposal, feature=args.feature, root=root)
-    except (contract.OrchestrationError, Exception) as error:
-        if isinstance(error, CliFailure):
-            raise
-        code = getattr(error, "code", "TASK-FILES-INVALID")
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, str(error)) from error
-    if any(not re.search(rf"^- \[[xX]\]\s+{re.escape(task_id)}(?:\s|$)", proposal, re.MULTILINE)
-           for task_id in accepted):
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-RESULT-DIVERGENT", "accepted checkbox was reopened")
-    payload = {**preview, "work_id": args.work_id, "feature": args.feature, "proposal": proposal_ref,
-               "tasks": [task.id for task in proposed_tasks]}
+    partition = grill_core_module("partition")
+
+    def preview() -> tuple[dict[str, Any], bytes]:
+        _, _, document, item, _context = _activity_policy(
+            root, args.work_id, args.context_id, args.epoch, args.session_ref)
+        if not current_path.is_file():
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-ABSENT", str(current_path))
+        current_raw = safe_read_regular_fd(root, current_path)
+        proposal_raw = safe_read_regular_fd(root, root / proposal_ref)
+        try:
+            current, proposal = current_raw.decode("utf-8"), proposal_raw.decode("utf-8")
+            accepted = re.findall(r"^- \[[xX]\]\s+(T\d+)", current, re.MULTILINE)
+            result = contract.task_files_migration_preview(
+                current, proposal, expected_sha256=hash_bytes(current_raw), accepted_task_ids=accepted)
+            tasks = partition.parse_task_files(proposal, feature=args.feature, root=root)
+            contract.require_task_files_review(item, context_id=args.context_id,
+                author_id=args.author_activity, reviewer_id=args.review_activity,
+                proposal={"path": proposal_ref, "sha256": hash_bytes(proposal_raw), "size": len(proposal_raw)})
+        except (contract.OrchestrationError, partition.PartitionError, UnicodeError) as exc:
+            code = getattr(exc, "code", str(exc) if isinstance(exc, contract.OrchestrationError) else "TASK-FILES-INVALID")
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, "migration inputs are not current") from exc
+        if any(not re.search(rf"^- \[[xX]\]\s+{re.escape(task_id)}(?:\s|$)", proposal, re.MULTILINE) for task_id in accepted):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-RESULT-DIVERGENT", "accepted checkbox was reopened")
+        for activity_id in (args.author_activity, args.review_activity):
+            activity = item["activities"][activity_id]
+            if hash_bytes(safe_read_regular_fd(root, root / activity["result_ref"])) != activity["result_sha256"]:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-SOURCE-STALE", "specialist result changed")
+        active, unknown = _continuity_quiescence(document, item, args.work_id)
+        if active or unknown or any(op.get("state") in {"INTENT", "APPLIED", "UNKNOWN"} for op in item["operations"].values()):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-ACTIVE-WORK", "migration requires quiescence")
+        inputs = {"work_id": args.work_id, "feature": args.feature, "root": str(root),
+                  "context_id": args.context_id, "epoch": args.epoch, "session_ref": args.session_ref,
+                  "store_sha256": store.jcs_sha256(document), "proposal": proposal_ref,
+                  "current_sha256": result["current_sha256"], "proposal_sha256": result["proposal_sha256"],
+                  "author_activity": args.author_activity, "review_activity": args.review_activity}
+        return {**result, **inputs, "expected_sha256": store.jcs_sha256(inputs),
+                "tasks": [task.id for task in tasks]}, proposal_raw
+
+    payload, proposal_raw = preview()
     if not args.apply:
         return payload, EXIT_OK
-    if args.expected_proposal_sha256 != preview["proposal_sha256"]:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-SOURCE-STALE", "proposal changed after preview")
-    reject_symlink_chain(root, current_path, allow_missing=False)
-    current_path.write_text(proposal, encoding="utf-8")
+    if args.expected_sha256 != payload["expected_sha256"] or (
+            args.expected_proposal_sha256 is not None and args.expected_proposal_sha256 != payload["proposal_sha256"]):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-SOURCE-STALE", "migration changed after preview")
+    with store.work_lock(root, args.work_id), store.orchestrator_lock(store.store_paths(root)):
+        fresh, proposal_raw = preview()
+        if fresh != payload:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-SOURCE-STALE", "migration changed before apply")
+        atomic_write(root, current_path, proposal_raw)
     return {**payload, "verdict": "APPLIED"}, EXIT_OK
 
 
@@ -5615,10 +5687,12 @@ def build_parser() -> JsonParser:
         else:
             control_parser.add_argument("--session-ref")
         if command == "gauntlet-cleanup":
-            # Optional individually for the legacy FASE-001 command; the
-            # handler requires the pair before selecting durable cleanup.
+            # The handler distinguishes adopted selectors from the legacy pair.
             control_parser.add_argument("--run-id")
             control_parser.add_argument("--worker-id")
+            control_parser.add_argument("--activity-id")
+            control_parser.add_argument("--context-id")
+            control_parser.add_argument("--epoch", type=int)
     prepare_worker_parser = subparsers.add_parser("gauntlet-prepare-worker")
     prepare_worker_parser.add_argument("root")
     prepare_worker_parser.add_argument("--work-id", required=True)
@@ -5648,7 +5722,12 @@ def build_parser() -> JsonParser:
     task_files_migrate_parser.add_argument("--work-id", required=True)
     task_files_migrate_parser.add_argument("--feature", required=True)
     task_files_migrate_parser.add_argument("--proposal", required=True)
-    task_files_migrate_parser.add_argument("--expected-sha256", required=True)
+    task_files_migrate_parser.add_argument("--context-id")
+    task_files_migrate_parser.add_argument("--epoch", type=int)
+    task_files_migrate_parser.add_argument("--session-ref")
+    task_files_migrate_parser.add_argument("--author-activity")
+    task_files_migrate_parser.add_argument("--review-activity")
+    task_files_migrate_parser.add_argument("--expected-sha256")
     task_files_migrate_parser.add_argument("--expected-proposal-sha256")
     task_files_migrate_parser.add_argument("--apply", action="store_true")
     dag_validate_parser = subparsers.add_parser("gauntlet-dag-validate")

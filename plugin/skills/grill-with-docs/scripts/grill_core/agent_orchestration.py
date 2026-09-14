@@ -1589,6 +1589,46 @@ def require_task_phase_barrier(tasks: Any, accepted_tasks: Any, *, target_phase:
         _fail("TASK-PHASE-PENDING:" + ",".join(pending))
 
 
+def require_task_files_review(item: Mapping[str, Any], *, context_id: str, author_id: str,
+                             reviewer_id: str, proposal: Mapping[str, Any]) -> None:
+    """A digest pins bytes; accepted specialist activities prove who judged them."""
+    activities, resources = item.get("activities", {}), item.get("resources", {})
+    author, reviewer = activities.get(author_id), activities.get(reviewer_id)
+    for role, activity in (("author", author), ("reviewer", reviewer)):
+        if (not isinstance(activity, Mapping) or activity.get("state") != "ACCEPTED"
+                or activity.get("activity_type") != role or activity.get("step_id") != "tasks"
+                or activity.get("context_id") != context_id or activity.get("accepted_by_context") != context_id
+                or activity.get("policy_sha256") != item.get("policy_sha256")
+                or activity.get("review_verdict") != "APPROVED" or not activity.get("acceptance_ref")):
+            _fail("ACTIVITY-REQUIRED")
+        model, effort = specialist_pair(activity.get("runtime"), role)
+        if (activity.get("requested_model"), activity.get("effective_model"), activity.get("resolved_model_id"),
+                activity.get("requested_effort"), activity.get("effective_effort")) != (model, model, model, effort, effort):
+            _fail("SPECIALIST-CAPABILITY-UNPROVEN")
+        manifest = activity.get("output_manifest" if role == "author" else "input_manifest")
+        files = manifest.get("files", []) if isinstance(manifest, Mapping) else []
+        if not any(isinstance(entry, Mapping) and all(entry.get(key) == proposal[key]
+                   for key in ("path", "sha256", "size")) for entry in files):
+            _fail("TASKS-SOURCE-STALE")
+    if author_id not in reviewer.get("author_activity_ids", []):
+        _fail("REVIEWER-NOT-INDEPENDENT")
+    reviewer_resource = resources.get(reviewer.get("session_resource_id"))
+    if not isinstance(reviewer_resource, Mapping) or reviewer_resource.get("activity_id") != reviewer_id:
+        _fail("REVIEWER-NOT-INDEPENDENT")
+    # Compare session identity, not activity/dispatch IDs that one session can reuse.
+    keys = ("provider", "host", "runtime_instance", "handle", "incarnation")
+    identity = reviewer_resource.get("identity", {})
+    if any(not identity.get(key) for key in keys):
+        _fail("REVIEWER-NOT-INDEPENDENT")
+    for source in _reviewer_authors(reviewer, activities, require_accepted=True):
+        resource = resources.get(source.get("session_resource_id"), {})
+        source_identity = resource.get("identity", {})
+        if (resource.get("activity_id") != source.get("activity_id")
+                or any(not source_identity.get(key) for key in keys)
+                or all(source_identity[key] == identity[key] for key in keys)):
+            _fail("REVIEWER-NOT-INDEPENDENT")
+
+
 def task_files_migration_preview(current_text: str, proposal_text: str, *, expected_sha256: str,
                                  accepted_task_ids: Any = ()) -> dict[str, Any]:
     """Hash-fence a reviewed proposal; parsing and writing stay at the CLI boundary."""

@@ -151,6 +151,44 @@ class AgentOrchestrationContract(unittest.TestCase):
                 ".", "work", "run-cleanup", run["admission"], purpose="cleanup"
             ), run)
 
+    def test_cleanup_public_selectors_preserve_unproven_sessions(self):
+        temporary, root = self.fixture()
+        with temporary:
+            activity, _, _, observed, _, _ = self.accepted_specialist("author-cleanup")
+            resource_id, resource = agent_orchestration.session_resource(
+                activity, observed, collected_at="2026-01-01T00:00:00Z")
+            context = {"context_id": "ctx-1", "epoch": 1, "state": "ACTIVE", "scheduler_runs": {},
+                       "leader": {"state": "ACTIVE", "session_ref": "session-1"}}
+            item = {"current_context_id": "ctx-1", "contexts": {"ctx-1": context},
+                    "activities": {"author-cleanup": activity}, "resources": {resource_id: resource}}
+            snapshot = SimpleNamespace(document={"agent_orchestration": {"work_items": {"wx": item}}})
+            args = ("gauntlet-cleanup", str(root), "--work-id", "wx", "--context-id", "ctx-1",
+                    "--epoch", "1", "--session-ref", "session-1")
+            with mock.patch.object(grill_workspace.grill_core_module("gauntlet_runs").store, "read_snapshot", return_value=snapshot), \
+                 mock.patch.object(grill_workspace.grill_core_module("gauntlet_runs"), "cleanup_worker") as cleanup:
+                for selector in ((), ("--activity-id", "author-cleanup")):
+                    code, payload = self.run_cli(*args, *selector)
+                    self.assertEqual((code, payload["verdict"]), (2, "UNKNOWN"), payload)
+                    self.assertEqual(payload["resources"][0]["code"], "SESSION-CLOSE-UNPROVEN")
+                for selector, expected in (
+                        (("--activity-id", "missing"), "RESOURCE-IDENTITY-DIVERGENT"),
+                        (("--activity-id", "author-cleanup", "--run-id", "run-1"), "INVALID-ARGUMENTS"),
+                        (("--worker-id", "worker-1"), "INVALID-ARGUMENTS"),
+                        (("--epoch", "2"), "LEADER-AUTHORITY-UNPROVEN")):
+                    code, payload = self.run_cli(*args, *selector)
+                    self.assertEqual((code, payload["code"]), (2, expected))
+                cleanup.assert_not_called()
+                resource.update(state="CLOSED", result_acceptance_ref=activity["acceptance_ref"])
+                self.assertEqual(self.run_cli(*args, "--activity-id", "author-cleanup")[0], 0)
+                runs = grill_workspace.grill_core_module("gauntlet_runs")
+                cleanup.side_effect = [{"verdict": "PRESERVED", "worker_id": "w1"},
+                                       {"verdict": "CLEANED", "worker_id": "w2"}]
+                with mock.patch.object(grill_workspace, "gauntlet_run_admission", return_value=(root, runs, {}, {})), \
+                     mock.patch.object(runs, "_run_for_worker", return_value={"workers": {"w1": {}, "w2": {}}}):
+                    code, payload = self.run_cli(*args, "--run-id", "run-1")
+                    self.assertEqual((code, payload["verdict"], len(payload["resources"])), (2, "PRESERVED", 2))
+                    self.assertEqual(cleanup.call_count, 2)
+
     def test_failed_or_unproven_cleaned_worker_never_unblocks_dependency(self):
         for state, converged in (("FAILED", True), ("CLEANED", False)):
             with self.subTest(state=state, converged=converged):
