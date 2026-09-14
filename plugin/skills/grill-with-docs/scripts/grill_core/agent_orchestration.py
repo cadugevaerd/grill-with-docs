@@ -194,9 +194,13 @@ def _absolute_path(value: Any, label: str) -> None:
 
 
 def _branch_ref(value: Any, label: str) -> None:
-    _text(value, label)
+    if not isinstance(value, str) or not value or any(ord(char) < 32 or ord(char) == 127 for char in value):
+        _fail(f"invalid {label}")
     name = value.removeprefix("refs/heads/")
-    if name == value or name in {"", "unknown", "undetermined"} or any(part in {"", ".", ".."} for part in name.split("/")):
+    if (name == value or name in {"", "unknown", "undetermined"}
+            or any(not part or part.startswith(".") or part.endswith(".lock") for part in name.split("/"))
+            or ".." in value or any(char in value for char in " ~^:?*[\\")
+            or value.endswith(".") or "@{" in value):
         _fail(f"invalid {label}")
 
 

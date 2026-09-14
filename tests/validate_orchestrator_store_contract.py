@@ -238,6 +238,25 @@ class StoreContract(unittest.TestCase):
   reject(lambda item: resource_identity(item,'worktree',{**worktree,'real_path':'/fixture/\x00worktree'}))
   reject(lambda item: item['resources']['resource-1']['creation_observation'].update(collected_at='2026-99-99T99:99:99Z'))
   reject(lambda item: item['activities']['activity-1'].update(activity_scope='cycle',step_id='T010'))
+  for kind, branch_ref, accepted in (
+   ('branch','refs/heads/release/naïve.v1',True), ('worktree','refs/heads/topic/a.b/c',True),
+   ('branch','refs/heads/-branch',True), ('worktree','refs/heads/foo./bar',True),
+   ('branch','refs/heads/control-\u0085',True),
+   ('branch','refs/heads/has space',False), ('worktree','refs/heads/has space',False),
+   ('branch','refs/heads/foo..bar',False), ('worktree','refs/heads/nested//name',False),
+   ('branch','refs/heads/.hidden',False), ('worktree','refs/heads/locked.lock',False),
+   ('branch','refs/heads/ends.',False), ('worktree','refs/heads/forbidden~^:?*[',False),
+   ('branch','refs/heads/@{reflog',False), ('worktree',r'refs/heads/back\slash',False),
+  ):
+   self.tearDown(); self.setUp(); self.register()
+   identity={**(branch if kind=='branch' else worktree),'branch_ref':branch_ref}
+   if accepted:
+    stored=store.transact(self.r,lambda document: candidate(document,lambda item: resource_identity(item,kind,identity)),now=CLOCK)
+    self.assertEqual(stored.document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1']['identity'],identity)
+   else:
+    with self.assertRaises(store.StoreError) as caught:
+     store.transact(self.r,lambda document: candidate(document,lambda item: resource_identity(item,kind,identity)),now=CLOCK)
+    self.assertEqual(caught.exception.code,'ORCHESTRATOR_INVALID')
   self.tearDown(); self.setUp(); self.register()
   windows={**worktree,'git_common_dir':'C:/fixture/.git','real_path':'C:/fixture/worktree'}
   stored=store.transact(self.r,lambda document: candidate(document,lambda item: resource_identity(item,'worktree',windows)),now=CLOCK)
