@@ -2,7 +2,7 @@
 
 The public parser, native session normalization, reference hash checks, request
 correlation and Store all run. Only native I/O and the presentation-axis probe
-are injected; startup trust is deliberately unavailable in the live adapter.
+are injected; current configuration and startup trust are unavailable in the live adapter.
 """
 from __future__ import annotations
 
@@ -61,6 +61,7 @@ def boundary(module, root, runtime, session_ref, work_id, *, loaded=True):
         "contentComplete": True, "clipping": [], "transcript": {"messages": [], "limited": False}}}
     axes = {"installation": {"status": "present", "version": "0.3.0", "skill_ref": str(REFERENCE)},
         "enablement": {"state": "enabled", "source_ref": "fixture:plugin-list", "source_sha256": "a" * 64},
+        "configuration": {"state": "observed", "source_ref": "fixture:session-config", "source_sha256": "c" * 64},
         "trust": {"state": "ready", "source_ref": "fixture:startup", "source_sha256": "b" * 64}}
     def read(argv):
         return pack(show if argv[1] == "worker-show" else transcript)
@@ -74,12 +75,14 @@ def boundary(module, root, runtime, session_ref, work_id, *, loaded=True):
     if loaded:
         import shlex
         script = str(Path(core.__file__).resolve().parents[1] / "grill_workspace.py")
+        command = [sys.executable, "-B", script, "preflight" if work_id is None else "init", str(root),
+                   "--runtime", runtime, "--session-ref", session_ref]
+        if work_id is not None:
+            command += ["--work-id", work_id, "--type", "feature", "--slug", "fixture"]
         transcript["result"]["transcript"]["messages"] = (
-            tool_pair(runtime, shlex.join([sys.executable, "-B", script, "init", str(root),
-                      "--runtime", runtime, "--session-ref", session_ref, "--work-id", work_id or "",
-                      "--type", "feature", "--slug", "fixture"]),
+            tool_pair(runtime, shlex.join(command),
                       json.dumps({"verdict": "BLOCKED", "code": "STYLE-LOAD-UNCONFIRMED", "presentation": pending}), "request")
-            + tool_pair(runtime, shlex.join(["cat", "--", str(REFERENCE)]), REFERENCE.read_text(), "read"))
+            + tool_pair(runtime, shlex.join([shutil.which("cat"), "--", str(REFERENCE)]), REFERENCE.read_text(), "read"))
     return adapter, show, transcript
 
 
@@ -94,7 +97,10 @@ def offline_leader(module):
         policy["presentation"]["approved"] = [{"version": "0.3.0", "skill_sha256":
             "sha256:" + hashlib.sha256(REFERENCE.read_bytes()).hexdigest()}]
         policy_path.write_bytes(pack(policy))
-        with mock.patch.object(module, "ASSETS", assets), mock.patch.object(module, "_leader_boundary",
+        native_which = shutil.which
+        with mock.patch.object(shutil, "which", side_effect=lambda name, *args, **kwargs:
+                (native_which(name, *args, **kwargs) or "/offline/bin/cat") if name == "cat" else native_which(name, *args, **kwargs)), \
+                mock.patch.object(module, "ASSETS", assets), mock.patch.object(module, "_leader_boundary",
                 side_effect=lambda *args: boundary(module, *args)[0]):
             yield
 
@@ -104,7 +110,7 @@ def command(program, args):
     values = [SESSION if value == "fixture-leader" else str(value) for value in args]
     if Path(program).name != "grill_workspace.py":
         return [sys.executable, "-B", str(program), *values]
-    if values and values[0] in {"init", "checkpoint", "gauntlet-run", "gauntlet-resume", "gauntlet-cleanup",
+    if values and values[0] in {"init", "checkpoint", "attest", "phase-turn", "partition-emit", "gauntlet-tasks-reconcile", "gauntlet-run", "gauntlet-resume", "gauntlet-cleanup",
             "gauntlet-prepare-worker", "gauntlet-wave-declare", "gauntlet-converge", "gauntlet-run-abandon",
             "gauntlet-worker-declare", "gauntlet-progress-record", "gauntlet-worker-terminal", "gauntlet-remediate"} and "--session-ref" not in values:
         values += ["--session-ref", SESSION]

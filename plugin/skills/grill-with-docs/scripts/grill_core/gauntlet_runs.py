@@ -341,6 +341,7 @@ def admit_or_reuse_run(root: str | Path, work_id: str, admission: Mapping[str, s
 
 def _admit_or_reuse_run_once(root: str | Path, work_id: str, admission: Mapping[str, str]) -> dict[str, Any]:
     """Create one durable run, or reuse the compatible active run unchanged."""
+    _require_orchestration_authority(root, work_id, "run")
     identity = _validate_admission(admission)
     _require_base_commit(root, identity)
     # FASE-001 has deliberately no Store side effects.  Durable admission is
@@ -1407,7 +1408,10 @@ def _require_active_lease(lease: Mapping[str, Any]) -> None:
 def _require_orchestration_authority(root: str | Path, work_id: str, purpose: str) -> None:
     """Keep a selected work item from borrowing another caller's authority."""
     try:
-        store.require_orchestration_authority(root, work_id, purpose=purpose)
+        if store.store_exists(root):
+            # Never observe the journal-before-snapshot publication window.
+            with store.orchestrator_lock(store.store_paths(root)):
+                store.require_orchestration_authority(root, work_id, purpose=purpose)
     except store.StoreError as exc:
         _fail("LEADER-AUTHORITY-UNPROVEN", exc.message)
 

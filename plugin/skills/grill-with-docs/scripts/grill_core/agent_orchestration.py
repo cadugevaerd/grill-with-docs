@@ -7,6 +7,7 @@ recovery) apply the same rules instead of relying on CLI callers.
 from __future__ import annotations
 
 import copy
+import difflib
 import base64
 import hashlib
 import json
@@ -1640,6 +1641,8 @@ def task_files_migration_preview(current_text: str, proposal_text: str, *, expec
     if not set(accepted_task_ids).issubset(new_ids) or not set(accepted_task_ids).issubset(old_ids):
         _fail("TASK-RESULT-DIVERGENT")
     return {"verdict": "PREVIEW", "current_sha256": current_sha256, "proposal_sha256": proposal_sha256,
+            "diff": "".join(difflib.unified_diff(current_text.splitlines(keepends=True), proposal_text.splitlines(keepends=True),
+                                              fromfile="tasks.md", tofile="proposal")),
             "preserved_task_ids": sorted(old_ids & new_ids), "added_task_ids": sorted(new_ids - old_ids),
             "accepted_task_ids": sorted(accepted_task_ids)}
 

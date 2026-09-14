@@ -2,10 +2,12 @@
 """Offline checks for migration's specialist and public authority boundary."""
 import copy
 import contextlib
+import concurrent.futures
 import hashlib
 import io
 import json
 import sys
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -96,6 +98,15 @@ class TaskFilesContract(unittest.TestCase):
                        "leader": {"state": "ACTIVE", "session_ref": "session-1"}}
             item.update(current_context_id="ctx-1", contexts={"ctx-1": context}, operations={})
             document = {"agent_orchestration": {"work_items": {"wx": item}}}
+            dag_path = directory / "execution-dag.json"
+            dag_path.write_text(json.dumps({"schema": "grill-gauntlet-execution-dag/v1", "feature": "030-demo",
+                "nodes": [{"id": "p01-a", "files": ["specs/030-demo/implement/p01-a.tasks.json"]}]}))
+            sidecar = directory / "implement/p01-a.tasks.json"
+            sidecar.parent.mkdir()
+            sidecar.write_text(json.dumps({"completed": ["T001"]}))
+            dag_hash = hashlib.sha256(dag_path.read_bytes()).hexdigest()
+            document["work_items"] = {"wx": {"gauntlet": {"runs": {
+                "run-old": {"state": "COMPLETE", "dag_content_sha256": dag_hash}}}}}
             def authority(_root, work_id, context_id, epoch, session_ref):
                 try:
                     contract.require_authority(item, context_id, epoch, session_ref)
@@ -117,6 +128,11 @@ class TaskFilesContract(unittest.TestCase):
                 code, preview = cli()
                 self.assertEqual(code, 0, preview)
                 self.assertEqual(current.read_bytes(), before)
+                self.assertIn('+  Files: []', preview["diff"])
+                self.assertEqual(preview["files_changes"], [{"task_id": "T001", "before": None, "after": []}])
+                self.assertEqual(preview["affected_dags"], [{"path": "specs/030-demo/execution-dag.json",
+                    "sha256": dag_hash, "revision": "legacy-unproven"}])
+                self.assertEqual(preview["affected_runs"][0]["run_id"], "run-old")
                 self.assertEqual(cli("--apply", "--expected-sha256", "0" * 64)[1]["code"], "TASKS-SOURCE-STALE")
                 context["epoch"] = 2
                 self.assertEqual(cli("--apply", "--expected-sha256", preview["expected_sha256"])[1]["code"], "LEADER-AUTHORITY-UNPROVEN")
@@ -125,6 +141,42 @@ class TaskFilesContract(unittest.TestCase):
                 code, applied = cli("--apply", "--expected-sha256", preview["expected_sha256"])
                 self.assertEqual((code, applied.get("verdict")), (0, "APPLIED"), applied)
                 self.assertEqual(current.read_bytes(), proposal.read_bytes())
+
+                # Deterministic former lost update: reconcile attempts its write
+                # after migration has validated, immediately before atomic_write.
+                current.write_bytes(before)
+                waiting = threading.Event()
+                runtime_store = grill_workspace.grill_core_module("store")
+                real_lock, real_write = runtime_store.work_lock, grill_workspace.atomic_write
+                reconcile_args = grill_workspace.build_parser().parse_args([
+                    "gauntlet-tasks-reconcile", str(root), "--work-id", "wx",
+                    "--dag", "specs/030-demo/execution-dag.json", "--apply"])
+                future = None
+                @contextlib.contextmanager
+                def observed_lock(*args, **kwargs):
+                    if threading.current_thread() is not threading.main_thread():
+                        waiting.set()
+                    with real_lock(*args, **kwargs):
+                        yield
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    def interleave(write_root, path, raw, *args, **kwargs):
+                        nonlocal future
+                        if path == current and threading.current_thread() is threading.main_thread():
+                            # Admission is complete; interleave the two actual
+                            # file writers without repeating the global read.
+                            future = executor.submit(grill_workspace.gauntlet_tasks_reconcile_command.__wrapped__, reconcile_args)
+                            self.assertTrue(waiting.wait(3), "reconcile did not use migration's work_lock")
+                            self.assertFalse(future.done(), "reconcile wrote inside migration's critical section")
+                        return real_write(write_root, path, raw, *args, **kwargs)
+                    with mock.patch.object(runtime_store, "work_lock", side_effect=observed_lock), \
+                         mock.patch.object(grill_workspace, "atomic_write", side_effect=interleave):
+                        code, applied = cli("--apply", "--expected-sha256", preview["expected_sha256"])
+                        self.assertEqual((code, applied.get("verdict")), (0, "APPLIED"), applied)
+                        reconciled, code = future.result(timeout=3)
+                self.assertEqual((code, reconciled["verdict"], reconciled["marked"]), (0, "APPLIED", ["T001"]))
+                self.assertIn("- [X] T001", current.read_text())
+                self.assertIn("Files: []", current.read_text())
+                self.assertEqual(hashlib.sha256(dag_path.read_bytes()).hexdigest(), dag_hash)
 
 
 if __name__ == "__main__":

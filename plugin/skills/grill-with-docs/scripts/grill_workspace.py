@@ -95,6 +95,10 @@ def grill_core_module(name: str) -> Any:
     kept separate from ``_SIBLINGS`` rather than generalising that loader.
     Only ``work_item_v3`` is actually loaded this round -- see gaps_deferred.
     """
+    # Gauntlet's standalone loader owns the Store ContextVar. All CLI paths
+    # must share it, including activity/checkpoint and direct filesystem effects.
+    if name == "store":
+        return grill_core_module("gauntlet_runs").store
     if name not in _GRILL_CORE:
         path = Path(__file__).resolve().with_name("grill_core") / f"{name}.py"
         spec = importlib.util.spec_from_file_location(f"grill_core_{name}", path)
@@ -1257,6 +1261,13 @@ def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     payload["verdict"] = payload["dependencies"].get("verdict", "BLOCKED")
     if payload["dependencies"].get("code"):
         payload["code"] = payload["dependencies"]["code"]
+    try:
+        payload["presentation"] = _session_readiness(
+            root, args.runtime, args.session_ref, work_id=None)["presentation"]
+    except CliFailure as exc:
+        payload["verdict"], payload["code"] = "BLOCKED", exc.code
+        if exc.extra and isinstance(exc.extra.get("presentation"), dict):
+            payload["presentation"] = exc.extra["presentation"]
     return _with_coordinator_response(payload, args.runtime), EXIT_OK if payload["verdict"] == "OK" else EXIT_BLOCKED
 
 
@@ -1513,14 +1524,27 @@ def _leader_boundary(root: Path, runtime: str, session_ref: str, work_id: str | 
 
 
 def _session_readiness(root: Path, runtime: str, session_ref: str | None, *,
-                       work_id: str) -> dict[str, Any]:
+                       work_id: str | None) -> dict[str, Any]:
     """Read one adapter observation and derive presentation at the CLI boundary."""
-    if not isinstance(session_ref, str) or not session_ref:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "--session-ref is required")
     policy_path = ASSETS / "agent-orchestration.v1.json"
     policy_raw = policy_path.read_bytes()
     gwd_raw = (ASSETS.parent / "SKILL.md").read_bytes()
     agent_runtime = grill_core_module("agent_runtime")
+    def unobserved() -> dict[str, Any]:
+        dependencies = sibling("ensure_dependencies")
+        status, version, source, _reason = dependencies.plugin_registry_state(
+            {"id": "i-have-adhd", "plugin": "i-have-adhd", "marketplace": "i-have-adhd", "min": "0.3.0"},
+            dependencies.Toolchain(), runtime)
+        return agent_runtime.presentation_state(
+            policy=json.loads(policy_raw), policy_sha256=hash_bytes(policy_raw),
+            gwd_skill_sha256=hash_bytes(gwd_raw), runtime=runtime,
+            session_identity="unobserved", config_fingerprint="unobserved",
+            scope={"kind": "gwd", "root": str(root), "work_id": work_id},
+            installation={"status": status, "version": version, "manifest_ref": source},
+            enablement=None, trust=None)
+    if not isinstance(session_ref, str) or not session_ref:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "--session-ref is required",
+                         extra={"presentation": unobserved()})
     try:
         observed, presentation = agent_runtime.project_leader_presentation(
             _leader_boundary(root, runtime, session_ref, work_id),
@@ -1531,7 +1555,7 @@ def _session_readiness(root: Path, runtime: str, session_ref: str | None, *,
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", str(exc), "presentation evidence is not correlated") from exc
     except agent_runtime.RuntimeError as exc:
         code = str(exc) if str(exc).startswith("LEADER-") else "LEADER-AUTHORITY-UNPROVEN"
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, str(exc)) from exc
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, str(exc), extra={"presentation": unobserved()}) from exc
     scope = presentation["scope"]
     if (scope.get("kind") != "gwd" or scope.get("root") != str(root)
             or work_id is not None and scope.get("work_id") != work_id):
@@ -1543,6 +1567,22 @@ def _session_readiness(root: Path, runtime: str, session_ref: str | None, *,
                          "presentation is not ready", extra={"presentation": presentation})
     return {"ref": session_ref, "sha256": observed["source_sha256"],
             "incarnation": observed["incarnation"], "presentation": presentation}
+
+
+def _require_current_leader(root: Path, work_id: str, context: dict[str, Any], session_ref: str,
+                            readiness: dict[str, Any] | None = None) -> None:
+    """Reuse the work observation; cleanup/switch reobserve without presentation."""
+    if readiness is None:
+        runtime = grill_core_module("agent_runtime")
+        try:
+            observed = _leader_boundary(root, context["runtime"], session_ref, work_id).observe()
+        except runtime.RuntimeError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+        readiness = {"ref": observed["source_ref"], "sha256": observed["source_sha256"], "incarnation": observed["incarnation"]}
+    if any(context["leader"].get(key) != readiness[field] for key, field in (
+            ("session_ref", "ref"), ("observation_ref", "ref"),
+            ("observation_sha256", "sha256"), ("incarnation", "incarnation"))):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "current leader changed")
 
 
 def _orchestration_inputs(root: Path, work_id: str, runtime: str, session_ref: str | None,
@@ -3087,14 +3127,52 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
         item = block.get("work_items", {}).get(args.work_id) if isinstance(block, dict) else None
         if item is None:
             return handler(args)
+        if handler.__name__ in {"partition_emit_command", "gauntlet_tasks_reconcile_command"} and not args.apply:
+            return handler(args)
         context_id = item.get("current_context_id")
         context = item.get("contexts", {}).get(context_id)
         session_ref = getattr(args, "session_ref", None)
         if not isinstance(context, dict) or not isinstance(session_ref, str):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
+        contract = grill_core_module("agent_orchestration")
+        selected_id, selected_epoch = getattr(args, "context_id", None), getattr(args, "epoch", None)
+        if ((selected_id is None) != (selected_epoch is None)):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "incomplete context selectors")
+        try:
+            contract.require_authority(item, selected_id if selected_id is not None else context_id,
+                                       selected_epoch if selected_epoch is not None else context["epoch"], session_ref)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+        # Cleanup requires a current leader, independently of presentation.
+        cleanup = handler.__name__ == "gauntlet_cleanup_command"
+        if cleanup:
+            readiness = None
+        else:
+            try:
+                contract.require_presentation_work_ready(context)
+            except contract.OrchestrationError as exc:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", str(exc), "presentation is not ready") from exc
+            if getattr(args, "runtime", None) not in (None, context["runtime"]):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "runtime changed without continuity")
+            readiness = _session_readiness(root, context["runtime"], session_ref, work_id=args.work_id)
+        _require_current_leader(root, args.work_id, context, session_ref, readiness)
+        if not cleanup:
+            if any(context["presentation"].get(key) != readiness["presentation"].get(key)
+                   for key in ("session_identity", "config_fingerprint", "scope", "policy_sha256", "gwd_skill_sha256")):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STYLE-SCOPE-CONFLICT", "presentation configuration changed; bootstrap again")
+            if context["presentation"] != readiness["presentation"]:
+                def refresh(document: dict[str, Any]) -> dict[str, Any]:
+                    target = document["agent_orchestration"]["work_items"][args.work_id]
+                    if target.get("current_context_id") != context_id or target["contexts"].get(context_id) != context:
+                        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "context changed during observation")
+                    target["contexts"][context_id]["presentation"] = readiness["presentation"]
+                    return document
+                snapshot = store.transact(root, refresh)
+                context = snapshot.document["agent_orchestration"]["work_items"][args.work_id]["contexts"][context_id]
         try:
             with store.orchestration_authority(
                 root, args.work_id, context_id=context_id, epoch=context["epoch"], session_ref=session_ref,
+                observed_context=context, cleanup=cleanup,
             ):
                 return handler(args)
         except store.StoreError as exc:
@@ -3214,6 +3292,7 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
             or context.get("epoch") != args.epoch or context.get("leader", {}).get("session_ref") != args.session_ref
             or context.get("state") not in {"ACTIVE", "QUIESCING"}):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
+    _require_current_leader(root, args.work_id, context, args.session_ref)
     identity = _continuity_identity(root, args.work_id, read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1])
     if context.get("worktree_identity") not in (None, identity):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "worktree identity changed")
@@ -3554,6 +3633,7 @@ def _feature_paths(root: Path, feature: str) -> tuple[Path, str, str]:
     return directory, f"specs/{feature}/execution-dag.json", f"specs/{feature}/partition-report.json"
 
 
+@_gauntlet_authorized
 def partition_emit_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """WORKFLOW v4 `partition`: derive the Execution DAG from tasks.md.
 
@@ -3668,7 +3748,19 @@ def gauntlet_partition_brief_command(args: argparse.Namespace) -> tuple[dict[str
             "brief": "\n".join(lines)}, EXIT_OK
 
 
+@_gauntlet_authorized
 def gauntlet_tasks_reconcile_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    root = project_root(args.root)
+    store = grill_core_module("store")
+    # Same work-item lock as migration; every input is read after acquiring it.
+    with store.work_lock(root, args.work_id) if args.apply else contextlib.nullcontext():
+        with store.orchestrator_lock(store.store_paths(root)) if args.apply else contextlib.nullcontext():
+            if args.apply:
+                store.require_orchestration_authority(root, args.work_id, purpose="tasks-reconcile")
+            return _gauntlet_tasks_reconcile_locked(args)
+
+
+def _gauntlet_tasks_reconcile_locked(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Mark completed tasks in tasks.md once, on the coordinator's branch.
 
     Deterministic bookkeeping, no model in the loop: it reads the sidecars the
@@ -3729,7 +3821,7 @@ def gauntlet_tasks_reconcile_command(args: argparse.Namespace) -> tuple[dict[str
         if not args.apply:
             return payload, EXIT_OK
         reject_symlink_chain(root, tasks_path, allow_missing=False)
-        tasks_path.write_text("".join(lines), encoding="utf-8")
+        atomic_write(root, tasks_path, "".join(lines).encode("utf-8"))
         return {**payload, "verdict": "APPLIED"}, EXIT_OK
     completed: set[str] = set()
     missing: list[str] = []
@@ -3759,10 +3851,11 @@ def gauntlet_tasks_reconcile_command(args: argparse.Namespace) -> tuple[dict[str
     if not args.apply:
         return payload, EXIT_OK
     reject_symlink_chain(root, tasks_path, allow_missing=False)
-    tasks_path.write_text("".join(lines), encoding="utf-8")
+    atomic_write(root, tasks_path, "".join(lines).encode("utf-8"))
     return {**payload, "verdict": "APPLIED"}, EXIT_OK
 
 
+@_gauntlet_authorized
 def task_files_migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Apply only the current, independently reviewed proposal under its authority fence."""
     root = project_root(args.root)
@@ -3790,6 +3883,8 @@ def task_files_migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any]
             result = contract.task_files_migration_preview(
                 current, proposal, expected_sha256=hash_bytes(current_raw), accepted_task_ids=accepted)
             tasks = partition.parse_task_files(proposal, feature=args.feature, root=root)
+            previous_tasks = (partition.parse_task_files(current, feature=args.feature, root=root)
+                              if partition.TASK_FILES_MARKER in current else [])
             contract.require_task_files_review(item, context_id=args.context_id,
                 author_id=args.author_activity, reviewer_id=args.review_activity,
                 proposal={"path": proposal_ref, "sha256": hash_bytes(proposal_raw), "size": len(proposal_raw)})
@@ -3805,11 +3900,30 @@ def task_files_migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any]
         active, unknown = _continuity_quiescence(document, item, args.work_id)
         if active or unknown or any(op.get("state") in {"INTENT", "APPLIED", "UNKNOWN"} for op in item["operations"].values()):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-ACTIVE-WORK", "migration requires quiescence")
+        previous_files = {task.id: list(task.files) for task in previous_tasks}
+        files_changes = [{"task_id": task.id, "before": previous_files.get(task.id), "after": list(task.files)}
+                         for task in tasks if previous_files.get(task.id) != list(task.files)]
+        semantic = partition.tasks_semantic_sha256(current, previous_tasks) if previous_tasks else None
+        affected_dags = []
+        for path in sorted(directory.glob("execution-dag*.json")):
+            raw = safe_read_regular_fd(root, path)
+            dag = json.loads(raw)
+            if dag.get("feature") != args.feature:
+                continue
+            if dag.get("schema") == "grill-gauntlet-execution-dag/v2" and dag.get("tasks_semantic_sha256") != semantic:
+                continue
+            affected_dags.append({"path": path.relative_to(root).as_posix(), "sha256": hash_bytes(raw),
+                                  "revision": "current" if semantic is not None and dag.get("tasks_semantic_sha256") == semantic else "legacy-unproven"})
+        dag_hashes = {entry["sha256"] for entry in affected_dags}
+        runs = document.get("work_items", {}).get(args.work_id, {}).get("gauntlet", {}).get("runs", {})
+        affected_runs = [{"run_id": run_id, "state": run["state"], "dag_content_sha256": run["dag_content_sha256"]}
+                         for run_id, run in sorted(runs.items()) if run.get("dag_content_sha256") in dag_hashes]
         inputs = {"work_id": args.work_id, "feature": args.feature, "root": str(root),
                   "context_id": args.context_id, "epoch": args.epoch, "session_ref": args.session_ref,
                   "store_sha256": store.jcs_sha256(document), "proposal": proposal_ref,
                   "current_sha256": result["current_sha256"], "proposal_sha256": result["proposal_sha256"],
-                  "author_activity": args.author_activity, "review_activity": args.review_activity}
+                  "author_activity": args.author_activity, "review_activity": args.review_activity,
+                  "files_changes": files_changes, "affected_dags": affected_dags, "affected_runs": affected_runs}
         return {**result, **inputs, "expected_sha256": store.jcs_sha256(inputs),
                 "tasks": [task.id for task in tasks]}, proposal_raw
 
@@ -4447,6 +4561,10 @@ def _activity_policy(root: Path, work_id: str, context_id: str, epoch: int,
     item = block.get("work_items", {}).get(work_id) if isinstance(block, dict) else None
     if not isinstance(item, dict):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-MIGRATION-REQUIRED", work_id)
+    try:
+        store.require_orchestration_authority(root, work_id, purpose="activity")
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", exc.message) from exc
     context = item.get("contexts", {}).get(context_id)
     try:
         contract.require_authority(item, context_id, epoch, session_ref)
@@ -4652,6 +4770,7 @@ def _step_activity_coverage(root: Path, work_id: str, step_id: str) -> dict[str,
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", str(exc)) from exc
 
 
+@_gauntlet_authorized
 def gauntlet_step_enter_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Deliver the resolved entrypoint plus hashed supplements, never invoke it."""
     root = project_root(args.root)
@@ -4689,6 +4808,7 @@ def gauntlet_step_enter_command(args: argparse.Namespace) -> tuple[dict[str, Any
             "limitation": "context delivery does not prove canonical skill invocation"}, EXIT_OK
 
 
+@_gauntlet_authorized
 def gauntlet_preview_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Register a byte-checked visual preview or a corroborated non-frontend classification."""
     root = project_root(args.root)
@@ -4738,6 +4858,7 @@ def gauntlet_preview_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
             "store_revision": committed.revision}, EXIT_OK
 
 
+@_gauntlet_authorized
 def gauntlet_preview_decide_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Persist an observed human decision; --decision alone never approves a preview."""
     root = project_root(args.root)
@@ -4785,6 +4906,7 @@ def gauntlet_preview_decide_command(args: argparse.Namespace) -> tuple[dict[str,
             "preview_sha256": reference["sha256"], "store_revision": committed.revision}, EXIT_OK
 
 
+@_gauntlet_authorized
 def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Persist prepare -> verified -> dispatch -> result -> accept for one specialist."""
     root = project_root(args.root)
@@ -4987,6 +5109,7 @@ def _replace_activity(document: dict[str, Any], work_id: str, activity_id: str,
     return document
 
 
+@_gauntlet_authorized
 def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Mint the attestation chain for one leader-executed step.
 
@@ -5277,6 +5400,7 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     }, EXIT_OK
 
 
+@_gauntlet_authorized
 def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     if args.step not in SEQUENCE:
@@ -5450,6 +5574,7 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
 
 
 
+@_gauntlet_authorized
 def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Close a finished phase and hand the step matrix back to the next one.
 
@@ -5612,6 +5737,7 @@ def build_parser() -> JsonParser:
     preflight_parser = subparsers.add_parser("preflight")
     preflight_parser.add_argument("root")
     preflight_parser.add_argument("--runtime", choices=("claude", "codex"), required=True)
+    preflight_parser.add_argument("--session-ref")
     preflight_parser.add_argument("--allow-install", action="store_true", dest="allow_install")
     preflight_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
     preflight_parser.add_argument("--db")
@@ -5790,6 +5916,7 @@ def build_parser() -> JsonParser:
     partition_emit_parser.add_argument("--feature", required=True)
     partition_emit_parser.add_argument("--groups", type=int, default=3)
     partition_emit_parser.add_argument("--apply", action="store_true")
+    partition_emit_parser.add_argument("--session-ref")
     partition_brief_parser = subparsers.add_parser("gauntlet-partition-brief")
     partition_brief_parser.add_argument("root")
     partition_brief_parser.add_argument("--dag", required=True)
@@ -5801,6 +5928,7 @@ def build_parser() -> JsonParser:
     tasks_reconcile_parser.add_argument("--dag", required=True)
     tasks_reconcile_parser.add_argument("--run-id")
     tasks_reconcile_parser.add_argument("--apply", action="store_true")
+    tasks_reconcile_parser.add_argument("--session-ref")
     task_files_migrate_parser = subparsers.add_parser("task-files-migrate")
     task_files_migrate_parser.add_argument("root")
     task_files_migrate_parser.add_argument("--work-id", required=True)
@@ -5896,6 +6024,7 @@ def build_parser() -> JsonParser:
                                help="project-relative path to write the attestation bundle to")
     attest_parser.add_argument("--run-id", default=None)
     attest_parser.add_argument("--runtime", choices=("claude", "codex"), default=None)
+    attest_parser.add_argument("--session-ref")
     attest_parser.add_argument("--supersedes", default=None,
                                help="project-relative path to the accepted bundle this one replaces")
     attest_parser.add_argument("--authorization", default=None,
@@ -5918,6 +6047,7 @@ def build_parser() -> JsonParser:
     phase_turn_parser = subparsers.add_parser("phase-turn")
     phase_turn_parser.add_argument("root")
     phase_turn_parser.add_argument("--work-id", required=True)
+    phase_turn_parser.add_argument("--session-ref")
     # A razão é exigida pela lógica, não pelo parser: assim a falta sai como
     # REASON-REQUIRED, um código nomeado, em vez de erro de uso do argparse.
     phase_turn_parser.add_argument("--reason", default="")

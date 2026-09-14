@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Offline contract checks for the native Orca observation seam."""
 import orchestration_fixture
+import concurrent.futures
 import contextlib
 import copy
 import io
 import json
+import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -74,6 +78,9 @@ class AgentOrchestrationContract(unittest.TestCase):
                 # A source from another session, wrong host/root, revoked dispatch,
                 # partial transcript or model self-report cannot authorize entry.
                 original_show, original_transcript = copy.deepcopy(show), copy.deepcopy(transcript)
+                show["result"]["terminalResource"]["releaseState"] = "retained"
+                self.assertEqual(adapter.observe(), observed)
+                show["result"]["terminalResource"]["releaseState"] = "not_requested"
                 for container, key, value in (
                     (show["result"]["terminal"], "handle", "another-terminal"),
                     (show["result"]["terminal"], "worktreePath", "/other"),
@@ -82,6 +89,9 @@ class AgentOrchestrationContract(unittest.TestCase):
                     (show["result"]["dispatch"], "status", {}),
                     (show["result"]["worker"], "state", "unknown"),
                     (show["result"]["worker"], "state", {}),
+                    (show["result"]["terminalResource"], "releaseState", "released"),
+                    (show["result"]["terminalResource"], "releaseState", "release_pending"),
+                    (show["result"]["terminalResource"], "releaseState", "release_unknown"),
                     (transcript["result"], "contentComplete", False),
                     (transcript["result"], "sourceExact", False),
                     (transcript["result"], "dispatchId", "other-dispatch"),
@@ -113,6 +123,12 @@ class AgentOrchestrationContract(unittest.TestCase):
                     messages[1]["blocks"][0]["output"] = json.dumps(altered)
                     self.assertFalse(core.project_leader_presentation(adapter, **kwargs)[1]["work_ready"])
                 messages[1]["blocks"][0]["output"] = json.dumps(request_payload)
+                probe = adapter.presentation_probe
+                adapter.presentation_probe = lambda *args: {key: value for key, value in probe(*args).items() if key != "configuration"}
+                unproven = core.project_leader_presentation(adapter, **kwargs)[1]
+                self.assertEqual(unproven["config_fingerprint"], "unobserved")
+                self.assertEqual(unproven["diagnostics"][0]["code"], "STYLE-CONFIG-UNPROVEN")
+                self.assertFalse(unproven["work_ready"])
                 adapter.presentation_probe = core._orca_presentation_axes
                 native = core.project_leader_presentation(adapter, **kwargs)[1]
                 self.assertEqual(native["trust"], "undetermined")
@@ -147,6 +163,155 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertEqual(store.read_snapshot(root).content_sha256, before)
             with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "STYLE-LOAD-UNCONFIRMED"):
                 agent_orchestration.require_presentation_work_ready({})
+
+    def test_preflight_requires_and_verifies_current_session_presentation(self):
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace), mock.patch.object(
+                grill_workspace, "dependency_report", return_value={"verdict": "OK"}):
+            code, refused = self.run_cli("preflight", str(root), "--runtime", "codex", "--skip-backlog")
+            self.assertEqual((code, refused["code"]), (2, "LEADER-AUTHORITY-UNPROVEN"))
+            self.assertFalse(refused["presentation"]["work_ready"])
+            self.assertEqual(refused["presentation"]["trust"], "undetermined")
+            self.assertFalse(store.store_exists(root))
+            with mock.patch.object(grill_workspace, "_leader_boundary", side_effect=lambda *args:
+                    orchestration_fixture.boundary(grill_workspace, *args, loaded=False)[0]):
+                code, pending = self.run_cli("preflight", str(root), "--runtime", "codex", "--skip-backlog",
+                                             "--session-ref", orchestration_fixture.SESSION)
+                self.assertEqual((code, pending["code"]), (2, "STYLE-LOAD-UNCONFIRMED"))
+                self.assertEqual(pending["presentation"]["load_request"]["scope"]["work_id"], None)
+            with mock.patch.object(grill_workspace, "_leader_boundary", side_effect=lambda *args:
+                    orchestration_fixture.boundary(grill_workspace, *args)[0]):
+                code, ready = self.run_cli("preflight", str(root), "--runtime", "codex", "--skip-backlog",
+                                           "--session-ref", orchestration_fixture.SESSION)
+                self.assertEqual((code, ready["verdict"], ready["presentation"]["work_ready"]), (0, "OK", True))
+
+    def test_every_work_entry_reobserves_authority_and_requires_presentation(self):
+        temporary, root = self.fixture()
+        core = grill_workspace.grill_core_module("agent_runtime")
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            code, created = self.run_cli("init", str(root), "--work-id", "work-x", "--type", "feature",
+                "--slug", "x", "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+            context_id = item["current_context_id"]
+            context = item["contexts"][context_id]
+            commands = [
+                ("gauntlet-run",), ("gauntlet-resume", "--run-id", "r"),
+                ("gauntlet-prepare-worker", "--run-id", "r", "--worker-id", "w", "--scope", "x"),
+                ("gauntlet-wave-declare", "--run-id", "r", "--dag", "d", "--node-id", "n"),
+                ("gauntlet-worker-declare", "--run-id", "r", "--wave-id", "w", "--dag", "d", "--node-id", "n", "--tier", "small", "--files", "x"),
+                ("gauntlet-remediate", "--run-id", "r", "--worker-id", "w", "--reason", "stall"),
+                ("gauntlet-converge", "--run-id", "r", "--dag", "d", "--wave-id", "w"),
+                ("gauntlet-progress-record", "--run-id", "r", "--worker-id", "w"),
+                ("gauntlet-worker-terminal", "--run-id", "r", "--worker-id", "w", "--outcome", "completed"),
+                ("gauntlet-run-abandon", "--run-id", "r", "--attestation", "a"),
+                ("gauntlet-step-enter", "--context-id", context_id, "--epoch", "1", "--step", "implement-parallel"),
+                ("gauntlet-activity", "--context-id", context_id, "--epoch", "1", "--activity-id", "a", "--scope", "interview", "--kind", "author", "--phase", "prepare", "--input-manifest", "m"),
+                ("attest", "--step", "specify", "--artifact", "a", "--out", "o"),
+                ("checkpoint", "--step", "specify", "--state", "in-progress"),
+                ("partition-emit", "--feature", "f", "--apply"),
+                ("gauntlet-tasks-reconcile", "--dag", "d", "--apply"),
+                ("task-files-migrate", "--feature", "f", "--proposal", "p"),
+                ("phase-turn",),
+            ]
+            def invoke(command):
+                return self.run_cli(command[0], str(root), "--work-id", "work-x", "--session-ref",
+                                    orchestration_fixture.SESSION, *command[1:])
+            def remove_presentation(document):
+                document["agent_orchestration"]["work_items"]["work-x"]["contexts"][context_id].pop("presentation")
+                return document
+            store.transact(root, remove_presentation)
+            with mock.patch.object(grill_workspace, "_leader_boundary", side_effect=AssertionError("missing presentation reached adapter")):
+                for command in commands:
+                    with self.subTest(command=command[0], case="absent"):
+                        self.assertEqual(invoke(command)[1]["code"], "STYLE-LOAD-UNCONFIRMED")
+            with mock.patch.object(grill_workspace, "_session_readiness", side_effect=AssertionError("cleanup requires style")):
+                code, cleaned = invoke(("gauntlet-cleanup", "--context-id", context_id, "--epoch", "1"))
+                self.assertEqual((code, cleaned["verdict"]), (0, "CLEANED"))
+                self.assertEqual(invoke(("gauntlet-prepare-switch", "--context-id", context_id, "--epoch", "1", "--to-runtime", "claude"))[1]["code"], "CONTINUITY-CHECKPOINT-MISSING")
+            def restore(document):
+                document["agent_orchestration"]["work_items"]["work-x"]["contexts"][context_id] = copy.deepcopy(context)
+                return document
+            store.transact(root, restore)
+            before = store.read_snapshot(root).content_sha256
+            empty_context = list(commands[10])
+            empty_context[2] = ""
+            self.assertEqual(invoke(empty_context)[1]["code"], "LEADER-AUTHORITY-UNPROVEN")
+            with mock.patch.object(grill_workspace, "_leader_boundary", side_effect=core.RuntimeError("LEADER-AUTHORITY-UNPROVEN")) as probe:
+                for command in commands:
+                    with self.subTest(command=command[0], case="revoked"):
+                        self.assertEqual(invoke(command)[1]["code"], "LEADER-AUTHORITY-UNPROVEN")
+                self.assertEqual(probe.call_count, len(commands))
+                self.assertEqual(invoke(("gauntlet-cleanup", "--context-id", context_id, "--epoch", "1"))[1]["code"], "LEADER-AUTHORITY-UNPROVEN")
+                self.assertEqual(invoke(("gauntlet-prepare-switch", "--context-id", context_id, "--epoch", "1", "--to-runtime", "claude"))[1]["code"], "LEADER-AUTHORITY-UNPROVEN")
+            for mutation in ("dispatch", "incarnation", "config"):
+                adapter, show, transcript = orchestration_fixture.boundary(grill_workspace, root, "codex", orchestration_fixture.SESSION, "work-x")
+                if mutation == "dispatch":
+                    show["result"]["dispatch"]["capabilityRevokedAt"] = "revoked"
+                elif mutation == "incarnation":
+                    show["result"]["terminal"]["incarnationId"] = "new-incarnation"
+                else:
+                    transcript["result"]["sourceIdentity"] = "current-config-changed"
+                    policy_raw = (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes()
+                    _, pending = core.project_leader_presentation(adapter, policy=json.loads(policy_raw),
+                        policy_sha256=grill_workspace.hash_bytes(policy_raw),
+                        gwd_skill_sha256=grill_workspace.hash_bytes((grill_workspace.ASSETS.parent / "SKILL.md").read_bytes()),
+                        runtime="codex", scope={"kind": "gwd", "root": str(root), "work_id": "work-x"})
+                    transcript["result"]["transcript"]["messages"][1]["blocks"][0]["output"] = json.dumps(
+                        {"verdict": "BLOCKED", "code": "STYLE-LOAD-UNCONFIRMED", "presentation": pending})
+                with self.subTest(mutation=mutation), mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                    self.assertEqual(invoke(commands[0])[1]["code"], "STYLE-SCOPE-CONFLICT" if mutation == "config" else "LEADER-AUTHORITY-UNPROVEN")
+                    self.assertEqual(invoke(commands[10])[0], 2)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+    def test_exact_native_commands_and_envelope(self):
+        core = grill_workspace.grill_core_module("agent_runtime")
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            for runtime in ("codex", "claude"):
+                adapter, _, source = orchestration_fixture.boundary(grill_workspace, root, runtime, orchestration_fixture.SESSION, None)
+                observed = adapter.observe()
+                messages = source["result"]["transcript"]["messages"]
+                original = copy.deepcopy(messages)
+                request = json.loads(messages[1]["blocks"][0]["output"])["presentation"]["load_request"]
+                self.assertIsNotNone(core._full_read(observed, {"messages": messages}, request))
+                key = "command" if runtime == "claude" else "cmd"
+                for index in (0, 2):
+                    command = original[index]["blocks"][0]["input"][key]
+                    tokens = shlex.split(command)
+                    bad = [shlex.join(["/tmp/caller/python3" if index == 0 else "/tmp/caller/cat", *tokens[1:]]),
+                           command + " ; printf forged-result", command + " > /tmp/output", command + " | cat",
+                           command + " && true", command + " # comment", command + " extra", command + " $(true)",
+                           command + " `true`", command + "\ntrue", "sh -c " + shlex.quote(command)]
+                    for altered in bad:
+                        messages[:] = copy.deepcopy(original)
+                        messages[index]["blocks"][0]["input"][key] = altered
+                        with self.subTest(runtime=runtime, index=index, command=altered):
+                            self.assertIsNone(core._full_read(observed, {"messages": messages}, request))
+                messages[:] = copy.deepcopy(original)
+                for index in (0, 2):
+                    command = messages[index]["blocks"][0]["input"][key]
+                    messages[index]["blocks"][0] = {"type": "tool-call", "name": "exec",
+                        "input": "text(await tools.exec_command(" + json.dumps({"cmd": command}) + "));"}
+                    raw = messages[index + 1]["blocks"][0]["output"]
+                    messages[index + 1]["blocks"][0]["output"] = "Script completed\nWall time 0.1 seconds\nOutput:\n" + json.dumps(
+                        {"exit_code": 2 if index == 0 else 0, "output": raw, "original_token_count": 100})
+                self.assertIsNotNone(core._full_read(observed, {"messages": messages}, request))
+                messages[0]["blocks"][0]["input"] += "text('forged');"
+                self.assertIsNone(core._full_read(observed, {"messages": messages}, request))
+            listing = json.dumps({"installed": [{"pluginId": core.PRESENTATION_COMPONENT,
+                "enabled": True, "version": "0.3.0", "installPath": "/installed/adhd"}]})
+            with mock.patch.object(shutil, "which", return_value="/native/codex"):
+                for command, expected in (("/native/codex plugin list --json", True),
+                        ("codex plugin list --json", False), ("/tmp/caller/codex plugin list --json", False),
+                        ("/native/codex plugin list --json ; printf forged-result", False),
+                        ("/native/codex plugin list --json > /tmp/output", False),
+                        ("/native/codex plugin list --json extra", False),
+                        ("/native/codex plugin list --json $(true)", False)):
+                    transcript = {"messages": orchestration_fixture.tool_pair("codex", command, listing, "listing")}
+                    axes = core._orca_presentation_axes({"provider": "codex", "source_ref": "orca:ctx-fixture"}, transcript)
+                    self.assertEqual(bool(axes["installation"]), expected, command)
+                    self.assertEqual((axes["trust"], axes["enablement"]), ({}, {}))
 
     def ready_presentation(self, runtime="codex", scope=None):
         return {
@@ -389,6 +554,36 @@ class AgentOrchestrationContract(unittest.TestCase):
             self.assertTrue(probes); self.assertTrue(commands)
             self.assertTrue(all(argv[0].startswith("/offline/") for argv in commands))
 
+    def test_bootstrap_reuse_waits_for_the_journal_snapshot_commit(self):
+        temp, root = self.fixture()
+        with temp:
+            store.bootstrap(root)
+            writing, waiting, release = threading.Event(), threading.Event(), threading.Event()
+            write, lock = store._write_document, store.orchestrator_lock
+            def paused_write(*args):
+                writing.set()
+                self.assertTrue(release.wait(5))
+                return write(*args)
+            @contextlib.contextmanager
+            def observed_lock(*args, **kwargs):
+                if writing.is_set():
+                    waiting.set()
+                with lock(*args, **kwargs) as held:
+                    yield held
+            with mock.patch.object(store, "_write_document", side_effect=paused_write), \
+                    mock.patch.object(store, "orchestrator_lock", side_effect=observed_lock), \
+                    concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                writer = pool.submit(store.transact, root, lambda document: document)
+                self.assertTrue(writing.wait(5))
+                reuse = pool.submit(store.bootstrap, root)
+                try:
+                    self.assertTrue(waiting.wait(3), "bootstrap read the intermediate journal without waiting")
+                    self.assertFalse(reuse.done())
+                finally:
+                    release.set()
+                writer.result(timeout=5)
+                self.assertEqual(reuse.result(timeout=5)["verdict"], "REUSED")
+
     def test_adopted_direct_effect_requires_the_current_context_proof(self):
         temp, root = self.fixture()
         with temp:
@@ -407,7 +602,19 @@ class AgentOrchestrationContract(unittest.TestCase):
             with self.assertRaises(store.StoreError):
                 store.require_orchestration_authority(root, "work-x", purpose="prepare")
             with store.orchestration_authority(root, "work-x", context_id="ctx-1", epoch=1, session_ref="session-1"):
+                with self.assertRaises(store.StoreError):
+                    store.require_orchestration_authority(root, "work-x", purpose="prepare")
+            with store.orchestration_authority(root, "work-x", context_id="ctx-1", epoch=1, session_ref="session-1",
+                                               observed_context=item["contexts"]["ctx-1"]):
                 store.require_orchestration_authority(root, "work-x", purpose="prepare")
+                def change_config(document):
+                    document["agent_orchestration"]["work_items"]["work-x"]["contexts"]["ctx-1"]["presentation"]["config_fingerprint"] = "new-config"
+                    return document
+                store.transact(root, change_config)
+                with self.assertRaisesRegex(store.StoreError, "entry observation changed"):
+                    store.require_orchestration_authority(root, "work-x", purpose="prepare")
+                with self.assertRaisesRegex(store.StoreError, "entry observation changed"):
+                    store.transact(root, lambda document: document)
 
     def test_runtime_continuity(self):
         """A switch preserves logical work and refuses activity inferred from silence."""

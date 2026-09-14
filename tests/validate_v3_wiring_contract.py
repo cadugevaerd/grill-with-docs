@@ -599,8 +599,9 @@ class LazyCoreFailureContract(WiringHarness):
                 "print('IMPORT-NOISE'); raise RuntimeError('late loader boom')\n", encoding="utf-8"
             )
             process = subprocess.run(
-                [sys.executable, str(copied / "scripts/grill_workspace.py"), "checkpoint", str(self.root),
-                 "--work-id", "wa", "--step", "specify", "--state", "complete", "--evidence", "evidence.md", "--reason", "done"],
+                orchestration_fixture.command(copied / "scripts/grill_workspace.py", (
+                    "checkpoint", self.root, "--work-id", "wa", "--step", "specify", "--state", "complete",
+                    "--evidence", "evidence.md", "--reason", "done")),
                 text=True, capture_output=True, check=False,
             )
         self.assertEqual(len(process.stdout.splitlines()), 1, process.stdout)
@@ -883,7 +884,7 @@ class CheckpointAttestationWiringContract(WiringHarness):
             "--artifact", "corrigido.md", "--out", "receipts/runtime-divergent.json",
             "--runtime", "codex", "--supersedes", accepted.relative_to(self.root))
         self.assertEqual((process.returncode, payload["code"]),
-                         (2, "ACTIVATION-RUNTIME-DIVERGENT"), payload)
+                         (2, "LEADER-AUTHORITY-UNPROVEN"), payload)
         self.assertFalse((self.root / "receipts/runtime-divergent.json").exists())
 
         config_path = self.root / ".grill/gauntlet.yaml"

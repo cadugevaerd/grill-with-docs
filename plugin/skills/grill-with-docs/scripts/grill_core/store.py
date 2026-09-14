@@ -243,11 +243,14 @@ class StoreError(Exception):
 
 @contextmanager
 def orchestration_authority(root: str | Path, work_id: str, *, context_id: str,
-                            epoch: int, session_ref: str) -> Iterator[None]:
+                            epoch: int, session_ref: str,
+                            observed_context: dict[str, Any] | None = None,
+                            cleanup: bool = False) -> Iterator[None]:
     """Install one caller proof for the narrow duration of a domain effect."""
     token = _ORCHESTRATION_AUTHORITY.set({"root": str(Path(root).resolve()), "work_id": work_id,
                                           "context_id": context_id, "epoch": epoch,
-                                          "session_ref": session_ref})
+                                          "session_ref": session_ref,
+                                          "observed_context": copy.deepcopy(observed_context), "cleanup": cleanup})
     try:
         yield
     finally:
@@ -272,10 +275,23 @@ def require_orchestration_authority(root: str | Path, work_id: str, *, purpose: 
     if not isinstance(proof, dict) or proof.get("root") != str(Path(root).resolve()) or proof.get("work_id") != work_id:
         _fail(STATE_DIVERGENCE, f"LEADER-AUTHORITY-UNPROVEN for {purpose}")
     try:
-        contract = _checkpoint_contract()
-        contract.require_authority(item, proof.get("context_id"), proof.get("epoch"), proof.get("session_ref"))
+        _require_observed_context(item, proof, work_ready=purpose != "cleanup")
     except Exception as exc:
         _fail(STATE_DIVERGENCE, f"LEADER-AUTHORITY-UNPROVEN for {purpose}: {exc}")
+
+
+def _require_observed_context(item: dict[str, Any], proof: dict[str, Any], *, work_ready: bool) -> None:
+    """Fence the entry observation against the current Store under its writer lock."""
+    contract = _checkpoint_contract()
+    context = contract.require_authority(item, proof.get("context_id"), proof.get("epoch"), proof.get("session_ref"))
+    observed = proof.get("observed_context")
+    if not isinstance(observed, dict) or any(context.get(key) != observed.get(key)
+            for key in ("runtime", "leader", "presentation")):
+        _fail(STATE_DIVERGENCE, "LEADER-AUTHORITY-UNPROVEN: entry observation changed or absent")
+    if work_ready:
+        if proof.get("cleanup"):
+            _fail(STATE_DIVERGENCE, "cleanup does not authorize work")
+        contract.require_presentation_work_ready(context)
 
 
 def _fail(code: str, message: Any) -> NoReturn:
@@ -1033,6 +1049,14 @@ def _validate_orchestration_transition(previous: dict[str, Any], candidate: dict
     new = candidate.get("agent_orchestration")
     if old is None and new is None:
         return
+    proof = _ORCHESTRATION_AUTHORITY.get()
+    if isinstance(proof, dict) and isinstance(old, dict):
+        item = old.get("work_items", {}).get(proof["work_id"])
+        if isinstance(item, dict):
+            try:
+                _require_observed_context(item, proof, work_ready=not proof.get("cleanup"))
+            except Exception as exc:
+                _fail(STATE_DIVERGENCE, f"LEADER-AUTHORITY-UNPROVEN: {exc}")
     if old is not None and new is None:
         _invalid("adopted agent_orchestration cannot be removed")
     try:
@@ -1465,13 +1489,13 @@ def bootstrap(
     for category in RECEIPT_CATEGORIES:
         _ensure_directory(paths.receipts / category)
     digest = identity["project_id"].split(":", 1)[1]
-    with _mutex(paths.locks, f"bootstrap-{digest}.lock", timeout):  # step 4
+    # Bootstrap reuse must not read between a writer's journal and snapshot.
+    with _mutex(paths.locks, f"bootstrap-{digest}.lock", timeout), orchestrator_lock(paths, timeout):
         existing = _read_paths(paths, required=False)
         if existing is None:
             document = stamp(initial_document(project), 1, _now(now))  # step 5
             _ensure_events(paths)
-            with orchestrator_lock(paths, timeout):  # journal-before-visibility, see §22/Core note
-                document = _finalize_commit(paths, document, now)
+            document = _finalize_commit(paths, document, now)
             if _create_exclusive(paths, document):
                 snapshot = _require(paths)
                 return _register_payload("CREATED", paths, snapshot)

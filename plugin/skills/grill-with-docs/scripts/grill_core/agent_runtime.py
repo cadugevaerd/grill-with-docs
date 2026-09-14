@@ -6,7 +6,9 @@ import json
 import os
 import re
 import shlex
+import shutil
 import stat
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -200,6 +202,9 @@ def presentation_state(*, policy: dict[str, Any], policy_sha256: str,
     skill_ref = installation.get("skill_ref")
     compatible, reference = "undetermined", None
     diagnostics: list[dict[str, str]] = []
+    if config_fingerprint == "unobserved":
+        diagnostics.append(_diagnostic("STYLE-CONFIG-UNPROVEN", "config_fingerprint",
+            "effective session configuration not observed", "collect configuration from the session's owning harness"))
     if status == "missing":
         diagnostics.append(_diagnostic("STYLE-DEPENDENCY-MISSING", "installation", "component absent", "install through the harness"))
     elif status == "outdated":
@@ -207,7 +212,7 @@ def presentation_state(*, policy: dict[str, Any], policy_sha256: str,
     elif status == "undetermined":
         diagnostics.append(_diagnostic("STYLE-DEPENDENCY-UNDETERMINED", "installation", "installation source unreadable or ambiguous", "repair the runtime registry and observe again"))
     elif not isinstance(skill_ref, str) or not version:
-        status, compatible = "undetermined", "undetermined"
+        compatible = "undetermined"
         diagnostics.append(_diagnostic("STYLE-DEPENDENCY-UNDETERMINED", "installation", "effective skill path not observed", "collect runtime-correlated installation observation"))
     else:
         try:
@@ -230,7 +235,8 @@ def presentation_state(*, policy: dict[str, Any], policy_sha256: str,
         diagnostics.append(_diagnostic("STYLE-TRUST-PENDING", "trust", "runtime startup trust pending", "resolve trust in the harness UI"))
     elif trusted["state"] != "ready":
         diagnostics.append(_diagnostic("STYLE-TRUST-PENDING", "trust", "startup trust not observed", "collect startup observation"))
-    prerequisites = status == "present" and compatible == "approved" and enabled["state"] == "enabled" and trusted["state"] == "ready"
+    prerequisites = (config_fingerprint != "unobserved" and status == "present" and compatible == "approved"
+                     and enabled["state"] == "enabled" and trusted["state"] == "ready")
     request = ({"loader": PRESENTATION_LOADER, "component": PRESENTATION_COMPONENT,
                 "version": reference["version"], "skill_ref": reference["skill_ref"],
                 "skill_sha256": reference["skill_sha256"], "body_sha256": reference["body_sha256"],
@@ -362,18 +368,45 @@ def _tool_results(transcript: dict[str, Any]):
             continue
         block = blocks[0]
         if message.get("role") == "tool" and block.get("type") == "tool-result" and previous and message.get("id"):
-            yield previous, message.get("id"), block.get("output")
+            output = block.get("output")
+            if previous.get("name") == "exec":
+                # One literal exec_command, printed unchanged. Never interpret
+                # JavaScript, concatenate outputs, or strip arbitrary prose.
+                match = re.fullmatch(r"Script completed\nWall time [0-9.]+ seconds\nOutput:\n([\s\S]+)", output or "") if isinstance(output, str) else None
+                try:
+                    result = json.loads(match[1]) if match else None
+                except ValueError:
+                    result = None
+                if (not isinstance(result, dict) or type(result.get("exit_code")) is not int
+                        or result["exit_code"] not in (0, 2) or result.get("session_id") is not None
+                        or not isinstance(result.get("output"), str)):
+                    previous = None
+                    continue
+                output = result["output"]
+            yield previous, message.get("id"), output
         previous = block if message.get("role") == "assistant" and block.get("type") == "tool-call" else None
 
 
 def _tool_command(call: dict[str, Any]) -> list[str]:
-    if call.get("name") not in ("Bash", "exec_command", "functions.exec_command"):
-        return []
     value = call.get("input")
     try:
+        if call.get("name") == "exec":
+            match = re.fullmatch(r"text\(await tools\.exec_command\((\{[\s\S]+\})\)\);?", value) if isinstance(value, str) else None
+            if not match:
+                return []
+            value = json.loads(match[1])
+        elif call.get("name") not in ("Bash", "exec_command", "functions.exec_command"):
+            return []
         value = json.loads(value) if isinstance(value, str) else value
+        if not isinstance(value, dict) or set(value) - {"command", "cmd", "max_output_tokens", "yield_time_ms", "timeout", "description"}:
+            return []
+        if ("command" in value) == ("cmd" in value):
+            return []
         command = value.get("command", value.get("cmd")) if isinstance(value, dict) else None
-        return shlex.split(command) if isinstance(command, str) else []
+        arguments = shlex.split(command) if isinstance(command, str) else []
+        # Only canonical literal shell words. This excludes operators,
+        # redirects, substitutions, comments, expansions and extra commands.
+        return arguments if arguments and command == shlex.join(arguments) else []
     except (ValueError, TypeError):
         return []
 
@@ -386,7 +419,7 @@ def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]
     """
     evidence: dict[str, Any] = {"installation": {}, "enablement": {}, "trust": {}}
     for call, event_id, output in _tool_results(transcript):
-        if _tool_command(call) != [observed["provider"], "plugin", "list", "--json"]:
+        if _tool_command(call) != [shutil.which(observed["provider"]), "plugin", "list", "--json"]:
             continue
         evidence = {"installation": {}, "enablement": {}, "trust": {}}
         try:
@@ -401,16 +434,47 @@ def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]
         if len(records) != 1 or not isinstance(event_id, str):
             continue
         entry = records[0]
-        if type(entry.get("enabled")) is bool:
-            evidence["enablement"] = {"state": "enabled" if entry["enabled"] else "disabled",
-                "source_ref": observed["source_ref"] + ":" + event_id,
-                "source_sha256": _sha256(output.encode())}
+        # A plugin-list child process does not expose the active session's
+        # config/overrides or startup trust. Preserve the listing as history,
+        # without promoting its enabled flag to current session authority.
+        evidence["plugin_listing"] = {"source_ref": observed["source_ref"] + ":" + event_id,
+                                     "source_sha256": _sha256(output.encode())}
         # Do not choose a cache version or guess a path absent from native output.
         path, version = entry.get("installPath"), entry.get("version")
         if isinstance(path, str) and Path(path).is_absolute() and isinstance(version, str):
             evidence["installation"] = {"status": "present", "version": version,
                 "install_root": path, "skill_ref": str(Path(path) / "skills/i-have-adhd/SKILL.md")}
     return evidence
+
+
+def _load_request_command(command: list[str], observed: dict[str, Any], request: dict[str, Any]) -> bool:
+    script = str(Path(__file__).resolve().parents[1] / "grill_workspace.py")
+    if len(command) < 5 or command[:3] != [sys.executable, "-B", script] or command[4] != request["scope"].get("root"):
+        return False
+    verb = command[3]
+    if verb not in {"preflight", "init", "gauntlet-orchestration-adopt"}:
+        return False
+    fields, flags = {}, set()
+    args = iter(command[5:])
+    for key in args:
+        if key == "--skip-backlog" and verb in {"preflight", "init"} and key not in flags:
+            flags.add(key)
+        elif key in {"--runtime", "--session-ref", "--work-id", "--type", "--slug"} and key not in fields:
+            fields[key] = next(args, None)
+        else:
+            return False
+    expected = {"--runtime": observed["provider"], "--session-ref": observed["source_ref"]}
+    work_id = request["scope"].get("work_id")
+    if verb == "preflight":
+        return work_id is None and fields == expected
+    if not isinstance(work_id, str):
+        return False
+    expected["--work-id"] = work_id
+    if verb == "init":
+        if fields.get("--type") not in {"feature", "fix", "hotfix"} or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,80}", fields.get("--slug") or ""):
+            return False
+        expected.update({key: fields[key] for key in ("--type", "--slug")})
+    return fields == expected
 
 
 @dataclass
@@ -453,7 +517,10 @@ class LeaderBoundary:
                 or _mapping(show.get("observation"), "observation").get("exactWorker") is not True
                 or _mapping(projection.get("liveness"), "liveness").get("verdict") != "live"
                 or projection["liveness"].get("source") != "agent_status"
-                or resource.get("releaseState") != "not_requested"
+                # Orca retains reused/pre-existing terminals independently of
+                # this active Dispatch. All ownership/incarnation checks above
+                # still apply; retention is neither release nor startup trust.
+                or resource.get("releaseState") not in ("not_requested", "retained")
                 or dispatch.get("status") not in ("dispatched", "running")
                 or "capabilityRevokedAt" not in dispatch or dispatch["capabilityRevokedAt"] is not None
                 or activity is None):
@@ -492,29 +559,19 @@ def _full_read(observed: dict[str, Any], transcript: dict[str, Any], request: di
     if request is None:
         return None
     requested = False
-    script = str(Path(__file__).resolve().parents[1] / "grill_workspace.py")
     for call, event_id, output in _tool_results(transcript):
         command = _tool_command(call)
         # The native tool result must contain this exact core-issued request.
-        arguments = command[2:] if len(command) > 1 and command[1] == "-B" else command[1:]
-        if (command and re.fullmatch(r"python(?:3(?:\.\d+)?)?(?:\.exe)?", Path(command[0]).name)
-                and len(arguments) >= 3 and arguments[0] == script
-                and arguments[1] in {"init", "gauntlet-orchestration-adopt"}
-                and arguments[2] == request["scope"].get("root")):
+        if _load_request_command(command, observed, request):
             try:
                 payload = json.loads(output)
             except (TypeError, ValueError):
                 continue
             presentation = payload.get("presentation") if isinstance(payload, dict) else None
             requested = (isinstance(presentation, dict) and presentation.get("load_request") == request
-                         and payload.get("verdict") == "BLOCKED" and payload.get("code") == "STYLE-LOAD-UNCONFIRMED"
-                         and all(arguments.count(flag) == 1 and arguments.index(flag) + 1 < len(arguments)
-                                 and arguments[arguments.index(flag) + 1] == expected
-                                 for flag, expected in (("--session-ref", observed["source_ref"]),
-                                                        ("--runtime", observed["provider"]),
-                                                        ("--work-id", request["scope"].get("work_id")))))
+                         and payload.get("verdict") == "BLOCKED" and payload.get("code") == "STYLE-LOAD-UNCONFIRMED")
             continue
-        if not requested or command != ["cat", "--", request["skill_ref"]] or not isinstance(output, str) or not isinstance(event_id, str):
+        if not requested or command != [shutil.which("cat"), "--", request["skill_ref"]] or not isinstance(output, str) or not isinstance(event_id, str):
             continue
         raw = output.encode()
         if _sha256(raw) != request["skill_sha256"]:
@@ -534,9 +591,12 @@ def project_leader_presentation(value: Any, *, policy: dict[str, Any], policy_sh
     observed = value.observe()
     transcript = value.transcript(observed)
     axes = value.presentation_probe(observed, transcript)
+    configuration = _axis(axes.get("configuration"), states={"observed", "undetermined"}, default="undetermined")
+    fingerprint = (_sha256(json.dumps({"source": transcript["sourceIdentity"], "axes": axes}, sort_keys=True).encode())
+                   if configuration["state"] == "observed" else "unobserved")
     kwargs = dict(policy=policy, policy_sha256=policy_sha256, gwd_skill_sha256=gwd_skill_sha256,
         runtime=runtime, session_identity=leader_session_identity(observed), scope=scope,
-        config_fingerprint=_sha256(json.dumps({"source": transcript["sourceIdentity"], "axes": axes}, sort_keys=True).encode()),
+        config_fingerprint=fingerprint,
         installation=axes.get("installation"), enablement=axes.get("enablement"), trust=axes.get("trust"))
     presentation = presentation_state(**kwargs)
     loading = _full_read(observed, transcript, presentation["load_request"])
