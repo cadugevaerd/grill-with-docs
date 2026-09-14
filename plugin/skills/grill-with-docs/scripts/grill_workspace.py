@@ -3417,11 +3417,18 @@ def partition_emit_command(args: argparse.Namespace) -> tuple[dict[str, Any], in
     if not tasks_path.is_file():
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-ABSENT", f"specs/{args.feature}/tasks.md does not exist")
     text = safe_read_regular_fd(root, tasks_path).decode("utf-8", errors="replace")
+    adopted = partition.TASK_FILES_MARKER in text
+    if adopted:
+        # A v1 DAG is evidence, never an input to overwrite.  A new task
+        # revision receives its own explicit r2 pair.
+        dag_ref = f"specs/{args.feature}/execution-dag.r2.json"
+        report_ref = f"specs/{args.feature}/partition-report.r2.json"
     try:
-        dag, report = partition.partition(
-            text, feature=args.feature, sidecar_dir=f"specs/{args.feature}/implement",
-            groups=args.groups,
-        )
+        dag, report = (partition.partition_task_files(text, feature=args.feature, groups=args.groups, root=root)
+                       if adopted else partition.partition(
+                           text, feature=args.feature, sidecar_dir=f"specs/{args.feature}/implement",
+                           groups=args.groups,
+                       ))
     except partition.PartitionError as error:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message,
                          extra={"work_id": args.work_id, **error.extra}) from error
@@ -3429,13 +3436,16 @@ def partition_emit_command(args: argparse.Namespace) -> tuple[dict[str, Any], in
         "verdict": report["verdict"], "work_id": args.work_id, "feature": args.feature,
         "dag": dag_ref, "report": report_ref, "max_workers": dag["max_workers"],
         "nodes": len(dag["nodes"]), "deferred_to_leader": report["deferred_to_leader"],
-        "unmapped_task_ids": report["unmapped_task_ids"],
+        "unmapped_task_ids": report.get("unmapped_task_ids", []),
+        "read_only_tasks": report.get("read_only_tasks", []),
     }
     if not args.apply:
         return {**payload, "verdict": "PREVIEW", "partition_verdict": report["verdict"],
                 "execution_dag": dag, "partition_report": report}, EXIT_OK
     for target, document in ((root / dag_ref, dag), (root / report_ref, report)):
         reject_symlink_chain(root, target, allow_missing=True)
+        if adopted and target.exists():
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DAG-SEALED", f"partition output is already sealed: {target.relative_to(root)}")
         target.write_text(json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
                           encoding="utf-8")
     return {**payload, "verdict": "APPLIED", "partition_verdict": report["verdict"]}, EXIT_OK
@@ -3456,6 +3466,33 @@ def gauntlet_partition_brief_command(args: argparse.Namespace) -> tuple[dict[str
     if args.node_id not in nodes or args.node_id not in entries:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DAG-NODE-UNKNOWN", f"no such node: {args.node_id}")
     node, entry = nodes[args.node_id], entries[args.node_id]
+    if dag.get("schema") == "grill-gauntlet-execution-dag/v2":
+        if (dag.get("tasks_contract") != "task-files/v1" or entry.get("task_ids") != node.get("task_ids")
+                or entry.get("files") != node.get("files") or entry.get("result_files") != node.get("result_files")):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-RESULT-DIVERGENT", "DAG and report do not bind the same node")
+        phase_match = re.match(r"^p(\d+)-", args.node_id)
+        if phase_match is None:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "v2 node has no phase identity")
+        runs = grill_core_module("gauntlet_runs")
+        try:
+            guard = runs.task_phase_barrier(dag, report, target_phase=int(phase_match.group(1)),
+                                            dag_content_sha256=hash_bytes(safe_read_regular_fd(root, root / args.dag)))
+        except runs.GauntletRunError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+        if guard["pending"]:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", ",".join(guard["pending"]))
+        results = node["result_files"]
+        lines = [
+            f"You are worker {args.node_id} of feature {dag.get('feature')}.", "",
+            "Tasks assigned to you: " + ", ".join(node["task_ids"]) + ".", "Paths you may write:",
+            *(f"  - {path}" for path in node["files"]), "",
+            "Do not edit tasks.md. Write exactly one grill-task-result/v1 per assigned task:",
+            *(f"  - {task_id}: {path}" for task_id, path in results.items()),
+            "Do not write .grill/ or .specify/reports/. The leader observes the terminal commit.",
+        ]
+        return {"verdict": "BRIEF", "node_id": args.node_id, "tier": node["tier"],
+                "parallel": node["parallel"], "files": node["files"], "task_ids": node["task_ids"],
+                "result_files": results, "brief": "\n".join(lines)}, EXIT_OK
     sidecar = next((f for f in node["files"] if f.endswith(f"/{args.node_id}.tasks.json")), None)
     lines = [
         f"You are worker {args.node_id} of feature {dag.get('feature')}.",
@@ -3492,6 +3529,53 @@ def gauntlet_tasks_reconcile_command(args: argparse.Namespace) -> tuple[dict[str
     tasks_path = directory / "tasks.md"
     if not tasks_path.is_file():
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-ABSENT", f"specs/{feature}/tasks.md does not exist")
+    if dag.get("schema") == "grill-gauntlet-execution-dag/v2":
+        partition = grill_core_module("partition")
+        text = safe_read_regular_fd(root, tasks_path).decode("utf-8", errors="replace")
+        try:
+            tasks = partition.parse_task_files(text, feature=feature, root=root)
+            semantic = partition.tasks_semantic_sha256(text, tasks)
+        except partition.PartitionError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+        if dag.get("tasks_semantic_sha256") != semantic:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-SOURCE-STALE", "tasks.md differs from the DAG pin")
+        valid = {task.id: task for task in tasks}
+        completed: set[str] = set()
+        missing: list[str] = []
+        for node in dag.get("nodes", []):
+            if not isinstance(node, dict):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DAG-MALFORMED", "node is invalid")
+            for task_id, result_path in node.get("result_files", {}).items():
+                task = valid.get(task_id)
+                target = root / result_path
+                if task is None or task.result != result_path or not target.is_file():
+                    missing.append(str(task_id))
+                    continue
+                result = _read_json_document(root, result_path, "TASK-RESULT-MISSING")
+                required = {"schema", "work_id", "scheduler_run_id", "node_id", "task_id", "attempt_id", "status", "diagnostic_ref"}
+                if (set(result) != required or result.get("schema") != "grill-task-result/v1"
+                        or result.get("task_id") != task_id or result.get("node_id") != node.get("id")
+                        or result.get("status") != "completed" or not isinstance(result.get("attempt_id"), str)):
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-RESULT-DIVERGENT", f"result does not bind {task_id}")
+                if getattr(args, "run_id", None) and result.get("scheduler_run_id") != args.run_id:
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-RESULT-DIVERGENT", f"result run differs for {task_id}")
+                completed.add(task_id)
+        marked: list[str] = []
+        lines = []
+        for line in text.splitlines(keepends=True):
+            match = re.match(r"^(- \[)[ xX](\]\s+)(T\d+)", line)
+            if match and match.group(3) in completed and not line.startswith("- [X]"):
+                line = line[:len(match.group(1))] + "X" + line[len(match.group(1)) + 1:]
+                marked.append(match.group(3))
+            lines.append(line)
+        payload = {"verdict": "PREVIEW", "work_id": args.work_id, "feature": feature,
+                   "marked": sorted(marked), "completed": sorted(completed), "missing_results": sorted(missing),
+                   "tasks_semantic_sha256": semantic}
+        if not args.apply:
+            return payload, EXIT_OK
+        reject_symlink_chain(root, tasks_path, allow_missing=False)
+        tasks_path.write_text("".join(lines), encoding="utf-8")
+        return {**payload, "verdict": "APPLIED"}, EXIT_OK
     completed: set[str] = set()
     missing: list[str] = []
     for node in dag.get("nodes", []):
@@ -3521,6 +3605,48 @@ def gauntlet_tasks_reconcile_command(args: argparse.Namespace) -> tuple[dict[str
         return payload, EXIT_OK
     reject_symlink_chain(root, tasks_path, allow_missing=False)
     tasks_path.write_text("".join(lines), encoding="utf-8")
+    return {**payload, "verdict": "APPLIED"}, EXIT_OK
+
+
+def task_files_migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Preview/apply an author-reviewed task-files proposal without touching a sealed DAG."""
+    root = project_root(args.root)
+    resolve_gauntlet_subject(root, args.work_id)
+    directory, _, _ = _feature_paths(root, args.feature)
+    current_path = directory / "tasks.md"
+    if not current_path.is_file():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-ABSENT", f"specs/{args.feature}/tasks.md does not exist")
+    proposal_ref = args.proposal
+    if not isinstance(proposal_ref, str) or not re.fullmatch(r"specs/[0-9A-Za-z][0-9A-Za-z._-]{0,127}/[^\\/]+", proposal_ref):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--proposal must be a feature-local file")
+    proposal_path = root / proposal_ref
+    if not proposal_path.is_file():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-FILES-MISSING", "proposal is unavailable")
+    current = safe_read_regular_fd(root, current_path).decode("utf-8", errors="strict")
+    proposal = safe_read_regular_fd(root, proposal_path).decode("utf-8", errors="strict")
+    contract = grill_core_module("agent_orchestration")
+    accepted = re.findall(r"^- \[[xX]\]\s+(T\d+)", current, re.MULTILINE)
+    try:
+        preview = contract.task_files_migration_preview(current, proposal, expected_sha256=args.expected_sha256,
+                                                        accepted_task_ids=accepted)
+        partition = grill_core_module("partition")
+        proposed_tasks = partition.parse_task_files(proposal, feature=args.feature, root=root)
+    except (contract.OrchestrationError, Exception) as error:
+        if isinstance(error, CliFailure):
+            raise
+        code = getattr(error, "code", "TASK-FILES-INVALID")
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, str(error)) from error
+    if any(not re.search(rf"^- \[[xX]\]\s+{re.escape(task_id)}(?:\s|$)", proposal, re.MULTILINE)
+           for task_id in accepted):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-RESULT-DIVERGENT", "accepted checkbox was reopened")
+    payload = {**preview, "work_id": args.work_id, "feature": args.feature, "proposal": proposal_ref,
+               "tasks": [task.id for task in proposed_tasks]}
+    if not args.apply:
+        return payload, EXIT_OK
+    if args.expected_proposal_sha256 != preview["proposal_sha256"]:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-SOURCE-STALE", "proposal changed after preview")
+    reject_symlink_chain(root, current_path, allow_missing=False)
+    current_path.write_text(proposal, encoding="utf-8")
     return {**payload, "verdict": "APPLIED"}, EXIT_OK
 
 
@@ -5157,7 +5283,16 @@ def build_parser() -> JsonParser:
     tasks_reconcile_parser.add_argument("root")
     tasks_reconcile_parser.add_argument("--work-id", required=True)
     tasks_reconcile_parser.add_argument("--dag", required=True)
+    tasks_reconcile_parser.add_argument("--run-id")
     tasks_reconcile_parser.add_argument("--apply", action="store_true")
+    task_files_migrate_parser = subparsers.add_parser("task-files-migrate")
+    task_files_migrate_parser.add_argument("root")
+    task_files_migrate_parser.add_argument("--work-id", required=True)
+    task_files_migrate_parser.add_argument("--feature", required=True)
+    task_files_migrate_parser.add_argument("--proposal", required=True)
+    task_files_migrate_parser.add_argument("--expected-sha256", required=True)
+    task_files_migrate_parser.add_argument("--expected-proposal-sha256")
+    task_files_migrate_parser.add_argument("--apply", action="store_true")
     dag_validate_parser = subparsers.add_parser("gauntlet-dag-validate")
     dag_validate_parser.add_argument("root")
     dag_validate_parser.add_argument("--work-id", required=True)
@@ -5305,6 +5440,7 @@ def main(argv: list[str] | None = None) -> int:
             "partition-emit": partition_emit_command,
             "gauntlet-partition-brief": gauntlet_partition_brief_command,
             "gauntlet-tasks-reconcile": gauntlet_tasks_reconcile_command,
+            "task-files-migrate": task_files_migrate_command,
             "gauntlet-dag-validate": gauntlet_dag_validate_command,
             "gauntlet-wave-declare": gauntlet_wave_declare_command,
             "gauntlet-converge": gauntlet_converge_command,

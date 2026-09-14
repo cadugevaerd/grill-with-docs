@@ -32,7 +32,11 @@ touches" -- deliberately wide, and reported as such rather than pretended away.
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import json
+import os
 import re
+import stat
 from pathlib import Path
 from typing import Any, Iterable, NamedTuple
 
@@ -47,6 +51,10 @@ except ImportError:  # pragma: no cover - direct-file load, mirrors gauntlet_run
 
 DAG_SCHEMA = gauntlet_runs.DAG_SCHEMA
 REPORT_SCHEMA = "grill-partition-report/v1"
+TASK_FILES_MARKER = "<!-- grill-task-files:v1 -->"
+TASK_FILES_SCHEMA = "task-files/v1"
+DAG_V2_SCHEMA = "grill-gauntlet-execution-dag/v2"
+REPORT_V2_SCHEMA = "grill-partition-report/v2"
 
 #: Requested parallel width. A ceiling, never a promise -- see ``_pack``.
 DEFAULT_GROUPS = 3
@@ -92,6 +100,19 @@ class Task(NamedTuple):
     parallel: bool
     stories: tuple[str, ...]
     files: tuple[str, ...]
+    line_no: int
+
+
+class TaskFilesTask(NamedTuple):
+    """One fully-declared v1 task.  It deliberately has no description grant."""
+
+    id: str
+    phase: int
+    phase_title: str
+    parallel: bool
+    stories: tuple[str, ...]
+    files: tuple[str, ...]
+    result: str | None
     line_no: int
 
 
@@ -231,6 +252,8 @@ def partition(text: str, *, feature: str, sidecar_dir: str,
     Returns ``(execution_dag, partition_report)``. Raises :class:`PartitionError`
     rather than emitting a document that only looks parallel.
     """
+    if TASK_FILES_MARKER in text:
+        return partition_task_files(text, feature=feature, groups=groups, tier=tier)
     if groups < 1:
         raise PartitionError("PARTITION-INVALID-WIDTH", "requested width must be at least 1")
     tasks = parse_tasks(text)
@@ -354,4 +377,240 @@ def partition(text: str, *, feature: str, sidecar_dir: str,
         "phases": phase_reports,
         "nodes": node_reports,
     }
+    return dag, report
+
+
+# The historical parser above is intentionally retained for audit-only v1
+# documents.  A candidate document opts into this closed grammar explicitly;
+# its task descriptions are never consulted for write authority.
+def _strict_json(value: str, label: str) -> Any:
+    def pairs(items: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, item in items:
+            if key in result:
+                raise ValueError(f"duplicate key {key!r}")
+            result[key] = item
+        return result
+
+    try:
+        return json.loads(value, object_pairs_hook=pairs,
+                          parse_constant=lambda item: (_ for _ in ()).throw(ValueError(item)))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise PartitionError("TASK-FILES-INVALID", f"{label} is not strict JSON") from exc
+
+
+def normalize_task_path(value: Any) -> str:
+    """Canonicalize the one allowed spelling variation before validating it."""
+    if not isinstance(value, str):
+        raise PartitionError("TASK-FILES-INVALID", "task file path is not a string")
+    path = value[2:] if value.startswith("./") else value
+    if value.startswith("././") or not path or not gauntlet_runs._is_safe_relative_path(path):
+        raise PartitionError("TASK-FILES-INVALID", "task file path is unsafe", path=value)
+    pieces = path.split("/")
+    # A path accepted by POSIX but interpreted as a device, ADS, or alias on a
+    # Windows checkout is not portable enough to grant to a worker.
+    devices = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+    if any(part.endswith((" ", ".")) or ":" in part or part.upper().split(".", 1)[0] in devices
+           for part in pieces):
+        raise PartitionError("TASK-FILES-INVALID", "task file path is not portable", path=value)
+    return path
+
+
+def _validate_leaf(root: str | Path | None, path: str) -> None:
+    """Prove that existing parents stay inside ``root`` without following links."""
+    if root is None:
+        return
+    cursor = Path(root)
+    try:
+        root_stat = os.lstat(cursor)
+    except OSError as exc:
+        raise PartitionError("TASK-SCOPE-VIOLATION", "task root is unavailable") from exc
+    if stat.S_ISLNK(root_stat.st_mode) or not stat.S_ISDIR(root_stat.st_mode):
+        raise PartitionError("TASK-SCOPE-VIOLATION", "task root is not a real directory")
+    pieces = path.split("/")
+    for index, piece in enumerate(pieces):
+        cursor /= piece
+        try:
+            observed = os.lstat(cursor)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            raise PartitionError("TASK-SCOPE-VIOLATION", "could not prove task path boundary", path=path) from exc
+        if stat.S_ISLNK(observed.st_mode):
+            raise PartitionError("TASK-SCOPE-VIOLATION", "task path traverses a link", path=path)
+        if index < len(pieces) - 1 and not stat.S_ISDIR(observed.st_mode):
+            raise PartitionError("TASK-SCOPE-VIOLATION", "task path parent is not a directory", path=path)
+        if index == len(pieces) - 1 and not stat.S_ISREG(observed.st_mode):
+            raise PartitionError("TASK-SCOPE-VIOLATION", "task path leaf is not a regular file", path=path)
+
+
+def parse_task_files(text: str, *, feature: str, root: str | Path | None = None,
+                     scope_files: Iterable[str] | None = None) -> tuple[TaskFilesTask, ...]:
+    """Parse the adopted ``task-files/v1`` grammar before any grant exists."""
+    lines = text.splitlines()
+    fenced = False
+    markers: list[int] = []
+    phase = None
+    previous_phase = 0
+    phase_title = ""
+    seen_ids: set[str] = set()
+    consumed: set[int] = set()
+    visible: set[int] = set()
+    tasks: list[TaskFilesTask] = []
+    normalized_scope = None if scope_files is None else {normalize_task_path(path) for path in scope_files}
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+            index += 1
+            continue
+        if fenced:
+            index += 1
+            continue
+        visible.add(index)
+        if line.strip() == TASK_FILES_MARKER:
+            markers.append(index + 1)
+            index += 1
+            continue
+        heading = _PHASE_RE.match(line)
+        if heading:
+            candidate = int(heading.group(1))
+            if candidate <= previous_phase:
+                raise PartitionError("TASKS-STRUCTURE-INVALID", "phases must be strictly ordered", line=index + 1)
+            phase, previous_phase, phase_title = candidate, candidate, heading.group(2).strip()
+            index += 1
+            continue
+        match = _TASK_RE.match(line)
+        if not match:
+            index += 1
+            continue
+        if phase is None:
+            raise PartitionError("TASKS-STRUCTURE-INVALID", "task is outside a phase", line=index + 1)
+        task_id = match.group(1)
+        if task_id in seen_ids:
+            raise PartitionError("TASKS-STRUCTURE-INVALID", "task id is duplicated", task_id=task_id, line=index + 1)
+        if index + 1 >= len(lines) or not lines[index + 1].startswith("  Files: "):
+            raise PartitionError("TASK-FILES-MISSING", "Files must immediately follow a task", task_id=task_id, line=index + 1)
+        raw_files = _strict_json(lines[index + 1][9:], "Files")
+        if not isinstance(raw_files, list) or any(not isinstance(path, str) for path in raw_files):
+            raise PartitionError("TASK-FILES-INVALID", "Files must be a JSON string array", task_id=task_id)
+        files = tuple(normalize_task_path(path) for path in raw_files)
+        if len(set(files)) != len(files) or len({path.casefold() for path in files}) != len(files):
+            raise PartitionError("TASK-FILES-DUPLICATE", "Files contains a duplicate path", task_id=task_id)
+        if normalized_scope is not None and not set(files).issubset(normalized_scope):
+            raise PartitionError("TASK-SCOPE-VIOLATION", "Files exceeds adopted scope", task_id=task_id)
+        for path in files:
+            _validate_leaf(root, path)
+        consumed.add(index + 1)
+        result: str | None = None
+        next_index = index + 2
+        if next_index < len(lines) and lines[next_index].startswith("  Result: "):
+            raw_result = _strict_json(lines[next_index][10:], "Result")
+            if not isinstance(raw_result, str):
+                raise PartitionError("TASK-FILES-INVALID", "Result must be a JSON string", task_id=task_id)
+            result = normalize_task_path(raw_result)
+            consumed.add(next_index)
+            next_index += 1
+        deferred = any(gauntlet_runs._dag_scope_violation(path) for path in files)
+        if files and not deferred and result is None:
+            raise PartitionError("TASK-RESULT-MISSING", "worker task needs a declared Result", task_id=task_id)
+        if result is not None:
+            if result not in files:
+                raise PartitionError("TASK-RESULT-UNDECLARED", "Result is not declared in Files", task_id=task_id)
+            expected = f"specs/{feature}/implement/{task_id}.tasks.json"
+            if result != expected:
+                raise PartitionError("TASK-RESULT-UNDECLARED", "Result has the wrong public path", task_id=task_id)
+        markers_found = tuple(marker.strip() for marker in _MARKER_RE.findall(match.group(2) or ""))
+        tasks.append(TaskFilesTask(task_id, phase, phase_title, "P" in markers_found,
+                                   tuple(marker for marker in markers_found if marker != "P"), files, result, index + 1))
+        seen_ids.add(task_id)
+        index = next_index
+    if fenced:
+        raise PartitionError("TASKS-STRUCTURE-INVALID", "markdown fence is not closed")
+    if len(markers) != 1:
+        raise PartitionError("TASK-FILES-MIGRATION-REQUIRED", "task-files/v1 marker must appear exactly once")
+    for line_no, line in enumerate(lines):
+        if line_no in visible and line_no not in consumed and line.startswith(("  Files:", "  Result:")):
+            raise PartitionError("TASK-FILES-INVALID", "orphan or duplicate task field", line=line_no + 1)
+    if not tasks:
+        raise PartitionError("TASKS-STRUCTURE-INVALID", "tasks.md declares no tasks")
+    return tuple(tasks)
+
+
+def tasks_semantic_sha256(text: str, tasks: Iterable[TaskFilesTask] | None = None) -> str:
+    """Pin every byte except parsed checklist state, which reconciliation owns."""
+    parsed = tuple(tasks) if tasks is not None else parse_task_files(text, feature=_feature_from_result_hint(text))
+    lines = text.splitlines(keepends=True)
+    for task in parsed:
+        lines[task.line_no - 1] = re.sub(r"^- \[[ xX]\]", "- [ ]", lines[task.line_no - 1])
+    return hashlib.sha256("".join(lines).encode("utf-8")).hexdigest()
+
+
+def _feature_from_result_hint(text: str) -> str:
+    match = re.search(r'"specs/([^/]+)/implement/T\d+\.tasks\.json"', text)
+    if not match:
+        raise PartitionError("TASK-RESULT-UNDECLARED", "cannot determine feature from Result")
+    return match.group(1)
+
+
+def partition_task_files(text: str, *, feature: str, groups: int = DEFAULT_GROUPS,
+                         tier: str = DEFAULT_TIER, root: str | Path | None = None,
+                         scope_files: Iterable[str] | None = None,
+                         accepted_tasks: dict[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Emit v2 only from explicit task grants; accepted tasks never remint work."""
+    if groups < 1:
+        raise PartitionError("PARTITION-INVALID-WIDTH", "requested width must be at least 1")
+    tasks = parse_task_files(text, feature=feature, root=root, scope_files=scope_files)
+    semantic = tasks_semantic_sha256(text, tasks)
+    accepted = dict(accepted_tasks or {})
+    task_ids = {task.id for task in tasks}
+    if set(accepted) - task_ids:
+        raise PartitionError("TASK-RESULT-DIVERGENT", "accepted task is absent from current tasks")
+    pending = [task for task in tasks if task.id not in accepted]
+    readonly = [task for task in pending if not task.files]
+    deferred = [task for task in pending if task.files and any(gauntlet_runs._dag_scope_violation(path) for path in task.files)]
+    dispatchable = [task for task in pending if task.files and task not in deferred]
+    if not dispatchable:
+        raise PartitionError("PARTITION-NO-WORKERS", "no dispatchable task remains", phases=[task.phase for task in tasks],
+                             read_only_tasks=[task.id for task in readonly], deferred_to_leader=[task.id for task in deferred],
+                             accepted_tasks=sorted(accepted))
+    phases: list[int] = []
+    for task in tasks:
+        if task.phase not in phases:
+            phases.append(task.phase)
+    nodes: list[dict[str, Any]] = []
+    node_reports: list[dict[str, Any]] = []
+    phase_reports: list[dict[str, Any]] = []
+    previous: list[str] = []
+    for phase in phases:
+        phase_tasks = [task for task in tasks if task.phase == phase]
+        members = [task for task in dispatchable if task.phase == phase]
+        phase_nodes: list[str] = []
+        for number, packed in enumerate(_pack(_conflict_groups(members), groups)):
+            node_id = f"p{phase:02d}-{_BIN_LABELS[number]}"
+            node_files = sorted({path for task in packed for path in task.files})
+            result_files = {task.id: task.result for task in packed if task.result is not None}
+            node = {"id": node_id, "depends_on": sorted(previous), "tier": tier, "parallel": True,
+                    "files": node_files, "task_ids": [task.id for task in packed], "result_files": result_files}
+            nodes.append(node)
+            node_reports.append({"id": node_id, "phase": phase, "task_ids": node["task_ids"],
+                                 "files": node_files, "result_files": result_files})
+            phase_nodes.append(node_id)
+        phase_reports.append({"phase": phase, "title": phase_tasks[0].phase_title,
+                              "task_ids": [task.id for task in phase_tasks], "node_ids": phase_nodes,
+                              "read_only_tasks": [task.id for task in readonly if task.phase == phase],
+                              "deferred_to_leader": [task.id for task in deferred if task.phase == phase],
+                              "accepted_tasks": [task.id for task in phase_tasks if task.id in accepted]})
+        previous = phase_nodes
+    widest = max(len(report["node_ids"]) for report in phase_reports)
+    dag = {"schema": DAG_V2_SCHEMA, "tasks_contract": TASK_FILES_SCHEMA, "feature": feature,
+           "max_workers": max(1, min(groups, widest)), "tasks_semantic_sha256": semantic,
+           "accepted_tasks": accepted, "nodes": nodes}
+    report = {"schema": REPORT_V2_SCHEMA, "tasks_contract": TASK_FILES_SCHEMA, "feature": feature,
+              "verdict": VERDICT_DEGRADED if readonly or deferred or accepted else VERDICT_COMPLETE,
+              "requested_groups": groups, "max_workers": dag["max_workers"], "tasks": len(tasks),
+              "dispatchable_tasks": len(dispatchable), "read_only_tasks": [task.id for task in readonly],
+              "deferred_to_leader": [task.id for task in deferred], "accepted_tasks": sorted(accepted),
+              "tasks_semantic_sha256": semantic, "phases": phase_reports, "nodes": node_reports}
     return dag, report

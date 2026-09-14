@@ -393,6 +393,47 @@ class RealCorpus(unittest.TestCase):
                         with self.subTest(feature=feature, phase=phase):
                             self.assertEqual(files[ids[left]] & files[ids[right]], set())
 
+class TaskFilesV1(unittest.TestCase):
+    def text(self, checkbox: str = " ") -> str:
+        return tasks_md(
+            "<!-- grill-task-files:v1 -->", "## Phase 1: Build",
+            f"- [{checkbox}] T001 [P] Edit only the declared file.",
+            '  Files: ["./src/a.py", "specs/demo/implement/T001.tasks.json"]',
+            '  Result: "specs/demo/implement/T001.tasks.json"',
+            "## Phase 2: Leader", "- [ ] T002 Audit the result.", "  Files: []",
+        )
+
+    def test_explicit_grants_make_a_v2_dag_without_an_implicit_sidecar(self) -> None:
+        dag, report = P.partition_task_files(self.text(), feature="demo")
+        self.assertEqual((dag["schema"], dag["tasks_contract"]), (P.DAG_V2_SCHEMA, "task-files/v1"))
+        self.assertEqual(dag["nodes"][0]["files"], ["specs/demo/implement/T001.tasks.json", "src/a.py"])
+        self.assertEqual(dag["nodes"][0]["result_files"], {"T001": "specs/demo/implement/T001.tasks.json"})
+        self.assertEqual(report["phases"][1]["read_only_tasks"], ["T002"])
+        gauntlet_runs._validate_dag_structure(dag)
+
+    def test_checkbox_changes_do_not_change_the_semantic_pin(self) -> None:
+        pending, complete = self.text(" "), self.text("X")
+        self.assertEqual(P.tasks_semantic_sha256(pending, P.parse_task_files(pending, feature="demo")),
+                         P.tasks_semantic_sha256(complete, P.parse_task_files(complete, feature="demo")))
+
+    def test_result_and_paths_are_fail_closed_before_a_partial_grant(self) -> None:
+        broken = self.text().replace('  Result: "specs/demo/implement/T001.tasks.json"\n', "")
+        with self.assertRaises(P.PartitionError) as missing:
+            P.parse_task_files(broken, feature="demo")
+        self.assertEqual(missing.exception.code, "TASK-RESULT-MISSING")
+        duplicate = self.text().replace('"./src/a.py", ', '"./src/a.py", "src/a.py", ')
+        with self.assertRaises(P.PartitionError) as duplicate_error:
+            P.parse_task_files(duplicate, feature="demo")
+        self.assertEqual(duplicate_error.exception.code, "TASK-FILES-DUPLICATE")
+
+    def test_fences_are_not_tasks_and_no_worker_is_an_honest_block(self) -> None:
+        fenced = self.text().replace("## Phase 1: Build", "```markdown\n- [ ] T999 fake\n  Files: []\n```\n## Phase 1: Build")
+        self.assertEqual([task.id for task in P.parse_task_files(fenced, feature="demo")], ["T001", "T002"])
+        only_leader = tasks_md("<!-- grill-task-files:v1 -->", "## Phase 1: Leader", "- [ ] T001 Decide.", "  Files: []")
+        with self.assertRaises(P.PartitionError) as no_workers:
+            P.partition_task_files(only_leader, feature="demo")
+        self.assertEqual(no_workers.exception.code, "PARTITION-NO-WORKERS")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=0)

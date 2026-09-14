@@ -1343,6 +1343,62 @@ def require_authority(item: dict[str, Any], context_id: str, epoch: int, session
     return context
 
 
+def task_phase_pending(tasks: Any, accepted_tasks: Any, *, target_phase: int,
+                       tasks_semantic_sha256: str, dag_content_sha256: str) -> list[str]:
+    """Return unfinished predecessors; acceptance is a bound receipt, not a checkbox."""
+    _digest(tasks_semantic_sha256, "tasks semantic digest")
+    _digest(dag_content_sha256, "DAG digest")
+    if type(target_phase) is not int or target_phase < 1 or not isinstance(tasks, (list, tuple)) or not isinstance(accepted_tasks, dict):
+        _fail("TASK-PHASE-PENDING")
+    pending: list[str] = []
+    for task in tasks:
+        if not isinstance(task, dict) or not isinstance(task.get("task_id"), str) or type(task.get("phase")) is not int:
+            _fail("TASK-PHASE-PENDING")
+        if task["phase"] >= target_phase:
+            continue
+        receipt = accepted_tasks.get(task["task_id"])
+        if not isinstance(receipt, dict) or receipt.get("state") != "ACCEPTED":
+            pending.append(task["task_id"])
+            continue
+        binding = receipt.get("task_binding")
+        if not isinstance(binding, dict) or binding != {
+            "task_id": task["task_id"], "phase": str(task["phase"]),
+            "tasks_semantic_sha256": tasks_semantic_sha256, "dag_content_sha256": dag_content_sha256,
+        }:
+            pending.append(task["task_id"])
+    return sorted(pending)
+
+
+def require_task_phase_barrier(tasks: Any, accepted_tasks: Any, *, target_phase: int,
+                               tasks_semantic_sha256: str, dag_content_sha256: str) -> None:
+    pending = task_phase_pending(tasks, accepted_tasks, target_phase=target_phase,
+                                 tasks_semantic_sha256=tasks_semantic_sha256,
+                                 dag_content_sha256=dag_content_sha256)
+    if pending:
+        _fail("TASK-PHASE-PENDING:" + ",".join(pending))
+
+
+def task_files_migration_preview(current_text: str, proposal_text: str, *, expected_sha256: str,
+                                 accepted_task_ids: Any = ()) -> dict[str, Any]:
+    """Hash-fence a reviewed proposal; parsing and writing stay at the CLI boundary."""
+    if not isinstance(current_text, str) or not isinstance(proposal_text, str):
+        _fail("TASK-FILES-INVALID")
+    current_sha256 = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
+    proposal_sha256 = hashlib.sha256(proposal_text.encode("utf-8")).hexdigest()
+    _digest(expected_sha256, "migration expected digest")
+    if current_sha256 != expected_sha256:
+        _fail("TASKS-SOURCE-STALE")
+    if not isinstance(accepted_task_ids, (list, tuple)) or any(not isinstance(task_id, str) for task_id in accepted_task_ids):
+        _fail("TASK-FILES-INVALID")
+    old_ids = set(re.findall(r"^- \[[ xX]\]\s+(T\d+)", current_text, re.MULTILINE))
+    new_ids = set(re.findall(r"^- \[[ xX]\]\s+(T\d+)", proposal_text, re.MULTILINE))
+    if not set(accepted_task_ids).issubset(new_ids) or not set(accepted_task_ids).issubset(old_ids):
+        _fail("TASK-RESULT-DIVERGENT")
+    return {"verdict": "PREVIEW", "current_sha256": current_sha256, "proposal_sha256": proposal_sha256,
+            "preserved_task_ids": sorted(old_ids & new_ids), "added_task_ids": sorted(new_ids - old_ids),
+            "accepted_task_ids": sorted(accepted_task_ids)}
+
+
 def adoption_inputs(*, work_id: str, runtime: str, session_ref: str | None, scope_files: list[str], origin: dict[str, Any]) -> dict[str, Any]:
     """Closed, hashable adoption request.  The CLI hashes this before apply."""
     _id(work_id, "orchestration work id")

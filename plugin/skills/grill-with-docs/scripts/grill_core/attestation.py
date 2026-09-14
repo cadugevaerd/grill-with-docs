@@ -551,6 +551,14 @@ def require_activity_coverage(coverage: Mapping[str, Any], *, step_id: str) -> N
                        changes_required=sorted(coverage["changes_required"]), stale=sorted(coverage["stale"]))
 
 
+def require_task_phase_barrier(guard: Mapping[str, Any], *, step_id: str) -> None:
+    """Keep a scheduler-complete run from bypassing accepted non-worker tasks."""
+    if not isinstance(guard, Mapping) or not isinstance(guard.get("pending"), list):
+        raise _blocked("TASK_PHASE_PENDING", step_id=step_id)
+    if guard["pending"]:
+        raise _blocked("TASK_PHASE_PENDING", step_id=step_id, pending=sorted(guard["pending"]))
+
+
 # --------------------------------------------------------------------------
 # the chain judge (plan 4.1)
 # --------------------------------------------------------------------------
