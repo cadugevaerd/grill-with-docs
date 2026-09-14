@@ -9,11 +9,18 @@ PLUGIN=Path(__file__).resolve().parents[1]/"plugin"
 WS=PLUGIN/"skills/grill-with-docs/scripts/grill_workspace.py"
 WORKFLOW_TEMPLATE=PLUGIN/"skills/grill-with-docs/assets/WORKFLOW.template.md"
 STATUS=PLUGIN/"skills/grill-with-docs/scripts/grill_status.py"
+CHECKPOINT_COUNTER=0
 
 def cli(script,*args):
+    global CHECKPOINT_COUNTER
     args=tuple(args)
     if script == WS and args and args[0] in {"init","preflight","gauntlet-init"} and "--runtime" not in args:
         args += ("--runtime","claude")
+    if script == WS and args and args[0] == "init" and "--session-ref" not in args:
+        args += ("--session-ref","fixture-leader")
+    if script == WS and args and args[0] == "checkpoint" and "--operation-id" not in args:
+        CHECKPOINT_COUNTER += 1
+        args += ("--session-ref", "fixture-leader", "--operation-id", f"cp-{CHECKPOINT_COUNTER:012d}")
     return subprocess.run([sys.executable,str(script),*(str(x) for x in args)],text=True,capture_output=True,env={**os.environ,"PYTHONDONTWRITEBYTECODE":"1"})
 def status(root,*args):
     # Exercise the public CORE entry point; direct grill_status invocation

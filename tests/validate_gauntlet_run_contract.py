@@ -79,6 +79,10 @@ def invoke(program: Path, *args: object) -> tuple[subprocess.CompletedProcess[st
     args = tuple(args)
     if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
         args += ("--runtime", "claude")
+    if args and args[0] == "init" and "--session-ref" not in args:
+        args += ("--session-ref", "fixture-leader")
+    if args and args[0] in {"gauntlet-run", "gauntlet-resume", "gauntlet-cleanup", "gauntlet-prepare-worker", "gauntlet-wave-declare", "gauntlet-converge", "gauntlet-run-abandon", "gauntlet-worker-declare", "gauntlet-progress-record", "gauntlet-worker-terminal", "gauntlet-remediate"} and "--session-ref" not in args:
+        args += ("--session-ref", "fixture-leader")
     """Run one public command and require exactly one JSON object on stdout."""
     process = subprocess.run(
         [sys.executable, str(program), *(str(value) for value in args)],
@@ -690,7 +694,7 @@ class GauntletRunContractHarness(unittest.TestCase):
     def test_explicit_unknown_run_status_is_blocked_when_store_lacks_the_work_item(self) -> None:
         unknown_run_id = "run-unknown-a1b2"
         bootstrap = store.bootstrap(self.root)
-        self.assertEqual(bootstrap["verdict"], "CREATED")
+        self.assertEqual(bootstrap["verdict"], "REUSED")
         self.assertEqual(store.read_snapshot(self.root).document["work_items"], {})
         root_before = root_snapshot(self.root)
         store_before = store_snapshot(self.root)
@@ -747,7 +751,7 @@ class GauntletRunContractHarness(unittest.TestCase):
         self.assert_no_execution_artifacts(root_before, worktree_before)
         self.assert_no_store_residue(event_name="gauntlet.run.admitted", receipt_prefix="gauntlet-run-admit-")
         snapshot = store.read_snapshot(self.root)
-        self.assertEqual(snapshot.revision, 2)
+        self.assertEqual(snapshot.revision, 3)
         self.assertEqual(set(snapshot.document["work_items"][WORK_ID]["gauntlet"]["runs"]), {created[0]["run_id"]})
 
     def test_eight_concurrent_eligible_resumes_record_once_and_reuse_without_residue(self) -> None:
@@ -775,7 +779,7 @@ class GauntletRunContractHarness(unittest.TestCase):
         self.assert_no_store_residue(
             event_name="gauntlet.run.recovery-recorded", receipt_prefix="gauntlet-resume-"
         )
-        self.assertEqual(store.read_snapshot(self.root).revision, 4)
+        self.assertEqual(store.read_snapshot(self.root).revision, 5)
         recovered = run_snapshot(self.root, WORK_ID, run_id)
         self.assertEqual((recovered["state"], recovered["recovery_count"]), ("RECOVERY_RECORDED", 1))
 
