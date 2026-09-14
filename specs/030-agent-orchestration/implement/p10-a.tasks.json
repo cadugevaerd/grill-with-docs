@@ -1,0 +1,17 @@
+{
+  "worker": "p10-a",
+  "feature": "030-agent-orchestration",
+  "completed": ["T024", "T025"],
+  "tasks": {
+    "T024": {
+      "status": "done",
+      "summary": "Added closed frontend classification, an observed Impeccable record, and byte-checked grill-design-preview/v1 handling. Frontend previews require a self-contained HTML entrypoint, complete PNG state/viewport captures, current author xhigh and independent reviewer high evidence; coherent platform-devops classification records NOT_APPLICABLE without Impeccable.",
+      "evidence": "Detached overlay from c576c032df9102ea3773a5bf83bc8a89910dd1fd with this grant's source/test paths copied: PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_visual_gate passed (1 test); PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py passed (23 tests)."
+    },
+    "T025": {
+      "status": "done",
+      "summary": "Added gauntlet-preview-decide with preview and human-evidence digest fences, immutable decision history, and stale detection when either manifest, assets, review, or observed human evidence changes. The common visual gate is applied at tasks step entry, tasks checkpoints and attestations, and partition preview/apply; it releases only APPROVED or coherent NOT_APPLICABLE classifications.",
+      "evidence": "Same detached overlay: PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_checkpoint_contract.py passed (78 tests in 181.621s). The focused visual gate and both full validators used no network, real CLI, engine, or download."
+    }
+  }
+}

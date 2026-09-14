@@ -559,6 +559,15 @@ def require_task_phase_barrier(guard: Mapping[str, Any], *, step_id: str) -> Non
         raise _blocked("TASK_PHASE_PENDING", step_id=step_id, pending=sorted(guard["pending"]))
 
 
+def require_visual_gate(state: str) -> None:
+    """Only a current human-approved preview, or proven non-applicability, releases tasks."""
+    if state in {"APPROVED", "NOT_APPLICABLE"}:
+        return
+    if state == "STALE":
+        raise _blocked("PREVIEW_STALE")
+    raise _blocked("PREVIEW_APPROVAL_REQUIRED", state=state)
+
+
 # --------------------------------------------------------------------------
 # the chain judge (plan 4.1)
 # --------------------------------------------------------------------------
