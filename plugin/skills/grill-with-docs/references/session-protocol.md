@@ -2,6 +2,12 @@
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
+## Apresentação local obrigatória
+
+Antes de qualquer resposta de trabalho em um fluxo GWD, inclusive início, retomada, compactação reentrada e especialista, execute o bootstrap local de `i-have-adhd@i-have-adhd`. O bootstrap resolve a instalação **selecionada pelo runtime**, exige observações correlacionadas e distintas de habilitação e confiança, e lê o arquivo regular aprovado por inteiro com o `load_request`; registra sessão, geração/configuração, escopo GWD e hashes do arquivo/corpo. Nunca trate cache, enumeração, caminho impresso, exit 0 ou autorrelato como leitura/obediência; não execute hook upstream, não auto-invoque a skill e não altere configurações, caches ou flags globais.
+
+Enquanto a aplicação estiver ativa, cada nova sessão/incarnation, runtime ou reentrada após compactação exige leitura atual antes de uso. `stop adhd mode` é a única suspensão local: requer fonte humana da mesma sessão/incarnation/escopo, deixa `work_ready=true` somente após revalidar instalação, compatibilidade, enablement e trust, mantém `loading=stale` e não recarrega/aplica o corpo. A sessão nova não herda essa suspensão. `normal mode` só respeita pedido explícito e nunca é emitido pelo loader. Preservar Ponytail, conteúdo solicitado e as regras/exceções completas da referência; fora do GWD, `application=out_of_scope` e não há alteração de configuração externa.
+
 ## Fluxo e checkpoints
 
 `grill_workspace.py init --runtime claude|codex` cria a Constituição gerenciada somente quando ausente, sem clobber, com fsync/readback; arquivo existente preserva bytes. O runtime é obrigatório e identifica o harness da sessão ativa. Ausência não é `not-present`: é bootstrap pendente e deve ser resolvida no init. Symlink, ancestor symlink, UTF-8 inválido ou corrida insegura falham fechado.

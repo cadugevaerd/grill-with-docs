@@ -79,6 +79,19 @@ class DependencyManifest(unittest.TestCase):
                 with self.assertRaises(MODULE.ManifestError):
                     MODULE.load_manifest(path)
 
+    def test_i_have_adhd_is_required_and_uses_only_approved_delegated_argv(self) -> None:
+        entry = next(item for item in MODULE.load_manifest()["dependencies"] if item["id"] == "i-have-adhd")
+        self.assertEqual((entry["kind"], entry["required"], entry["min"], entry["marketplace_source"]),
+                         ("harness-plugin", True, "0.3.0", "ayghri/i-have-adhd"))
+        self.assertEqual(entry["install_by_runtime"]["claude"], [
+            ["claude", "plugin", "marketplace", "add", "ayghri/i-have-adhd"],
+            ["claude", "plugin", "install", "i-have-adhd@i-have-adhd", "--scope", "user"],
+        ])
+        self.assertEqual(entry["install_by_runtime"]["codex"], [
+            ["codex", "plugin", "marketplace", "add", "ayghri/i-have-adhd", "--ref", "main"],
+            ["codex", "plugin", "add", "i-have-adhd@i-have-adhd"],
+        ])
+
 
 class VersionComparison(unittest.TestCase):
     def test_parses_real_tool_banners(self) -> None:
@@ -104,6 +117,17 @@ class Detection(unittest.TestCase):
 
     def report(self, reports, identifier):
         return next(item for item in reports if item["id"] == identifier)
+
+    def test_i_have_adhd_does_not_promote_the_highest_codex_cache_as_effective(self) -> None:
+        home = Path(self.temporary.name) / "home"
+        for version in ("0.3.0", "0.4.0"):
+            plugin = home / ".codex/plugins/cache/i-have-adhd/i-have-adhd" / version / ".codex-plugin/plugin.json"
+            plugin.parent.mkdir(parents=True, exist_ok=True)
+            plugin.write_text(json.dumps({"version": version}), encoding="utf-8")
+        tools = StubToolchain(environ={"HOME": str(home)})
+        report = self.report(MODULE.detect(self.root, MODULE.load_manifest(), tools, runtime="codex"), "i-have-adhd")
+        self.assertEqual(report["status"], "undetermined")
+        self.assertIn("instalacao efetiva", report["reason"])
 
     def test_missing_binary_reports_remediation_and_no_version(self) -> None:
         tools = StubToolchain()
@@ -427,6 +451,7 @@ class HarnessPluginInstallDelegation(unittest.TestCase):
         self.home.mkdir()
         self.manifest = MODULE.load_manifest()
         self.ponytail = next(e for e in self.manifest["dependencies"] if e["id"] == "ponytail")
+        self.adhd = next(e for e in self.manifest["dependencies"] if e["id"] == "i-have-adhd")
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -438,13 +463,17 @@ class HarnessPluginInstallDelegation(unittest.TestCase):
         tools = StubToolchain(environ={"HOME": str(self.home)})
         reports = MODULE.detect(self.root, self.manifest, tools, runtime="claude")
         MODULE.install(self.root, self.manifest, reports, tools, runtime="claude")
-        self.assertEqual(self.harness_calls(tools), MODULE.declared_install(self.ponytail, "claude"))
+        calls = self.harness_calls(tools)
+        self.assertEqual(calls[:2], MODULE.declared_install(self.ponytail, "claude"))
+        self.assertEqual(calls[2:4], MODULE.declared_install(self.adhd, "claude"))
 
     def test_allowed_install_runs_exactly_the_declared_codex_sequence_in_order(self) -> None:
         tools = StubToolchain(environ={"HOME": str(self.home)})
         reports = MODULE.detect(self.root, self.manifest, tools, runtime="codex")
         MODULE.install(self.root, self.manifest, reports, tools, runtime="codex")
-        self.assertEqual(self.harness_calls(tools), MODULE.declared_install(self.ponytail, "codex"))
+        calls = self.harness_calls(tools)
+        self.assertEqual(calls[:2], MODULE.declared_install(self.ponytail, "codex"))
+        self.assertEqual(calls[2:4], MODULE.declared_install(self.adhd, "codex"))
 
     def test_without_allow_install_no_harness_process_ever_runs(self) -> None:
         tools = StubToolchain(environ={"HOME": str(self.home)})

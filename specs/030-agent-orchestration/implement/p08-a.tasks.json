@@ -1,0 +1,30 @@
+{
+  "schema": "grill-task-result/v1",
+  "worker": "p08-a",
+  "feature": "030-agent-orchestration",
+  "work_id": "feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa",
+  "scheduler_run_id": "run-da41897923ba2397c839aa23",
+  "node_id": "p08-a",
+  "attempt_id": "lease-run-da41897923ba2397c839aa23-p08-a",
+  "status": "completed",
+  "diagnostic_ref": null,
+  "completed": ["T019", "T020", "T021", "T022"],
+  "tasks": {
+    "T019": {"status": "done", "summary": "Added the mandatory i-have-adhd harness-plugin dependency, exact delegated install argv, and runtime-effective cache ambiguity refusal without changing Ponytail semantics."},
+    "T020": {"status": "done", "summary": "Added a no-follow approved-byte loader, frontmatter-only body extraction, and correlated loading evidence that never promotes a listing, exit code, or self-report."},
+    "T021": {"status": "done", "summary": "Added independent readiness projections, bounded user suspension, presentation persistence validation, entry/activity gating when adopted, checkpoint propagation, and read-only status projection."},
+    "T022": {"status": "done", "summary": "Updated the GWD entry, session protocol, supplement, and policy pins so both harnesses bootstrap the local presentation while preserving Ponytail, scope, and upstream exceptions."}
+  },
+  "checks": [
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_presentation_bootstrap",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_presentation_context",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_presentation_scope_preservation",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_dependencies_contract.py",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_status_contract.py",
+    "git diff --check"
+  ],
+  "limitations": [
+    "validate_status_contract.py has two inherited failures on both the p08 overlay and clean 208b818: StatusPublicContract.test_specify_checkpoint_binds_phase_branch_and_status_exposes_it and StatusPublicContract.test_phase_turn_archives_and_clears_phase_binding_then_next_specify_binds_new_branch receive ACTIVITY-REQUIRED: author, reviewer before status projection."
+  ]
+}
