@@ -55,7 +55,7 @@
   },
   "references": {
     "protocol": {"path": "plugin/skills/grill-with-docs/references/agent-orchestration.md", "sha256": "sha256:04b4533636117f26e6870bec6f43632bca8114d0bf1cc92911c15b5855ff7ed3"},
-    "task_files_template": {"path": "plugin/skills/grill-with-docs/assets/task-files.v1.template.md", "sha256": "sha256:1f6d1d5ced9a10b21245f619b50bcb5f4bef5b00de4af8b011aea6584d45449f"}
+    "task_files_template": {"path": "plugin/skills/grill-with-docs/assets/task-files.v1.template.md", "sha256": "sha256:4961ec90bd4c31b09aaecd00ed14cf28a7caa927081cdf50110bcc6b5a380eee"}
   },
   "presentation": {
     "schema": "grill-gwd-presentation/v1",

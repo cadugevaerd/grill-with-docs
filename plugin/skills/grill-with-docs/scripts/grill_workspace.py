@@ -3365,6 +3365,7 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
 def gauntlet_prepare_worker_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Prepare one passive, scoped worker workspace from a fresh admission."""
     root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
+    _require_scheduler_task_phase(root, gauntlet_runs, args, args.worker_id)
     try:
         return gauntlet_runs.prepare_worker(
             root, args.work_id, args.run_id, args.worker_id, args.scope, admission
@@ -3670,7 +3671,7 @@ def task_files_migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any]
     return {**payload, "verdict": "APPLIED"}, EXIT_OK
 
 
-def _read_json_document(root: Path, reference: Any, code: str) -> dict[str, Any]:
+def _read_json_document_bytes(root: Path, reference: Any, code: str) -> tuple[dict[str, Any], bytes]:
     """Read one repo-relative JSON document through the safe-path boundary."""
     if not isinstance(reference, str) or not reference:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "a document path is required")
@@ -3681,9 +3682,98 @@ def _read_json_document(root: Path, reference: Any, code: str) -> dict[str, Any]
     if not target.is_file():
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, f"document is unavailable: {reference}")
     try:
-        return json.loads(safe_read_regular_fd(root, target))
+        raw = safe_read_regular_fd(root, target)
+        return json.loads(raw), raw
     except ValueError as error:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, f"document is not valid JSON: {reference}") from error
+
+
+def _read_json_document(root: Path, reference: Any, code: str) -> dict[str, Any]:
+    return _read_json_document_bytes(root, reference, code)[0]
+
+
+def _task_phase_documents(root: Path, gauntlet_runs: Any,
+                          args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any], str] | None:
+    """Resolve the v2 DAG/report pair; ``None`` preserves v1 scheduling."""
+    dag_ref = getattr(args, "dag", None)
+    if isinstance(dag_ref, str):
+        try:
+            dag, raw = _read_json_document_bytes(root, dag_ref, "DAG-MALFORMED")
+        except CliFailure:
+            return {}, {}, "0" * 64
+        if dag.get("schema") != gauntlet_runs.DAG_V2_SCHEMA:
+            return None
+        name = Path(dag_ref).name
+        if name == "execution-dag.json":
+            report_ref = str(Path(dag_ref).with_name("partition-report.json"))
+        elif re.fullmatch(r"execution-dag\.r[1-9][0-9]*\.json", name):
+            report_ref = str(Path(dag_ref).with_name(name.replace("execution-dag", "partition-report", 1)))
+        else:
+            return dag, {}, hash_bytes(raw)
+        try:
+            report, _ = _read_json_document_bytes(root, report_ref, "PARTITION-REPORT-MALFORMED")
+        except CliFailure:
+            report = {}
+        return dag, report, hash_bytes(raw)
+
+    try:
+        run = gauntlet_runs._read_runs(root, args.work_id).get(args.run_id)
+    except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError):
+        return None
+    pin = run.get("dag_content_sha256") if isinstance(run, dict) else None
+    if not isinstance(pin, str) or not re.fullmatch(r"[0-9a-f]{64}", pin):
+        return None
+    for candidate in sorted((root / "specs").glob("*/execution-dag*.json")):
+        try:
+            dag, raw = _read_json_document_bytes(root, str(candidate.relative_to(root)), "DAG-MALFORMED")
+        except CliFailure:
+            continue
+        if gauntlet_runs.store.jcs_sha256(dag) != pin:
+            continue
+        if dag.get("schema") != gauntlet_runs.DAG_V2_SCHEMA:
+            return None
+        name = candidate.name
+        report_ref = str(candidate.relative_to(root).with_name(name.replace("execution-dag", "partition-report", 1)))
+        try:
+            report, _ = _read_json_document_bytes(root, report_ref, "PARTITION-REPORT-MALFORMED")
+        except CliFailure:
+            report = {}
+        return dag, report, hash_bytes(raw)
+    return {}, {}, "0" * 64
+
+
+def _require_scheduler_task_phase(root: Path, gauntlet_runs: Any,
+                                  args: argparse.Namespace, node_ids: Any) -> None:
+    """Run the v2 phase fence before any mutable scheduler primitive."""
+    documents = _task_phase_documents(root, gauntlet_runs, args)
+    if documents is None:
+        targets = [1]
+        dag = report = None
+        dag_sha256 = "0" * 64
+        legacy = True
+    else:
+        dag, report, dag_sha256 = documents
+        raw_ids = [node_ids] if isinstance(node_ids, str) else node_ids
+        targets = []
+        if not isinstance(raw_ids, (list, tuple)):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "v2 node has no phase identity")
+        for node_id in raw_ids:
+            match = re.match(r"^p(\d+)-", node_id) if isinstance(node_id, str) else None
+            if match is None:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "v2 node has no phase identity")
+            phase = int(match.group(1))
+            if phase not in targets:
+                targets.append(phase)
+        legacy = False
+    for target_phase in targets:
+        try:
+            guard = gauntlet_runs.task_phase_barrier(
+                dag, report, target_phase=target_phase, dag_content_sha256=dag_sha256, legacy=legacy,
+            )
+        except gauntlet_runs.GauntletRunError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+        if guard["pending"]:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", ",".join(guard["pending"]))
 
 
 def gauntlet_dag_validate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -3705,6 +3795,7 @@ def gauntlet_dag_validate_command(args: argparse.Namespace) -> tuple[dict[str, A
 def gauntlet_wave_declare_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-004/FR-005, ADR-0013): declare the run's next Execution Wave."""
     root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
+    _require_scheduler_task_phase(root, gauntlet_runs, args, args.node_id)
     agent_execute_floor, markdown_floor = _tier_floors(record)
     try:
         return gauntlet_runs.declare_wave(
@@ -3789,6 +3880,7 @@ def gauntlet_run_abandon_command(args: argparse.Namespace) -> tuple[dict[str, An
 def gauntlet_worker_declare_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-007): mint one first-dispatch worker, ``worker_id = node_id``."""
     root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
+    _require_scheduler_task_phase(root, gauntlet_runs, args, args.node_id)
     agent_execute_floor, markdown_floor = _tier_floors(record)
     try:
         return gauntlet_runs.declare_worker(
@@ -3840,6 +3932,7 @@ def gauntlet_remediate_command(args: argparse.Namespace) -> tuple[dict[str, Any]
     both (a node cannot chain remediation by alternating reasons).
     """
     root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
+    _require_scheduler_task_phase(root, gauntlet_runs, args, args.worker_id)
     try:
         return gauntlet_runs.remediate_node(
             root, args.work_id, args.run_id, args.worker_id, args.reason, admission,

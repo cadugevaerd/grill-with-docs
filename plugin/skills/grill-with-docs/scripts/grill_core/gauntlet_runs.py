@@ -818,14 +818,17 @@ def validate_execution_dag(root: str | Path, work_id: str, run_id: str, dag_path
     }
 
 
-def task_phase_barrier(dag: Mapping[str, Any], report: Mapping[str, Any], *, target_phase: int,
-                       dag_content_sha256: str) -> dict[str, Any]:
+def task_phase_barrier(dag: Mapping[str, Any] | None, report: Mapping[str, Any] | None, *, target_phase: int,
+                       dag_content_sha256: str, legacy: bool = False) -> dict[str, Any]:
     """Return the v2 task receipts still required before a later phase can run.
 
     The scheduler owns worker waves; this helper owns the complementary fact
     that an accepted checkbox or a diagnostic alone never releases a deferred
     or read-only predecessor.
     """
+    if legacy and dag is None and report is None:
+        return {"pending": [], "tasks_semantic_sha256": None,
+                "dag_content_sha256": dag_content_sha256}
     if (not isinstance(dag, Mapping) or dag.get("schema") != DAG_V2_SCHEMA
             or not isinstance(report, Mapping) or report.get("schema") != "grill-partition-report/v2"
             or type(target_phase) is not int or target_phase < 1 or not _hex64(dag_content_sha256)):
