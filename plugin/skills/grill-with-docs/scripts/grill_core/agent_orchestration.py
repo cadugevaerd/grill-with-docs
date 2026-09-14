@@ -17,7 +17,9 @@ SCHEMA = "grill-agent-orchestration/v1"
 EVENT_SCHEMA = "grill-orchestration-event/v1"
 CHECKPOINT_SCHEMA = "grill-continuity-checkpoint/v1"
 _HEX = re.compile(r"^[0-9a-f]{64}$")
+_OID = re.compile(r"^[0-9a-f]{40}$")
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_UTC_RFC3339 = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$")
 _CONTEXT_STATES = {"PREPARED", "ACTIVE", "QUIESCING", "RELEASED", "SUPERSEDED"}
 _OPERATION_STATES = {"INTENT", "APPLIED", "CONFIRMED", "UNKNOWN", "REFUSED"}
 _LEADER_STATES = {"ACTIVE", "RELEASING", "RELEASED"}
@@ -91,6 +93,95 @@ def _json(value: Any, label: str) -> None:
 def _nullable_digest(value: Any, label: str) -> None:
     if value is not None:
         _digest(value, label)
+
+
+def _ref(value: Any, label: str, *, nullable: bool = False) -> None:
+    if value is None and nullable:
+        return
+    value = _object(value, {"ref", "sha256"}, set(), label)
+    _text(value["ref"], f"{label} ref")
+    _digest(value["sha256"], f"{label} sha256")
+
+
+def _file(value: Any, label: str) -> None:
+    value = _object(value, {"path", "sha256", "size", "media_type"}, set(), label)
+    _safe_path(value["path"])
+    _digest(value["sha256"], f"{label} sha256")
+    if type(value["size"]) is not int or value["size"] < 0:
+        _fail(f"invalid {label} size")
+    _text(value["media_type"], f"{label} media_type")
+
+
+def _unique_ids(value: Any, label: str) -> list[str]:
+    if not isinstance(value, list):
+        _fail(f"invalid {label}")
+    for member in value:
+        _id(member, label)
+    if len(set(value)) != len(value):
+        _fail(f"duplicate {label}")
+    return value
+
+
+def _task_binding(value: Any, label: str, *, nullable: bool = False) -> None:
+    if value is None and nullable:
+        return
+    value = _object(value, {"task_id", "phase", "tasks_semantic_sha256", "dag_content_sha256"}, set(), label)
+    _id(value["task_id"], f"{label} task_id")
+    _text(value["phase"], f"{label} phase")
+    _digest(value["tasks_semantic_sha256"], f"{label} tasks_semantic_sha256")
+    _digest(value["dag_content_sha256"], f"{label} dag_content_sha256")
+
+
+def _input_manifest(value: Any) -> None:
+    value = _object(value, {"files", "required_activity_ids", "author_activity_ids", "task_binding", "human_authorization"}, set(), "input manifest")
+    if not isinstance(value["files"], list):
+        _fail("invalid input manifest files")
+    paths = []
+    for file in value["files"]:
+        _file(file, "input manifest file")
+        paths.append(file["path"])
+    if len(set(paths)) != len(paths):
+        _fail("duplicate input manifest file")
+    _unique_ids(value["required_activity_ids"], "input manifest required activity")
+    _unique_ids(value["author_activity_ids"], "input manifest author activity")
+    _task_binding(value["task_binding"], "input manifest task_binding", nullable=True)
+    _ref(value["human_authorization"], "input manifest human_authorization", nullable=True)
+
+
+def _output_manifest(value: Any) -> None:
+    if value is None:
+        return
+    value = _object(value, {"files", "return_ref", "effect_ref"}, set(), "output manifest")
+    if not isinstance(value["files"], list):
+        _fail("invalid output manifest files")
+    paths = []
+    for file in value["files"]:
+        _file(file, "output manifest file")
+        paths.append(file["path"])
+    if len(set(paths)) != len(paths):
+        _fail("duplicate output manifest file")
+    _ref(value["return_ref"], "output manifest return_ref", nullable=True)
+    _ref(value["effect_ref"], "output manifest effect_ref", nullable=True)
+
+
+def _manifest_sha256(value: dict[str, Any]) -> str:
+    try:
+        from .store import jcs_sha256
+    except ImportError:
+        from grill_core.store import jcs_sha256
+    return jcs_sha256(value)
+
+
+def _absolute_path(value: Any, label: str) -> None:
+    if not isinstance(value, str) or not value.startswith("/") or "/../" in value or value.endswith("/.."):
+        _fail(f"invalid {label}")
+
+
+def _oid(value: Any, label: str, *, nullable: bool = False) -> None:
+    if value is None and nullable:
+        return
+    if not isinstance(value, str) or not _OID.fullmatch(value):
+        _fail(f"invalid {label}")
 
 
 def _origin(value: Any) -> None:
@@ -228,24 +319,68 @@ def _activity(activity_id: str, value: Any, contexts: dict[str, Any]) -> None:
     _id(activity_id, "activity id")
     if value["activity_id"] != activity_id or value["context_id"] not in contexts or type(value["attempt"]) is not int or value["attempt"] < 1:
         _fail("invalid activity identity")
-    if value["step_id"] is not None: _id(value["step_id"], "activity step_id")
-    for key in ("activity_scope", "activity_type", "role", "runtime", "requested_model", "requested_effort"):
-        _text(value[key], f"activity {key}")
-    if value["runtime"] not in {"codex", "claude"} or value["state"] not in _ACTIVITY_STATES:
+    if value["activity_scope"] not in {"interview", "cycle"} or value["activity_type"] not in {"author", "reviewer", "deterministic_check"} or value["role"] != value["activity_type"] or value["state"] not in _ACTIVITY_STATES:
         _fail("invalid activity state")
-    _digest(value["input_sha256"], "activity input_sha256")
+    if value["activity_scope"] == "interview":
+        if value["step_id"] is not None: _fail("interview activity has step")
+    else:
+        _id(value["step_id"], "activity step_id")
+    if value["activity_type"] == "deterministic_check":
+        if any(value[key] is not None for key in ("runtime", "requested_model", "requested_effort", "effective_model", "effective_effort", "resolved_model_id", "session_resource_id", "launch_observation_ref", "presentation_observation_ref", "released_at")):
+            _fail("deterministic activity has runtime slots")
+    else:
+        if value["runtime"] not in {"codex", "claude"} or value["runtime"] != contexts[value["context_id"]]["runtime"]:
+            _fail("invalid activity runtime")
+        for key in ("requested_model", "requested_effort"):
+            _text(value[key], f"activity {key}")
+    _input_manifest(value["input_manifest"])
+    if value["author_activity_ids"] != value["input_manifest"]["author_activity_ids"] or value["task_binding"] != value["input_manifest"]["task_binding"]:
+        _fail("activity manifest correlation")
+    _task_binding(value["task_binding"], "activity task_binding", nullable=True)
+    if value["input_sha256"] != _manifest_sha256(value["input_manifest"]):
+        _fail("activity input manifest digest mismatch")
     _digest(value["policy_sha256"], "activity policy_sha256")
-    if not isinstance(value["author_activity_ids"], list) or len(set(value["author_activity_ids"])) != len(value["author_activity_ids"]):
-        _fail("invalid activity authors")
-    for author in value["author_activity_ids"]: _id(author, "activity author")
-    if not isinstance(value["write_files"], list) or len(set(value["write_files"])) != len(value["write_files"]): _fail("invalid activity files")
+    _unique_ids(value["author_activity_ids"], "activity author")
+    if not isinstance(value["write_files"], list): _fail("invalid activity files")
     for path in value["write_files"]: _safe_path(path)
-    for key in ("session_resource_id", "launch_observation_ref", "effective_model", "effective_effort", "resolved_model_id", "released_at", "presentation_observation_ref", "result_ref", "diagnostic_ref", "accepted_by_context", "acceptance_ref", "review_verdict"):
+    if len(set(value["write_files"])) != len(value["write_files"]): _fail("duplicate activity files")
+    if value["activity_type"] == "reviewer" and value["write_files"]:
+        _fail("reviewer writes files")
+    for key in ("session_resource_id", "launch_observation_ref", "effective_model", "effective_effort", "resolved_model_id", "released_at", "presentation_observation_ref", "result_ref", "diagnostic_ref", "accepted_by_context", "acceptance_ref"):
         _text(value[key], f"activity {key}", nullable=True)
+    if value["review_verdict"] not in {None, "APPROVED", "CHANGES_REQUIRED"}:
+        _fail("invalid activity review verdict")
     for key in ("payload_sha256", "result_sha256"):
         _nullable_digest(value[key], f"activity {key}")
-    for key in ("input_manifest", "task_binding", "output_manifest"):
-        _json(value[key], f"activity {key}")
+    _output_manifest(value["output_manifest"])
+    if (value["result_ref"] is None) != (value["result_sha256"] is None) or (value["result_ref"] is None) != (value["output_manifest"] is None):
+        _fail("incomplete activity result")
+    if (value["effective_model"] is None) != (value["effective_effort"] is None):
+        _fail("incomplete activity model observation")
+    if value["state"] == "DECLARED" and any(value[key] is not None for key in ("session_resource_id", "launch_observation_ref", "effective_model", "effective_effort", "resolved_model_id", "payload_sha256", "released_at", "presentation_observation_ref", "result_ref", "diagnostic_ref", "accepted_by_context", "acceptance_ref", "review_verdict")):
+        _fail("declared activity has observation")
+    if value["state"] in {"DECLARED", "BOOTSTRAPPING", "VERIFIED"} and value["payload_sha256"] is not None:
+        _fail("activity payload before dispatch")
+    if value["state"] in {"DECLARED", "BOOTSTRAPPING", "VERIFIED", "DISPATCHED"} and value["result_ref"] is not None:
+        _fail("activity result before record")
+    if value["state"] == "VERIFIED" and (value["effective_model"] is None or value["effective_effort"] is None):
+        _fail("verified activity lacks model observation")
+    if value["state"] == "DISPATCHED" and value["payload_sha256"] is None:
+        _fail("dispatched activity lacks payload")
+    if value["state"] in {"RESULT_RECORDED", "ACCEPTED"} and value["result_ref"] is None:
+        _fail("activity state requires result")
+    if value["state"] == "ACCEPTED" and (value["accepted_by_context"] is None or value["acceptance_ref"] is None or value["review_verdict"] is None):
+        _fail("accepted activity incomplete")
+    if value["state"] in {"BLOCKED", "FAILED"} and value["diagnostic_ref"] is None:
+        _fail("blocked activity lacks diagnostic")
+    if value["output_manifest"] is not None:
+        for file in value["output_manifest"]["files"]:
+            if file["path"] not in value["write_files"]:
+                _fail("output file outside activity grant")
+        if not value["write_files"] and (value["output_manifest"]["files"] or value["output_manifest"]["return_ref"] is None):
+            _fail("read-only activity lacks durable return")
+        if value["task_binding"] is not None and value["write_files"] and value["output_manifest"]["effect_ref"] is None:
+            _fail("task output lacks confirmed effect")
 
 
 def _resource(resource_id: str, value: Any, contexts: dict[str, Any]) -> None:
@@ -254,12 +389,77 @@ def _resource(resource_id: str, value: Any, contexts: dict[str, Any]) -> None:
     _id(resource_id, "resource id")
     if value["kind"] not in {"session", "worktree", "branch"} or value["origin_context_id"] not in contexts or value["state"] not in _RESOURCE_STATES:
         _fail("invalid resource state")
-    for key in ("agent_id", "activity_id", "scheduler_run_id", "worker_id", "wave_id", "result_acceptance_ref", "last_observation", "operation_id"):
+    for key in ("agent_id", "result_acceptance_ref", "operation_id"):
         _text(value[key], f"resource {key}", nullable=True)
-    for key in ("identity", "creation_observation", "evidence_manifest"):
-        if not isinstance(value[key], dict): _fail(f"invalid resource {key}")
-        _json(value[key], f"resource {key}")
-    if not isinstance(value["preservation_reasons"], list) or any(not isinstance(reason, str) or not reason for reason in value["preservation_reasons"]):
+    linked_activity = value["activity_id"] is not None
+    scheduler_link = (value["scheduler_run_id"], value["worker_id"], value["wave_id"])
+    if linked_activity == any(member is not None for member in scheduler_link):
+        _fail("resource requires one creation binding")
+    if linked_activity:
+        _id(value["activity_id"], "resource activity_id")
+    else:
+        for key in ("scheduler_run_id", "worker_id", "wave_id"):
+            _id(value[key], f"resource {key}")
+    identity = value["identity"]
+    if value["kind"] == "session":
+        identity = _object(identity, {"provider", "adapter", "host", "runtime_instance", "handle", "incarnation", "owner_dispatch", "task_id", "dispatch_incarnation", "worktree_id"}, set(), "session identity")
+        if identity["provider"] not in {"codex", "claude"} or identity["adapter"] != "orca":
+            _fail("invalid session identity")
+        for key in ("host", "runtime_instance", "handle", "incarnation", "worktree_id"):
+            _text(identity[key], f"session identity {key}")
+        dispatch = (identity["owner_dispatch"], identity["task_id"], identity["dispatch_incarnation"])
+        if any(member is None for member in dispatch) and any(member is not None for member in dispatch):
+            _fail("incomplete session dispatch identity")
+        for key in ("owner_dispatch", "task_id", "dispatch_incarnation"):
+            _text(identity[key], f"session identity {key}", nullable=True)
+    elif value["kind"] == "worktree":
+        identity = _object(identity, {"git_common_dir", "worktree_key", "real_path", "branch_ref", "base_commit"}, set(), "worktree identity")
+        for key in ("git_common_dir", "real_path"):
+            _absolute_path(identity[key], f"worktree identity {key}")
+        _text(identity["worktree_key"], "worktree identity worktree_key")
+        if not isinstance(identity["branch_ref"], str) or not identity["branch_ref"].startswith("refs/heads/"):
+            _fail("invalid worktree identity branch_ref")
+        _oid(identity["base_commit"], "worktree identity base_commit")
+    else:
+        identity = _object(identity, {"git_common_dir", "branch_ref", "creation_oid", "expected_oid"}, set(), "branch identity")
+        _absolute_path(identity["git_common_dir"], "branch identity git_common_dir")
+        if not isinstance(identity["branch_ref"], str) or not identity["branch_ref"].startswith("refs/heads/"):
+            _fail("invalid branch identity branch_ref")
+        _oid(identity["creation_oid"], "branch identity creation_oid")
+        _oid(identity["expected_oid"], "branch identity expected_oid")
+    creation = _object(value["creation_observation"], {"kind", "identity", "source_ref", "source_sha256", "collected_at"}, set(), "resource creation_observation")
+    if creation["kind"] != value["kind"] or creation["identity"] != identity:
+        _fail("resource creation identity mismatch")
+    _text(creation["source_ref"], "resource creation source_ref")
+    _digest(creation["source_sha256"], "resource creation source_sha256")
+    if not isinstance(creation["collected_at"], str) or not _UTC_RFC3339.fullmatch(creation["collected_at"]):
+        _fail("invalid resource creation collected_at")
+    evidence = _object(value["evidence_manifest"], {"files", "receipts", "terminal_head", "integrated_head"}, set(), "resource evidence_manifest")
+    if not isinstance(evidence["files"], list) or not isinstance(evidence["receipts"], list):
+        _fail("invalid resource evidence manifest")
+    file_paths = []
+    for file in evidence["files"]:
+        _file(file, "resource evidence file")
+        file_paths.append(file["path"])
+    if len(set(file_paths)) != len(file_paths):
+        _fail("duplicate resource evidence file")
+    receipt_refs = []
+    for receipt in evidence["receipts"]:
+        _ref(receipt, "resource evidence receipt")
+        receipt_refs.append(receipt["ref"])
+    if len(set(receipt_refs)) != len(receipt_refs):
+        _fail("duplicate resource evidence receipt")
+    if value["kind"] == "session":
+        if evidence["terminal_head"] is not None or evidence["integrated_head"] is not None:
+            _fail("session evidence has git heads")
+    else:
+        _oid(evidence["terminal_head"], "resource terminal_head", nullable=True)
+        _oid(evidence["integrated_head"], "resource integrated_head", nullable=True)
+    _ref(value["last_observation"], "resource last_observation", nullable=True)
+    if value["last_observation"] is not None and value["last_observation"] not in evidence["receipts"]:
+        _fail("resource observation is not preserved")
+    reasons = {"RESULT_NOT_DURABLE", "SESSION_ACTIVE", "SESSION_CLOSE_UNCONFIRMED", "IDENTITY_UNPROVEN", "IDENTITY_CHANGED", "WORKTREE_DIRTY", "IGNORED_CONTENT", "WORK_NOT_INTEGRATED", "EXCLUSIVE_EVIDENCE", "BRANCH_IN_USE", "REF_CHANGED", "PROVIDER_UNAVAILABLE"}
+    if not isinstance(value["preservation_reasons"], list) or any(reason not in reasons for reason in value["preservation_reasons"]) or len(set(value["preservation_reasons"])) != len(value["preservation_reasons"]):
         _fail("invalid resource preservation_reasons")
 
 
@@ -363,13 +563,25 @@ def validate_block(block: Any) -> dict[str, Any]:
             _fail("unknown checkpoint head")
         for activity_id, activity in item["activities"].items():
             _activity(activity_id, activity, item["contexts"])
-            if any(author not in item["activities"] for author in activity["author_activity_ids"]): _fail("activity has unknown author")
+            if activity["policy_sha256"] != item["contexts"][activity["context_id"]]["policy_sha256"]:
+                _fail("activity policy does not match context")
+            if any(author not in item["activities"] for author in activity["author_activity_ids"] + activity["input_manifest"]["required_activity_ids"]): _fail("activity has unknown input activity")
             if activity["session_resource_id"] is not None and activity["session_resource_id"] not in item["resources"]: _fail("activity has unknown resource")
             if activity["accepted_by_context"] is not None and activity["accepted_by_context"] not in item["contexts"]: _fail("activity accepted by unknown context")
         for resource_id, resource in item["resources"].items():
             _resource(resource_id, resource, item["contexts"])
             if resource["activity_id"] is not None and resource["activity_id"] not in item["activities"]: _fail("resource has unknown activity")
+            if resource["scheduler_run_id"] is not None and resource["scheduler_run_id"] not in item["contexts"][resource["origin_context_id"]]["scheduler_runs"]: _fail("resource has unknown scheduler run")
             if resource["operation_id"] is not None and resource["operation_id"] not in item["operations"]: _fail("resource has unknown operation")
+        for activity in item["activities"].values():
+            resource_id = activity["session_resource_id"]
+            if resource_id is not None and item["resources"][resource_id]["kind"] != "session":
+                _fail("activity resource is not a session")
+            if activity["activity_type"] == "reviewer" and resource_id is not None:
+                for author_id in activity["author_activity_ids"]:
+                    author_resource = item["activities"][author_id]["session_resource_id"]
+                    if author_resource is None or author_resource == resource_id:
+                        _fail("reviewer session is not independent")
         for decision_id, decision in item["visual_decisions"].items(): _visual_decision(decision_id, decision, item["contexts"])
         if item["last_transition"] is not None:
             transition = _object(item["last_transition"], {"event_sequence", "receipt_sha256", "operation_id"}, set(), "orchestration last_transition")
@@ -446,6 +658,9 @@ def validate_transition(previous: Any, candidate: Any) -> None:
         for activity_id, activity in old["activities"].items():
             later = new["activities"][activity_id]
             if any(later[key] != activity[key] for key in activity_identity): _fail("activity identity changed")
+            for key in ("session_resource_id", "launch_observation_ref", "effective_model", "effective_effort", "resolved_model_id", "payload_sha256", "released_at", "presentation_observation_ref", "result_ref", "result_sha256", "output_manifest", "diagnostic_ref", "accepted_by_context", "acceptance_ref", "review_verdict"):
+                if activity[key] is not None and later[key] != activity[key]:
+                    _fail(f"activity first-bound field changed: {key}")
             if activity["state"] == "ACCEPTED" and later != activity: _fail("accepted activity changed")
             if later["state"] not in _ACTIVITY_EDGES[activity["state"]]: _fail("invalid activity transition")
         resource_identity = {"kind", "agent_id", "activity_id", "scheduler_run_id", "worker_id", "wave_id", "origin_context_id", "identity", "creation_observation"}
@@ -453,6 +668,16 @@ def validate_transition(previous: Any, candidate: Any) -> None:
         for resource_id, resource in old["resources"].items():
             later = new["resources"][resource_id]
             if any(later[key] != resource[key] for key in resource_identity): _fail("resource identity changed")
+            old_evidence, later_evidence = resource["evidence_manifest"], later["evidence_manifest"]
+            old_files = {file["path"]: file for file in old_evidence["files"]}
+            later_files = {file["path"]: file for file in later_evidence["files"]}
+            old_receipts = {receipt["ref"]: receipt for receipt in old_evidence["receipts"]}
+            later_receipts = {receipt["ref"]: receipt for receipt in later_evidence["receipts"]}
+            if any(later_files.get(path) != file for path, file in old_files.items()) or any(later_receipts.get(ref) != receipt for ref, receipt in old_receipts.items()):
+                _fail("resource evidence changed")
+            for key in ("terminal_head", "integrated_head"):
+                if old_evidence[key] is not None and later_evidence[key] != old_evidence[key]:
+                    _fail("resource evidence head changed")
             if later["state"] not in _RESOURCE_EDGES[resource["state"]]: _fail("invalid resource transition")
         if not set(old["visual_decisions"]).issubset(new["visual_decisions"]): _fail("visual decision history removed")
         for decision_id, decision in old["visual_decisions"].items():

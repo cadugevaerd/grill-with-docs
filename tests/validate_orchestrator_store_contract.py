@@ -22,10 +22,18 @@ def ORCHESTRATION_OPERATION(operation_id='op-1',context_id='ctx-1',result_sha256
  return {'kind':'checkpoint','context_id':context_id,'fence':1,'subject_ids':['subject-1'],'input_sha256':'3'*64,'expected_before':{},'intended_after':{},'idempotency_key':'key-1','state':'INTENT','result_ref':None,'result_sha256':result_sha256,'observation_ref':None,'error':None}
 def ORCHESTRATION_ITEM(contexts=None,operations=None):
  return {'policy_ref':'policy/v1','policy_sha256':'a'*64,'adopted_at':CLOCK(),'origin':dict(ORCHESTRATION_ORIGIN),'current_context_id':None if contexts is None else 'ctx-1','contexts':{} if contexts is None else contexts,'activities':{},'resources':{},'operations':{} if operations is None else operations,'checkpoints':{},'checkpoint_head':None,'visual_decisions':{},'scope_files':['specs/result.json'],'scope_revision':1,'scope_history':[{'revision':1,'files':['specs/result.json'],'inputs_sha256':'4'*64}],'last_transition':None}
+def REF(ref='receipts/ref',sha256='c'*64):
+ return {'ref':ref,'sha256':sha256}
+def FILE(path='specs/input.json',sha256='d'*64,size=1,media_type='application/json'):
+ return {'path':path,'sha256':sha256,'size':size,'media_type':media_type}
+def INPUT_MANIFEST(task_binding=None,authors=None,required=None,files=None,human_authorization=None):
+ return {'files':[] if files is None else files,'required_activity_ids':[] if required is None else required,'author_activity_ids':[] if authors is None else authors,'task_binding':task_binding,'human_authorization':human_authorization}
 def ORCHESTRATION_ACTIVITY(activity_id='activity-1'):
- return {'activity_id':activity_id,'context_id':'ctx-1','step_id':None,'activity_scope':'implement','activity_type':'worker','role':'author','attempt':1,'author_activity_ids':[],'input_manifest':{},'input_sha256':'5'*64,'task_binding':None,'runtime':'codex','requested_model':'gpt-6-astra','requested_effort':'high','policy_sha256':'a'*64,'write_files':[],'session_resource_id':None,'launch_observation_ref':None,'effective_model':None,'effective_effort':None,'resolved_model_id':None,'payload_sha256':None,'released_at':None,'state':'DECLARED','presentation_observation_ref':None,'result_ref':None,'result_sha256':None,'output_manifest':{},'diagnostic_ref':None,'accepted_by_context':None,'acceptance_ref':None,'review_verdict':None}
+ manifest=INPUT_MANIFEST()
+ return {'activity_id':activity_id,'context_id':'ctx-1','step_id':None,'activity_scope':'interview','activity_type':'author','role':'author','attempt':1,'author_activity_ids':[],'input_manifest':manifest,'input_sha256':store.jcs_sha256(manifest),'task_binding':None,'runtime':'codex','requested_model':'gpt-6-astra','requested_effort':'high','policy_sha256':'a'*64,'write_files':[],'session_resource_id':None,'launch_observation_ref':None,'effective_model':None,'effective_effort':None,'resolved_model_id':None,'payload_sha256':None,'released_at':None,'state':'DECLARED','presentation_observation_ref':None,'result_ref':None,'result_sha256':None,'output_manifest':None,'diagnostic_ref':None,'accepted_by_context':None,'acceptance_ref':None,'review_verdict':None}
 def ORCHESTRATION_RESOURCE(resource_id='resource-1'):
- return {'kind':'session','agent_id':None,'activity_id':None,'scheduler_run_id':None,'worker_id':None,'wave_id':None,'origin_context_id':'ctx-1','identity':{'handle':'term-1'},'creation_observation':{},'result_acceptance_ref':None,'evidence_manifest':{},'state':'REGISTERED','last_observation':None,'preservation_reasons':[],'operation_id':None}
+ identity={'provider':'codex','adapter':'orca','host':'host-1','runtime_instance':'runtime-1','handle':resource_id,'incarnation':'inc-1','owner_dispatch':None,'task_id':None,'dispatch_incarnation':None,'worktree_id':'worktree-1'}
+ return {'kind':'session','agent_id':None,'activity_id':'activity-1','scheduler_run_id':None,'worker_id':None,'wave_id':None,'origin_context_id':'ctx-1','identity':identity,'creation_observation':{'kind':'session','identity':dict(identity),'source_ref':f'receipts/create-{resource_id}','source_sha256':'e'*64,'collected_at':CLOCK()},'result_acceptance_ref':None,'evidence_manifest':{'files':[],'receipts':[],'terminal_head':None,'integrated_head':None},'state':'REGISTERED','last_observation':None,'preservation_reasons':[],'operation_id':None}
 def ORCHESTRATION_DECISION(decision_id='decision-1'):
  return {'decision_id':decision_id,'preview_sha256':'6'*64,'review_ref':'receipts/review','actor_ref':'receipts/actor','decision':'approved','source_ref':'receipts/source','recorded_at':CLOCK(),'context_id':'ctx-1'}
 def ORCHESTRATION_CHECKPOINT(checkpoint_id='checkpoint-1', previous=None, revision=0):
@@ -176,6 +184,37 @@ class StoreContract(unittest.TestCase):
    document['agent_orchestration']=self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()}); document['agent_orchestration']['work_items']['orchestration-work']['current_context_id']='ctx-unknown'; return document
   with self.assertRaises(store.StoreError): store.transact(self.r,bad_context,now=CLOCK)
 
+ def test_orchestration_r1_resource_and_activity_schemas_round_trip_and_reject_invalid_evidence(self):
+  self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}
+  author=ORCHESTRATION_ACTIVITY()
+  task_binding={'task_id':'T010','phase':'Phase 4','tasks_semantic_sha256':'8'*64,'dag_content_sha256':'9'*64}
+  reviewer=ORCHESTRATION_ACTIVITY('reviewer-1'); reviewer['activity_type']=reviewer['role']='reviewer'; reviewer['author_activity_ids']=['activity-1']; reviewer['task_binding']=task_binding; reviewer['input_manifest']=INPUT_MANIFEST(task_binding=task_binding,authors=['activity-1']); reviewer['input_sha256']=store.jcs_sha256(reviewer['input_manifest'])
+  check=ORCHESTRATION_ACTIVITY('check-1'); check.update(activity_scope='cycle',step_id='T010',activity_type='deterministic_check',role='deterministic_check',runtime=None,requested_model=None,requested_effort=None)
+  worktree_identity={'git_common_dir':'/fixture/.git','worktree_key':'worktree-1','real_path':'/fixture/worktree','branch_ref':'refs/heads/feature','base_commit':'1'*40}
+  branch_identity={'git_common_dir':'/fixture/.git','branch_ref':'refs/heads/feature','creation_oid':'1'*40,'expected_oid':'1'*40}
+  def resource(kind,identity):
+   value=ORCHESTRATION_RESOURCE(f'{kind}-1'); value.update(kind=kind,identity=identity,creation_observation={'kind':kind,'identity':dict(identity),'source_ref':f'receipts/create-{kind}','source_sha256':'e'*64,'collected_at':CLOCK()}); return value
+  def adopt(document):
+   document['agent_orchestration']=self._orchestration_doc(contexts); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':author,'reviewer-1':reviewer,'check-1':check}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE(),'worktree-1':resource('worktree',worktree_identity),'branch-1':resource('branch',branch_identity)}; resource_1=item['resources']['resource-1']; observation=REF('receipts/observation'); resource_1['evidence_manifest']['receipts']=[observation]; resource_1['last_observation']=observation; return document
+  stored=store.transact(self.r,adopt,now=CLOCK)
+  item=store.read_snapshot(self.r).document['agent_orchestration']['work_items']['orchestration-work']
+  self.assertEqual(item['activities']['activity-1']['input_sha256'],store.jcs_sha256(item['activities']['activity-1']['input_manifest']))
+  self.assertEqual(item['resources']['branch-1']['creation_observation']['identity'],branch_identity)
+  self.assertEqual(stored.revision,store.read_snapshot(self.r).revision)
+  def append_evidence(document):
+   evidence=document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1']['evidence_manifest']; evidence['files'].append(FILE('specs/evidence.json')); evidence['receipts'].append(REF('receipts/final')); return document
+  store.transact(self.r,append_evidence,now=CLOCK)
+  def invalid(mutate):
+   with self.assertRaises(store.StoreError) as caught: store.transact(self.r,mutate,now=CLOCK)
+   self.assertEqual(caught.exception.code,'ORCHESTRATOR_INVALID')
+  invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1']['identity'].pop('handle'),document)[1])
+  invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1']['input_manifest'].update(unknown=True),document)[1])
+  invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1']['input_manifest']['files'].append(FILE(size=True)),document)[1])
+  invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1']['evidence_manifest'].update(receipts=[REF('receipts/duplicate'),REF('receipts/duplicate','f'*64)]),document)[1])
+  invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1']['evidence_manifest']['files'].pop(),document)[1])
+  invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['branch-1']['creation_observation']['identity'].update(expected_oid='2'*40),document)[1])
+  invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1'].update(input_sha256='f'*64),document)[1])
+
  def test_orchestration_epochs_scope_and_first_binding_have_closed_transitions(self):
   self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}
   store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc(contexts)},now=CLOCK)
@@ -254,7 +293,7 @@ class StoreContract(unittest.TestCase):
   class InjectedFault(RuntimeError): pass
   self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}; operations={'op-1':ORCHESTRATION_OPERATION()}
   def adopt(document):
-   document['agent_orchestration']=self._orchestration_doc(contexts,operations); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':ORCHESTRATION_ACTIVITY()}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE(),'resource-2':ORCHESTRATION_RESOURCE('resource-2')}; item['resources']['resource-2']['identity']={'handle':'term-2'}; return document
+   document['agent_orchestration']=self._orchestration_doc(contexts,operations); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':ORCHESTRATION_ACTIVITY()}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE(),'resource-2':ORCHESTRATION_RESOURCE('resource-2')}; return document
   store.transact(self.r,adopt,now=CLOCK)
   store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1'].update(state='APPLIED'),document)[1],now=CLOCK)
   def confirm(document):
@@ -274,11 +313,17 @@ class StoreContract(unittest.TestCase):
   self.assertEqual(caught.exception.code,'STORE_RECOVERY_REQUIRED')
   self.tearDown(); self.setUp(); self.register()
   def accepted(document):
-   document['agent_orchestration']=self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()}); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':ORCHESTRATION_ACTIVITY()}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE(),'resource-2':ORCHESTRATION_RESOURCE('resource-2')}; item['resources']['resource-2']['identity']={'handle':'term-2'}; return document
+   document['agent_orchestration']=self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()}); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':ORCHESTRATION_ACTIVITY()}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE(),'resource-2':ORCHESTRATION_RESOURCE('resource-2')}; return document
   store.transact(self.r,accepted,now=CLOCK)
   for state in ('BOOTSTRAPPING','VERIFIED','DISPATCHED','RESULT_RECORDED','ACCEPTED'):
    def advance(document,state=state):
-    activity=document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1']; activity.update(state=state,session_resource_id='resource-1',result_ref='receipts/result',result_sha256='d'*64,output_manifest={'artifact':'d'*64},accepted_by_context='ctx-1',acceptance_ref='receipts/acceptance',review_verdict='APPROVED'); return document
+    activity=document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1']; activity['state']=state
+    if state=='BOOTSTRAPPING': activity.update(session_resource_id='resource-1',launch_observation_ref='receipts/launch')
+    if state=='VERIFIED': activity.update(effective_model='gpt-6-astra',effective_effort='high',resolved_model_id='gpt-6-astra')
+    if state=='DISPATCHED': activity['payload_sha256']='b'*64
+    if state=='RESULT_RECORDED': activity.update(result_ref='receipts/result',result_sha256='d'*64,output_manifest={'files':[],'return_ref':REF('receipts/return'),'effect_ref':None})
+    if state=='ACCEPTED': activity.update(accepted_by_context='ctx-1',acceptance_ref='receipts/acceptance',review_verdict='APPROVED')
+    return document
    store.transact(self.r,advance,now=CLOCK)
   for updates in ({'session_resource_id':'resource-2'},{'result_ref':'receipts/replacement','result_sha256':'e'*64,'output_manifest':{'artifact':'e'*64}},{'acceptance_ref':'receipts/replacement-acceptance','review_verdict':'CHANGES_REQUIRED'}):
    with self.subTest(updates=updates), self.assertRaises(store.StoreError): store.transact(self.r,lambda document, updates=updates: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1'].update(updates),document)[1],now=CLOCK)
@@ -292,8 +337,9 @@ class StoreContract(unittest.TestCase):
    item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']['activity-1']['state']='BOOTSTRAPPING'; item['resources']['resource-1']['state']='CLOSE_PENDING'; return document
   store.transact(self.r,begin,now=CLOCK)
   def advance(document):
-   item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']['activity-1']['state']='VERIFIED'; item['resources']['resource-1']['state']='CLOSED'; return document
+   item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']['activity-1'].update(state='VERIFIED',effective_model='gpt-6-astra',effective_effort='high',resolved_model_id='gpt-6-astra'); item['resources']['resource-1']['state']='CLOSED'; return document
   store.transact(self.r,advance,now=CLOCK)
+  with self.assertRaises(store.StoreError): store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1'].update(effective_model='other-model'),document)[1],now=CLOCK)
   with self.assertRaises(store.StoreError): store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1'].update(state='REGISTERED'),document)[1],now=CLOCK)
   with self.assertRaises(store.StoreError): store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1'].update(state='ACCEPTED'),document)[1],now=CLOCK)
   with self.assertRaises(store.StoreError): store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources'].clear(),document)[1],now=CLOCK)
