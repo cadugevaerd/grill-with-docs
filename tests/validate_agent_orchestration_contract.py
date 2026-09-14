@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "plugin/skills/grill-with-docs/scripts"
@@ -215,6 +216,19 @@ class AgentOrchestrationContract(unittest.TestCase):
                 document = store.read_snapshot(root).document
                 context = document["agent_orchestration"]["work_items"]["work-x"]["contexts"][adopted["context_id"]]
                 self.assertIsNone(context["activation"]); self.assertIsNone(context["campaign"]); self.assertEqual(context["scheduler_runs"], {})
+                code, entered = self.run_cli(
+                    "gauntlet-step-enter", str(root), "--work-id", "work-x", "--context-id", adopted["context_id"],
+                    "--epoch", "1", "--session-ref", "observed-session", "--step", "implement-parallel")
+                self.assertEqual(code, 0)
+                invocation = entered["invocation_context"]
+                self.assertEqual(invocation["canonical_entrypoint"]["entrypoint"], "grill-with-docs:grill-implement-parallel")
+                for key, path in (("supplement", "references/agent-orchestration.md"),
+                                  ("task_template", "assets/task-files.v1.template.md")):
+                    body = (SCRIPTS.parent / path).read_bytes()
+                    self.assertEqual(invocation[key], {
+                        "path": f"plugin/skills/grill-with-docs/{path}",
+                        "sha256": __import__("hashlib").sha256(body).hexdigest(),
+                    })
                 checkpoint_args = ("checkpoint", str(root), "--work-id", "work-x", "--step", "specify", "--state", "in-progress", "--operation-id", "checkpoint-1", "--session-ref", "observed-session")
                 code, checkpoint = self.run_cli(*checkpoint_args)
                 self.assertEqual((code, checkpoint["code"]), (2, "ACTIVITY-REQUIRED"))
@@ -650,6 +664,40 @@ class AgentOrchestrationContract(unittest.TestCase):
         self.assertEqual(preview["preserved_task_ids"], ["T001"])
         with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "TASKS-SOURCE-STALE"):
             agent_orchestration.task_files_migration_preview(current, proposal, expected_sha256="0" * 64)
+
+        # Every mutable scheduler entrance must reject an unfinished prior
+        # phase before its own core can see the request. The CLI boundary uses
+        # its admission seam, so this regression creates no live run or worker.
+        record = {
+            "workflow": {"version": "v4"},
+            "tier_policy": {"minimum_by_step": {"implement-parallel": "medium"},
+                            "supplemental": {"markdown-maintenance": "small"}},
+            "limits": {"max_workers": 1, "stall_minutes": 15},
+            "runtime": {"id": "codex"},
+        }
+        boundaries = (
+            (grill_workspace.gauntlet_wave_declare_command.__wrapped__, "declare_wave",
+             SimpleNamespace(root=".", work_id="work", run_id="run", dag="dag.json", node_id=["p02-a"])),
+            (grill_workspace.gauntlet_worker_declare_command.__wrapped__, "declare_worker",
+             SimpleNamespace(root=".", work_id="work", run_id="run", wave_id="wave-0001", node_id="p02-a",
+                             tier="medium", files=["src/a.py"], dag="dag.json")),
+            (grill_workspace.gauntlet_prepare_worker_command.__wrapped__, "prepare_worker",
+             SimpleNamespace(root=".", work_id="work", run_id="run", worker_id="p02-a", scope=["src/a.py"])),
+            (grill_workspace.gauntlet_remediate_command.__wrapped__, "remediate_node",
+             SimpleNamespace(root=".", work_id="work", run_id="run", worker_id="p02-a", reason="stall")),
+        )
+        for command, core_action, args in boundaries:
+            with self.subTest(boundary=core_action), \
+                 mock.patch.object(grill_workspace, "gauntlet_run_admission",
+                                   return_value=(Path("."), gauntlet_runs, {}, record)), \
+                 mock.patch.object(gauntlet_runs, "task_phase_barrier",
+                                   side_effect=gauntlet_runs.GauntletRunError("TASK-PHASE-PENDING", "T001")) as guard, \
+                 mock.patch.object(gauntlet_runs, core_action,
+                                   side_effect=AssertionError(f"{core_action} bypassed task phase barrier")):
+                with self.assertRaises(grill_workspace.CliFailure) as blocked:
+                    command(args)
+                self.assertEqual(blocked.exception.code, "TASK-PHASE-PENDING")
+                guard.assert_called_once()
 
     def test_visual_gate(self):
         with tempfile.TemporaryDirectory() as temporary:
