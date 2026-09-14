@@ -216,6 +216,19 @@ class AgentOrchestrationContract(unittest.TestCase):
                 document = store.read_snapshot(root).document
                 context = document["agent_orchestration"]["work_items"]["work-x"]["contexts"][adopted["context_id"]]
                 self.assertIsNone(context["activation"]); self.assertIsNone(context["campaign"]); self.assertEqual(context["scheduler_runs"], {})
+                code, entered = self.run_cli(
+                    "gauntlet-step-enter", str(root), "--work-id", "work-x", "--context-id", adopted["context_id"],
+                    "--epoch", "1", "--session-ref", "observed-session", "--step", "implement-parallel")
+                self.assertEqual(code, 0)
+                invocation = entered["invocation_context"]
+                self.assertEqual(invocation["canonical_entrypoint"]["entrypoint"], "grill-with-docs:grill-implement-parallel")
+                for key, path in (("supplement", "references/agent-orchestration.md"),
+                                  ("task_template", "assets/task-files.v1.template.md")):
+                    body = (SCRIPTS.parent / path).read_bytes()
+                    self.assertEqual(invocation[key], {
+                        "path": f"plugin/skills/grill-with-docs/{path}",
+                        "sha256": __import__("hashlib").sha256(body).hexdigest(),
+                    })
                 checkpoint_args = ("checkpoint", str(root), "--work-id", "work-x", "--step", "specify", "--state", "in-progress", "--operation-id", "checkpoint-1", "--session-ref", "observed-session")
                 code, checkpoint = self.run_cli(*checkpoint_args)
                 self.assertEqual((code, checkpoint["code"]), (2, "ACTIVITY-REQUIRED"))
