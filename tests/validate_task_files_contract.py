@@ -100,13 +100,18 @@ class TaskFilesContract(unittest.TestCase):
             document = {"agent_orchestration": {"work_items": {"wx": item}}}
             dag_path = directory / "execution-dag.json"
             dag_path.write_text(json.dumps({"schema": "grill-gauntlet-execution-dag/v1", "feature": "030-demo",
-                "nodes": [{"id": "p01-a", "files": ["specs/030-demo/implement/p01-a.tasks.json"]}]}))
+                "max_workers": 1, "nodes": [{"id": "p01-a", "depends_on": [], "parallel": False,
+                    "tier": "medium", "files": ["specs/030-demo/implement/p01-a.tasks.json"]}]}))
             sidecar = directory / "implement/p01-a.tasks.json"
             sidecar.parent.mkdir()
             sidecar.write_text(json.dumps({"completed": ["T001"]}))
             dag_hash = hashlib.sha256(dag_path.read_bytes()).hexdigest()
+            _, _, scheduler_pin = fixtures.gauntlet_runs._load_and_validate_dag(
+                root, "specs/030-demo/execution-dag.json", agent_execute_floor="medium", markdown_floor="medium")
+            self.assertNotEqual(scheduler_pin, dag_hash)
             document["work_items"] = {"wx": {"gauntlet": {"runs": {
-                "run-old": {"state": "COMPLETE", "dag_content_sha256": dag_hash}}}}}
+                "run-old": {"state": "COMPLETE", "dag_content_sha256": scheduler_pin},
+                "run-unrelated": {"state": "COMPLETE", "dag_content_sha256": dag_hash}}}}}
             def authority(_root, work_id, context_id, epoch, session_ref):
                 try:
                     contract.require_authority(item, context_id, epoch, session_ref)
@@ -130,9 +135,10 @@ class TaskFilesContract(unittest.TestCase):
                 self.assertEqual(current.read_bytes(), before)
                 self.assertIn('+  Files: []', preview["diff"])
                 self.assertEqual(preview["files_changes"], [{"task_id": "T001", "before": None, "after": []}])
+                self.assertEqual(preview["affected_runs"], [{"run_id": "run-old", "state": "COMPLETE",
+                    "dag_content_sha256": scheduler_pin}])
                 self.assertEqual(preview["affected_dags"], [{"path": "specs/030-demo/execution-dag.json",
-                    "sha256": dag_hash, "revision": "legacy-unproven"}])
-                self.assertEqual(preview["affected_runs"][0]["run_id"], "run-old")
+                    "sha256": dag_hash, "dag_content_sha256": scheduler_pin, "revision": "legacy-unproven"}])
                 self.assertEqual(cli("--apply", "--expected-sha256", "0" * 64)[1]["code"], "TASKS-SOURCE-STALE")
                 context["epoch"] = 2
                 self.assertEqual(cli("--apply", "--expected-sha256", preview["expected_sha256"])[1]["code"], "LEADER-AUTHORITY-UNPROVEN")

@@ -266,6 +266,21 @@ class AgentOrchestrationContract(unittest.TestCase):
 
     def test_exact_native_commands_and_envelope(self):
         core = grill_workspace.grill_core_module("agent_runtime")
+        # Literal Orca capture, ctx_28bc43fcfd6c / ctco_01a0a1ab-0180-73e3-af98-5ae259c41421.
+        native = {"type": "tool-call", "name": "exec",
+                  "input": 'text(await tools.exec_command({"cmd":"/usr/bin/true","max_output_tokens":1000}));\n'}
+        output = ('Script completed\nWall time 0.1 seconds\nOutput:\n'
+                  '{"chunk_id":"c6c076","wall_time_seconds":0.000003266,"exit_code":0,"original_token_count":0,"output":""}')
+        transcript = {"messages": [
+            {"role": "assistant", "blocks": [native]},
+            {"id": "ctco_01a0a1ab-0180-73e3-af98-5ae259c41421", "role": "tool",
+             "blocks": [{"type": "tool-result", "output": output}]}]}
+        self.assertEqual(list(core._tool_results(transcript)), [(native, transcript["messages"][1]["id"], "")])
+        self.assertEqual(core._tool_command(native), ["/usr/bin/true"])
+        for altered in (native["input"] + "text('forged');", native["input"] * 2,
+                        native["input"].replace("text(await", "text(String(await"),
+                        native["input"].replace('"max_output_tokens":1000', '"command":"/usr/bin/false"')):
+            self.assertEqual(core._tool_command({**native, "input": altered}), [])
         temporary, root = self.fixture()
         with temporary, orchestration_fixture.offline_leader(grill_workspace):
             for runtime in ("codex", "claude"):
@@ -292,11 +307,20 @@ class AgentOrchestrationContract(unittest.TestCase):
                 for index in (0, 2):
                     command = messages[index]["blocks"][0]["input"][key]
                     messages[index]["blocks"][0] = {"type": "tool-call", "name": "exec",
-                        "input": "text(await tools.exec_command(" + json.dumps({"cmd": command}) + "));"}
+                        "input": "text(await tools.exec_command(" + json.dumps({"cmd": command}) + "));\n"}
                     raw = messages[index + 1]["blocks"][0]["output"]
                     messages[index + 1]["blocks"][0]["output"] = "Script completed\nWall time 0.1 seconds\nOutput:\n" + json.dumps(
                         {"exit_code": 2 if index == 0 else 0, "output": raw, "original_token_count": 100})
                 self.assertIsNotNone(core._full_read(observed, {"messages": messages}, request))
+                envelope = copy.deepcopy(messages)
+                for index in (0, 2):
+                    for altered in ("/tmp/caller/" + ("python3" if index == 0 else "cat"),
+                                    shlex.join([sys.executable, "-c", "print('forged')"]),
+                                    original[index]["blocks"][0]["input"][key] + " ; printf forged"):
+                        messages[:] = copy.deepcopy(envelope)
+                        messages[index]["blocks"][0]["input"] = "text(await tools.exec_command(" + json.dumps({"cmd": altered}) + "));\n"
+                        self.assertIsNone(core._full_read(observed, {"messages": messages}, request))
+                messages[:] = copy.deepcopy(envelope)
                 messages[0]["blocks"][0]["input"] += "text('forged');"
                 self.assertIsNone(core._full_read(observed, {"messages": messages}, request))
             listing = json.dumps({"installed": [{"pluginId": core.PRESENTATION_COMPONENT,
@@ -653,6 +677,127 @@ class AgentOrchestrationContract(unittest.TestCase):
             {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"workers": {"w": {"state": "ORPHANED"}}}}}}}},
             {"activities": {}, "resources": {}}, "work-x")
         self.assertEqual(active, []); self.assertEqual(unknown, ["worker:run-1:w"])
+
+    def test_public_continuity_resume_observes_destination_before_commit(self):
+        import validate_orchestrator_store_contract as seed
+        store = grill_workspace.grill_core_module("store")
+        core = grill_workspace.grill_core_module("agent_runtime")
+        for source_runtime, runtime in (("codex", "claude"), ("claude", "codex")):
+            temporary, root = self.fixture()
+            with temporary, self.subTest(runtime=runtime), orchestration_fixture.offline_leader(grill_workspace):
+                with mock.patch.object(grill_workspace, "_initialize_orchestration", return_value={}):
+                    code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                        "--work-id", "work-x", "--runtime", source_runtime,
+                        "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+                self.assertEqual(code, 0, payload)
+                state = grill_workspace.read_development_state(root,
+                    grill_workspace.resolve_development_item(root, "work-x"), "work-x")[1]
+                identity = grill_workspace._continuity_identity(root, "work-x", state)
+                context = seed.ORCHESTRATION_CONTEXT(state="RELEASED", leader_state="RELEASED")
+                context.update(runtime=source_runtime, adapter=source_runtime, worktree_identity=identity)
+                checkpoint = seed.ORCHESTRATION_CHECKPOINT()
+                checkpoint.update(worktree_identity=identity, accepted_outputs={"specify": {"output_sha256": "a" * 64}})
+                checkpoint["checkpoint_sha256"] = store.jcs_sha256({k: v for k, v in checkpoint.items() if k != "checkpoint_sha256"})
+                operation = seed.ORCHESTRATION_OPERATION()
+                operation.update(kind="continuity-switch", state="APPLIED", expected_before={"checkpoint_id": "checkpoint-1"},
+                                 intended_after={"to_runtime": runtime, "campaign_bridge": None})
+                item = seed.ORCHESTRATION_ITEM({"ctx-1": context}, {"op-1": operation})
+                item["policy_ref"] = "assets/agent-orchestration.v1.json"
+                item["policy_sha256"] = context["policy_sha256"] = grill_workspace.hash_bytes(
+                    (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes())
+                item.update(checkpoints={"checkpoint-1": checkpoint}, checkpoint_head="checkpoint-1")
+                store.bootstrap(root)
+                store.transact(root, lambda doc: {**doc, "agent_orchestration": {
+                    "schema": "grill-agent-orchestration/v1", "work_items": {"work-x": item}}})
+                session = "orca:ctx-destination"
+                argv = ("gauntlet-resume", str(root), "--work-id", "work-x", "--checkpoint", "checkpoint-1",
+                        "--runtime", runtime, "--session-ref", session)
+                adapter, show, transcript = orchestration_fixture.boundary(grill_workspace, root, runtime, session, "work-x")
+                request_call = transcript["result"]["transcript"]["messages"][0]["blocks"][0]
+                request_call["input"] = {"command" if runtime == "claude" else "cmd": shlex.join(
+                    [sys.executable, "-B", str(SCRIPTS / "grill_workspace.py"), *argv])}
+                def durable():
+                    return {str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+                before = durable()
+                with mock.patch.object(grill_workspace, "_continuity_effective_activation",
+                        return_value={"runtime": {"id": runtime, "adapter": runtime}}), \
+                     mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter) as observe:
+                    code, preview = self.run_cli(*argv)
+                    self.assertEqual(code, 0, preview)
+                    self.assertEqual(durable(), before)
+                    for container, key, value, expected in (
+                        (show["result"]["terminal"], "handle", "wrong-terminal", "LEADER-AUTHORITY-UNPROVEN"),
+                        (show["result"]["terminal"], "agentIdentity", source_runtime, "LEADER-AUTHORITY-UNPROVEN"),
+                        (show["result"]["terminal"], "worktreePath", "/other", "LEADER-AUTHORITY-UNPROVEN"),
+                        (show["result"]["dispatch"], "capabilityRevokedAt", "revoked", "LEADER-AUTHORITY-UNPROVEN"),
+                        (transcript["result"], "contentComplete", False, "LEADER-TRANSCRIPT-UNPROVEN"),
+                        (transcript["result"]["transcript"]["messages"][3]["blocks"][0], "output", "",
+                         "STYLE-LOAD-UNCONFIRMED"),
+                        (request_call, "input", {"command" if runtime == "claude" else "cmd": shlex.join(
+                            [sys.executable, "-B", str(SCRIPTS / "grill_workspace.py"), *argv, "--run-id", "r"])},
+                         "STYLE-LOAD-UNCONFIRMED"),
+                    ):
+                        original = container[key]
+                        container[key] = value
+                        for tail in ((), ("--apply", "--expected-sha256", preview["expected_sha256"])):
+                            code, blocked = self.run_cli(*argv, *tail)
+                            self.assertEqual((code, blocked.get("code")), (2, expected), blocked)
+                            self.assertEqual(durable(), before)
+                        container[key] = original
+                    with mock.patch.object(adapter, "read", side_effect=core.RuntimeError("LEADER-ADAPTER-UNAVAILABLE")):
+                        code, blocked = self.run_cli(*argv, "--apply", "--expected-sha256", preview["expected_sha256"])
+                    self.assertEqual((code, blocked.get("code")), (2, "LEADER-ADAPTER-UNAVAILABLE"), blocked)
+                    self.assertEqual(durable(), before)
+                    with mock.patch.object(adapter, "session_ref", "arbitrary-caller-session"):
+                        code, blocked = self.run_cli(*argv, "--apply", "--expected-sha256", preview["expected_sha256"])
+                    self.assertEqual((code, blocked.get("code")), (2, "LEADER-ADAPTER-UNSUPPORTED"), blocked)
+                    self.assertEqual(durable(), before)
+                    # Another valid native task changes the observed identity; the old preview cannot authorize it.
+                    for container in (show["result"]["dispatch"], show["result"]["projection"]):
+                        container["taskId"] = "task-successor"
+                    request_result = transcript["result"]["transcript"]["messages"][1]["blocks"][0]
+                    original_result = request_result["output"]
+                    request = json.loads(original_result)
+                    request["presentation"]["load_request"]["session_identity"] = core.leader_session_identity(adapter.observe())
+                    request_result["output"] = json.dumps(request)
+                    code, blocked = self.run_cli(*argv, "--apply", "--expected-sha256", preview["expected_sha256"])
+                    self.assertEqual((code, blocked.get("code")), (2, "ORCHESTRATION-POLICY-STALE"), blocked)
+                    self.assertEqual(durable(), before)
+                    for container in (show["result"]["dispatch"], show["result"]["projection"]):
+                        container["taskId"] = "task-fixture"
+                    request_result["output"] = original_result
+                    # A Store update after observation must fail CAS before promotion.
+                    real_transact = store.transact
+                    concurrent = None
+                    def race(write_root, mutate):
+                        nonlocal concurrent
+                        real_transact(write_root, lambda document: document)
+                        concurrent = durable()
+                        return real_transact(write_root, mutate)
+                    with mock.patch.object(store, "transact", side_effect=race):
+                        code, blocked = self.run_cli(*argv, "--apply", "--expected-sha256", preview["expected_sha256"])
+                    self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-CAS-CONFLICT"), blocked)
+                    self.assertEqual(durable(), concurrent)
+                    code, preview = self.run_cli(*argv)
+                    self.assertEqual(code, 0, preview)
+                    code, resumed = self.run_cli(*argv, "--apply", "--expected-sha256", preview["expected_sha256"])
+                    self.assertEqual((code, resumed.get("verdict")), (0, "RESUMED"), resumed)
+                    self.assertGreater(observe.call_count, 2)
+                    saved = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+                    destination = saved["contexts"][saved["current_context_id"]]
+                    observed = adapter.observe()
+                    self.assertEqual(saved["contexts"]["ctx-1"]["state"], "SUPERSEDED")
+                    self.assertEqual(destination["leader"]["incarnation"], observed["incarnation"])
+                    self.assertEqual(destination["leader"]["observation_ref"], session)
+                    self.assertEqual(destination["leader"]["observation_sha256"], observed["source_sha256"])
+                    self.assertEqual(destination["presentation"], preview["presentation"])
+                    self.assertEqual(resumed["presentation"], destination["presentation"])
+                    self.assertEqual(saved["checkpoints"]["checkpoint-1"], checkpoint)
+                    code, entered = self.run_cli("gauntlet-step-enter", str(root), "--work-id", "work-x",
+                        "--context-id", destination["context_id"], "--epoch", "2", "--session-ref", session,
+                        "--step", "implement-parallel")
+                    self.assertEqual(code, 0, entered)
+
     def boundary(self, probe=None, after=None, release=None, adapter="orca", capabilities=None, calls=None):
         probe = probe or native_sources()
         after = after or native_sources(released=True)

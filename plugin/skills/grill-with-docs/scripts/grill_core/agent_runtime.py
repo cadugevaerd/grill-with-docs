@@ -391,7 +391,7 @@ def _tool_command(call: dict[str, Any]) -> list[str]:
     value = call.get("input")
     try:
         if call.get("name") == "exec":
-            match = re.fullmatch(r"text\(await tools\.exec_command\((\{[\s\S]+\})\)\);?", value) if isinstance(value, str) else None
+            match = re.fullmatch(r"text\(await tools\.exec_command\((\{[\s\S]+\})\)\);?\n?", value) if isinstance(value, str) else None
             if not match:
                 return []
             value = json.loads(match[1])
@@ -452,14 +452,14 @@ def _load_request_command(command: list[str], observed: dict[str, Any], request:
     if len(command) < 5 or command[:3] != [sys.executable, "-B", script] or command[4] != request["scope"].get("root"):
         return False
     verb = command[3]
-    if verb not in {"preflight", "init", "gauntlet-orchestration-adopt"}:
+    if verb not in {"preflight", "init", "gauntlet-orchestration-adopt", "gauntlet-resume"}:
         return False
     fields, flags = {}, set()
     args = iter(command[5:])
     for key in args:
         if key == "--skip-backlog" and verb in {"preflight", "init"} and key not in flags:
             flags.add(key)
-        elif key in {"--runtime", "--session-ref", "--work-id", "--type", "--slug"} and key not in fields:
+        elif key in {"--runtime", "--session-ref", "--work-id", "--type", "--slug", "--checkpoint"} and key not in fields:
             fields[key] = next(args, None)
         else:
             return False
@@ -474,6 +474,10 @@ def _load_request_command(command: list[str], observed: dict[str, Any], request:
         if fields.get("--type") not in {"feature", "fix", "hotfix"} or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,80}", fields.get("--slug") or ""):
             return False
         expected.update({key: fields[key] for key in ("--type", "--slug")})
+    if verb == "gauntlet-resume":
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", fields.get("--checkpoint") or ""):
+            return False
+        expected["--checkpoint"] = fields["--checkpoint"]
     return fields == expected
 
 

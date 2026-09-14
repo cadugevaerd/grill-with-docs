@@ -3427,6 +3427,7 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-ACTIVE-WORK", ",".join(active))
     if unknown:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-QUIESCENCE-UNPROVEN", ",".join(unknown))
+    readiness = _session_readiness(root, args.runtime, args.session_ref, work_id=args.work_id)
     activation = _continuity_effective_activation(root, args.work_id, args.runtime)
     bridge = operation.get("intended_after", {}).get("campaign_bridge")
     if bridge is not None:
@@ -3448,9 +3449,10 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     preview = {"verdict": "PREVIEW", "work_id": args.work_id, "checkpoint_id": args.checkpoint,
         "from_context_id": source_id, "to_runtime": args.runtime, "accepted_outputs": copy.deepcopy(checkpoint["accepted_outputs"]),
         "pending_attempts": pending, "preserved_resources": retained, "operations_to_reconcile": reconcile,
-        "campaign": expected_campaign, "activation": activation,
+        "campaign": expected_campaign, "activation": activation, "presentation": readiness["presentation"],
         "expected_sha256": store.jcs_sha256({"revision": snapshot.revision, "checkpoint": args.checkpoint,
-            "runtime": args.runtime, "session_ref": args.session_ref, "identity": identity, "campaign": expected_campaign}),
+            "runtime": args.runtime, "session_ref": args.session_ref, "identity": identity,
+            "campaign": expected_campaign, "readiness": readiness}),
         **_coordinator_response(args.runtime)}
     if not args.apply:
         return preview, EXIT_OK
@@ -3461,6 +3463,8 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     result_sha = store.jcs_sha256({"checkpoint": args.checkpoint, "from_context": source_id,
         "to_context": context_id, "campaign": expected_campaign, "accepted_outputs": checkpoint["accepted_outputs"]})
     def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        if document["revision"] != snapshot.revision:
+            raise store.StoreError(store.STATE_DIVERGENCE, "continuity inputs changed during observation")
         target = document["agent_orchestration"]["work_items"][args.work_id]
         current = target["contexts"].get(source_id)
         existing = target["contexts"].get(context_id)
@@ -3479,9 +3483,10 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
             "predecessor_context_id": source_id, "continuity_ref": operation_id, "runtime": args.runtime,
             "adapter": activation["runtime"]["adapter"], "activation": copy.deepcopy(activation),
             "campaign": copy.deepcopy(expected_campaign), "scheduler_runs": copy.deepcopy(current["scheduler_runs"]),
-            "leader": {"owner_id": context_id, "session_ref": args.session_ref, "incarnation": None,
-                "fence": next_epoch, "epoch": next_epoch, "state": "ACTIVE", "observation_ref": None,
-                "observation_sha256": None}, "state": "ACTIVE", "policy_sha256": current["policy_sha256"],
+            "leader": {"owner_id": context_id, "session_ref": args.session_ref, "incarnation": readiness["incarnation"],
+                "fence": next_epoch, "epoch": next_epoch, "state": "ACTIVE", "observation_ref": readiness["ref"],
+                "observation_sha256": readiness["sha256"]}, "state": "ACTIVE", "policy_sha256": current["policy_sha256"],
+            "presentation": copy.deepcopy(readiness["presentation"]),
             "inputs_sha256": current["inputs_sha256"], "worktree_identity": copy.deepcopy(identity)}
         current["state"] = "SUPERSEDED"
         current_operation.update({"state": "CONFIRMED", "result_ref": result_ref, "result_sha256": result_sha,
@@ -3495,8 +3500,8 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     return {"verdict": "RESUMED", "work_id": args.work_id, "checkpoint_id": args.checkpoint,
         "context_id": context_id, "epoch": snapshot.document["agent_orchestration"]["work_items"][args.work_id]["contexts"][source_id]["epoch"] + 1,
         "campaign": expected_campaign, "pending_attempts": pending, "preserved_resources": retained,
-        "operations_to_reconcile": reconcile, "store_revision": committed.revision,
-        **_coordinator_response(args.runtime)}
+        "operations_to_reconcile": reconcile, "store_revision": committed.revision, "presentation": readiness["presentation"],
+        **_coordinator_response(args.runtime)}, EXIT_OK
 
 
 @_gauntlet_authorized
@@ -3913,8 +3918,9 @@ def task_files_migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any]
             if dag.get("schema") == "grill-gauntlet-execution-dag/v2" and dag.get("tasks_semantic_sha256") != semantic:
                 continue
             affected_dags.append({"path": path.relative_to(root).as_posix(), "sha256": hash_bytes(raw),
+                                  "dag_content_sha256": store.jcs_sha256(dag),
                                   "revision": "current" if semantic is not None and dag.get("tasks_semantic_sha256") == semantic else "legacy-unproven"})
-        dag_hashes = {entry["sha256"] for entry in affected_dags}
+        dag_hashes = {entry["dag_content_sha256"] for entry in affected_dags}
         runs = document.get("work_items", {}).get(args.work_id, {}).get("gauntlet", {}).get("runs", {})
         affected_runs = [{"run_id": run_id, "state": run["state"], "dag_content_sha256": run["dag_content_sha256"]}
                          for run_id, run in sorted(runs.items()) if run.get("dag_content_sha256") in dag_hashes]
