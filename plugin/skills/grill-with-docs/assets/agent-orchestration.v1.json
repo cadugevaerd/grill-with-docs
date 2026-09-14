@@ -46,15 +46,16 @@
   },
   "task_contract": {
     "marker": "grill-task-files:v1",
-    "result_per_writing_task": true,
+    "result_for_dispatchable_writing_task": true,
     "result_must_be_declared_in_files": true,
+    "leader_reserved_evidence": "deferred_to_leader_without_result",
     "phase_order": "workers_then_read_only_or_deferred",
     "no_workers": "PARTITION-NO-WORKERS",
     "adoption_required": true
   },
   "references": {
-    "protocol": {"path": "plugin/skills/grill-with-docs/references/agent-orchestration.md", "sha256": "sha256:c42b59d025becab2c6e0d493c2262cfe1ad40e632665367d4b4ad877a0225dab"},
-    "task_files_template": {"path": "plugin/skills/grill-with-docs/assets/task-files.v1.template.md", "sha256": "sha256:1f6d1d5ced9a10b21245f619b50bcb5f4bef5b00de4af8b011aea6584d45449f"}
+    "protocol": {"path": "plugin/skills/grill-with-docs/references/agent-orchestration.md", "sha256": "sha256:3d62ca9a21f4192d33a2bb2c6b8284b87abf44262d7f073f70e6886a2d2e9b6c"},
+    "task_files_template": {"path": "plugin/skills/grill-with-docs/assets/task-files.v1.template.md", "sha256": "sha256:4961ec90bd4c31b09aaecd00ed14cf28a7caa927081cdf50110bcc6b5a380eee"}
   },
   "presentation": {
     "schema": "grill-gwd-presentation/v1",

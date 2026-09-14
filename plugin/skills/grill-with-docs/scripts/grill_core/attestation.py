@@ -535,6 +535,17 @@ def guard_capability_access(invocation_started: Mapping[str, Any] | None, *, cap
         raise _policy_violation(step_id=step_id, capability=capability)
 
 
+def require_activity_coverage(coverage: Mapping[str, Any], *, step_id: str) -> None:
+    """A delivered supplement is context, not a substitute for its author."""
+    if not isinstance(coverage, Mapping):
+        raise _blocked("ACTIVITY_REQUIRED", step_id=step_id)
+    missing = coverage.get("missing")
+    if not isinstance(missing, list) or any(not isinstance(role, str) for role in missing):
+        raise _blocked("ACTIVITY_REQUIRED", step_id=step_id)
+    if missing:
+        raise _blocked("ACTIVITY_REQUIRED", step_id=step_id, missing=sorted(missing))
+
+
 # --------------------------------------------------------------------------
 # the chain judge (plan 4.1)
 # --------------------------------------------------------------------------
@@ -1123,6 +1134,7 @@ def judge_checkpoint_attestation(
     step_id: str,
     campaign: Mapping[str, Any] | None = None,
     predecessor_output: Mapping[str, Any] | None = None,
+    campaign_bridge: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate the only receipt form that may complete a v3 checkpoint.
 
@@ -1154,7 +1166,14 @@ def judge_checkpoint_attestation(
         "plan_revision": dispatch.get("plan_revision"),
     })
     if campaign is not None and _checkpoint_campaign(campaign) != observed:
-        raise _stale_output("CHECKPOINT_CAMPAIGN_STALE", expected=dict(campaign), actual=observed)
+        bridge = campaign_bridge if isinstance(campaign_bridge, Mapping) else None
+        expected_bridge = {"from_campaign", "to_campaign", "accepted_outputs", "worktree_identity"}
+        if (bridge is None or set(bridge) != expected_bridge
+                or _checkpoint_campaign(bridge["from_campaign"]) != _checkpoint_campaign(campaign)
+                or _checkpoint_campaign(bridge["to_campaign"]) != observed
+                or not isinstance(bridge["accepted_outputs"], Mapping)
+                or not isinstance(bridge["worktree_identity"], Mapping)):
+            raise _stale_output("CHECKPOINT_CAMPAIGN_STALE", expected=dict(campaign), actual=observed)
     expected = {**observed, "work_item_id": work_item_id, "step_id": step_id}
     authorization = bundle.get("human_authorization")
     if resolution.get("human_authorization_required"):

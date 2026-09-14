@@ -1,0 +1,18 @@
+{
+  "schema": "grill-task-result/v1",
+  "worker": "p05-a",
+  "feature": "030-agent-orchestration",
+  "completed": ["T010", "T011"],
+  "tasks": {
+    "T010": {
+      "status": "done",
+      "summary": "Added the durable gauntlet-activity prepare, dispatch, and accept path. It admits only the exact Codex Astra/xhigh or Claude fable/xhigh pair, keeps bootstrap payload-free, binds technical payloads to activity/context/fence/input digest, read-backs before a dispatch retry, revalidates returns, records result before close, and retains no leader/worker fallback.",
+      "evidence": "Overlay from 84d6fd241ef76c355f7bdcf68a20f65f72518e5b: PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_specialist_admission passed. A focused temporary Store lifecycle also passed prepare -> dispatch -> read-back reuse -> result-recorded -> accepted close with correlated session resource."
+    },
+    "T011": {
+      "status": "done",
+      "summary": "Added gauntlet-step-enter with a resolved canonical entrypoint and policy-verified supplemental/template descriptors, while preserving the eleven canonical entries. Policy coverage now rejects direct checkpoint or attest bypasses for specify, plan, and tasks until accepted required activities exist; delivered context remains explicitly non-invocation evidence.",
+      "evidence": "Overlay from 84d6fd241ef76c355f7bdcf68a20f65f72518e5b: PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_activity_coverage passed; full validate_agent_orchestration_contract.py ran 18 tests OK; validate_attestation_emitter_contract.py ran 56 tests OK."
+    }
+  }
+}

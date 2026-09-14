@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import contextlib
 import errno
+import functools
 import hashlib
 import importlib.util
 import io
@@ -1464,6 +1466,277 @@ def backlog_migrate_command(args: argparse.Namespace) -> tuple[dict[str, Any], i
     return _projection_command(args, "migrate")
 
 
+def _orchestration_origin(root: Path, item: Path, work_id: str) -> dict[str, Any]:
+    state_path, state = read_development_state(root, item, work_id)
+    state_bytes = safe_read_regular_fd(root, state_path)
+    bundle = read_local_bundle(root, item)
+    return {
+        "state_sha256": hash_bytes(state_bytes),
+        "metadata_sha256": hash_bytes(canonical(bundle.metadata)),
+        "activation": state.get("activation"), "campaign": state.get("attestation_campaign"),
+        "lifecycle": bundle.metadata.get("lifecycle"),
+        "worktree": {"root": str(root), "branch": git_optional(root, "branch", "--show-current") or "DETACHED"},
+    }
+
+
+def _orchestration_inputs(root: Path, work_id: str, runtime: str, session_ref: str | None,
+                          scope_files: list[str]) -> tuple[Any, dict[str, Any]]:
+    item = resolve_development_item(root, work_id)
+    contract = grill_core_module("agent_orchestration")
+    try:
+        inputs = contract.adoption_inputs(work_id=work_id, runtime=runtime, session_ref=session_ref,
+                                          scope_files=scope_files, origin=_orchestration_origin(root, item, work_id))
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ORCHESTRATION-ADOPTION", str(exc)) from exc
+    return contract, inputs
+
+
+def _initialize_orchestration(root: Path, work_id: str, runtime: str, session_ref: str | None) -> dict[str, Any]:
+    """New init persists its observed session when supplied; it never invents one."""
+    contract, inputs = _orchestration_inputs(root, work_id, runtime, session_ref, [])
+    store = grill_core_module("store")
+    policy = ASSETS / "agent-orchestration.v1.json"
+    policy_bytes = policy.read_bytes()
+    policy_ref = "assets/agent-orchestration.v1.json"
+    policy_sha256 = hash_bytes(policy_bytes)
+    store.bootstrap(root)
+    try:
+        snapshot = store.transact(root, lambda document: _bind_orchestration(
+            document, work_id, contract.new_work_item(inputs, policy_ref=policy_ref,
+            policy_sha256=policy_sha256, adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            context_id=f"ctx-{contract.adoption_sha256(inputs)[:12]}" if session_ref else None)))
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    return {"store_revision": snapshot.revision, "orchestration": "INITIALIZED"}
+
+
+def _bind_orchestration(document: dict[str, Any], work_id: str, item: dict[str, Any]) -> dict[str, Any]:
+    block = document.get("agent_orchestration")
+    if block is None:
+        document["agent_orchestration"] = {"schema": "grill-agent-orchestration/v1", "work_items": {work_id: item}}
+        return document
+    existing = block["work_items"].get(work_id)
+    if existing is None:
+        block["work_items"][work_id] = item
+    return document
+
+
+def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    root = project_root(args.root)
+    contract, inputs = _orchestration_inputs(root, args.work_id, args.runtime, args.session_ref, args.scope_file or [])
+    expected = contract.adoption_sha256(inputs)
+    preview = {"verdict": "PREVIEW", "work_id": args.work_id, "expected_sha256": expected,
+               "origin": inputs["origin"], "scope_files": inputs["scope_files"],
+               "limitations": ["does not rewrite legacy state, activation, campaign or receipts"]}
+    if not args.apply:
+        return preview, EXIT_OK
+    if args.expected_sha256 != expected:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "expected_sha256 does not match reread adoption inputs")
+    store = grill_core_module("store")
+    policy = ASSETS / "agent-orchestration.v1.json"
+    policy_bytes = policy.read_bytes()
+    policy_ref, policy_sha256 = "assets/agent-orchestration.v1.json", hash_bytes(policy_bytes)
+    existing_snapshot = store.read_snapshot(root, required=False)
+    if existing_snapshot is not None:
+        existing = existing_snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
+        current = existing.get("contexts", {}).get(existing.get("current_context_id")) if isinstance(existing, dict) else None
+        if (isinstance(existing, dict) and existing.get("origin") == inputs["origin"]
+                and existing.get("policy_sha256") == policy_sha256 and existing.get("scope_files") == inputs["scope_files"]
+                and isinstance(current, dict) and current.get("runtime") == args.runtime
+                and current.get("leader", {}).get("session_ref") == args.session_ref):
+            return {"verdict": "REUSED", "work_id": args.work_id, "context_id": existing["current_context_id"],
+                    "expected_sha256": expected, "store_revision": existing_snapshot.revision}, EXIT_OK
+    store.bootstrap(root)
+    context_id = f"ctx-{expected[:12]}"
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        block = document.get("agent_orchestration")
+        if block is None or args.work_id not in block["work_items"]:
+            return _bind_orchestration(document, args.work_id, contract.new_work_item(
+                inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
+                adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), context_id=context_id))
+        item = block["work_items"][args.work_id]
+        if item["origin"] != inputs["origin"] or item["policy_sha256"] != policy_sha256:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
+        current = item.get("contexts", {}).get(item.get("current_context_id"))
+        if current is not None and (current.get("runtime") != args.runtime or current.get("leader", {}).get("session_ref") != args.session_ref):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "existing context has different runtime or session")
+        if item["scope_files"] != inputs["scope_files"]:
+            item["scope_revision"] += 1
+            item["scope_files"] = inputs["scope_files"]
+            item["scope_history"].append({"revision": item["scope_revision"], "files": inputs["scope_files"],
+                                          "inputs_sha256": expected})
+        if current is None:
+            replacement = contract.new_work_item(inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
+                                                 adopted_at=item["adopted_at"], context_id=context_id)
+            replacement["scope_revision"], replacement["scope_history"] = item["scope_revision"], item["scope_history"]
+            block["work_items"][args.work_id] = replacement
+        return document
+    try:
+        snapshot = store.transact(root, mutate)
+    except CliFailure:
+        raise
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    committed_context_id = snapshot.document["agent_orchestration"]["work_items"][args.work_id]["current_context_id"]
+    return {"verdict": "ORCHESTRATION-ADOPTED", "work_id": args.work_id, "context_id": committed_context_id,
+            "expected_sha256": expected, "store_revision": snapshot.revision}, EXIT_OK
+
+
+def _checkpoint_ref(root: Path, value: str | None) -> dict[str, str] | None:
+    if value is None:
+        return None
+    path = Path(value)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-EVIDENCE-PATH", value)
+    full = root / path
+    if not full.is_file() or full.is_symlink():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "EVIDENCE-MISSING", value)
+    return {"ref": path.as_posix(), "sha256": hash_bytes(safe_read_regular_fd(root, full))}
+
+
+def _cleanup_checkpoint_projection(root: Path, work_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Capture already-known cleanup obligations without probing or mutating."""
+    gauntlet_runs = grill_core_module("gauntlet_runs")
+    projection = gauntlet_runs.cleanup_projection(root, work_id)
+    pending = {
+        f"{entry['run_id']}:{entry['worker_id']}": entry
+        for entry in projection["pending"]
+    }
+    preserved = {
+        f"{entry['run_id']}:{entry['worker_id']}": entry
+        for entry in projection["preserved"]
+    }
+    return pending, preserved
+
+
+def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: bytes,
+                                    state: dict[str, Any], args: argparse.Namespace,
+                                    payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Use the v2 Store WAL only for an already-adopted work item.
+
+    Legacy checkpoints keep their established bytes and transition behavior;
+    an adopted item must provide a stable operation id and the bound session.
+    """
+    store = grill_core_module("store")
+    snapshot = store.read_snapshot(root, required=False)
+    if snapshot is None:
+        return None
+    block = snapshot.document.get("agent_orchestration")
+    item = block.get("work_items", {}).get(args.work_id) if isinstance(block, dict) else None
+    if item is None:
+        return None
+    if not getattr(args, "operation_id", None):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "OPERATION-ID-REQUIRED", args.work_id)
+    if not getattr(args, "session_ref", None):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "session_ref is required")
+    contract = grill_core_module("agent_orchestration")
+    context_id = item.get("current_context_id")
+    context = item.get("contexts", {}).get(context_id)
+    try:
+        if not isinstance(context, dict):
+            raise contract.OrchestrationError("no current context")
+        contract.require_authority(item, context_id, context["epoch"], args.session_ref)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+    existing = item.get("operations", {}).get(args.operation_id)
+    prior_origin = existing.get("request", {}).get("store_origin") if isinstance(existing, dict) else None
+    evidence = sorted(({"path": record["path"], "sha256": record["sha256"]} for record in payload["evidence"]), key=lambda record: record["path"])
+    request = contract.checkpoint_request(
+        store_origin=prior_origin if isinstance(prior_origin, dict) else {"revision": snapshot.revision, "content_sha256": snapshot.content_sha256},
+        work_id=args.work_id, operation_id=args.operation_id, context_id=context_id,
+        step=args.step, state=args.state, evidence=evidence, reason=payload["reason"],
+        attestation=_checkpoint_ref(root, args.attestation),
+        supersedes_attestation=_checkpoint_ref(root, args.supersedes_attestation),
+        initialize_legacy=bool(args.initialize_legacy), from_step=args.from_step,
+    )
+    if existing is not None:
+        if existing.get("request") != request:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "OPERATION-ID-COLLISION", args.operation_id)
+        if existing.get("state") != "CONFIRMED" or not isinstance(existing.get("content_ref"), str):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "OPERATION-RECOVERY-REQUIRED", args.operation_id)
+        content_path = root / existing["content_ref"]
+        try:
+            content = json.loads(safe_read_regular_fd(root, content_path).decode("utf-8"))
+            contract.validate_checkpoint_content(content)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, contract.OrchestrationError) as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CONTENT-INVALID", args.operation_id) from exc
+        if contract.checkpoint_content_sha256(content) != existing.get("result_sha256"):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CONTENT-INVALID", args.operation_id)
+        return {"verdict": "REUSED", "work_id": args.work_id, **content["result"], "store_revision": snapshot.revision}
+    state_after = (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
+    relative_state = state_path.relative_to(root).as_posix()
+    checkpoint_id = "cp-" + store.jcs_sha256({"store_origin": request["store_origin"], "work_id": args.work_id, "operation_id": args.operation_id})
+    cleanup_obligations, preserved_resources = _cleanup_checkpoint_projection(root, args.work_id)
+    accepted_campaign = context["campaign"]
+    development_campaign = state.get("development", {}).get("attestation_campaign")
+    if accepted_campaign is None and isinstance(development_campaign, dict):
+        accepted_campaign = development_campaign
+    elif accepted_campaign is not None and isinstance(development_campaign, dict) and accepted_campaign != development_campaign:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CAMPAIGN-DIVERGENT", args.work_id)
+    checkpoint = {
+        "schema": contract.CHECKPOINT_SCHEMA, "checkpoint_id": checkpoint_id, "context_id": context_id,
+        "previous_checkpoint_id": item.get("checkpoint_head"), "worktree_identity": context.get("worktree_identity", {}),
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "store_revision": snapshot.revision + 1,
+        "journal_anchor": snapshot.document["journal_head"], "state_sha256": hash_bytes(state_after),
+        "inputs_manifest": {"evidence": evidence}, "workflow_sha256": context["inputs_sha256"],
+        "constitution_sha256": item["origin"]["metadata_sha256"], "policy_sha256": item["policy_sha256"],
+        "activation": context["activation"], "campaign": accepted_campaign,
+        "development_sequence": state.get("development", {}).get("sequence", []),
+        "current_step": state.get("development", {}).get("current_step"), "step_states": state.get("development", {}).get("steps", {}),
+        "accepted_outputs": state.get("development", {}).get("attested_outputs", {}),
+        "accepted_executions": state.get("development", {}).get("attested_executions", {}),
+        "pending_attempts": {}, "scheduler_runs": context["scheduler_runs"], "operations": item["operations"],
+        "cleanup_obligations": cleanup_obligations, "preserved_resources": preserved_resources,
+        "blocking_activity": None, "visual_state": {},
+        "presentation": context.get("presentation"), "checkpoint_sha256": "",
+    }
+    checkpoint["checkpoint_sha256"] = store.jcs_sha256({key: value for key, value in checkpoint.items() if key != "checkpoint_sha256"})
+    import base64
+    state_write = {"work_id": args.work_id, "destination": relative_state, "before_sha256": hash_bytes(state_before),
+                   "after_base64": base64.b64encode(state_after).decode("ascii"), "after_sha256": hash_bytes(state_after),
+                   "expected_store_revision": snapshot.revision, "expected_journal_anchor": snapshot.document["journal_head"]}
+    result = {"work_id": args.work_id, "context_id": context_id, "epoch": context["epoch"], "operation_id": args.operation_id,
+              "checkpoint_id": checkpoint_id, "step": args.step, "state": args.state, "evidence": evidence,
+              "reason": payload["reason"], "execution_branch": payload.get("execution_branch"),
+              "supersedes": _checkpoint_ref(root, args.supersedes_attestation),
+              "current_step": state.get("development", {}).get("current_step")}
+    content = {"schema": contract.CHECKPOINT_CONTENT_SCHEMA, "work_id": args.work_id, "operation_id": args.operation_id,
+               "request": request, "checkpoint": checkpoint, "before_base64": base64.b64encode(state_before).decode("ascii"),
+               "state_write": state_write, "binding_transition": None, "result": result}
+    digest = contract.checkpoint_content_sha256(content)
+    content_ref = f".grill/work-items/{args.work_id}/agent-orchestration/checkpoints/{args.operation_id}.json"
+    operation = {"kind": "checkpoint", "context_id": context_id, "fence": context["leader"]["fence"], "subject_ids": [relative_state],
+                 "input_sha256": store.jcs_sha256(request), "expected_before": {"state_sha256": state_write["before_sha256"]},
+                 "intended_after": {"state_sha256": state_write["after_sha256"]}, "idempotency_key": args.operation_id,
+                 "state": "CONFIRMED", "result_ref": content_ref, "result_sha256": digest, "observation_ref": content_ref,
+                 "error": None, "request": request, "content_ref": content_ref}
+    receipt = {"schema": "grill-orchestration-receipt/v1", "category": "runtime", "name": "checkpoint-" + checkpoint_id,
+               "work_id": args.work_id, "context_id": context_id, "operation_id": args.operation_id,
+               "input_sha256": operation["input_sha256"], "output_sha256": digest}
+    event = {"schema": "grill-orchestration-event/v1", "event": "agent.orchestration.checkpoint", "work_id": args.work_id,
+             "context_id": context_id, "operation_id": args.operation_id, "input_sha256": operation["input_sha256"],
+             "output_sha256": digest, "receipt_sha256": store.jcs_sha256(receipt)}
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        target = document["agent_orchestration"]["work_items"][args.work_id]
+        if args.operation_id in target["operations"]:
+            raise store.StoreError(store.STATE_DIVERGENCE, "checkpoint operation appeared during commit")
+        target["operations"][args.operation_id] = operation
+        target_context = target["contexts"][context_id]
+        if target_context["campaign"] is None and accepted_campaign is not None:
+            target_context["campaign"] = accepted_campaign
+        elif target_context["campaign"] != accepted_campaign:
+            raise store.StoreError(store.STATE_DIVERGENCE, "checkpoint campaign changed before commit")
+        target["checkpoints"][checkpoint_id] = checkpoint
+        target["checkpoint_head"] = checkpoint_id
+        return document
+    try:
+        committed = store.transact_checkpoint_with_content(root, mutate, event=event, receipt=receipt,
+                                                           content_ref=content_ref, content=content)
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    return {"verdict": "UPDATED", "work_id": args.work_id, **result, "store_revision": committed.revision}
+
+
 def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     if args.type not in KINDS or not SLUG_RE.fullmatch(args.slug):
@@ -1471,6 +1744,8 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     work_id = args.work_id or f"{args.type}-{args.slug}-{uuid.uuid4().hex}"
     if not WORK_ID_RE.fullmatch(work_id):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", work_id)
+    if not args.session_ref:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "session_ref is required before init effects")
     workflow = ensure_project_workflow(root)
     goal = ensure_project_goal(root)
     dependencies = dependency_report(
@@ -1506,7 +1781,8 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             immutable = validate_metadata(bundle.metadata, work_id)
             if immutable.get("type") != args.type or immutable.get("slug") != args.slug:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-DIVERGENCE", work_id)
-            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint, **environment}, EXIT_OK
+            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
+                    **_initialize_orchestration(root, work_id, args.runtime, getattr(args, "session_ref", None)), **environment}, EXIT_OK
         constitution_created, constitution_hash = ensure_managed_constitution(root)
         immutable = immutable_metadata(root, args, work_id)
         files = initial_files(root, work_id, immutable, goal, backlog_skipped=skipped_backlog)
@@ -1522,11 +1798,13 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             immutable = validate_metadata(bundle.metadata, work_id)
             if immutable.get("type") != args.type or immutable.get("slug") != args.slug:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-DIVERGENCE", work_id)
-            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint, **environment}, EXIT_OK
+            return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
+                    **_initialize_orchestration(root, work_id, args.runtime, getattr(args, "session_ref", None)), **environment}, EXIT_OK
         bundle = read_local_bundle(root, target)
         return {"status": "CREATED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
                 "constitution": "CREATED" if constitution_created else "PRESERVED", "constitution_sha256": constitution_hash,
                 "backlog_skipped": skipped_backlog,
+                **_initialize_orchestration(root, work_id, args.runtime, getattr(args, "session_ref", None)),
                 **environment}, EXIT_OK
     finally:
         if lock is not None:
@@ -2695,6 +2973,36 @@ def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[st
             os.close(grill_fd)
 
 
+def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str, Any], int]]) -> Callable[[argparse.Namespace], tuple[dict[str, Any], int]]:
+    """Require the adopted context fence around a mutable Gauntlet command."""
+    @functools.wraps(handler)
+    def wrapped(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+        root = project_root(args.root)
+        # ``gauntlet_runs`` owns the Store module identity on the direct-file
+        # CLI path.  Its ContextVar must be set on that exact module, not a
+        # second sibling import with an identical filename.
+        store = grill_core_module("gauntlet_runs").store
+        snapshot = store.read_snapshot(root, required=False)
+        block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+        item = block.get("work_items", {}).get(args.work_id) if isinstance(block, dict) else None
+        if item is None:
+            return handler(args)
+        context_id = item.get("current_context_id")
+        context = item.get("contexts", {}).get(context_id)
+        session_ref = getattr(args, "session_ref", None)
+        if not isinstance(context, dict) or not isinstance(session_ref, str):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
+        try:
+            with store.orchestration_authority(
+                root, args.work_id, context_id=context_id, epoch=context["epoch"], session_ref=session_ref,
+            ):
+                return handler(args)
+        except store.StoreError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    return wrapped
+
+
+@_gauntlet_authorized
 def gauntlet_run_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
     try:
@@ -2705,6 +3013,14 @@ def gauntlet_run_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]
 
 
 def gauntlet_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    if args.checkpoint is not None or args.runtime is not None:
+        if args.run_id is not None or args.checkpoint is None or args.runtime is None:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "choose scheduler recovery or continuity resume")
+        return continuity_resume_command(args)
+    return _gauntlet_authorized(_gauntlet_scheduler_resume_command)(args)
+
+
+def _gauntlet_scheduler_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     # Retain the FASE-001 control boundary for callers that did not select a
     # durable run.  FASE-002 recovery is deliberately opt-in via --run-id.
     if args.run_id is None:
@@ -2720,6 +3036,290 @@ def gauntlet_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any], i
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+def _continuity_identity(root: Path, work_id: str, state: dict[str, Any]) -> dict[str, str]:
+    """The identity a CLI switch may preserve; no branch or worktree migration."""
+    store = grill_core_module("store")
+    project = store.project_identity(root)
+    branch = git_optional(root, "branch", "--show-current")
+    if not branch:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "detached HEAD")
+    phase = state.get("active_phase") or state.get("development", {}).get("current_step") or "unassigned"
+    return {"project_id": project["project_id"], "work_id": work_id, "phase": str(phase),
+            "du": "work-item", "git_common_dir": project["git_common_dir"],
+            "real_path": str(root.resolve()), "branch": branch}
+
+
+def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_id: str) -> tuple[list[str], list[str]]:
+    """Only explicit terminal observations are quiet; lease expiry and silence are ignored."""
+    active, unknown = [], []
+    for activity_id, activity in item.get("activities", {}).items():
+        if activity.get("state") in {"BOOTSTRAPPING", "VERIFIED", "DISPATCHED", "RESULT_RECORDED"}:
+            active.append("activity:" + activity_id)
+    for resource_id, resource in item.get("resources", {}).items():
+        if resource.get("kind") == "session" and resource.get("state") == "UNKNOWN":
+            unknown.append("session:" + resource_id)
+    runs = document.get("work_items", {}).get(work_id, {}).get("gauntlet", {}).get("runs", {})
+    worker_active, worker_unknown = grill_core_module("gauntlet_runs").continuity_worker_quiescence(runs)
+    return sorted(active + worker_active), sorted(unknown + worker_unknown)
+
+
+def _continuity_operation(item: dict[str, Any], context_id: str, to_runtime: str) -> tuple[str, dict[str, Any]] | None:
+    matches = [(operation_id, operation) for operation_id, operation in item.get("operations", {}).items()
+               if operation.get("kind") == "continuity-switch" and operation.get("context_id") == context_id
+               and operation.get("intended_after", {}).get("to_runtime") == to_runtime]
+    if len(matches) > 1:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "ambiguous switch operation")
+    return matches[0] if matches else None
+
+
+def _continuity_checkpoint(item: dict[str, Any], *, operation_id: str, context_id: str,
+                           identity: dict[str, str], store_revision: int, journal_anchor: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    contract = grill_core_module("agent_orchestration")
+    store = grill_core_module("store")
+    head = item.get("checkpoint_head")
+    if not isinstance(head, str) or head not in item.get("checkpoints", {}):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-CHECKPOINT-MISSING", "no committed checkpoint")
+    checkpoint_id = "cp-" + operation_id
+    existing = item["checkpoints"].get(checkpoint_id)
+    if isinstance(existing, dict):
+        return checkpoint_id, existing
+    checkpoint = copy.deepcopy(item["checkpoints"][head])
+    checkpoint.update({"checkpoint_id": checkpoint_id, "context_id": context_id,
+                       "previous_checkpoint_id": head, "worktree_identity": copy.deepcopy(identity),
+                       "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                       "store_revision": store_revision, "journal_anchor": copy.deepcopy(journal_anchor),
+                       "checkpoint_sha256": ""})
+    checkpoint["checkpoint_sha256"] = store.jcs_sha256({key: value for key, value in checkpoint.items()
+                                                          if key != "checkpoint_sha256"})
+    try:
+        contract.validate_block({"schema": contract.SCHEMA, "work_items": {"x": {**item,
+            "checkpoints": {**item["checkpoints"], checkpoint_id: checkpoint}, "checkpoint_head": checkpoint_id}}})
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", str(exc)) from exc
+    return checkpoint_id, checkpoint
+
+
+def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    root = project_root(args.root)
+    store = grill_core_module("store")
+    contract = grill_core_module("agent_orchestration")
+    snapshot = store.read_snapshot(root, required=True)
+    item = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
+    if not isinstance(item, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-MIGRATION-REQUIRED", args.work_id)
+    context_id = args.context_id
+    context = item.get("contexts", {}).get(context_id)
+    if (not isinstance(context, dict) or item.get("current_context_id") != context_id
+            or context.get("epoch") != args.epoch or context.get("leader", {}).get("session_ref") != args.session_ref
+            or context.get("state") not in {"ACTIVE", "QUIESCING"}):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
+    identity = _continuity_identity(root, args.work_id, read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1])
+    if context.get("worktree_identity") not in (None, identity):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "worktree identity changed")
+    operation_entry = _continuity_operation(item, context_id, args.to_runtime)
+    if operation_entry is None:
+        source_checkpoint = item.get("checkpoint_head")
+        if not isinstance(source_checkpoint, str) or source_checkpoint not in item.get("checkpoints", {}):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-CHECKPOINT-MISSING", args.work_id)
+        operation_id = "switch-" + hashlib.sha256(canonical({"context": context_id, "checkpoint": source_checkpoint,
+            "to_runtime": args.to_runtime})).hexdigest()[:24]
+        checkpoint_id = "cp-" + operation_id
+        source_campaign = context.get("campaign")
+        if source_campaign is None and isinstance(item.get("checkpoints", {}).get(source_checkpoint), dict):
+            source_campaign = item["checkpoints"][source_checkpoint].get("campaign")
+        bridge = None
+        if source_campaign is not None:
+            try:
+                destination_adapter = grill_core_module("gauntlet").ADAPTER_BY_RUNTIME[args.to_runtime]
+                successor = contract.successor_campaign(source_campaign, runtime=args.to_runtime,
+                    adapter=destination_adapter, registry_sha256=source_campaign["registry_sha256"],
+                    bridge_seed={"context": context_id, "checkpoint": checkpoint_id})
+                bridge = contract.campaign_bridge(source_campaign, successor,
+                    accepted_outputs=item["checkpoints"][source_checkpoint]["accepted_outputs"], worktree_identity=identity)
+            except (KeyError, contract.OrchestrationError) as exc:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", str(exc)) from exc
+        request = {"context_id": context_id, "checkpoint_id": checkpoint_id, "to_runtime": args.to_runtime,
+                   "worktree_identity": identity, "campaign_bridge": bridge}
+        operation = {"kind": "continuity-switch", "context_id": context_id, "fence": context["leader"]["fence"],
+            "subject_ids": [context_id, checkpoint_id], "input_sha256": store.jcs_sha256(request),
+            "expected_before": {"checkpoint_id": checkpoint_id, "worktree_identity": copy.deepcopy(identity)},
+            "intended_after": {"to_runtime": args.to_runtime, "campaign_bridge": bridge},
+            "idempotency_key": operation_id, "state": "INTENT", "result_ref": None, "result_sha256": None,
+            "observation_ref": None, "error": None}
+    else:
+        operation_id, operation = operation_entry
+        checkpoint_id = operation.get("expected_before", {}).get("checkpoint_id")
+        if not isinstance(checkpoint_id, str):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", operation_id)
+    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
+    began_active = context["state"] == "ACTIVE"
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        target = document["agent_orchestration"]["work_items"][args.work_id]
+        source = target["contexts"].get(context_id)
+        if (not isinstance(source, dict) or target.get("current_context_id") != context_id
+                or source.get("epoch") != args.epoch or source.get("leader", {}).get("session_ref") != args.session_ref):
+            raise store.StoreError(store.STATE_DIVERGENCE, "continuity source changed")
+        target["operations"].setdefault(operation_id, copy.deepcopy(operation))
+        source.setdefault("worktree_identity", copy.deepcopy(identity))
+        if source["campaign"] is None and operation["intended_after"]["campaign_bridge"] is not None:
+            source["campaign"] = copy.deepcopy(operation["intended_after"]["campaign_bridge"]["from_campaign"])
+        started_active = source["state"] == "ACTIVE"
+        if started_active:
+            source["state"] = "QUIESCING"; source["leader"]["state"] = "RELEASING"
+        if not started_active and not active and not unknown and source["state"] == "QUIESCING":
+            source["state"] = "RELEASED"; source["leader"]["state"] = "RELEASED"
+            if checkpoint_id not in target["checkpoints"]:
+                _, checkpoint = _continuity_checkpoint(target, operation_id=operation_id, context_id=context_id,
+                    identity=identity, store_revision=document["revision"] + 1, journal_anchor=document["journal_head"])
+                target["checkpoints"][checkpoint_id] = checkpoint; target["checkpoint_head"] = checkpoint_id
+            target["operations"][operation_id]["state"] = "APPLIED"
+        return document
+    try:
+        committed = store.transact(root, mutate)
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-CAS-CONFLICT", exc.message) from exc
+    if active:
+        return {"verdict": "BLOCKED", "code": "CONTINUITY-ACTIVE-WORK", "work_id": args.work_id,
+                "context_id": context_id, "epoch": args.epoch, "operation_id": operation_id, "active": active}, EXIT_BLOCKED
+    if unknown:
+        return {"verdict": "BLOCKED", "code": "CONTINUITY-QUIESCENCE-UNPROVEN", "work_id": args.work_id,
+                "context_id": context_id, "epoch": args.epoch, "operation_id": operation_id, "unknown": unknown}, EXIT_BLOCKED
+    if began_active:
+        return {"verdict": "QUIESCING", "work_id": args.work_id, "context_id": context_id,
+                "epoch": args.epoch, "operation_id": operation_id, "next": "repeat prepare-switch after quiescence"}, EXIT_OK
+    return {"verdict": "SWITCH-PREPARED", "work_id": args.work_id, "context_id": context_id,
+            "epoch": args.epoch, "operation_id": operation_id, "checkpoint_id": checkpoint_id,
+            "store_revision": committed.revision}, EXIT_OK
+
+
+def _continuity_effective_activation(root: Path, work_id: str, runtime: str) -> dict[str, Any]:
+    """Prove the destination runtime while retaining the source scheduler pins."""
+    gauntlet = grill_core_module("gauntlet")
+    workflow_gate = grill_core_module("workflow_v4")
+    work_item_v3 = grill_core_module("work_item_v3")
+    step_skills = grill_core_module("step_skills")
+    item_fd = config_fd = None
+    try:
+        item_fd = open_development_item_fd(root, work_id)
+        config_fd = gauntlet.open_config_directory(root)
+        _, workflow_bytes, workflow_text = workflow_gate.load_workflow(root)
+        source = gauntlet.require_activation(config_fd, work_id)
+        proof = gauntlet.current_activation(root=root, work_id=work_id, item_dir_fd=item_fd,
+            workflow_bytes=workflow_bytes, workflow_text=workflow_text, workflow_gate=workflow_gate,
+            work_item_v3=work_item_v3, step_skills=step_skills, runtime=runtime)
+        return gauntlet.effective_activation(source, proof)
+    except (gauntlet.GauntletError, workflow_gate.Failure) as exc:
+        code = getattr(exc, "code", "ACTIVATION-REQUIRED")
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, str(exc)) from exc
+    finally:
+        if item_fd is not None: os.close(item_fd)
+        if config_fd is not None: os.close(config_fd)
+
+
+def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    root = project_root(args.root)
+    if not isinstance(args.session_ref, str) or not args.session_ref:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "continuity resume requires --session-ref")
+    store = grill_core_module("store")
+    contract = grill_core_module("agent_orchestration")
+    snapshot = store.read_snapshot(root, required=True)
+    item = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
+    if not isinstance(item, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-MIGRATION-REQUIRED", args.work_id)
+    checkpoint = item.get("checkpoints", {}).get(args.checkpoint)
+    if not isinstance(checkpoint, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-CHECKPOINT-MISSING", args.checkpoint)
+    source_id = checkpoint.get("context_id")
+    source = item.get("contexts", {}).get(source_id)
+    operation_entry = _continuity_operation(item, source_id, args.runtime) if isinstance(source_id, str) else None
+    if (not isinstance(source, dict) or item.get("current_context_id") != source_id or source.get("state") != "RELEASED"
+            or source.get("leader", {}).get("state") != "RELEASED" or operation_entry is None):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-QUIESCENCE-UNPROVEN", args.work_id)
+    operation_id, operation = operation_entry
+    if operation.get("state") not in {"APPLIED", "CONFIRMED"} or operation.get("expected_before", {}).get("checkpoint_id") != args.checkpoint:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", args.checkpoint)
+    state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1]
+    identity = _continuity_identity(root, args.work_id, state)
+    if checkpoint.get("worktree_identity") != identity or source.get("worktree_identity") != identity:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "project/worktree/branch changed")
+    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
+    if active:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-ACTIVE-WORK", ",".join(active))
+    if unknown:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-QUIESCENCE-UNPROVEN", ",".join(unknown))
+    activation = _continuity_effective_activation(root, args.work_id, args.runtime)
+    bridge = operation.get("intended_after", {}).get("campaign_bridge")
+    if bridge is not None:
+        try:
+            expected_campaign = contract.successor_campaign(bridge["from_campaign"], runtime=args.runtime,
+                adapter=activation["runtime"]["adapter"], registry_sha256=activation["workflow"]["registry_sha256"],
+                bridge_seed={"context": source_id, "checkpoint": args.checkpoint})
+        except (KeyError, contract.OrchestrationError) as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", str(exc)) from exc
+        if bridge.get("to_campaign") != expected_campaign:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "runtime bridge differs from checkpoint")
+    else:
+        expected_campaign = None
+    pending = copy.deepcopy(checkpoint.get("pending_attempts", {}))
+    retained = {resource_id: copy.deepcopy(resource) for resource_id, resource in item.get("resources", {}).items()
+                if resource.get("state") not in {"CLOSED", "REMOVED"}}
+    reconcile = {operation_id: copy.deepcopy(record) for operation_id, record in item.get("operations", {}).items()
+                 if record.get("state") in {"INTENT", "APPLIED", "UNKNOWN"}}
+    preview = {"verdict": "PREVIEW", "work_id": args.work_id, "checkpoint_id": args.checkpoint,
+        "from_context_id": source_id, "to_runtime": args.runtime, "accepted_outputs": copy.deepcopy(checkpoint["accepted_outputs"]),
+        "pending_attempts": pending, "preserved_resources": retained, "operations_to_reconcile": reconcile,
+        "campaign": expected_campaign, "activation": activation,
+        "expected_sha256": store.jcs_sha256({"revision": snapshot.revision, "checkpoint": args.checkpoint,
+            "runtime": args.runtime, "session_ref": args.session_ref, "identity": identity, "campaign": expected_campaign}),
+        "coordinator_recommendation": "Sol" if args.runtime == "codex" else "Opus", "active_model_changed": False}
+    if not args.apply:
+        return preview, EXIT_OK
+    if args.expected_sha256 != preview["expected_sha256"]:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "expected_sha256 does not match preview")
+    context_id = "ctx-" + hashlib.sha256(canonical({"operation": operation_id, "session": args.session_ref})).hexdigest()[:24]
+    result_ref = f"continuity/{operation_id}.json"
+    result_sha = store.jcs_sha256({"checkpoint": args.checkpoint, "from_context": source_id,
+        "to_context": context_id, "campaign": expected_campaign, "accepted_outputs": checkpoint["accepted_outputs"]})
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        target = document["agent_orchestration"]["work_items"][args.work_id]
+        current = target["contexts"].get(source_id)
+        existing = target["contexts"].get(context_id)
+        if existing is not None:
+            if target.get("current_context_id") == context_id:
+                return document
+            raise store.StoreError(store.STATE_DIVERGENCE, "continuity context id already exists")
+        if (target.get("current_context_id") != source_id or not isinstance(current, dict)
+                or current.get("state") != "RELEASED" or current.get("leader", {}).get("state") != "RELEASED"):
+            raise store.StoreError(store.STATE_DIVERGENCE, "continuity source changed")
+        current_operation = target["operations"].get(operation_id)
+        if not isinstance(current_operation, dict) or current_operation.get("state") != "APPLIED":
+            raise store.StoreError(store.STATE_DIVERGENCE, "continuity operation changed")
+        next_epoch = current["epoch"] + 1
+        target["contexts"][context_id] = {"context_id": context_id, "epoch": next_epoch,
+            "predecessor_context_id": source_id, "continuity_ref": operation_id, "runtime": args.runtime,
+            "adapter": activation["runtime"]["adapter"], "activation": copy.deepcopy(activation),
+            "campaign": copy.deepcopy(expected_campaign), "scheduler_runs": copy.deepcopy(current["scheduler_runs"]),
+            "leader": {"owner_id": context_id, "session_ref": args.session_ref, "incarnation": None,
+                "fence": next_epoch, "epoch": next_epoch, "state": "ACTIVE", "observation_ref": None,
+                "observation_sha256": None}, "state": "ACTIVE", "policy_sha256": current["policy_sha256"],
+            "inputs_sha256": current["inputs_sha256"], "worktree_identity": copy.deepcopy(identity)}
+        current["state"] = "SUPERSEDED"
+        current_operation.update({"state": "CONFIRMED", "result_ref": result_ref, "result_sha256": result_sha,
+                                  "observation_ref": result_ref})
+        target["current_context_id"] = context_id
+        return document
+    try:
+        committed = store.transact(root, mutate)
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-CAS-CONFLICT", exc.message) from exc
+    return {"verdict": "RESUMED", "work_id": args.work_id, "checkpoint_id": args.checkpoint,
+        "context_id": context_id, "epoch": snapshot.document["agent_orchestration"]["work_items"][args.work_id]["contexts"][source_id]["epoch"] + 1,
+        "campaign": expected_campaign, "pending_attempts": pending, "preserved_resources": retained,
+        "operations_to_reconcile": reconcile, "store_revision": committed.revision,
+        "coordinator_recommendation": preview["coordinator_recommendation"], "active_model_changed": False}
+
+
+@_gauntlet_authorized
 def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     # Retain the FASE-001 control response for the legacy form.  The durable
     # worker lifecycle is selected only by the complete run/worker pair, so
@@ -2743,6 +3343,7 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
     return result, EXIT_OK if result.get("verdict") in {"CLEANED", "REUSED"} else EXIT_BLOCKED
 
 
+@_gauntlet_authorized
 def gauntlet_prepare_worker_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Prepare one passive, scoped worker workspace from a fresh admission."""
     root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
@@ -2954,6 +3555,7 @@ def gauntlet_dag_validate_command(args: argparse.Namespace) -> tuple[dict[str, A
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_wave_declare_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-004/FR-005, ADR-0013): declare the run's next Execution Wave."""
     root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
@@ -2970,6 +3572,7 @@ def gauntlet_wave_declare_command(args: argparse.Namespace) -> tuple[dict[str, A
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_converge_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-004 (FR-001-FR-005): integrate one wave into the execution branch.
 
@@ -2996,6 +3599,7 @@ def gauntlet_converge_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_run_abandon_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-004 (FR-014, ADR-0020): mark one irrecoverable run BLOCKED.
 
@@ -3035,6 +3639,7 @@ def gauntlet_run_abandon_command(args: argparse.Namespace) -> tuple[dict[str, An
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_worker_declare_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-007): mint one first-dispatch worker, ``worker_id = node_id``."""
     root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
@@ -3051,6 +3656,7 @@ def gauntlet_worker_declare_command(args: argparse.Namespace) -> tuple[dict[str,
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_progress_record_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-008(d)): renew one worker's lease past its original window."""
     root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
@@ -3062,6 +3668,7 @@ def gauntlet_progress_record_command(args: argparse.Namespace) -> tuple[dict[str
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_worker_terminal_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-009/FR-010): terminate one worker, success or failure."""
     root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
@@ -3075,6 +3682,7 @@ def gauntlet_worker_terminal_command(args: argparse.Namespace) -> tuple[dict[str
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_remediate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-007/FR-009/FR-010, ADR-0015): remediate one node's
     current worker.
@@ -3261,13 +3869,26 @@ def verify_checkpoint_attestation(
             previous = outputs.get(item_sequence[index - 1])
             if not isinstance(previous, dict):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ATTESTATION-PREDECESSOR-MISSING", item_sequence[index - 1])
+        recorded_campaign = development.get("attestation_campaign")
+        bridge = None
+        snapshot = store.read_snapshot(root, required=False)
+        item = (snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
+                if snapshot is not None else None)
+        if isinstance(item, dict):
+            context = item.get("contexts", {}).get(item.get("current_context_id"))
+            if isinstance(context, dict) and context.get("campaign") is not None:
+                recorded_campaign = context["campaign"]
+                operation = item.get("operations", {}).get(context.get("continuity_ref"))
+                if isinstance(operation, dict):
+                    bridge = operation.get("intended_after", {}).get("campaign_bridge")
         verdict = attestation.judge_checkpoint_attestation(
             bundle,
             project_id=project_id,
             work_item_id=work_id,
             step_id=step_id,
-            campaign=development.get("attestation_campaign"),
+            campaign=recorded_campaign,
             predecessor_output=previous,
+            campaign_bridge=bridge,
         )
     except CliFailure:
         raise
@@ -3421,6 +4042,297 @@ def _converged_waves_exist(root: Path, work_id: str) -> bool:
     return False
 
 
+def _activity_policy(root: Path, work_id: str, context_id: str, epoch: int,
+                     session_ref: str) -> tuple[Any, Any, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Read one current adopted context and its exact versioned policy bytes."""
+    store = grill_core_module("store")
+    contract = grill_core_module("agent_orchestration")
+    snapshot = store.read_snapshot(root, required=False)
+    block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+    item = block.get("work_items", {}).get(work_id) if isinstance(block, dict) else None
+    if not isinstance(item, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-MIGRATION-REQUIRED", work_id)
+    context = item.get("contexts", {}).get(context_id)
+    try:
+        contract.require_authority(item, context_id, epoch, session_ref)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+    if not isinstance(context, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", context_id)
+    policy_path = ASSETS / "agent-orchestration.v1.json"
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", work_id) from exc
+    if item.get("policy_ref") != "assets/agent-orchestration.v1.json" or item.get("policy_sha256") != hash_bytes(policy_path.read_bytes()):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", work_id)
+    return store, contract, snapshot.document, item, context
+
+
+def _activity_json(root: Path, value: str, code: str) -> tuple[dict[str, Any], dict[str, str]]:
+    reference = _checkpoint_ref(root, value)
+    assert reference is not None
+    try:
+        raw = safe_read_regular_fd(root, root / reference["ref"])
+        document = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, value) from exc
+    if not isinstance(document, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, value)
+    return document, reference
+
+
+def _activity_descriptors(policy: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Keep the canonical eleven-entry registry untouched; add only supplements."""
+    references = policy.get("references")
+    if not isinstance(references, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "references")
+    targets = {
+        "protocol": (Path(__file__).resolve().parent.parent / "references" / "agent-orchestration.md",
+                     "plugin/skills/grill-with-docs/references/agent-orchestration.md"),
+        "task_files_template": (ASSETS / "task-files.v1.template.md",
+                                "plugin/skills/grill-with-docs/assets/task-files.v1.template.md"),
+    }
+    descriptors: list[dict[str, Any]] = []
+    for key, (path, expected_path) in targets.items():
+        declared = references.get(key)
+        if not isinstance(declared, dict) or declared.get("path") != expected_path:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", key)
+        try:
+            digest = hash_bytes(path.read_bytes())
+        except OSError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", key) from exc
+        if declared.get("sha256") != "sha256:" + digest:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", key)
+        descriptors.append({"path": expected_path, "sha256": digest})
+    return descriptors[0], descriptors[1]
+
+
+def _step_activity_coverage(root: Path, work_id: str, step_id: str) -> dict[str, Any] | None:
+    """Apply the policy at every bypass-prone macrostep boundary."""
+    store = grill_core_module("store")
+    contract = grill_core_module("agent_orchestration")
+    snapshot = store.read_snapshot(root, required=False)
+    block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+    item = block.get("work_items", {}).get(work_id) if isinstance(block, dict) else None
+    if not isinstance(item, dict):
+        return None
+    context_id = item.get("current_context_id")
+    context = item.get("contexts", {}).get(context_id)
+    if not isinstance(context, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", work_id)
+    policy_path = ASSETS / "agent-orchestration.v1.json"
+    if item.get("policy_sha256") != hash_bytes(policy_path.read_bytes()):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", work_id)
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+        return contract.require_activity_coverage(
+            item, policy, context_id=context_id, step_id=step_id,
+            new_how=step_id == "specify", frontend=step_id == "plan",
+        )
+    except (json.JSONDecodeError, contract.OrchestrationError) as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", str(exc)) from exc
+
+
+def gauntlet_step_enter_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Deliver the resolved entrypoint plus hashed supplements, never invoke it."""
+    root = project_root(args.root)
+    if args.step not in SEQUENCE:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STEP", args.step)
+    _store, contract, _document, _item, context = _activity_policy(
+        root, args.work_id, args.context_id, args.epoch, args.session_ref)
+    policy_path = ASSETS / "agent-orchestration.v1.json"
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    supplement, task_template = _activity_descriptors(policy)
+    versions = grill_core_module("workflow_versions")
+    step_skills = grill_core_module("step_skills")
+    workflow_version = versions.ACTIVE_VERSION
+    try:
+        registry = (ASSETS / versions.REGISTRY_FILENAME_BY_VERSION[workflow_version]).read_bytes()
+        catalog = (ASSETS / versions.CATALOG_FILENAME_BY_VERSION_RUNTIME[workflow_version][context["runtime"]]).read_bytes()
+        parsed_catalog = step_skills.parse_strict(catalog)
+        resolutions, _trusted = step_skills.resolve_shipped_workflow_skills(
+            (args.step,), context["runtime"], step_skills.registry_sha256(registry), registry=registry,
+            catalog=parsed_catalog, trusted_catalogs_path=ASSETS / versions.TRUSTED_CATALOGS_FILENAME_BY_VERSION[workflow_version],
+        )
+    except Exception as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SKILL-RESOLUTION-FAILED", args.step) from exc
+    try:
+        invocation = contract.invocation_context(
+            policy=policy, policy_sha256=hash_bytes(policy_path.read_bytes()), context=context,
+            step_id=args.step, canonical_entrypoint=resolutions[0], supplement=supplement,
+            task_template=task_template, new_how=bool(args.new_how), frontend=bool(args.frontend),
+        )
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", str(exc)) from exc
+    return {"verdict": "STEP-ENTERED", "work_id": args.work_id, "invocation_context": invocation,
+            "limitation": "context delivery does not prove canonical skill invocation"}, EXIT_OK
+
+
+def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Persist prepare -> verified -> dispatch -> result -> accept for one specialist."""
+    root = project_root(args.root)
+    scope = "interview" if args.scope == "interview" else "cycle"
+    step_id = None if scope == "interview" else args.step
+    if (scope == "interview") == (step_id is not None):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ACTIVITY-SCOPE", args.activity_id)
+    store, contract, _document, _item, context = _activity_policy(
+        root, args.work_id, args.context_id, args.epoch, args.session_ref)
+    manifest, _manifest_ref = _activity_json(root, args.input_manifest, "INPUT-MANIFEST-INVALID")
+    try:
+        contract.activity_input_sha256(manifest)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INPUT-MANIFEST-INVALID", str(exc)) from exc
+    if args.author_activity and manifest.get("author_activity_ids") != args.author_activity:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-INPUT-DIVERGENT", args.activity_id)
+
+    def current(document: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        item = document["agent_orchestration"]["work_items"][args.work_id]
+        try:
+            bound = contract.require_authority(item, args.context_id, args.epoch, args.session_ref)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+        return item, bound
+
+    snapshot = store.read_snapshot(root)
+    item, bound = current(snapshot.document)
+    existing = item["activities"].get(args.activity_id)
+    if args.phase == "prepare":
+        try:
+            if existing is None:
+                activity = contract.new_activity(
+                    activity_id=args.activity_id, context_id=args.context_id, step_id=step_id,
+                    activity_scope=scope, activity_type=args.kind, attempt=1, input_manifest=manifest,
+                    policy_sha256=item["policy_sha256"], write_files=args.files or [],
+                )
+                activity = contract.prepare_activity(activity, bound)
+            else:
+                activity = contract.prepare_activity(existing, bound)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SPECIALIST-CAPABILITY-UNPROVEN", str(exc)) from exc
+        def prepare(document: dict[str, Any]) -> dict[str, Any]:
+            target, target_context = current(document)
+            prior = target["activities"].get(args.activity_id)
+            if prior is not None and prior != existing:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
+            target["activities"][args.activity_id] = contract.prepare_activity(activity, target_context)
+            return document
+        committed = store.transact(root, prepare)
+        activity = committed.document["agent_orchestration"]["work_items"][args.work_id]["activities"][args.activity_id]
+        return {"verdict": "BOOTSTRAP-REQUIRED", "activity_id": args.activity_id,
+                "bootstrap": contract.bootstrap_request(activity), "store_revision": committed.revision}, EXIT_OK
+
+    if existing is None or existing.get("input_sha256") != contract.activity_input_sha256(manifest):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-INPUT-DIVERGENT", args.activity_id)
+    if args.phase == "dispatch":
+        if not args.observation:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SPECIALIST-CAPABILITY-UNPROVEN", "observation is required")
+        observation, _observation_ref = _activity_json(root, args.observation, "SPECIALIST-CAPABILITY-UNPROVEN")
+        try:
+            verified = contract.record_verified_activity(existing, observation) if existing["state"] == "BOOTSTRAPPING" else existing
+            if existing["state"] == "BOOTSTRAPPING":
+                resource_id, resource = contract.session_resource(
+                    verified, observation, collected_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+                if verified["session_resource_id"] != resource_id:
+                    raise contract.OrchestrationError("SPECIALIST-CAPABILITY-UNPROVEN")
+                def verify(document: dict[str, Any]) -> dict[str, Any]:
+                    target, _target_context = current(document)
+                    if target["activities"].get(args.activity_id) != existing:
+                        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
+                    if resource_id in target["resources"]:
+                        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", resource_id)
+                    target["activities"][args.activity_id] = verified
+                    target["resources"][resource_id] = resource
+                    return document
+                store.transact(root, verify)
+            snapshot = store.read_snapshot(root); item, bound = current(snapshot.document)
+            verified = item["activities"][args.activity_id]
+            if verified["state"] == "DISPATCHED":
+                readback = contract.verify_specialist(verified, observation)
+                resource = item["resources"].get(verified["session_resource_id"])
+                if not isinstance(resource, dict) or readback["owner_dispatch"] != resource.get("identity", {}).get("owner_dispatch"):
+                    raise contract.OrchestrationError("SPECIALIST-CAPABILITY-UNPROVEN")
+                payload = contract.activity_payload(verified, bound)
+                return {"verdict": "REUSED", "activity_id": args.activity_id, "payload": payload}, EXIT_OK
+            dispatched, payload = contract.dispatch_activity(verified, bound)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SPECIALIST-CAPABILITY-UNPROVEN", str(exc)) from exc
+        def dispatch(document: dict[str, Any]) -> dict[str, Any]:
+            target, target_context = current(document)
+            prior = target["activities"].get(args.activity_id)
+            if prior is None or prior.get("state") != "VERIFIED":
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
+            target["activities"][args.activity_id], _payload = contract.dispatch_activity(prior, target_context)
+            return document
+        committed = store.transact(root, dispatch)
+        return {"verdict": "DISPATCHED", "activity_id": args.activity_id, "payload": payload,
+                "store_revision": committed.revision}, EXIT_OK
+
+    if args.phase != "accept":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ACTIVITY-PHASE", args.phase)
+    if existing.get("state") != "DISPATCHED":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
+    if not args.result and not args.diagnostic:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-REQUIRED", args.activity_id)
+    if args.diagnostic and not args.result:
+        diagnostic = _checkpoint_ref(root, args.diagnostic)
+        assert diagnostic is not None
+        failed = copy.deepcopy(existing); failed.update({"diagnostic_ref": diagnostic["ref"], "state": "FAILED"})
+        committed = store.transact(root, lambda document: _replace_activity(
+            document, args.work_id, args.activity_id, existing, failed))
+        return {"verdict": "FAILED", "activity_id": args.activity_id, "diagnostic": diagnostic,
+                "store_revision": committed.revision}, EXIT_BLOCKED
+    result = _checkpoint_ref(root, args.result)
+    assert result is not None
+    output = {"files": [], "return_ref": result, "effect_ref": None}
+    try:
+        recorded = contract.record_activity_result(existing, result_ref=result["ref"], result_sha256=result["sha256"],
+                                                   output_manifest=output, diagnostic_ref=None)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-INVALID", str(exc)) from exc
+    def record(document: dict[str, Any]) -> dict[str, Any]:
+        updated = _replace_activity(document, args.work_id, args.activity_id, existing, recorded)
+        resource_id = recorded["session_resource_id"]
+        resource = updated["agent_orchestration"]["work_items"][args.work_id]["resources"].get(resource_id)
+        if not isinstance(resource, dict) or resource.get("state") != "REGISTERED":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
+        resource["state"] = "CLOSE_PENDING"
+        return updated
+    committed = store.transact(root, record)
+    if not args.observation:
+        return {"verdict": "RESULT-RECORDED", "activity_id": args.activity_id,
+                "store_revision": committed.revision}, EXIT_OK
+    observation, _observation_ref = _activity_json(root, args.observation, "SPECIALIST-CAPABILITY-UNPROVEN")
+    snapshot = store.read_snapshot(root); item, bound = current(snapshot.document)
+    recorded = item["activities"][args.activity_id]
+    try:
+        accepted = contract.accept_activity(recorded, context=bound, observation=observation,
+                                            acceptance_ref=result["ref"])
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SPECIALIST-CAPABILITY-UNPROVEN", str(exc)) from exc
+    def accept(document: dict[str, Any]) -> dict[str, Any]:
+        updated = _replace_activity(document, args.work_id, args.activity_id, recorded, accepted)
+        target = updated["agent_orchestration"]["work_items"][args.work_id]
+        resource_id = accepted["session_resource_id"]
+        resource = target["resources"].get(resource_id)
+        if not isinstance(resource, dict):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
+        target["resources"][resource_id] = contract.close_session_resource(
+            resource, observation, acceptance_ref=result["ref"])
+        return updated
+    committed = store.transact(root, accept)
+    return {"verdict": "ACCEPTED", "activity_id": args.activity_id, "store_revision": committed.revision}, EXIT_OK
+
+
+def _replace_activity(document: dict[str, Any], work_id: str, activity_id: str,
+                      expected: dict[str, Any], replacement: dict[str, Any]) -> dict[str, Any]:
+    item = document["agent_orchestration"]["work_items"][work_id]
+    if item["activities"].get(activity_id) != expected:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", activity_id)
+    item["activities"][activity_id] = replacement
+    return document
+
+
 def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Mint the attestation chain for one leader-executed step.
 
@@ -3438,10 +4350,25 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     item = resolve_development_item(root, args.work_id)
     attestation = grill_core_module("attestation")
+    if args.step in {"specify", "plan", "tasks"}:
+        coverage = _step_activity_coverage(root, args.work_id, args.step)
+        if coverage is not None:
+            try:
+                attestation.require_activity_coverage(coverage, step_id=args.step)
+            except attestation.AttestationError as exc:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", exc.reason) from exc
     versions = grill_core_module("workflow_versions")
     step_skills_module = grill_core_module("step_skills")
     store = grill_core_module("store")
     gauntlet = grill_core_module("gauntlet")
+    orchestration_context = None
+    snapshot = store.read_snapshot(root, required=False)
+    if snapshot is not None:
+        item_record = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
+        if isinstance(item_record, dict):
+            candidate = item_record.get("contexts", {}).get(item_record.get("current_context_id"))
+            if isinstance(candidate, dict):
+                orchestration_context = candidate
 
     _, state = read_development_state(root, item, args.work_id)
     development = state.get("development") or {}
@@ -3483,6 +4410,17 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             if config_fd is not None:
                 os.close(config_fd)
         runtime = activation["runtime"]["id"]
+        if orchestration_context is not None:
+            context_runtime = orchestration_context.get("runtime")
+            context_activation = orchestration_context.get("activation")
+            if context_activation is not None:
+                if not isinstance(context_activation, dict):
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-REQUIRED", args.work_id)
+                activation = context_activation
+                runtime = context_runtime
+            elif context_runtime != runtime:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-RUNTIME-DIVERGENT",
+                                 "successor runtime requires a proved effective activation", extra={"work_id": args.work_id})
         if args.runtime is not None and args.runtime != runtime:
             raise CliFailure(
                 EXIT_BLOCKED,
@@ -3616,7 +4554,9 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     # instead of recomputing them: the recorded campaign is the authority, and a
     # formula that later changes would strand a run that had already started.
     derived_generation = "rg-" + hashlib.sha256(canonical(campaign_identity)).hexdigest()
-    recorded = development.get("attestation_campaign")
+    recorded = (orchestration_context.get("campaign") if orchestration_context is not None
+                and isinstance(orchestration_context.get("campaign"), dict)
+                else development.get("attestation_campaign"))
     if isinstance(recorded, dict):
         recovery_generation_id = recorded.get("recovery_generation_id", derived_generation)
         plan_revision = recorded.get("plan_revision", 0)
@@ -3692,6 +4632,7 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     lock = acquire_lock(root, args.work_id, item)
     try:
         path, state = read_development_state(root, item, args.work_id)
+        state_before = safe_read_regular_fd(root, path)
         development = state.get("development")
         if development_workflow_version(development) is None:
             if not args.initialize_legacy:
@@ -3712,6 +4653,13 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         # código nomeado.
         if sequence != development_sequence(development) or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
+        if args.state in {"in-progress", "complete"} and args.step in {"specify", "plan", "tasks"}:
+            coverage = _step_activity_coverage(root, args.work_id, args.step)
+            if coverage is not None:
+                try:
+                    grill_core_module("attestation").require_activity_coverage(coverage, step_id=args.step)
+                except Exception as exc:
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", str(exc)) from exc
         current = steps.get(args.step, "pending")
         evidence = []
         for value in args.evidence:
@@ -3833,6 +4781,9 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 payload["chain_stale"] = mark_chain_stale(development, args.step)
             outputs[args.step] = attestation_result["output"]
         development["current_step"] = next((s for s in sequence if steps.get(s) != "complete"), "complete")
+        orchestrated = _commit_orchestrated_checkpoint(root, path, state_before, state, args, payload)
+        if orchestrated is not None:
+            return orchestrated, EXIT_OK
         atomic_write(root, path, (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode())
         return {"verdict":"UPDATED", "work_id":args.work_id, **payload, "current_step":development["current_step"]}, EXIT_OK
     finally:
@@ -3993,6 +4944,7 @@ def build_parser() -> JsonParser:
     init_parser.add_argument("--work-id")
     init_parser.add_argument("--base-ref")
     init_parser.add_argument("--runtime", choices=("claude", "codex"), required=True)
+    init_parser.add_argument("--session-ref")
     init_parser.add_argument("--allow-install", action="store_true", dest="allow_install")
     init_parser.add_argument("--require-dependencies", action="store_true", dest="require_dependencies")
     init_parser.add_argument("--skip-backlog", action="store_true", dest="skip_backlog")
@@ -4093,6 +5045,40 @@ def build_parser() -> JsonParser:
     migrate_v4_parser.add_argument("--apply", action="store_true")
     migrate_v4_parser.add_argument("--expected-sha256")
     migrate_v4_parser.add_argument("--allow-local-edits", action="store_true")
+    orchestration_adopt_parser = subparsers.add_parser("gauntlet-orchestration-adopt")
+    orchestration_adopt_parser.add_argument("root")
+    orchestration_adopt_parser.add_argument("--work-id", required=True)
+    orchestration_adopt_parser.add_argument("--runtime", choices=("claude", "codex"), required=True)
+    orchestration_adopt_parser.add_argument("--session-ref", required=True)
+    orchestration_adopt_parser.add_argument("--scope-file", action="append", default=[])
+    orchestration_adopt_parser.add_argument("--apply", action="store_true")
+    orchestration_adopt_parser.add_argument("--expected-sha256")
+    step_enter_parser = subparsers.add_parser("gauntlet-step-enter")
+    step_enter_parser.add_argument("root")
+    step_enter_parser.add_argument("--work-id", required=True)
+    step_enter_parser.add_argument("--context-id", required=True)
+    step_enter_parser.add_argument("--epoch", type=int, required=True)
+    step_enter_parser.add_argument("--session-ref", required=True)
+    step_enter_parser.add_argument("--step", required=True)
+    step_enter_parser.add_argument("--new-how", action="store_true")
+    step_enter_parser.add_argument("--frontend", action="store_true")
+    activity_parser = subparsers.add_parser("gauntlet-activity")
+    activity_parser.add_argument("root")
+    activity_parser.add_argument("--work-id", required=True)
+    activity_parser.add_argument("--context-id", required=True)
+    activity_parser.add_argument("--epoch", type=int, required=True)
+    activity_parser.add_argument("--session-ref", required=True)
+    activity_parser.add_argument("--activity-id", required=True)
+    activity_parser.add_argument("--step")
+    activity_parser.add_argument("--scope")
+    activity_parser.add_argument("--kind", required=True, choices=("author", "reviewer", "deterministic_check"))
+    activity_parser.add_argument("--phase", required=True, choices=("prepare", "dispatch", "accept"))
+    activity_parser.add_argument("--input-manifest", required=True)
+    activity_parser.add_argument("--author-activity", action="append", default=[])
+    activity_parser.add_argument("--files", action="append", default=[])
+    activity_parser.add_argument("--observation")
+    activity_parser.add_argument("--result")
+    activity_parser.add_argument("--diagnostic")
     gauntlet_init_parser = subparsers.add_parser("gauntlet-init")
     gauntlet_init_parser.add_argument("root")
     gauntlet_init_parser.add_argument("--work-id", required=True)
@@ -4104,7 +5090,9 @@ def build_parser() -> JsonParser:
         control_parser.add_argument("--work-id", required=True)
         if command == "gauntlet-status":
             control_parser.add_argument("--run-id")
-        elif command == "gauntlet-cleanup":
+        else:
+            control_parser.add_argument("--session-ref")
+        if command == "gauntlet-cleanup":
             # Optional individually for the legacy FASE-001 command; the
             # handler requires the pair before selecting durable cleanup.
             control_parser.add_argument("--run-id")
@@ -4115,6 +5103,7 @@ def build_parser() -> JsonParser:
     prepare_worker_parser.add_argument("--run-id", required=True)
     prepare_worker_parser.add_argument("--worker-id", required=True)
     prepare_worker_parser.add_argument("--scope", action="append", required=True)
+    prepare_worker_parser.add_argument("--session-ref")
     partition_emit_parser = subparsers.add_parser("partition-emit")
     partition_emit_parser.add_argument("root")
     partition_emit_parser.add_argument("--work-id", required=True)
@@ -4142,17 +5131,20 @@ def build_parser() -> JsonParser:
     wave_declare_parser.add_argument("--run-id", required=True)
     wave_declare_parser.add_argument("--dag", required=True)
     wave_declare_parser.add_argument("--node-id", action="append", required=True)
+    wave_declare_parser.add_argument("--session-ref")
     converge_parser = subparsers.add_parser("gauntlet-converge")
     converge_parser.add_argument("root")
     converge_parser.add_argument("--work-id", required=True)
     converge_parser.add_argument("--run-id", required=True)
     converge_parser.add_argument("--dag", required=True)
     converge_parser.add_argument("--wave-id", required=True)
+    converge_parser.add_argument("--session-ref")
     run_abandon_parser = subparsers.add_parser("gauntlet-run-abandon")
     run_abandon_parser.add_argument("root")
     run_abandon_parser.add_argument("--work-id", required=True)
     run_abandon_parser.add_argument("--run-id", required=True)
     run_abandon_parser.add_argument("--attestation", required=True)
+    run_abandon_parser.add_argument("--session-ref")
     worker_declare_parser = subparsers.add_parser("gauntlet-worker-declare")
     worker_declare_parser.add_argument("root")
     worker_declare_parser.add_argument("--work-id", required=True)
@@ -4162,11 +5154,13 @@ def build_parser() -> JsonParser:
     worker_declare_parser.add_argument("--tier", required=True)
     worker_declare_parser.add_argument("--files", action="append", required=True)
     worker_declare_parser.add_argument("--dag", required=True)
+    worker_declare_parser.add_argument("--session-ref")
     progress_record_parser = subparsers.add_parser("gauntlet-progress-record")
     progress_record_parser.add_argument("root")
     progress_record_parser.add_argument("--work-id", required=True)
     progress_record_parser.add_argument("--run-id", required=True)
     progress_record_parser.add_argument("--worker-id", required=True)
+    progress_record_parser.add_argument("--session-ref")
     worker_terminal_parser = subparsers.add_parser("gauntlet-worker-terminal")
     worker_terminal_parser.add_argument("root")
     worker_terminal_parser.add_argument("--work-id", required=True)
@@ -4174,16 +5168,30 @@ def build_parser() -> JsonParser:
     worker_terminal_parser.add_argument("--worker-id", required=True)
     worker_terminal_parser.add_argument("--outcome", choices=("completed", "failed"), required=True)
     worker_terminal_parser.add_argument("--failure-class", choices=("process-timeout", "transport-failure"))
+    worker_terminal_parser.add_argument("--session-ref")
     remediate_parser = subparsers.add_parser("gauntlet-remediate")
     remediate_parser.add_argument("root")
     remediate_parser.add_argument("--work-id", required=True)
     remediate_parser.add_argument("--run-id", required=True)
     remediate_parser.add_argument("--worker-id", required=True)
     remediate_parser.add_argument("--reason", choices=("stall", "transient-failure"), required=True)
+    remediate_parser.add_argument("--session-ref")
     gauntlet_resume_parser = subparsers.add_parser("gauntlet-resume")
     gauntlet_resume_parser.add_argument("root")
     gauntlet_resume_parser.add_argument("--work-id", required=True)
     gauntlet_resume_parser.add_argument("--run-id")
+    gauntlet_resume_parser.add_argument("--session-ref")
+    gauntlet_resume_parser.add_argument("--runtime", choices=("claude", "codex"))
+    gauntlet_resume_parser.add_argument("--checkpoint")
+    gauntlet_resume_parser.add_argument("--apply", action="store_true")
+    gauntlet_resume_parser.add_argument("--expected-sha256")
+    prepare_switch_parser = subparsers.add_parser("gauntlet-prepare-switch")
+    prepare_switch_parser.add_argument("root")
+    prepare_switch_parser.add_argument("--work-id", required=True)
+    prepare_switch_parser.add_argument("--context-id", required=True)
+    prepare_switch_parser.add_argument("--epoch", type=int, required=True)
+    prepare_switch_parser.add_argument("--session-ref", required=True)
+    prepare_switch_parser.add_argument("--to-runtime", choices=("claude", "codex"), required=True)
     attest_parser = subparsers.add_parser("attest")
     attest_parser.add_argument("root")
     attest_parser.add_argument("--work-id", required=True)
@@ -4211,6 +5219,8 @@ def build_parser() -> JsonParser:
     checkpoint_parser.add_argument("--reason", default="")
     checkpoint_parser.add_argument("--initialize-legacy", action="store_true")
     checkpoint_parser.add_argument("--from-step")
+    checkpoint_parser.add_argument("--operation-id")
+    checkpoint_parser.add_argument("--session-ref")
     phase_turn_parser = subparsers.add_parser("phase-turn")
     phase_turn_parser.add_argument("root")
     phase_turn_parser.add_argument("--work-id", required=True)
@@ -4244,10 +5254,14 @@ def main(argv: list[str] | None = None) -> int:
             "migrate": migrate_command,
             "migrate-v3": migrate_v3_command,
             "migrate-v4": migrate_v4_command,
+            "gauntlet-orchestration-adopt": orchestration_adopt_command,
+            "gauntlet-step-enter": gauntlet_step_enter_command,
+            "gauntlet-activity": gauntlet_activity_command,
             "gauntlet-init": gauntlet_init_command,
             "gauntlet-status": gauntlet_status_command,
             "gauntlet-run": gauntlet_run_command,
             "gauntlet-resume": gauntlet_resume_command,
+            "gauntlet-prepare-switch": gauntlet_prepare_switch_command,
             "gauntlet-prepare-worker": gauntlet_prepare_worker_command,
             "gauntlet-cleanup": gauntlet_cleanup_command,
             "partition-emit": partition_emit_command,
