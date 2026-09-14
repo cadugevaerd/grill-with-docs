@@ -4042,6 +4042,297 @@ def _converged_waves_exist(root: Path, work_id: str) -> bool:
     return False
 
 
+def _activity_policy(root: Path, work_id: str, context_id: str, epoch: int,
+                     session_ref: str) -> tuple[Any, Any, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Read one current adopted context and its exact versioned policy bytes."""
+    store = grill_core_module("store")
+    contract = grill_core_module("agent_orchestration")
+    snapshot = store.read_snapshot(root, required=False)
+    block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+    item = block.get("work_items", {}).get(work_id) if isinstance(block, dict) else None
+    if not isinstance(item, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-MIGRATION-REQUIRED", work_id)
+    context = item.get("contexts", {}).get(context_id)
+    try:
+        contract.require_authority(item, context_id, epoch, session_ref)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+    if not isinstance(context, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", context_id)
+    policy_path = ASSETS / "agent-orchestration.v1.json"
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", work_id) from exc
+    if item.get("policy_ref") != "assets/agent-orchestration.v1.json" or item.get("policy_sha256") != hash_bytes(policy_path.read_bytes()):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", work_id)
+    return store, contract, snapshot.document, item, context
+
+
+def _activity_json(root: Path, value: str, code: str) -> tuple[dict[str, Any], dict[str, str]]:
+    reference = _checkpoint_ref(root, value)
+    assert reference is not None
+    try:
+        raw = safe_read_regular_fd(root, root / reference["ref"])
+        document = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, value) from exc
+    if not isinstance(document, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, value)
+    return document, reference
+
+
+def _activity_descriptors(policy: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Keep the canonical eleven-entry registry untouched; add only supplements."""
+    references = policy.get("references")
+    if not isinstance(references, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "references")
+    targets = {
+        "protocol": (Path(__file__).resolve().parent.parent / "references" / "agent-orchestration.md",
+                     "plugin/skills/grill-with-docs/references/agent-orchestration.md"),
+        "task_files_template": (ASSETS / "task-files.v1.template.md",
+                                "plugin/skills/grill-with-docs/assets/task-files.v1.template.md"),
+    }
+    descriptors: list[dict[str, Any]] = []
+    for key, (path, expected_path) in targets.items():
+        declared = references.get(key)
+        if not isinstance(declared, dict) or declared.get("path") != expected_path:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", key)
+        try:
+            digest = hash_bytes(path.read_bytes())
+        except OSError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", key) from exc
+        if declared.get("sha256") != "sha256:" + digest:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", key)
+        descriptors.append({"path": expected_path, "sha256": digest})
+    return descriptors[0], descriptors[1]
+
+
+def _step_activity_coverage(root: Path, work_id: str, step_id: str) -> dict[str, Any] | None:
+    """Apply the policy at every bypass-prone macrostep boundary."""
+    store = grill_core_module("store")
+    contract = grill_core_module("agent_orchestration")
+    snapshot = store.read_snapshot(root, required=False)
+    block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+    item = block.get("work_items", {}).get(work_id) if isinstance(block, dict) else None
+    if not isinstance(item, dict):
+        return None
+    context_id = item.get("current_context_id")
+    context = item.get("contexts", {}).get(context_id)
+    if not isinstance(context, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", work_id)
+    policy_path = ASSETS / "agent-orchestration.v1.json"
+    if item.get("policy_sha256") != hash_bytes(policy_path.read_bytes()):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", work_id)
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+        return contract.require_activity_coverage(
+            item, policy, context_id=context_id, step_id=step_id,
+            new_how=step_id == "specify", frontend=step_id == "plan",
+        )
+    except (json.JSONDecodeError, contract.OrchestrationError) as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", str(exc)) from exc
+
+
+def gauntlet_step_enter_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Deliver the resolved entrypoint plus hashed supplements, never invoke it."""
+    root = project_root(args.root)
+    if args.step not in SEQUENCE:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STEP", args.step)
+    _store, contract, _document, _item, context = _activity_policy(
+        root, args.work_id, args.context_id, args.epoch, args.session_ref)
+    policy_path = ASSETS / "agent-orchestration.v1.json"
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    supplement, task_template = _activity_descriptors(policy)
+    versions = grill_core_module("workflow_versions")
+    step_skills = grill_core_module("step_skills")
+    workflow_version = versions.ACTIVE_VERSION
+    try:
+        registry = (ASSETS / versions.REGISTRY_FILENAME_BY_VERSION[workflow_version]).read_bytes()
+        catalog = (ASSETS / versions.CATALOG_FILENAME_BY_VERSION_RUNTIME[workflow_version][context["runtime"]]).read_bytes()
+        parsed_catalog = step_skills.parse_strict(catalog)
+        resolutions, _trusted = step_skills.resolve_shipped_workflow_skills(
+            (args.step,), context["runtime"], step_skills.registry_sha256(registry), registry=registry,
+            catalog=parsed_catalog, trusted_catalogs_path=ASSETS / versions.TRUSTED_CATALOGS_FILENAME_BY_VERSION[workflow_version],
+        )
+    except Exception as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SKILL-RESOLUTION-FAILED", args.step) from exc
+    try:
+        invocation = contract.invocation_context(
+            policy=policy, policy_sha256=hash_bytes(policy_path.read_bytes()), context=context,
+            step_id=args.step, canonical_entrypoint=resolutions[0], supplement=supplement,
+            task_template=task_template, new_how=bool(args.new_how), frontend=bool(args.frontend),
+        )
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", str(exc)) from exc
+    return {"verdict": "STEP-ENTERED", "work_id": args.work_id, "invocation_context": invocation,
+            "limitation": "context delivery does not prove canonical skill invocation"}, EXIT_OK
+
+
+def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Persist prepare -> verified -> dispatch -> result -> accept for one specialist."""
+    root = project_root(args.root)
+    scope = "interview" if args.scope == "interview" else "cycle"
+    step_id = None if scope == "interview" else args.step
+    if (scope == "interview") == (step_id is not None):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ACTIVITY-SCOPE", args.activity_id)
+    store, contract, _document, _item, context = _activity_policy(
+        root, args.work_id, args.context_id, args.epoch, args.session_ref)
+    manifest, _manifest_ref = _activity_json(root, args.input_manifest, "INPUT-MANIFEST-INVALID")
+    try:
+        contract.activity_input_sha256(manifest)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INPUT-MANIFEST-INVALID", str(exc)) from exc
+    if args.author_activity and manifest.get("author_activity_ids") != args.author_activity:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-INPUT-DIVERGENT", args.activity_id)
+
+    def current(document: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        item = document["agent_orchestration"]["work_items"][args.work_id]
+        try:
+            bound = contract.require_authority(item, args.context_id, args.epoch, args.session_ref)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+        return item, bound
+
+    snapshot = store.read_snapshot(root)
+    item, bound = current(snapshot.document)
+    existing = item["activities"].get(args.activity_id)
+    if args.phase == "prepare":
+        try:
+            if existing is None:
+                activity = contract.new_activity(
+                    activity_id=args.activity_id, context_id=args.context_id, step_id=step_id,
+                    activity_scope=scope, activity_type=args.kind, attempt=1, input_manifest=manifest,
+                    policy_sha256=item["policy_sha256"], write_files=args.files or [],
+                )
+                activity = contract.prepare_activity(activity, bound)
+            else:
+                activity = contract.prepare_activity(existing, bound)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SPECIALIST-CAPABILITY-UNPROVEN", str(exc)) from exc
+        def prepare(document: dict[str, Any]) -> dict[str, Any]:
+            target, target_context = current(document)
+            prior = target["activities"].get(args.activity_id)
+            if prior is not None and prior != existing:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
+            target["activities"][args.activity_id] = contract.prepare_activity(activity, target_context)
+            return document
+        committed = store.transact(root, prepare)
+        activity = committed.document["agent_orchestration"]["work_items"][args.work_id]["activities"][args.activity_id]
+        return {"verdict": "BOOTSTRAP-REQUIRED", "activity_id": args.activity_id,
+                "bootstrap": contract.bootstrap_request(activity), "store_revision": committed.revision}, EXIT_OK
+
+    if existing is None or existing.get("input_sha256") != contract.activity_input_sha256(manifest):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-INPUT-DIVERGENT", args.activity_id)
+    if args.phase == "dispatch":
+        if not args.observation:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SPECIALIST-CAPABILITY-UNPROVEN", "observation is required")
+        observation, _observation_ref = _activity_json(root, args.observation, "SPECIALIST-CAPABILITY-UNPROVEN")
+        try:
+            verified = contract.record_verified_activity(existing, observation) if existing["state"] == "BOOTSTRAPPING" else existing
+            if existing["state"] == "BOOTSTRAPPING":
+                resource_id, resource = contract.session_resource(
+                    verified, observation, collected_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+                if verified["session_resource_id"] != resource_id:
+                    raise contract.OrchestrationError("SPECIALIST-CAPABILITY-UNPROVEN")
+                def verify(document: dict[str, Any]) -> dict[str, Any]:
+                    target, _target_context = current(document)
+                    if target["activities"].get(args.activity_id) != existing:
+                        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
+                    if resource_id in target["resources"]:
+                        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", resource_id)
+                    target["activities"][args.activity_id] = verified
+                    target["resources"][resource_id] = resource
+                    return document
+                store.transact(root, verify)
+            snapshot = store.read_snapshot(root); item, bound = current(snapshot.document)
+            verified = item["activities"][args.activity_id]
+            if verified["state"] == "DISPATCHED":
+                readback = contract.verify_specialist(verified, observation)
+                resource = item["resources"].get(verified["session_resource_id"])
+                if not isinstance(resource, dict) or readback["owner_dispatch"] != resource.get("identity", {}).get("owner_dispatch"):
+                    raise contract.OrchestrationError("SPECIALIST-CAPABILITY-UNPROVEN")
+                payload = contract.activity_payload(verified, bound)
+                return {"verdict": "REUSED", "activity_id": args.activity_id, "payload": payload}, EXIT_OK
+            dispatched, payload = contract.dispatch_activity(verified, bound)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SPECIALIST-CAPABILITY-UNPROVEN", str(exc)) from exc
+        def dispatch(document: dict[str, Any]) -> dict[str, Any]:
+            target, target_context = current(document)
+            prior = target["activities"].get(args.activity_id)
+            if prior is None or prior.get("state") != "VERIFIED":
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
+            target["activities"][args.activity_id], _payload = contract.dispatch_activity(prior, target_context)
+            return document
+        committed = store.transact(root, dispatch)
+        return {"verdict": "DISPATCHED", "activity_id": args.activity_id, "payload": payload,
+                "store_revision": committed.revision}, EXIT_OK
+
+    if args.phase != "accept":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ACTIVITY-PHASE", args.phase)
+    if existing.get("state") != "DISPATCHED":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
+    if not args.result and not args.diagnostic:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-REQUIRED", args.activity_id)
+    if args.diagnostic and not args.result:
+        diagnostic = _checkpoint_ref(root, args.diagnostic)
+        assert diagnostic is not None
+        failed = copy.deepcopy(existing); failed.update({"diagnostic_ref": diagnostic["ref"], "state": "FAILED"})
+        committed = store.transact(root, lambda document: _replace_activity(
+            document, args.work_id, args.activity_id, existing, failed))
+        return {"verdict": "FAILED", "activity_id": args.activity_id, "diagnostic": diagnostic,
+                "store_revision": committed.revision}, EXIT_BLOCKED
+    result = _checkpoint_ref(root, args.result)
+    assert result is not None
+    output = {"files": [], "return_ref": result, "effect_ref": None}
+    try:
+        recorded = contract.record_activity_result(existing, result_ref=result["ref"], result_sha256=result["sha256"],
+                                                   output_manifest=output, diagnostic_ref=None)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-INVALID", str(exc)) from exc
+    def record(document: dict[str, Any]) -> dict[str, Any]:
+        updated = _replace_activity(document, args.work_id, args.activity_id, existing, recorded)
+        resource_id = recorded["session_resource_id"]
+        resource = updated["agent_orchestration"]["work_items"][args.work_id]["resources"].get(resource_id)
+        if not isinstance(resource, dict) or resource.get("state") != "REGISTERED":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
+        resource["state"] = "CLOSE_PENDING"
+        return updated
+    committed = store.transact(root, record)
+    if not args.observation:
+        return {"verdict": "RESULT-RECORDED", "activity_id": args.activity_id,
+                "store_revision": committed.revision}, EXIT_OK
+    observation, _observation_ref = _activity_json(root, args.observation, "SPECIALIST-CAPABILITY-UNPROVEN")
+    snapshot = store.read_snapshot(root); item, bound = current(snapshot.document)
+    recorded = item["activities"][args.activity_id]
+    try:
+        accepted = contract.accept_activity(recorded, context=bound, observation=observation,
+                                            acceptance_ref=result["ref"])
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SPECIALIST-CAPABILITY-UNPROVEN", str(exc)) from exc
+    def accept(document: dict[str, Any]) -> dict[str, Any]:
+        updated = _replace_activity(document, args.work_id, args.activity_id, recorded, accepted)
+        target = updated["agent_orchestration"]["work_items"][args.work_id]
+        resource_id = accepted["session_resource_id"]
+        resource = target["resources"].get(resource_id)
+        if not isinstance(resource, dict):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
+        target["resources"][resource_id] = contract.close_session_resource(
+            resource, observation, acceptance_ref=result["ref"])
+        return updated
+    committed = store.transact(root, accept)
+    return {"verdict": "ACCEPTED", "activity_id": args.activity_id, "store_revision": committed.revision}, EXIT_OK
+
+
+def _replace_activity(document: dict[str, Any], work_id: str, activity_id: str,
+                      expected: dict[str, Any], replacement: dict[str, Any]) -> dict[str, Any]:
+    item = document["agent_orchestration"]["work_items"][work_id]
+    if item["activities"].get(activity_id) != expected:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", activity_id)
+    item["activities"][activity_id] = replacement
+    return document
+
+
 def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Mint the attestation chain for one leader-executed step.
 
@@ -4059,6 +4350,13 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     item = resolve_development_item(root, args.work_id)
     attestation = grill_core_module("attestation")
+    if args.step in {"specify", "plan", "tasks"}:
+        coverage = _step_activity_coverage(root, args.work_id, args.step)
+        if coverage is not None:
+            try:
+                attestation.require_activity_coverage(coverage, step_id=args.step)
+            except attestation.AttestationError as exc:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", exc.reason) from exc
     versions = grill_core_module("workflow_versions")
     step_skills_module = grill_core_module("step_skills")
     store = grill_core_module("store")
@@ -4355,6 +4653,13 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         # código nomeado.
         if sequence != development_sequence(development) or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
+        if args.state in {"in-progress", "complete"} and args.step in {"specify", "plan", "tasks"}:
+            coverage = _step_activity_coverage(root, args.work_id, args.step)
+            if coverage is not None:
+                try:
+                    grill_core_module("attestation").require_activity_coverage(coverage, step_id=args.step)
+                except Exception as exc:
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", str(exc)) from exc
         current = steps.get(args.step, "pending")
         evidence = []
         for value in args.evidence:
@@ -4748,6 +5053,32 @@ def build_parser() -> JsonParser:
     orchestration_adopt_parser.add_argument("--scope-file", action="append", default=[])
     orchestration_adopt_parser.add_argument("--apply", action="store_true")
     orchestration_adopt_parser.add_argument("--expected-sha256")
+    step_enter_parser = subparsers.add_parser("gauntlet-step-enter")
+    step_enter_parser.add_argument("root")
+    step_enter_parser.add_argument("--work-id", required=True)
+    step_enter_parser.add_argument("--context-id", required=True)
+    step_enter_parser.add_argument("--epoch", type=int, required=True)
+    step_enter_parser.add_argument("--session-ref", required=True)
+    step_enter_parser.add_argument("--step", required=True)
+    step_enter_parser.add_argument("--new-how", action="store_true")
+    step_enter_parser.add_argument("--frontend", action="store_true")
+    activity_parser = subparsers.add_parser("gauntlet-activity")
+    activity_parser.add_argument("root")
+    activity_parser.add_argument("--work-id", required=True)
+    activity_parser.add_argument("--context-id", required=True)
+    activity_parser.add_argument("--epoch", type=int, required=True)
+    activity_parser.add_argument("--session-ref", required=True)
+    activity_parser.add_argument("--activity-id", required=True)
+    activity_parser.add_argument("--step")
+    activity_parser.add_argument("--scope")
+    activity_parser.add_argument("--kind", required=True, choices=("author", "reviewer", "deterministic_check"))
+    activity_parser.add_argument("--phase", required=True, choices=("prepare", "dispatch", "accept"))
+    activity_parser.add_argument("--input-manifest", required=True)
+    activity_parser.add_argument("--author-activity", action="append", default=[])
+    activity_parser.add_argument("--files", action="append", default=[])
+    activity_parser.add_argument("--observation")
+    activity_parser.add_argument("--result")
+    activity_parser.add_argument("--diagnostic")
     gauntlet_init_parser = subparsers.add_parser("gauntlet-init")
     gauntlet_init_parser.add_argument("root")
     gauntlet_init_parser.add_argument("--work-id", required=True)
@@ -4924,6 +5255,8 @@ def main(argv: list[str] | None = None) -> int:
             "migrate-v3": migrate_v3_command,
             "migrate-v4": migrate_v4_command,
             "gauntlet-orchestration-adopt": orchestration_adopt_command,
+            "gauntlet-step-enter": gauntlet_step_enter_command,
+            "gauntlet-activity": gauntlet_activity_command,
             "gauntlet-init": gauntlet_init_command,
             "gauntlet-status": gauntlet_status_command,
             "gauntlet-run": gauntlet_run_command,

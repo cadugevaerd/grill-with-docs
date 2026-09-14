@@ -43,6 +43,16 @@ _CAMPAIGN_FIELDS = ("project_id", "run_id", "runtime", "adapter", "registry_sha2
 _ATTESTATION_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _RECOVERY_GENERATION = re.compile(r"^rg-[0-9a-f]{64}$")
 
+# The leader's recommendation is deliberately absent here.  These are the
+# only pairs that may author or review a technical decision; an unavailable
+# pair blocks instead of falling back to the leader or a frontier worker.
+SPECIALIST_PAIRS = {
+    "codex": {"author": ("gpt-6-astra", "xhigh"), "reviewer": ("gpt-6-astra", "high")},
+    "claude": {"author": ("fable", "xhigh"), "reviewer": ("fable", "high")},
+}
+_ACTIVITY_CONTEXT_SCHEMA = "grill-activity-context/v1"
+_ACTIVITY_PAYLOAD_SCHEMA = "grill-activity-payload/v1"
+
 
 class OrchestrationError(ValueError):
     pass
@@ -237,6 +247,171 @@ def _manifest_sha256(value: dict[str, Any]) -> str:
     except ImportError:
         from grill_core.store import jcs_sha256
     return jcs_sha256(value)
+
+
+def specialist_pair(runtime: str, activity_type: str) -> tuple[str, str]:
+    """Return the exact effective pair required for one specialist role."""
+    try:
+        return SPECIALIST_PAIRS[runtime][activity_type]
+    except KeyError as exc:
+        raise OrchestrationError("SPECIALIST-CAPABILITY-UNPROVEN") from exc
+
+
+def activity_input_sha256(manifest: dict[str, Any]) -> str:
+    """Validate and hash the immutable activity input before a bootstrap."""
+    _input_manifest(manifest)
+    return _manifest_sha256(manifest)
+
+
+def activity_payload(activity: Mapping[str, Any], context: Mapping[str, Any]) -> dict[str, Any]:
+    """Build the technical payload only after the stored VERIFIED boundary."""
+    activity = dict(activity)
+    context = dict(context)
+    if activity.get("state") not in {"VERIFIED", "DISPATCHED"}:
+        _fail("ACTIVITY-NOT-VERIFIED")
+    if (activity.get("context_id") != context.get("context_id")
+            or activity.get("runtime") != context.get("runtime")
+            or not isinstance(context.get("leader"), dict)):
+        _fail("CONTEXT-FENCED")
+    fence = context["leader"].get("fence")
+    if type(fence) is not int or fence < 1:
+        _fail("CONTEXT-FENCED")
+    return {
+        "schema": _ACTIVITY_PAYLOAD_SCHEMA,
+        "activity_id": activity["activity_id"],
+        "context_id": activity["context_id"],
+        "fence": fence,
+        "runtime": activity["runtime"],
+        "input_sha256": activity["input_sha256"],
+        "input_manifest": copy.deepcopy(activity["input_manifest"]),
+        "write_files": copy.deepcopy(activity["write_files"]),
+    }
+
+
+def bootstrap_request(activity: Mapping[str, Any]) -> dict[str, Any]:
+    """The first contact carries identity/configuration only, never work."""
+    activity = dict(activity)
+    if activity.get("state") not in {"DECLARED", "BOOTSTRAPPING"}:
+        _fail("INVALID-ACTIVITY-TRANSITION")
+    if activity.get("activity_type") == "deterministic_check":
+        _fail("SPECIALIST-CAPABILITY-UNPROVEN")
+    return {
+        "activity_id": activity["activity_id"],
+        "context_id": activity["context_id"],
+        "runtime": activity["runtime"],
+        "requested_model": activity["requested_model"],
+        "requested_effort": activity["requested_effort"],
+        "transport": "bootstrap",
+    }
+
+
+def verify_specialist(activity: Mapping[str, Any], observation: Mapping[str, Any], *,
+                      require_open: bool = True) -> dict[str, Any]:
+    """Reject requested-only, aliased, or changed effective specialist facts."""
+    try:
+        from .agent_runtime import validate_observation
+    except ImportError:
+        from grill_core.agent_runtime import validate_observation
+    activity = dict(activity)
+    observed = validate_observation(dict(observation))
+    if activity.get("activity_type") not in {"author", "reviewer"}:
+        _fail("SPECIALIST-CAPABILITY-UNPROVEN")
+    expected_model, expected_effort = specialist_pair(activity.get("runtime"), activity["activity_type"])
+    if activity.get("requested_model") != expected_model or activity.get("requested_effort") != expected_effort:
+        _fail("SPECIALIST-CAPABILITY-UNPROVEN")
+    if observed["provider"] != activity["runtime"]:
+        _fail("SPECIALIST-CAPABILITY-UNPROVEN")
+    if observed["effective_model"] != expected_model:
+        _fail("SPECIALIST-MODEL-DIVERGENT")
+    if observed["effective_effort"] != expected_effort:
+        _fail("SPECIALIST-EFFORT-DIVERGENT")
+    if observed["resolved_model_id"] != expected_model:
+        _fail("SPECIALIST-CAPABILITY-UNPROVEN")
+    if require_open and (observed["activity"] not in {"active", "idle"} or observed["close"] != "not_requested"):
+        _fail("SPECIALIST-CAPABILITY-UNPROVEN")
+    return observed
+
+
+def activity_requirements(policy: Mapping[str, Any], *, step_id: str | None,
+                          activity_scope: str, new_how: bool = False,
+                          frontend: bool = False) -> tuple[str, ...]:
+    """Return policy roles; a delivered context is intentionally not proof."""
+    if activity_scope == "interview":
+        interview = policy.get("interview") if isinstance(policy, Mapping) else None
+        if not isinstance(interview, Mapping) or step_id is not None:
+            _fail("ACTIVITY-REQUIRED")
+        roles = interview.get("roles")
+        if not isinstance(roles, list) or any(role not in {"author", "reviewer"} for role in roles):
+            _fail("ACTIVITY-REQUIRED")
+        return tuple(roles)
+    matrix = policy.get("activity_matrix") if isinstance(policy, Mapping) else None
+    entry = matrix.get(step_id) if isinstance(matrix, Mapping) else None
+    if not isinstance(entry, Mapping):
+        _fail("ACTIVITY-REQUIRED")
+    required = entry.get("required")
+    if not isinstance(required, list):
+        _fail("ACTIVITY-REQUIRED")
+    roles = {role for role in required if role in {"author", "reviewer"}}
+    if new_how and (entry.get("author_for_new_how") is True or step_id in {"plan", "tasks"}):
+        roles.add("author")
+    if frontend and step_id == "plan":
+        roles.add("author")
+        roles.add("reviewer")
+    return tuple(sorted(roles))
+
+
+def activity_coverage(item: Mapping[str, Any], policy: Mapping[str, Any], *, context_id: str,
+                      step_id: str | None, activity_scope: str = "cycle",
+                      new_how: bool = False, frontend: bool = False) -> dict[str, Any]:
+    """Prove accepted activities, never merely that their context was sent."""
+    required = activity_requirements(policy, step_id=step_id, activity_scope=activity_scope,
+                                     new_how=new_how, frontend=frontend)
+    accepted: dict[str, list[str]] = {role: [] for role in required}
+    for activity_id, activity in item.get("activities", {}).items():
+        if not isinstance(activity, Mapping) or activity.get("state") != "ACCEPTED":
+            continue
+        if (activity.get("context_id") != context_id or activity.get("activity_scope") != activity_scope
+                or activity.get("step_id") != step_id or activity.get("activity_type") not in accepted):
+            continue
+        accepted[activity["activity_type"]].append(activity_id)
+    missing = [role for role, ids in accepted.items() if not ids]
+    return {"required": list(required), "accepted": {role: sorted(ids) for role, ids in accepted.items()},
+            "missing": missing}
+
+
+def require_activity_coverage(item: Mapping[str, Any], policy: Mapping[str, Any], *, context_id: str,
+                              step_id: str | None, activity_scope: str = "cycle",
+                              new_how: bool = False, frontend: bool = False) -> dict[str, Any]:
+    coverage = activity_coverage(item, policy, context_id=context_id, step_id=step_id,
+                                 activity_scope=activity_scope, new_how=new_how, frontend=frontend)
+    if coverage["missing"]:
+        _fail("ACTIVITY-REQUIRED: " + ", ".join(coverage["missing"]))
+    return coverage
+
+
+def invocation_context(*, policy: Mapping[str, Any], policy_sha256: str,
+                       context: Mapping[str, Any], step_id: str,
+                       canonical_entrypoint: Mapping[str, Any], supplement: Mapping[str, Any],
+                       task_template: Mapping[str, Any], new_how: bool = False,
+                       frontend: bool = False) -> dict[str, Any]:
+    """Return hashed supplements alongside, never instead of, the entrypoint."""
+    _digest(policy_sha256, "policy sha256")
+    if not isinstance(canonical_entrypoint, Mapping) or not isinstance(supplement, Mapping) or not isinstance(task_template, Mapping):
+        _fail("INVALID-INVOCATION-CONTEXT")
+    requirements = activity_requirements(policy, step_id=step_id, activity_scope="cycle",
+                                         new_how=new_how, frontend=frontend)
+    return {
+        "schema": _ACTIVITY_CONTEXT_SCHEMA,
+        "context_id": context["context_id"],
+        "epoch": context["epoch"],
+        "step_id": step_id,
+        "canonical_entrypoint": copy.deepcopy(dict(canonical_entrypoint)),
+        "policy_sha256": policy_sha256,
+        "supplement": copy.deepcopy(dict(supplement)),
+        "task_template": copy.deepcopy(dict(task_template)),
+        "required_activities": list(requirements),
+        "limitation": "context-delivery-is-not-skill-invocation",
+    }
 
 
 def _absolute_path(value: Any, label: str) -> None:
@@ -446,7 +621,10 @@ def _activity(activity_id: str, value: Any, contexts: dict[str, Any]) -> None:
     _digest(value["policy_sha256"], "activity policy_sha256")
     _unique_ids(value["author_activity_ids"], "activity author")
     if not isinstance(value["write_files"], list): _fail("invalid activity files")
-    for path in value["write_files"]: _safe_path(path)
+    for path in value["write_files"]:
+        _safe_path(path)
+        if path == ".grill" or path.startswith(".grill/") or path == ".specify/reports" or path.startswith(".specify/reports/"):
+            _fail("activity writes leader evidence")
     if len(set(value["write_files"])) != len(value["write_files"]): _fail("duplicate activity files")
     if value["activity_type"] == "reviewer" and value["write_files"]:
         _fail("reviewer writes files")
@@ -485,6 +663,179 @@ def _activity(activity_id: str, value: Any, contexts: dict[str, Any]) -> None:
             _fail("read-only activity lacks durable return")
         if value["task_binding"] is not None and value["write_files"] and value["output_manifest"]["effect_ref"] is None:
             _fail("task output lacks confirmed effect")
+
+
+def new_activity(*, activity_id: str, context_id: str, step_id: str | None,
+                 activity_scope: str, activity_type: str, attempt: int,
+                 input_manifest: dict[str, Any], policy_sha256: str,
+                 write_files: list[str]) -> dict[str, Any]:
+    """Create the durable neutral-bootstrap record for one activity."""
+    if activity_scope not in {"interview", "cycle"}:
+        _fail("invalid activity scope")
+    if activity_scope == "interview" and step_id is not None:
+        _fail("interview activity has step")
+    if activity_scope == "cycle" and step_id not in SEQUENCE_V4:
+        _fail("invalid activity step_id")
+    _id(activity_id, "activity id")
+    _id(context_id, "activity context")
+    if type(attempt) is not int or attempt < 1:
+        _fail("invalid activity attempt")
+    input_manifest = copy.deepcopy(input_manifest)
+    input_sha256 = activity_input_sha256(input_manifest)
+    if activity_type == "deterministic_check":
+        runtime = requested_model = requested_effort = None
+    else:
+        runtime = None
+        # Runtime is supplied by the owning context during prepare. This keeps
+        # this constructor usable for a context switch without guessing it.
+        requested_model = requested_effort = None
+    return {
+        "activity_id": activity_id, "context_id": context_id, "step_id": step_id,
+        "activity_scope": activity_scope, "activity_type": activity_type, "role": activity_type,
+        "attempt": attempt, "author_activity_ids": input_manifest["author_activity_ids"],
+        "input_manifest": input_manifest, "input_sha256": input_sha256,
+        "task_binding": input_manifest["task_binding"], "runtime": runtime,
+        "requested_model": requested_model, "requested_effort": requested_effort,
+        "policy_sha256": policy_sha256, "write_files": sorted(write_files),
+        "session_resource_id": None, "launch_observation_ref": None,
+        "effective_model": None, "effective_effort": None, "resolved_model_id": None,
+        "payload_sha256": None, "released_at": None, "state": "DECLARED",
+        "presentation_observation_ref": None, "result_ref": None, "result_sha256": None,
+        "output_manifest": None, "diagnostic_ref": None, "accepted_by_context": None,
+        "acceptance_ref": None, "review_verdict": None,
+    }
+
+
+def prepare_activity(activity: Mapping[str, Any], context: Mapping[str, Any]) -> dict[str, Any]:
+    """Bind exact policy credentials and return a bootstrap-only activity."""
+    prepared = copy.deepcopy(dict(activity))
+    if prepared.get("state") not in {"DECLARED", "BOOTSTRAPPING"}:
+        _fail("INVALID-ACTIVITY-TRANSITION")
+    if prepared.get("context_id") != context.get("context_id"):
+        _fail("CONTEXT-FENCED")
+    if prepared["activity_type"] != "deterministic_check":
+        runtime = context.get("runtime")
+        model, effort = specialist_pair(runtime, prepared["activity_type"])
+        prepared["runtime"], prepared["requested_model"], prepared["requested_effort"] = runtime, model, effort
+    if prepared["activity_type"] == "reviewer" and prepared["write_files"]:
+        _fail("reviewer writes files")
+    prepared["state"] = "BOOTSTRAPPING"
+    return prepared
+
+
+def record_verified_activity(activity: Mapping[str, Any], observation: Mapping[str, Any]) -> dict[str, Any]:
+    """Persist only a freshly verified effective identity before payload use."""
+    verified = copy.deepcopy(dict(activity))
+    if verified.get("state") != "BOOTSTRAPPING":
+        _fail("INVALID-ACTIVITY-TRANSITION")
+    observed = verify_specialist(verified, observation)
+    verified.update({
+        "session_resource_id": specialist_resource_id(verified["activity_id"]),
+        "launch_observation_ref": observed["source_ref"],
+        "effective_model": observed["effective_model"],
+        "effective_effort": observed["effective_effort"],
+        "resolved_model_id": observed["resolved_model_id"],
+        "state": "VERIFIED",
+    })
+    return verified
+
+
+def specialist_resource_id(activity_id: str) -> str:
+    _id(activity_id, "activity id")
+    return "session-" + hashlib.sha256(activity_id.encode("utf-8")).hexdigest()[:24]
+
+
+def session_resource(activity: Mapping[str, Any], observation: Mapping[str, Any], *,
+                     collected_at: str) -> tuple[str, dict[str, Any]]:
+    """Register the observed session before a payload can be released."""
+    activity = dict(activity)
+    observed = verify_specialist(activity, observation)
+    resource_id = specialist_resource_id(activity["activity_id"])
+    identity = {key: observed[key] for key in (
+        "provider", "adapter", "host", "runtime_instance", "handle", "incarnation",
+        "owner_dispatch", "task_id", "dispatch_incarnation", "worktree_id",
+    )}
+    resource = {
+        "kind": "session", "agent_id": observed["provider"], "activity_id": activity["activity_id"],
+        "scheduler_run_id": None, "worker_id": None, "wave_id": None,
+        "origin_context_id": activity["context_id"], "identity": identity,
+        "creation_observation": {"kind": "session", "identity": copy.deepcopy(identity),
+                                   "source_ref": observed["source_ref"],
+                                   "source_sha256": observed["source_sha256"], "collected_at": collected_at},
+        "result_acceptance_ref": None,
+        "evidence_manifest": {"files": [], "receipts": [{"ref": observed["source_ref"],
+                                                              "sha256": observed["source_sha256"]}],
+                              "terminal_head": None, "integrated_head": None},
+        "state": "REGISTERED", "last_observation": observed["source_ref"],
+        "preservation_reasons": [], "operation_id": None,
+    }
+    return resource_id, resource
+
+
+def close_session_resource(resource: Mapping[str, Any], observation: Mapping[str, Any], *,
+                           acceptance_ref: str) -> dict[str, Any]:
+    """Close only the registered identity, after its result is durable."""
+    try:
+        from .agent_runtime import validate_observation
+    except ImportError:
+        from grill_core.agent_runtime import validate_observation
+    closed = copy.deepcopy(dict(resource))
+    observed = validate_observation(dict(observation))
+    identity = {key: observed[key] for key in closed["identity"]}
+    if identity != closed["identity"] or observed["close"] != "closed" or observed["activity"] != "exited":
+        _fail("SESSION-CLOSE-UNPROVEN")
+    if closed.get("state") != "CLOSE_PENDING":
+        _fail("INVALID-RESOURCE-TRANSITION")
+    _text(acceptance_ref, "resource acceptance ref")
+    closed.update({"result_acceptance_ref": acceptance_ref, "state": "CLOSED"})
+    return closed
+
+
+def dispatch_activity(activity: Mapping[str, Any], context: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Bind a one-shot technical payload to activity, context, fence and inputs."""
+    dispatched = copy.deepcopy(dict(activity))
+    payload = activity_payload(dispatched, context)
+    dispatched["payload_sha256"] = _manifest_sha256(payload)
+    dispatched["state"] = "DISPATCHED"
+    return dispatched, payload
+
+
+def record_activity_result(activity: Mapping[str, Any], *, result_ref: str, result_sha256: str,
+                           output_manifest: dict[str, Any] | None, diagnostic_ref: str | None = None) -> dict[str, Any]:
+    """Persist output or diagnostic before any runtime-close attempt."""
+    recorded = copy.deepcopy(dict(activity))
+    if recorded.get("state") != "DISPATCHED":
+        _fail("INVALID-ACTIVITY-TRANSITION")
+    _text(result_ref, "activity result_ref")
+    _digest(result_sha256, "activity result_sha256")
+    if output_manifest is None:
+        _fail("activity output required")
+    _output_manifest(output_manifest)
+    recorded.update({"result_ref": result_ref, "result_sha256": result_sha256,
+                     "output_manifest": copy.deepcopy(output_manifest), "diagnostic_ref": diagnostic_ref,
+                     "state": "RESULT_RECORDED"})
+    return recorded
+
+
+def accept_activity(activity: Mapping[str, Any], *, context: Mapping[str, Any],
+                    observation: Mapping[str, Any], acceptance_ref: str,
+                    review_verdict: str = "APPROVED") -> dict[str, Any]:
+    """Revalidate identity/configuration at return, then record accepted close."""
+    accepted = copy.deepcopy(dict(activity))
+    if accepted.get("state") != "RESULT_RECORDED":
+        _fail("INVALID-ACTIVITY-TRANSITION")
+    if accepted.get("context_id") != context.get("context_id"):
+        _fail("CONTEXT-FENCED")
+    observed = verify_specialist(accepted, observation, require_open=False)
+    if observed["close"] != "closed" or observed["activity"] != "exited":
+        _fail("SESSION-CLOSE-UNPROVEN")
+    _text(acceptance_ref, "activity acceptance_ref")
+    if review_verdict not in {"APPROVED", "CHANGES_REQUIRED"}:
+        _fail("invalid activity review verdict")
+    accepted.update({"released_at": observed["source_ref"], "accepted_by_context": context["context_id"],
+                     "acceptance_ref": acceptance_ref, "review_verdict": review_verdict,
+                     "state": "ACCEPTED"})
+    return accepted
 
 
 def _resource(resource_id: str, value: Any, contexts: dict[str, Any]) -> None:

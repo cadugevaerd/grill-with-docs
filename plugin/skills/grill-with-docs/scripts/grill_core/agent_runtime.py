@@ -225,6 +225,19 @@ class RuntimeBoundary:
             _fail("SPECIALIST-CAPABILITY-UNPROVEN")
         return observation
 
+    def revalidate(self, expected: dict[str, Any]) -> dict[str, Any]:
+        """Read current runtime facts before accepting a specialist return."""
+        expected = validate_observation(expected)
+        observed = self._read(self.observe)
+        if (_identity(observed) != _identity(expected)
+                or observed["effective_model"] != expected["effective_model"]
+                or observed["effective_effort"] != expected["effective_effort"]
+                or observed["resolved_model_id"] != expected["resolved_model_id"]
+                or observed["activity"] not in {"active", "idle"}
+                or observed["close"] != "not_requested"):
+            _fail("SPECIALIST-CAPABILITY-UNPROVEN")
+        return observed
+
     def close(self, expected: dict[str, Any]) -> dict[str, Any]:
         if self._closed:
             _fail("runtime close already confirmed")
