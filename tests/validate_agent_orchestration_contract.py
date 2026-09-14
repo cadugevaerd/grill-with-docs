@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "plugin/skills/grill-with-docs/scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -68,21 +69,34 @@ class AgentOrchestrationContract(unittest.TestCase):
     def test_rollout_and_canonical_pins(self):
         temp, root = self.fixture()
         with temp:
-            code, init = self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x", "--runtime", "codex", "--skip-backlog")
-            self.assertEqual(code, 0); self.assertEqual(init["orchestration"], "INITIALIZED")
-            before = store.read_snapshot(root).content_sha256
-            args = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex", "--session-ref", "observed-session", "--scope-file", "src/a.py")
-            code, preview = self.run_cli(*args); self.assertEqual(code, 0); self.assertEqual(preview["verdict"], "PREVIEW")
-            self.assertEqual(store.read_snapshot(root).content_sha256, before)
-            self.assertEqual(self.run_cli(*args, "--apply")[0], 2)
-            code, adopted = self.run_cli(*args, "--apply", "--expected-sha256", preview["expected_sha256"])
-            self.assertEqual(code, 0); self.assertEqual(adopted["verdict"], "ORCHESTRATION-ADOPTED")
-            self.assertEqual(self.run_cli(*args, "--apply", "--expected-sha256", preview["expected_sha256"])[1]["verdict"], "REUSED")
-            document = store.read_snapshot(root).document
-            context = document["agent_orchestration"]["work_items"]["work-x"]["contexts"][adopted["context_id"]]
-            self.assertIsNone(context["activation"]); self.assertIsNone(context["campaign"]); self.assertEqual(context["scheduler_runs"], {})
-            stale = self.run_cli(*args, "--scope-file", "src/b.py", "--apply", "--expected-sha256", preview["expected_sha256"])
-            self.assertEqual(stale[0], 2)
+            dependencies = grill_workspace.sibling("ensure_dependencies")
+            probes = []; commands = []
+            def sentinel_tool(_tools, command):
+                probes.append(command)
+                return f"/offline/{command}"
+            def sentinel_probe(_tools, argv, **_kwargs):
+                commands.append(argv)
+                return 1, ""
+            with mock.patch.dict("os.environ", {"GRILL_SKIP_DEPENDENCIES": ""}), \
+                 mock.patch.object(dependencies.Toolchain, "which", sentinel_tool), \
+                 mock.patch.object(dependencies.Toolchain, "run", sentinel_probe):
+                code, init = self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x", "--runtime", "codex", "--skip-backlog")
+                self.assertEqual(code, 0); self.assertEqual(init["orchestration"], "INITIALIZED")
+                before = store.read_snapshot(root).content_sha256
+                args = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex", "--session-ref", "observed-session", "--scope-file", "src/a.py")
+                code, preview = self.run_cli(*args); self.assertEqual(code, 0); self.assertEqual(preview["verdict"], "PREVIEW")
+                self.assertEqual(store.read_snapshot(root).content_sha256, before)
+                self.assertEqual(self.run_cli(*args, "--apply")[0], 2)
+                code, adopted = self.run_cli(*args, "--apply", "--expected-sha256", preview["expected_sha256"])
+                self.assertEqual(code, 0); self.assertEqual(adopted["verdict"], "ORCHESTRATION-ADOPTED")
+                self.assertEqual(self.run_cli(*args, "--apply", "--expected-sha256", preview["expected_sha256"])[1]["verdict"], "REUSED")
+                document = store.read_snapshot(root).document
+                context = document["agent_orchestration"]["work_items"]["work-x"]["contexts"][adopted["context_id"]]
+                self.assertIsNone(context["activation"]); self.assertIsNone(context["campaign"]); self.assertEqual(context["scheduler_runs"], {})
+                stale = self.run_cli(*args, "--scope-file", "src/b.py", "--apply", "--expected-sha256", preview["expected_sha256"])
+                self.assertEqual(stale[0], 2)
+            self.assertTrue(probes); self.assertTrue(commands)
+            self.assertTrue(all(argv[0].startswith("/offline/") for argv in commands))
     def boundary(self, probe=None, after=None, release=None, adapter="orca", capabilities=None, calls=None):
         probe = probe or native_sources()
         after = after or native_sources(released=True)

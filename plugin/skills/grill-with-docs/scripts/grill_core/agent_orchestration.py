@@ -23,7 +23,7 @@ _OPERATION_STATES = {"INTENT", "APPLIED", "CONFIRMED", "UNKNOWN", "REFUSED"}
 _LEADER_STATES = {"ACTIVE", "RELEASING", "RELEASED"}
 _ACTIVITY_STATES = {"DECLARED", "BOOTSTRAPPING", "VERIFIED", "DISPATCHED", "RESULT_RECORDED", "ACCEPTED", "BLOCKED", "FAILED"}
 _RESOURCE_STATES = {"REGISTERED", "CLOSE_PENDING", "REMOVE_PENDING", "CLOSED", "REMOVED", "PRESERVED", "UNKNOWN"}
-_OPERATION_EDGES = {"INTENT": {"INTENT", "APPLIED", "UNKNOWN", "REFUSED"}, "APPLIED": {"APPLIED", "CONFIRMED", "UNKNOWN"}, "CONFIRMED": {"CONFIRMED"}, "UNKNOWN": {"UNKNOWN"}, "REFUSED": {"REFUSED"}}
+_OPERATION_EDGES = {"INTENT": {"INTENT", "APPLIED", "UNKNOWN", "REFUSED"}, "APPLIED": {"APPLIED", "CONFIRMED", "UNKNOWN"}, "CONFIRMED": {"CONFIRMED"}, "UNKNOWN": {"UNKNOWN", "CONFIRMED"}, "REFUSED": {"REFUSED"}}
 _ACTIVITY_EDGES = {"DECLARED": {"DECLARED", "BOOTSTRAPPING", "BLOCKED"}, "BOOTSTRAPPING": {"BOOTSTRAPPING", "VERIFIED", "BLOCKED"}, "VERIFIED": {"VERIFIED", "DISPATCHED", "BLOCKED"}, "DISPATCHED": {"DISPATCHED", "RESULT_RECORDED", "FAILED"}, "RESULT_RECORDED": {"RESULT_RECORDED", "ACCEPTED"}, "ACCEPTED": {"ACCEPTED"}, "BLOCKED": {"BLOCKED"}, "FAILED": {"FAILED"}}
 _RESOURCE_EDGES = {"REGISTERED": {"REGISTERED", "CLOSE_PENDING", "REMOVE_PENDING", "PRESERVED", "UNKNOWN"}, "CLOSE_PENDING": {"CLOSE_PENDING", "CLOSED", "PRESERVED", "UNKNOWN"}, "REMOVE_PENDING": {"REMOVE_PENDING", "REMOVED", "PRESERVED", "UNKNOWN"}, "PRESERVED": {"PRESERVED", "CLOSE_PENDING", "REMOVE_PENDING"}, "UNKNOWN": {"UNKNOWN", "CLOSE_PENDING", "REMOVE_PENDING"}, "CLOSED": {"CLOSED"}, "REMOVED": {"REMOVED"}}
 
@@ -434,12 +434,19 @@ def validate_transition(previous: Any, candidate: Any) -> None:
             later = new["operations"][operation_id]
             for key in ("kind", "context_id", "fence", "subject_ids", "input_sha256", "expected_before", "intended_after", "idempotency_key"):
                 if later[key] != operation[key]: _fail("operation identity changed")
+            if operation["state"] == "CONFIRMED" and later != operation: _fail("confirmed operation changed")
             if later["state"] not in _OPERATION_EDGES[operation["state"]]: _fail("invalid operation transition")
+            if operation["state"] == "UNKNOWN":
+                for key in ("result_ref", "result_sha256", "observation_ref"):
+                    if operation[key] is not None and later[key] != operation[key]: _fail("unknown operation evidence changed")
+                if later["state"] == "CONFIRMED" and not all(isinstance(later[key], str) for key in ("result_ref", "result_sha256", "observation_ref")):
+                    _fail("unknown operation reconciliation requires result and observation evidence")
         activity_identity = {"activity_id", "context_id", "step_id", "activity_scope", "activity_type", "role", "attempt", "author_activity_ids", "input_manifest", "input_sha256", "task_binding", "runtime", "requested_model", "requested_effort", "policy_sha256", "write_files"}
         if not set(old["activities"]).issubset(new["activities"]): _fail("activity history removed")
         for activity_id, activity in old["activities"].items():
             later = new["activities"][activity_id]
             if any(later[key] != activity[key] for key in activity_identity): _fail("activity identity changed")
+            if activity["state"] == "ACCEPTED" and later != activity: _fail("accepted activity changed")
             if later["state"] not in _ACTIVITY_EDGES[activity["state"]]: _fail("invalid activity transition")
         resource_identity = {"kind", "agent_id", "activity_id", "scheduler_run_id", "worker_id", "wave_id", "origin_context_id", "identity", "creation_observation"}
         if not set(old["resources"]).issubset(new["resources"]): _fail("resource history removed")

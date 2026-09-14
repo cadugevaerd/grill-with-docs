@@ -230,6 +230,59 @@ class StoreContract(unittest.TestCase):
   pending=self.paths().locks/store.PENDING_TRANSITION_NAME; intent=json.loads(pending.read_text(encoding='utf-8')); intent['candidate']['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1']['state']='INTENT'; intent['candidate'].pop('content_sha256',None); intent['candidate']['content_sha256']=store.content_hash(intent['candidate']); pending.write_bytes(store.jcs(intent)+b'\n')
   with self.assertRaises(store.StoreError): store.recover_pending_transition(self.r,now=CLOCK)
 
+ def test_orchestration_unknown_reconciliation_requires_conclusive_preserved_evidence(self):
+  self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}; operations={'op-1':ORCHESTRATION_OPERATION()}
+  store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc(contexts,operations)},now=CLOCK)
+  def uncertain(document):
+   operation=document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1']; operation.update(state='APPLIED'); return document
+  store.transact(self.r,uncertain,now=CLOCK)
+  def lost_reply(document):
+   operation=document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1']; operation.update(state='UNKNOWN',observation_ref='receipts/readback',error='reply lost'); return document
+  unknown=store.transact(self.r,lost_reply,now=CLOCK)
+  for updates in ({'state':'APPLIED','result_ref':'receipts/result','result_sha256':'d'*64},{'state':'CONFIRMED','result_sha256':'d'*64},{'state':'CONFIRMED','result_ref':'receipts/result'}):
+   with self.subTest(updates=updates), self.assertRaises(store.StoreError): store.transact(self.r,lambda document, updates=updates: (document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1'].update(updates),document)[1],now=CLOCK)
+  with self.assertRaises(store.StoreError): store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1'].update(state='CONFIRMED',result_ref='receipts/result',result_sha256='d'*64,observation_ref='receipts/replacement'),document)[1],now=CLOCK)
+  def reconcile(document):
+   operation=document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1']; operation.update(state='CONFIRMED',result_ref='receipts/result',result_sha256='d'*64); return document
+  confirmed=store.transact(self.r,reconcile,now=CLOCK)
+  operation=confirmed.document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1']
+  self.assertEqual((operation['state'],operation['observation_ref'],operation['result_ref'],operation['result_sha256']),('CONFIRMED','receipts/readback','receipts/result','d'*64))
+  original=unknown.document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1']
+  self.assertEqual((operation['kind'],operation['context_id'],operation['fence'],operation['subject_ids'],operation['input_sha256'],operation['idempotency_key']),(original['kind'],original['context_id'],original['fence'],original['subject_ids'],original['input_sha256'],original['idempotency_key']))
+
+ def test_orchestration_confirmed_operation_and_accepted_activity_are_immutable_in_every_store_path(self):
+  class InjectedFault(RuntimeError): pass
+  self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}; operations={'op-1':ORCHESTRATION_OPERATION()}
+  def adopt(document):
+   document['agent_orchestration']=self._orchestration_doc(contexts,operations); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':ORCHESTRATION_ACTIVITY()}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE(),'resource-2':ORCHESTRATION_RESOURCE('resource-2')}; item['resources']['resource-2']['identity']={'handle':'term-2'}; return document
+  store.transact(self.r,adopt,now=CLOCK)
+  store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1'].update(state='APPLIED'),document)[1],now=CLOCK)
+  def confirm(document):
+   operation=document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1']; operation.update(state='CONFIRMED',result_ref='receipts/result',result_sha256='d'*64,observation_ref='receipts/observation'); return document
+  confirmed=store.transact(self.r,confirm,now=CLOCK)
+  rewrite=copy.deepcopy(confirmed.document); rewrite['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1']['result_ref']='receipts/replacement'
+  with self.assertRaises(store.StoreError): store.write_snapshot(self.r,rewrite,confirmed.revision,now=CLOCK)
+  with self.assertRaises(store.StoreError): store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1'].update(observation_ref='receipts/replacement-observation'),document)[1],now=CLOCK)
+  receipt={'schema':'grill-orchestration-receipt/v1','category':'runtime','name':'confirmed-history','work_id':'orchestration-work','context_id':'ctx-1','operation_id':'op-1','input_sha256':'3'*64,'output_sha256':'d'*64}
+  event={'schema':'grill-orchestration-event/v1','event':'agent.orchestration.recorded','work_id':'orchestration-work','context_id':'ctx-1','operation_id':'op-1','input_sha256':'3'*64,'output_sha256':'d'*64,'receipt_sha256':store.jcs_sha256(receipt)}
+  with self.assertRaises(store.StoreError): store.append_agent_orchestration_event(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1'].update(result_sha256='e'*64),document)[1],event=event,receipt=receipt,now=CLOCK)
+  def interrupt(point):
+   if point=='after-event': raise InjectedFault(point)
+  with self.assertRaises(InjectedFault): store.append_agent_orchestration_event(self.r,lambda document: document,event=event,receipt=receipt,now=CLOCK,fault=interrupt)
+  pending=self.paths().locks/store.PENDING_TRANSITION_NAME; intent=json.loads(pending.read_text(encoding='utf-8')); intent['candidate']['agent_orchestration']['work_items']['orchestration-work']['operations']['op-1']['result_sha256']='e'*64; intent['candidate'].pop('content_sha256',None); intent['candidate']['content_sha256']=store.content_hash(intent['candidate']); pending.write_bytes(store.jcs(intent)+b'\n')
+  with self.assertRaises(store.StoreError) as caught: store.recover_pending_transition(self.r,now=CLOCK)
+  self.assertEqual(caught.exception.code,'STORE_RECOVERY_REQUIRED')
+  self.tearDown(); self.setUp(); self.register()
+  def accepted(document):
+   document['agent_orchestration']=self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()}); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':ORCHESTRATION_ACTIVITY()}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE(),'resource-2':ORCHESTRATION_RESOURCE('resource-2')}; item['resources']['resource-2']['identity']={'handle':'term-2'}; return document
+  store.transact(self.r,accepted,now=CLOCK)
+  for state in ('BOOTSTRAPPING','VERIFIED','DISPATCHED','RESULT_RECORDED','ACCEPTED'):
+   def advance(document,state=state):
+    activity=document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1']; activity.update(state=state,session_resource_id='resource-1',result_ref='receipts/result',result_sha256='d'*64,output_manifest={'artifact':'d'*64},accepted_by_context='ctx-1',acceptance_ref='receipts/acceptance',review_verdict='APPROVED'); return document
+   store.transact(self.r,advance,now=CLOCK)
+  for updates in ({'session_resource_id':'resource-2'},{'result_ref':'receipts/replacement','result_sha256':'e'*64,'output_manifest':{'artifact':'e'*64}},{'acceptance_ref':'receipts/replacement-acceptance','review_verdict':'CHANGES_REQUIRED'}):
+   with self.subTest(updates=updates), self.assertRaises(store.StoreError): store.transact(self.r,lambda document, updates=updates: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1'].update(updates),document)[1],now=CLOCK)
+
  def test_orchestration_preserves_resource_activity_and_visual_histories(self):
   self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}
   def adopt(document):
