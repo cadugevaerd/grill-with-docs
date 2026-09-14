@@ -158,7 +158,39 @@ class StatusPublicContract(unittest.TestCase):
     def _switch_to_phase_branch(self, name="011-gauntlet-loop"):
         self.item(); self._git("add","."); self._git("commit","-qm","bundle")
         self._git("checkout","-qb",name); return name
+    def _accepted_activity(self, contract, runtime, context, step, role, authors=()):
+        activity_id=f"fixture-{role}-{step}"
+        manifest={"files":[],"required_activity_ids":[],"author_activity_ids":list(authors),"task_binding":None,"human_authorization":None}
+        activity=contract.prepare_activity(contract.new_activity(activity_id=activity_id,context_id=context["context_id"],step_id=step,activity_scope="cycle",activity_type=role,attempt=1,input_manifest=manifest,policy_sha256=context["policy_sha256"],write_files=[]),context)
+        model,effort=contract.specialist_pair(context["runtime"],role)
+        def observation(closed):
+            source=f"fixtures/{activity_id}-{'closed' if closed else 'open'}.json"
+            return runtime.validate_observation({"schema":"grill-agent-observation/v1","adapter":"orca","provider":context["runtime"],"handle":activity_id,"incarnation":f"inc-{activity_id}","dispatch_incarnation":f"dispatch-inc-{activity_id}","runtime_instance":f"runtime-{activity_id}","host":"fixture-host","owner_dispatch":f"dispatch-{activity_id}","task_id":f"task-{activity_id}","worktree_id":"fixture-worktree","source_ref":source,"source_sha256":hashlib.sha256(source.encode()).hexdigest(),"requested_model":model,"requested_effort":effort,"effective_model":model,"effective_effort":effort,"resolved_model_id":model,"activity":"exited" if closed else "active","close":"closed" if closed else "not_requested"})
+        opened=observation(False); activity=contract.record_verified_activity(activity,opened)
+        resource_id,resource=contract.session_resource(activity,opened,collected_at="2026-01-01T00:00:00Z")
+        activity,_=contract.dispatch_activity(activity,context); result_ref=f"fixtures/{activity_id}.json"; result_sha256=hashlib.sha256(result_ref.encode()).hexdigest()
+        activity=contract.record_activity_result(activity,result_ref=result_ref,result_sha256=result_sha256,output_manifest={"files":[],"return_ref":{"ref":result_ref,"sha256":result_sha256},"effect_ref":None})
+        closed=observation(True); activity=contract.accept_activity(activity,context=context,observation=closed,acceptance_ref=result_ref)
+        resource["state"]="CLOSE_PENDING"
+        return activity_id,activity,resource_id,contract.close_session_resource(resource,closed,acceptance_ref=result_ref)
+    def _accepted_activities(self, step):
+        sys.path.insert(0,str(WS.parent)); module=self._load_workspace_module(); store=module.grill_core_module("store"); contract=module.grill_core_module("agent_orchestration"); runtime=module.grill_core_module("agent_runtime")
+        policy=json.loads((PLUGIN/"skills/grill-with-docs/assets/agent-orchestration.v1.json").read_text(encoding="utf-8"))
+        snapshot=store.read_snapshot(self.r); item=snapshot.document["agent_orchestration"]["work_items"]["work-a"]; context=item["contexts"][item["current_context_id"]]
+        required=contract.activity_coverage(item,policy,context_id=context["context_id"],step_id=step,new_how=step=="specify",frontend=step=="plan")
+        if not required["missing"]: return
+        roles=set(required["required"])
+        if "reviewer" in roles: roles.add("author")
+        activities={}; resources={}; author_id=None
+        if "author" in roles:
+            author_id,activity,resource_id,resource=self._accepted_activity(contract,runtime,context,step,"author")
+            activities[author_id]=activity; resources[resource_id]=resource
+        if "reviewer" in roles:
+            reviewer_id,activity,resource_id,resource=self._accepted_activity(contract,runtime,context,step,"reviewer",(author_id,))
+            activities[reviewer_id]=activity; resources[resource_id]=resource
+        store.transact(self.r,lambda document:{**document,"agent_orchestration":{**document["agent_orchestration"],"work_items":{**document["agent_orchestration"]["work_items"],"work-a":{**document["agent_orchestration"]["work_items"]["work-a"],"activities":{**document["agent_orchestration"]["work_items"]["work-a"]["activities"],**activities},"resources":{**document["agent_orchestration"]["work_items"]["work-a"]["resources"],**resources}}}}})
     def _checkpoint(self, step, state):
+        if state in {"in-progress","complete"}: self._accepted_activities(step)
         p=cli(WS,"checkpoint",self.r,"--work-id","work-a","--step",step,
               "--state",state,"--evidence","WORKFLOW.md","--reason",f"contract {step} {state}")
         self.assertEqual(len(p.stdout.splitlines()),1,(p.stdout,p.stderr))

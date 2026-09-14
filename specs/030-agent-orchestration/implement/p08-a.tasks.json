@@ -12,7 +12,7 @@
   "tasks": {
     "T019": {"status": "done", "summary": "Added the mandatory i-have-adhd harness-plugin dependency, exact delegated install argv, and runtime-effective cache ambiguity refusal without changing Ponytail semantics."},
     "T020": {"status": "done", "summary": "Added a no-follow approved-byte loader, frontmatter-only body extraction, and correlated loading evidence that never promotes a listing, exit code, or self-report."},
-    "T021": {"status": "done", "summary": "Added independent readiness projections, bounded user suspension, presentation persistence validation, entry/activity gating when adopted, checkpoint propagation, and read-only status projection."},
+    "T021": {"status": "done", "summary": "Added independent readiness projections, bounded user suspension, presentation persistence validation, entry/activity gating when adopted, checkpoint propagation, and read-only status projection; status fixtures now establish accepted author/reviewer activities before checkpoint assertions."},
     "T022": {"status": "done", "summary": "Updated the GWD entry, session protocol, supplement, and policy pins so both harnesses bootstrap the local presentation while preserving Ponytail, scope, and upstream exceptions."}
   },
   "checks": [
@@ -24,7 +24,13 @@
     "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_status_contract.py",
     "git diff --check"
   ],
-  "limitations": [
-    "validate_status_contract.py has two inherited failures on both the p08 overlay and clean 208b818: StatusPublicContract.test_specify_checkpoint_binds_phase_branch_and_status_exposes_it and StatusPublicContract.test_phase_turn_archives_and_clears_phase_binding_then_next_specify_binds_new_branch receive ACTIVITY-REQUIRED: author, reviewer before status projection."
-  ]
+  "evidence": {
+    "base": "208b81813093dbf82bb0064e5ab6fdb04ef3a392",
+    "overlay": "current p08 bytes plus this remediation",
+    "validate_dependencies_contract.py": 65,
+    "validate_agent_orchestration_contract.py": 22,
+    "validate_status_contract.py": 52,
+    "focused_presentation_tests": 3
+  },
+  "limitations": []
 }
