@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline contract checks for the native Orca observation seam."""
+import orchestration_fixture
 import contextlib
 import copy
 import io
@@ -53,6 +54,118 @@ def release_source(dispatch="ctx-1"):
 
 
 class AgentOrchestrationContract(unittest.TestCase):
+    def test_current_leader_adapter_and_exact_read_sources(self):
+        core = grill_workspace.grill_core_module("agent_runtime")
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            policy_raw = (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes()
+            kwargs = {"policy": json.loads(policy_raw), "policy_sha256": grill_workspace.hash_bytes(policy_raw),
+                "gwd_skill_sha256": grill_workspace.hash_bytes((grill_workspace.ASSETS.parent / "SKILL.md").read_bytes()),
+                "scope": {"kind": "gwd", "root": str(root), "work_id": "work-x"}}
+            for runtime in ("codex", "claude"):
+                kwargs["runtime"] = runtime
+                adapter, show, transcript = orchestration_fixture.boundary(
+                    grill_workspace, root, runtime, orchestration_fixture.SESSION, "work-x")
+                observed, ready = core.project_leader_presentation(adapter, **kwargs)
+                self.assertTrue(ready["work_ready"])
+                self.assertFalse(ready["functional_verified"])
+                with self.assertRaisesRegex(core.RuntimeError, "LEADER-AUTHORITY-UNPROVEN"):
+                    core.project_leader_presentation({**observed, "presentation": ready}, **kwargs)
+                # A source from another session, wrong host/root, revoked dispatch,
+                # partial transcript or model self-report cannot authorize entry.
+                original_show, original_transcript = copy.deepcopy(show), copy.deepcopy(transcript)
+                for container, key, value in (
+                    (show["result"]["terminal"], "handle", "another-terminal"),
+                    (show["result"]["terminal"], "worktreePath", "/other"),
+                    (show["result"]["terminal"], "incarnationId", "new-incarnation"),
+                    (show["result"]["dispatch"], "capabilityRevokedAt", "revoked"),
+                    (show["result"]["dispatch"], "status", {}),
+                    (show["result"]["worker"], "state", "unknown"),
+                    (show["result"]["worker"], "state", {}),
+                    (transcript["result"], "contentComplete", False),
+                    (transcript["result"], "sourceExact", False),
+                    (transcript["result"], "dispatchId", "other-dispatch"),
+                    (transcript["result"], "provider", "other-provider"),
+                ):
+                    previous = container[key]; container[key] = value
+                    with self.assertRaises(core.RuntimeError):
+                        core.project_leader_presentation(adapter, **kwargs)
+                    container[key] = previous
+                messages = transcript["result"]["transcript"]["messages"]
+                for mutate in (
+                    lambda: messages[1].update(role="assistant"),
+                    lambda: messages[3].update(role="assistant"),
+                    lambda: messages[3].update(id=""),
+                    lambda: messages[3]["blocks"][0].update(output="loaded=true"),
+                    lambda: messages[2]["blocks"][0].update(name={}),
+                    lambda: messages[3]["blocks"][0].update(output=orchestration_fixture.REFERENCE.read_text()[:-1]),
+                    lambda: messages[2]["blocks"][0]["input"].update(
+                        {"command" if runtime == "claude" else "cmd": "echo loaded"}),
+                    lambda: messages.reverse(),
+                ):
+                    mutate()
+                    self.assertFalse(core.project_leader_presentation(adapter, **kwargs)[1]["work_ready"])
+                    messages[:] = copy.deepcopy(original_transcript["result"]["transcript"]["messages"])
+                request_payload = json.loads(messages[1]["blocks"][0]["output"])
+                for key in ("policy_sha256", "gwd_skill_sha256", "skill_ref", "body_sha256", "scope", "session_identity", "config_fingerprint"):
+                    altered = copy.deepcopy(request_payload)
+                    altered["presentation"]["load_request"][key] = "stale"
+                    messages[1]["blocks"][0]["output"] = json.dumps(altered)
+                    self.assertFalse(core.project_leader_presentation(adapter, **kwargs)[1]["work_ready"])
+                messages[1]["blocks"][0]["output"] = json.dumps(request_payload)
+                adapter.presentation_probe = core._orca_presentation_axes
+                native = core.project_leader_presentation(adapter, **kwargs)[1]
+                self.assertEqual(native["trust"], "undetermined")
+                self.assertFalse(native["work_ready"])
+                self.assertEqual(show, original_show)
+
+    def test_public_init_adopt_refuse_assertions_and_preserve_load_request(self):
+        temp, root = self.fixture()
+        core = grill_workspace.grill_core_module("agent_runtime")
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            args = ("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x",
+                    "--runtime", "codex", "--skip-backlog")
+            for ref in ("bare-session", "asserted.json"):
+                (root / "asserted.json").write_text(json.dumps({"presentation": self.ready_presentation()}))
+                code, result = self.run_cli(*args, "--session-ref", ref)
+                self.assertEqual((code, result["code"]), (2, "LEADER-ADAPTER-UNSUPPORTED"))
+                self.assertFalse((root / ".grill").exists())
+            adapter, _, _ = orchestration_fixture.boundary(grill_workspace, root, "codex",
+                orchestration_fixture.SESSION, "work-x", loaded=False)
+            with mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                code, pending = self.run_cli(*args, "--session-ref", orchestration_fixture.SESSION)
+                self.assertEqual((code, pending["code"]), (2, "STYLE-LOAD-UNCONFIRMED"))
+                self.assertEqual(pending["presentation"]["load_request"]["scope"]["work_id"], "work-x")
+                self.assertFalse((root / ".grill").exists())
+            code, created = self.run_cli(*args, "--session-ref", orchestration_fixture.SESSION)
+            self.assertEqual(code, 0, created)
+            before = store.read_snapshot(root).content_sha256
+            for ref in ("asserted.json", "bare-session"):
+                code, refused = self.run_cli("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x",
+                    "--runtime", "codex", "--session-ref", ref)
+                self.assertEqual(code, 2, refused)
+                self.assertEqual(store.read_snapshot(root).content_sha256, before)
+            with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "STYLE-LOAD-UNCONFIRMED"):
+                agent_orchestration.require_presentation_work_ready({})
+
+    def ready_presentation(self, runtime="codex", scope=None):
+        return {
+            "schema": "grill-gwd-presentation/v1", "component": "i-have-adhd@i-have-adhd",
+            "minimum_version": "0.3.0", "loader": "gwd-reference/v1", "runtime": runtime,
+            "session_identity": "observed-session", "config_fingerprint": "config-1",
+            "scope": scope or {"kind": "gwd", "root": "fixture", "work_id": "work-x"},
+            "policy_sha256": "a" * 64, "gwd_skill_sha256": "b" * 64,
+            "installation": {"status": "present"}, "compatibility": "approved",
+            "enablement": "enabled", "trust": "ready", "loading": "loaded",
+            "behavior": "not_tested", "application": "active", "suspension": None,
+            "evidence": {}, "load_request": None, "use_ready": True, "work_ready": True,
+            "functional_verified": False, "diagnostics": [],
+        }
+
+    def readiness(self, runtime="codex", scope=None):
+        return {"ref": "session-1", "sha256": "f" * 64,
+                "incarnation": "inc-1", "presentation": self.ready_presentation(runtime, scope)}
+
     def presentation_fixture(self):
         temporary = tempfile.TemporaryDirectory()
         reference = Path(temporary.name) / "SKILL.md"
@@ -83,7 +196,7 @@ class AgentOrchestrationContract(unittest.TestCase):
             self.assertEqual(pending["loading"], "unconfirmed")
             request = pending["load_request"]
             self.assertEqual(request["skill_ref"], str(reference))
-            loaded = presentation_state(**kwargs, loading={"evidence_kind": "full_read", "event_ref": "tool-read-1",
+            loaded = presentation_state(**kwargs, loading={"load_request": request, "evidence_kind": "full_read", "event_ref": "tool-read-1",
                 "event_sha256": "e" * 64, "session_identity": "session-1", "config_fingerprint": "config-1",
                 "scope": kwargs["scope"], "skill_sha256": request["skill_sha256"], "body_sha256": request["body_sha256"]})
             self.assertEqual((loaded["loading"], loaded["use_ready"], loaded["work_ready"],
@@ -91,7 +204,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                              ("loaded", True, True, "not_tested", False))
             for changed in ({"session_identity": "other"}, {"config_fingerprint": "other"},
                             {"evidence_kind": "exit_0"}, {"scope": {"kind": "gwd"}}):
-                invalid = {"evidence_kind": "full_read", "event_ref": "tool-read-1", "event_sha256": "e" * 64,
+                invalid = {"load_request": request, "evidence_kind": "full_read", "event_ref": "tool-read-1", "event_sha256": "e" * 64,
                            "session_identity": "session-1", "config_fingerprint": "config-1", "scope": kwargs["scope"],
                            "skill_sha256": request["skill_sha256"], "body_sha256": request["body_sha256"], **changed}
                 self.assertFalse(presentation_state(**kwargs, loading=invalid)["use_ready"])
@@ -113,7 +226,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                 suspension={"command": "stop adhd mode", "source_ref": "human-1", "source_sha256": "f" * 64,
                             "session_identity": "other", "config_fingerprint": "config-1", "scope": kwargs["scope"]})
             self.assertFalse(invalid["work_ready"])
-            active = presentation_state(**kwargs, loading={"evidence_kind": "full_read", "event_ref": "read-1",
+            active = presentation_state(**kwargs, loading={"load_request": request, "evidence_kind": "full_read", "event_ref": "read-1",
                 "event_sha256": "e" * 64, "session_identity": "session-1", "config_fingerprint": "config-1",
                 "scope": kwargs["scope"], "skill_sha256": request["skill_sha256"], "body_sha256": request["body_sha256"]})
             self.assertTrue(active["use_ready"])
@@ -123,7 +236,7 @@ class AgentOrchestrationContract(unittest.TestCase):
         with temporary:
             pending = presentation_state(**kwargs)
             request = pending["load_request"]
-            presentation = presentation_state(**kwargs, loading={"evidence_kind": "full_read", "event_ref": "read-1",
+            presentation = presentation_state(**kwargs, loading={"load_request": request, "evidence_kind": "full_read", "event_ref": "read-1",
                 "event_sha256": "e" * 64, "session_identity": "session-1", "config_fingerprint": "config-1",
                 "scope": kwargs["scope"], "skill_sha256": request["skill_sha256"], "body_sha256": request["body_sha256"]})
             context = {"context_id": "ctx-1", "epoch": 1, "presentation": presentation}
@@ -238,13 +351,14 @@ class AgentOrchestrationContract(unittest.TestCase):
                 return 1, ""
             with mock.patch.dict("os.environ", {"GRILL_SKIP_DEPENDENCIES": ""}), \
                  mock.patch.object(dependencies.Toolchain, "which", sentinel_tool), \
-                 mock.patch.object(dependencies.Toolchain, "run", sentinel_probe):
+                 mock.patch.object(dependencies.Toolchain, "run", sentinel_probe), \
+                 orchestration_fixture.offline_leader(grill_workspace):
                 self.assertEqual(self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x", "--runtime", "codex", "--skip-backlog")[0], 2)
                 self.assertFalse((root / ".grill").exists())
-                code, init = self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x", "--runtime", "codex", "--session-ref", "observed-session", "--skip-backlog")
+                code, init = self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x", "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
                 self.assertEqual(code, 0); self.assertEqual(init["orchestration"], "INITIALIZED")
                 before = store.read_snapshot(root).content_sha256
-                args = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex", "--session-ref", "observed-session", "--scope-file", "src/a.py")
+                args = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION, "--scope-file", "src/a.py")
                 code, preview = self.run_cli(*args); self.assertEqual(code, 0); self.assertEqual(preview["verdict"], "PREVIEW")
                 self.assertEqual(store.read_snapshot(root).content_sha256, before)
                 self.assertEqual(self.run_cli(*args, "--apply")[0], 2)
@@ -256,7 +370,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertIsNone(context["activation"]); self.assertIsNone(context["campaign"]); self.assertEqual(context["scheduler_runs"], {})
                 code, entered = self.run_cli(
                     "gauntlet-step-enter", str(root), "--work-id", "work-x", "--context-id", adopted["context_id"],
-                    "--epoch", "1", "--session-ref", "observed-session", "--step", "implement-parallel")
+                    "--epoch", "1", "--session-ref", orchestration_fixture.SESSION, "--step", "implement-parallel")
                 self.assertEqual(code, 0)
                 invocation = entered["invocation_context"]
                 self.assertEqual(invocation["canonical_entrypoint"]["entrypoint"], "grill-with-docs:grill-implement-parallel")
@@ -267,7 +381,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                         "path": f"plugin/skills/grill-with-docs/{path}",
                         "sha256": __import__("hashlib").sha256(body).hexdigest(),
                     })
-                checkpoint_args = ("checkpoint", str(root), "--work-id", "work-x", "--step", "specify", "--state", "in-progress", "--operation-id", "checkpoint-1", "--session-ref", "observed-session")
+                checkpoint_args = ("checkpoint", str(root), "--work-id", "work-x", "--step", "specify", "--state", "in-progress", "--operation-id", "checkpoint-1", "--session-ref", orchestration_fixture.SESSION)
                 code, checkpoint = self.run_cli(*checkpoint_args)
                 self.assertEqual((code, checkpoint["code"]), (2, "ACTIVITY-REQUIRED"))
                 stale = self.run_cli(*args, "--scope-file", "src/b.py", "--apply", "--expected-sha256", preview["expected_sha256"])
@@ -282,7 +396,11 @@ class AgentOrchestrationContract(unittest.TestCase):
             origin = {"state_sha256": "1" * 64, "metadata_sha256": "2" * 64, "activation": None,
                       "campaign": None, "lifecycle": "ACTIVE", "worktree": {"root": str(root), "branch": "main"}}
             contract = grill_workspace.grill_core_module("agent_orchestration")
-            inputs = contract.adoption_inputs(work_id="work-x", runtime="codex", session_ref="session-1", scope_files=[], origin=origin)
+            readiness = self.readiness()
+            inputs = contract.adoption_inputs(
+                work_id="work-x", runtime="codex", session_ref="session-1",
+                session_observation={key: readiness[key] for key in ("ref", "sha256", "incarnation")},
+                presentation=readiness["presentation"], scope_files=[], origin=origin)
             item = contract.new_work_item(inputs, policy_ref="policy/v1", policy_sha256="a" * 64,
                                           adopted_at="2026-01-01T00:00:00Z", context_id="ctx-1")
             store.transact(root, lambda document: {**document, "agent_orchestration": {"schema": contract.SCHEMA, "work_items": {"work-x": item}}})
@@ -502,7 +620,8 @@ class AgentOrchestrationContract(unittest.TestCase):
             self.assertEqual(coverage["missing"], [])
 
         invocation = agent_orchestration.invocation_context(
-            policy=policy, policy_sha256="c" * 64, context={"context_id": "ctx-1", "epoch": 1},
+            policy=policy, policy_sha256="c" * 64,
+            context={"context_id": "ctx-1", "epoch": 1, "presentation": self.ready_presentation()},
             step_id="plan", canonical_entrypoint={"kind": "canonical"},
             supplement={"path": "supplement", "sha256": "d" * 64},
             task_template={"path": "template", "sha256": "e" * 64}, frontend=True,

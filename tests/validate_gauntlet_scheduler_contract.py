@@ -23,6 +23,8 @@ DAG validation, wave/worker declaration, progress, and remediation cases once
 """
 from __future__ import annotations
 
+import orchestration_fixture
+
 import hashlib
 import importlib.util
 import json
@@ -125,7 +127,7 @@ def invoke(program: Path, *args: object) -> tuple[subprocess.CompletedProcess[st
         args += ("--session-ref", "fixture-leader", "--operation-id", "cp-" + hashlib.sha256(repr(args).encode()).hexdigest()[:12])
     """Run one public command and require exactly one JSON object on stdout."""
     process = subprocess.run(
-        [sys.executable, str(program), *(str(value) for value in args)],
+        orchestration_fixture.command(program, args),
         text=True,
         capture_output=True,
         check=False,
@@ -611,8 +613,10 @@ class GauntletDagAndWaveContractHarness(unittest.TestCase):
         self.temporary.cleanup()
 
     def write_dag(self, document: dict[str, Any], name: str = "execution-dag.json") -> str:
-        (self.root / name).write_text(json.dumps(document), encoding="utf-8")
-        return name
+        path = Path("specs/scheduler-fixture") / (name if name.startswith("execution-dag") else "execution-dag-" + name)
+        (self.root / path).parent.mkdir(parents=True, exist_ok=True)
+        (self.root / path).write_text(json.dumps(document), encoding="utf-8")
+        return path.as_posix()
 
     def dag_validate(self, dag_path: str) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
         return invoke(
@@ -629,7 +633,7 @@ class GauntletDagAndWaveContractHarness(unittest.TestCase):
         return invoke(WORKSPACE, *arguments)
 
     def worker_declare(
-        self, wave_id: str, node_id: str, *, dag_path: str = "execution-dag.json",
+        self, wave_id: str, node_id: str, *, dag_path: str = "specs/scheduler-fixture/execution-dag.json",
         tier: str = "medium", files: list[str] | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
         arguments = [
@@ -759,10 +763,11 @@ class GauntletDagAndWaveContractHarness(unittest.TestCase):
         process, payload = invoke(WORKSPACE, "gauntlet-run", capped_root, "--work-id", WORK_ID)
         run_id = payload["run_id"]
         document = dag_document([dag_node("T1", parallel=True), dag_node("T2", parallel=True)])
-        (capped_root / "execution-dag.json").write_text(json.dumps(document), encoding="utf-8")
+        (capped_root / "specs/scheduler-fixture").mkdir(parents=True, exist_ok=True)
+        (capped_root / "specs/scheduler-fixture/execution-dag.json").write_text(json.dumps(document), encoding="utf-8")
         process, payload = invoke(
             WORKSPACE, "gauntlet-wave-declare", capped_root, "--work-id", WORK_ID, "--run-id", run_id,
-            "--dag", "execution-dag.json", "--node-id", "T1", "--node-id", "T2",
+            "--dag", "specs/scheduler-fixture/execution-dag.json", "--node-id", "T1", "--node-id", "T2",
         )
         self.assert_blocked(process, payload, "WAVE-CAP-EXCEEDED")
 
@@ -805,6 +810,7 @@ class GauntletDagAndWaveContractHarness(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_worker_declare_rejects_reserved_remediation_suffix_node_id(self) -> None:
+        self.write_dag(dag_document([dag_node("T1", parallel=False)]))
         process, payload = self.worker_declare("wave-0001", "T1-r1")
         self.assert_blocked(process, payload, "INVALID-IDENTIFIER")
 
@@ -815,6 +821,7 @@ class GauntletDagAndWaveContractHarness(unittest.TestCase):
         self.assert_blocked(process, payload, "DAG-NODE-TIER-UNRESOLVED")
 
     def test_worker_declare_rejects_wave_that_is_not_active(self) -> None:
+        self.write_dag(dag_document([dag_node("T1", parallel=False)]))
         process, payload = self.worker_declare("wave-9999", "T1")
         self.assert_blocked(process, payload, "WAVE-NOT-FOUND")
 
@@ -949,8 +956,10 @@ class GauntletProgressTerminationRemediationHarness(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def write_dag(self, document: dict[str, Any], name: str = "execution-dag.json") -> str:
-        (self.root / name).write_text(json.dumps(document), encoding="utf-8")
-        return name
+        path = Path("specs/scheduler-fixture") / (name if name.startswith("execution-dag") else "execution-dag-" + name)
+        (self.root / path).parent.mkdir(parents=True, exist_ok=True)
+        (self.root / path).write_text(json.dumps(document), encoding="utf-8")
+        return path.as_posix()
 
     def wave_declare(self, dag_path: str, node_ids: list[str]) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
         arguments = [
@@ -961,7 +970,7 @@ class GauntletProgressTerminationRemediationHarness(unittest.TestCase):
         return invoke(WORKSPACE, *arguments)
 
     def worker_declare(
-        self, wave_id: str, node_id: str, *, dag_path: str = "execution-dag.json",
+        self, wave_id: str, node_id: str, *, dag_path: str = "specs/scheduler-fixture/execution-dag.json",
         tier: str = "medium", files: list[str] | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
         arguments = [
@@ -1361,17 +1370,18 @@ class GauntletProgressTerminationRemediationHarness(unittest.TestCase):
             raise AssertionError((process.returncode, payload, process.stderr))
         run_id = payload["run_id"]
         document = dag_document([dag_node("B", parallel=False), dag_node("A", parallel=False)], max_workers=5)
-        (capped_root / "execution-dag.json").write_text(json.dumps(document), encoding="utf-8")
+        (capped_root / "specs/scheduler-fixture").mkdir(parents=True, exist_ok=True)
+        (capped_root / "specs/scheduler-fixture/execution-dag.json").write_text(json.dumps(document), encoding="utf-8")
 
         process, payload = invoke(
             WORKSPACE, "gauntlet-wave-declare", capped_root, "--work-id", WORK_ID, "--run-id", run_id,
-            "--dag", "execution-dag.json", "--node-id", "B",
+            "--dag", "specs/scheduler-fixture/execution-dag.json", "--node-id", "B",
         )
         self.assertEqual((process.returncode, payload.get("verdict")), (0, "WAVE-DECLARED"), (payload, process.stderr))
         process, payload = invoke(
             WORKSPACE, "gauntlet-worker-declare", capped_root, "--work-id", WORK_ID, "--run-id", run_id,
             "--wave-id", "wave-0001", "--node-id", "B", "--tier", "medium", "--files", "tests/fixture-B.py",
-            "--dag", "execution-dag.json",
+            "--dag", "specs/scheduler-fixture/execution-dag.json",
         )
         self.assertEqual((process.returncode, payload.get("verdict")), (0, "WORKER-PREPARED"), (payload, process.stderr))
         process, payload = invoke(
@@ -1384,13 +1394,13 @@ class GauntletProgressTerminationRemediationHarness(unittest.TestCase):
         # wave-0002 for A is within it (0 non-terminal + 1 requested <= 1).
         process, payload = invoke(
             WORKSPACE, "gauntlet-wave-declare", capped_root, "--work-id", WORK_ID, "--run-id", run_id,
-            "--dag", "execution-dag.json", "--node-id", "A",
+            "--dag", "specs/scheduler-fixture/execution-dag.json", "--node-id", "A",
         )
         self.assertEqual((process.returncode, payload.get("verdict")), (0, "WAVE-DECLARED"), (payload, process.stderr))
         process, payload = invoke(
             WORKSPACE, "gauntlet-worker-declare", capped_root, "--work-id", WORK_ID, "--run-id", run_id,
             "--wave-id", "wave-0002", "--node-id", "A", "--tier", "medium", "--files", "tests/fixture-A.py",
-            "--dag", "execution-dag.json",
+            "--dag", "specs/scheduler-fixture/execution-dag.json",
         )
         self.assertEqual((process.returncode, payload.get("verdict")), (0, "WORKER-PREPARED"), (payload, process.stderr))
 

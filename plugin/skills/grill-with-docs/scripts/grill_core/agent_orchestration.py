@@ -499,13 +499,7 @@ def invocation_context(*, policy: Mapping[str, Any], policy_sha256: str,
         _fail("INVALID-INVOCATION-CONTEXT")
     requirements = activity_requirements(policy, step_id=step_id, activity_scope="cycle",
                                          new_how=new_how, frontend=frontend)
-    presentation = context.get("presentation")
-    if presentation is not None:
-        _presentation(presentation)
-        if not presentation["work_ready"]:
-            codes = [entry.get("code") for entry in presentation["diagnostics"]
-                     if isinstance(entry, dict) and isinstance(entry.get("code"), str)]
-            _fail(codes[0] if codes else "STYLE-LOAD-UNCONFIRMED")
+    presentation = require_presentation_work_ready(context)
     return {
         "schema": _ACTIVITY_CONTEXT_SCHEMA,
         "context_id": context["context_id"],
@@ -1133,10 +1127,10 @@ def _presentation(value: Any) -> None:
 
 
 def require_presentation_work_ready(context: Mapping[str, Any]) -> dict[str, Any]:
-    """Gate work only for contexts that adopted the presentation contract."""
+    """Every adopted context proves presentation readiness before work."""
     presentation = context.get("presentation")
     if presentation is None:
-        return {"legacy": True, "work_ready": True}
+        _fail("STYLE-LOAD-UNCONFIRMED")
     _presentation(presentation)
     if not presentation["work_ready"]:
         codes = [entry.get("code") for entry in presentation["diagnostics"]
@@ -1650,11 +1644,26 @@ def task_files_migration_preview(current_text: str, proposal_text: str, *, expec
             "accepted_task_ids": sorted(accepted_task_ids)}
 
 
-def adoption_inputs(*, work_id: str, runtime: str, session_ref: str | None, scope_files: list[str], origin: dict[str, Any]) -> dict[str, Any]:
+def adoption_inputs(*, work_id: str, runtime: str, session_ref: str | None,
+                    session_observation: Mapping[str, Any] | None = None,
+                    presentation: Mapping[str, Any] | None = None,
+                    scope_files: list[str], origin: dict[str, Any]) -> dict[str, Any]:
     """Closed, hashable adoption request.  The CLI hashes this before apply."""
     _id(work_id, "orchestration work id")
-    if runtime not in {"codex", "claude"} or session_ref is not None and (not isinstance(session_ref, str) or not session_ref):
+    if runtime not in {"codex", "claude"} or not isinstance(session_ref, str) or not session_ref:
         _fail("invalid adoption runtime or session")
+    if not isinstance(session_observation, Mapping) or not isinstance(presentation, Mapping):
+        _fail("LEADER-AUTHORITY-UNPROVEN")
+    observation_ref, observation_sha256 = session_observation.get("ref"), session_observation.get("sha256")
+    incarnation = session_observation.get("incarnation")
+    if observation_ref != session_ref or not isinstance(incarnation, str) or not incarnation:
+        _fail("LEADER-AUTHORITY-UNPROVEN")
+    _digest(observation_sha256, "leader observation sha256")
+    _presentation(presentation)
+    if not presentation["work_ready"] or presentation["runtime"] != runtime:
+        codes = [entry.get("code") for entry in presentation["diagnostics"]
+                 if isinstance(entry, Mapping) and isinstance(entry.get("code"), str)]
+        _fail(codes[0] if codes else "STYLE-LOAD-UNCONFIRMED")
     if not isinstance(origin, dict):
         _fail("invalid orchestration origin")
     for path in scope_files:
@@ -1662,6 +1671,8 @@ def adoption_inputs(*, work_id: str, runtime: str, session_ref: str | None, scop
     if len(scope_files) != len(set(scope_files)):
         _fail("duplicate scope file")
     return {"work_id": work_id, "runtime": runtime, "session_ref": session_ref,
+            "session_observation": copy.deepcopy(dict(session_observation)),
+            "presentation": copy.deepcopy(dict(presentation)),
             "scope_files": sorted(scope_files), "origin": copy.deepcopy(origin)}
 
 
@@ -1689,17 +1700,17 @@ def new_work_item(inputs: dict[str, Any], *, policy_ref: str, policy_sha256: str
     _id(context_id, "context id")
     item["contexts"][context_id] = {
         "context_id": context_id, "epoch": 1, "predecessor_context_id": None,
-        "continuity_ref": None, "runtime": inputs["runtime"], "adapter": inputs["runtime"],
+        "continuity_ref": None, "runtime": inputs["runtime"], "adapter": "orca",
         "activation": None, "campaign": None, "scheduler_runs": {},
         "leader": {"owner_id": context_id, "session_ref": inputs["session_ref"],
-                   "incarnation": None, "fence": 1, "epoch": 1, "state": "ACTIVE",
-                   "observation_ref": None, "observation_sha256": None},
+                   "incarnation": inputs["session_observation"]["incarnation"],
+                   "fence": 1, "epoch": 1, "state": "ACTIVE",
+                   "observation_ref": inputs["session_observation"]["ref"],
+                   "observation_sha256": inputs["session_observation"]["sha256"]},
         "state": "ACTIVE", "policy_sha256": policy_sha256,
         "inputs_sha256": adoption_sha256(inputs),
     }
-    if inputs.get("presentation") is not None:
-        _presentation(inputs["presentation"])
-        item["contexts"][context_id]["presentation"] = copy.deepcopy(inputs["presentation"])
+    item["contexts"][context_id]["presentation"] = copy.deepcopy(inputs["presentation"])
     item["current_context_id"] = context_id
     return item
 

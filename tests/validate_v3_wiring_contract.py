@@ -23,6 +23,8 @@ beyond their public, documented functions -- those belong to other pieces.
 """
 from __future__ import annotations
 
+import orchestration_fixture
+
 import ast
 import contextlib
 import hashlib
@@ -80,7 +82,7 @@ def invoke(*args: object) -> tuple[subprocess.CompletedProcess[str], dict]:
     if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
         args += ("--runtime", "claude")
     process = subprocess.run(
-        [sys.executable, str(WORKSPACE), *(str(a) for a in args)], text=True, capture_output=True, check=False,
+        orchestration_fixture.command(WORKSPACE, args), text=True, capture_output=True, check=False,
     )
     lines = process.stdout.splitlines()
     if len(lines) != 1:

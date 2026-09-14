@@ -1494,21 +1494,76 @@ def _orchestration_origin(root: Path, item: Path, work_id: str) -> dict[str, Any
     }
 
 
+def _leader_boundary(root: Path, runtime: str, session_ref: str, work_id: str | None):
+    """The public CLI reads native Orca output; tests inject this transport."""
+    agent_runtime = grill_core_module("agent_runtime")
+    handle = os.environ.get("ORCA_TERMINAL_HANDLE")
+    def read(argv: list[str]) -> bytes:
+        if not handle:
+            raise agent_runtime.RuntimeError("LEADER-ADAPTER-UNSUPPORTED")
+        executable = os.environ.get("ORCA_CLI_COMMAND") or "orca"
+        try:
+            result = subprocess.run([executable, *argv], cwd=root, capture_output=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise agent_runtime.RuntimeError("LEADER-ADAPTER-UNAVAILABLE") from exc
+        if result.returncode:
+            raise agent_runtime.RuntimeError("LEADER-ADAPTER-UNAVAILABLE")
+        return result.stdout
+    return agent_runtime.LeaderBoundary(session_ref, root, runtime, handle, read)
+
+
+def _session_readiness(root: Path, runtime: str, session_ref: str | None, *,
+                       work_id: str) -> dict[str, Any]:
+    """Read one adapter observation and derive presentation at the CLI boundary."""
+    if not isinstance(session_ref, str) or not session_ref:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "--session-ref is required")
+    policy_path = ASSETS / "agent-orchestration.v1.json"
+    policy_raw = policy_path.read_bytes()
+    gwd_raw = (ASSETS.parent / "SKILL.md").read_bytes()
+    agent_runtime = grill_core_module("agent_runtime")
+    try:
+        observed, presentation = agent_runtime.project_leader_presentation(
+            _leader_boundary(root, runtime, session_ref, work_id),
+            policy=json.loads(policy_raw), policy_sha256=hash_bytes(policy_raw),
+            gwd_skill_sha256=hash_bytes(gwd_raw), runtime=runtime,
+            scope={"kind": "gwd", "root": str(root), "work_id": work_id})
+    except agent_runtime.PresentationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", str(exc), "presentation evidence is not correlated") from exc
+    except agent_runtime.RuntimeError as exc:
+        code = str(exc) if str(exc).startswith("LEADER-") else "LEADER-AUTHORITY-UNPROVEN"
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, str(exc)) from exc
+    scope = presentation["scope"]
+    if (scope.get("kind") != "gwd" or scope.get("root") != str(root)
+            or work_id is not None and scope.get("work_id") != work_id):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STYLE-SCOPE-CONFLICT", "presentation scope is not current")
+    if not presentation["work_ready"]:
+        codes = [entry.get("code") for entry in presentation["diagnostics"]
+                 if isinstance(entry, dict) and isinstance(entry.get("code"), str)]
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", codes[0] if codes else "STYLE-LOAD-UNCONFIRMED",
+                         "presentation is not ready", extra={"presentation": presentation})
+    return {"ref": session_ref, "sha256": observed["source_sha256"],
+            "incarnation": observed["incarnation"], "presentation": presentation}
+
+
 def _orchestration_inputs(root: Path, work_id: str, runtime: str, session_ref: str | None,
-                          scope_files: list[str]) -> tuple[Any, dict[str, Any]]:
+                          scope_files: list[str], readiness: dict[str, Any] | None = None) -> tuple[Any, dict[str, Any]]:
     item = resolve_development_item(root, work_id)
     contract = grill_core_module("agent_orchestration")
+    readiness = readiness or _session_readiness(root, runtime, session_ref, work_id=work_id)
     try:
         inputs = contract.adoption_inputs(work_id=work_id, runtime=runtime, session_ref=session_ref,
+                                          session_observation={key: readiness[key] for key in ("ref", "sha256", "incarnation")},
+                                          presentation=readiness["presentation"],
                                           scope_files=scope_files, origin=_orchestration_origin(root, item, work_id))
     except contract.OrchestrationError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ORCHESTRATION-ADOPTION", str(exc)) from exc
     return contract, inputs
 
 
-def _initialize_orchestration(root: Path, work_id: str, runtime: str, session_ref: str | None) -> dict[str, Any]:
+def _initialize_orchestration(root: Path, work_id: str, runtime: str, session_ref: str | None,
+                              readiness: dict[str, Any]) -> dict[str, Any]:
     """New init persists its observed session when supplied; it never invents one."""
-    contract, inputs = _orchestration_inputs(root, work_id, runtime, session_ref, [])
+    contract, inputs = _orchestration_inputs(root, work_id, runtime, session_ref, [], readiness)
     store = grill_core_module("store")
     policy = ASSETS / "agent-orchestration.v1.json"
     policy_bytes = policy.read_bytes()
@@ -1522,7 +1577,8 @@ def _initialize_orchestration(root: Path, work_id: str, runtime: str, session_re
             context_id=f"ctx-{contract.adoption_sha256(inputs)[:12]}" if session_ref else None)))
     except store.StoreError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
-    return {"store_revision": snapshot.revision, "orchestration": "INITIALIZED"}
+    return {"store_revision": snapshot.revision, "orchestration": "INITIALIZED",
+            "presentation": readiness["presentation"]}
 
 
 def _bind_orchestration(document: dict[str, Any], work_id: str, item: dict[str, Any]) -> dict[str, Any]:
@@ -1533,7 +1589,21 @@ def _bind_orchestration(document: dict[str, Any], work_id: str, item: dict[str, 
     existing = block["work_items"].get(work_id)
     if existing is None:
         block["work_items"][work_id] = item
+    else:
+        current = existing["contexts"].get(existing["current_context_id"])
+        incoming = item["contexts"][item["current_context_id"]]
+        if not _same_observed_leader(current, incoming):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "existing leader observation differs")
+        current["presentation"] = incoming["presentation"]
     return document
+
+
+def _same_observed_leader(current: Any, incoming: dict[str, Any]) -> bool:
+    return (isinstance(current, dict) and current.get("state") == "ACTIVE"
+            and current.get("leader", {}).get("state") == "ACTIVE"
+            and current.get("runtime") == incoming["runtime"]
+            and all(current.get("leader", {}).get(key) == incoming["leader"][key]
+                    for key in ("session_ref", "incarnation", "observation_ref", "observation_sha256")))
 
 
 def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -1542,6 +1612,7 @@ def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any
     expected = contract.adoption_sha256(inputs)
     preview = {"verdict": "PREVIEW", "work_id": args.work_id, "expected_sha256": expected,
                "origin": inputs["origin"], "scope_files": inputs["scope_files"],
+               "presentation": inputs["presentation"],
                "limitations": ["does not rewrite legacy state, activation, campaign or receipts"]}
     if not args.apply:
         return preview, EXIT_OK
@@ -1551,14 +1622,17 @@ def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any
     policy = ASSETS / "agent-orchestration.v1.json"
     policy_bytes = policy.read_bytes()
     policy_ref, policy_sha256 = "assets/agent-orchestration.v1.json", hash_bytes(policy_bytes)
+    candidate = contract.new_work_item(inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
+        adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), context_id=f"ctx-{expected[:12]}")
+    incoming = candidate["contexts"][candidate["current_context_id"]]
     existing_snapshot = store.read_snapshot(root, required=False)
     if existing_snapshot is not None:
         existing = existing_snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
         current = existing.get("contexts", {}).get(existing.get("current_context_id")) if isinstance(existing, dict) else None
         if (isinstance(existing, dict) and existing.get("origin") == inputs["origin"]
                 and existing.get("policy_sha256") == policy_sha256 and existing.get("scope_files") == inputs["scope_files"]
-                and isinstance(current, dict) and current.get("runtime") == args.runtime
-                and current.get("leader", {}).get("session_ref") == args.session_ref):
+                and _same_observed_leader(current, incoming)
+                and current.get("presentation") == inputs["presentation"]):
             return {"verdict": "REUSED", "work_id": args.work_id, "context_id": existing["current_context_id"],
                     "expected_sha256": expected, "store_revision": existing_snapshot.revision}, EXIT_OK
     store.bootstrap(root)
@@ -1573,8 +1647,10 @@ def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any
         if item["origin"] != inputs["origin"] or item["policy_sha256"] != policy_sha256:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
         current = item.get("contexts", {}).get(item.get("current_context_id"))
-        if current is not None and (current.get("runtime") != args.runtime or current.get("leader", {}).get("session_ref") != args.session_ref):
+        if current is not None and not _same_observed_leader(current, incoming):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "existing context has different runtime or session")
+        if current is not None:
+            current["presentation"] = inputs["presentation"]
         if item["scope_files"] != inputs["scope_files"]:
             item["scope_revision"] += 1
             item["scope_files"] = inputs["scope_files"]
@@ -1759,8 +1835,7 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     work_id = args.work_id or f"{args.type}-{args.slug}-{uuid.uuid4().hex}"
     if not WORK_ID_RE.fullmatch(work_id):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", work_id)
-    if not args.session_ref:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "session_ref is required before init effects")
+    readiness = _session_readiness(root, args.runtime, args.session_ref, work_id=work_id)
     workflow = ensure_project_workflow(root)
     goal = ensure_project_goal(root)
     dependencies = dependency_report(
@@ -1798,7 +1873,7 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             if immutable.get("type") != args.type or immutable.get("slug") != args.slug:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-DIVERGENCE", work_id)
             return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
-                    **_initialize_orchestration(root, work_id, args.runtime, getattr(args, "session_ref", None)), **environment}, EXIT_OK
+                    **_initialize_orchestration(root, work_id, args.runtime, args.session_ref, readiness), **environment}, EXIT_OK
         constitution_created, constitution_hash = ensure_managed_constitution(root)
         immutable = immutable_metadata(root, args, work_id)
         files = initial_files(root, work_id, immutable, goal, backlog_skipped=skipped_backlog)
@@ -1815,12 +1890,12 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             if immutable.get("type") != args.type or immutable.get("slug") != args.slug:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-DIVERGENCE", work_id)
             return {"status": "REUSED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
-                    **_initialize_orchestration(root, work_id, args.runtime, getattr(args, "session_ref", None)), **environment}, EXIT_OK
+                    **_initialize_orchestration(root, work_id, args.runtime, args.session_ref, readiness), **environment}, EXIT_OK
         bundle = read_local_bundle(root, target)
         return {"status": "CREATED", "work_id": work_id, "path": str(target), "fingerprint": bundle.fingerprint,
                 "constitution": "CREATED" if constitution_created else "PRESERVED", "constitution_sha256": constitution_hash,
                 "backlog_skipped": skipped_backlog,
-                **_initialize_orchestration(root, work_id, args.runtime, getattr(args, "session_ref", None)),
+                **_initialize_orchestration(root, work_id, args.runtime, args.session_ref, readiness),
                 **environment}, EXIT_OK
     finally:
         if lock is not None:
@@ -2999,7 +3074,15 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
         # CLI path.  Its ContextVar must be set on that exact module, not a
         # second sibling import with an identical filename.
         store = grill_core_module("gauntlet_runs").store
-        snapshot = store.read_snapshot(root, required=False)
+        # A concurrent commit publishes its journal anchor before its snapshot.
+        # Read the authority fence under the same lock, never between those writes.
+        try:
+            snapshot = None
+            if store.store_exists(root):
+                with store.orchestrator_lock(store.store_paths(root)):
+                    snapshot = store.read_snapshot(root, required=False)
+        except store.StoreError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
         block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
         item = block.get("work_items", {}).get(args.work_id) if isinstance(block, dict) else None
         if item is None:
@@ -3351,7 +3434,8 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
     selected = activity_id is not None or context_id is not None or (args.run_id is not None and args.worker_id is None)
     if not selected and args.run_id is None:
         resolve_gauntlet_subject(root, args.work_id)
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "cleanup needs a context or run and worker")
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "cleanup needs a context or run and worker",
+                         extra={"work_id": args.work_id})
     item = None
     if selected:
         snapshot = runs.store.read_snapshot(root, required=False)

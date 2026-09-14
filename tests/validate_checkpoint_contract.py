@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Contract smoke matrix for the persistent eleven-step checkpoint ledger."""
+import orchestration_fixture
 import base64, concurrent.futures, hashlib, json, os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 REPO=Path(__file__).resolve().parents[1]
@@ -15,8 +16,8 @@ STEPS = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "imple
 def run(*a):
  a=tuple(a)
  if a and a[0] in {"init","preflight","gauntlet-init"} and "--runtime" not in a: a += ("--runtime","claude")
- if a and a[0] == "init" and "--session-ref" not in a: a += ("--session-ref", "session-1")
- return subprocess.run([sys.executable,str(SCRIPT),*map(str,a)],text=True,capture_output=True)
+ if a and a[0] == "init" and "--session-ref" not in a: a += ("--session-ref", orchestration_fixture.SESSION)
+ return subprocess.run(orchestration_fixture.command(SCRIPT, a),text=True,capture_output=True)
 class CheckpointContract(unittest.TestCase):
  def setUp(self):
   self.t=tempfile.TemporaryDirectory(ignore_cleanup_errors=True); self.r=Path(self.t.name); subprocess.run(['git','init','-q','-b','main',str(self.r)],check=True); (self.r/'WORKFLOW.md').write_bytes(TEMPLATE.read_bytes())
@@ -25,7 +26,7 @@ class CheckpointContract(unittest.TestCase):
  def tearDown(self): self.t.cleanup()
  def call(self,step,state,**kw):
   a=['checkpoint',self.r,'--work-id','wx','--step',step,'--state',state]
-  a += ['--operation-id',f'{step}-{state}','--session-ref','session-1']
+  a += ['--operation-id',f'{step}-{state}','--session-ref',orchestration_fixture.SESSION]
   for x in kw.get('evidence',[]): a += ['--evidence',x]
   if 'reason' in kw: a += ['--reason',kw['reason']]
   return run(*a)
@@ -118,7 +119,7 @@ class CheckpointContract(unittest.TestCase):
   p=self.call('specify','complete',evidence=['e'],reason='done'); self.assertEqual((p.returncode,json.loads(p.stdout)['code']),(2,'STATE-DIVERGENCE'))
  def test_legacy_explicit_specify_initialization_succeeds_without_inference(self):
   path=self.r/'.grill/work-items/wx/state.json'; path.write_text('{}')
-  p=run('checkpoint',self.r,'--work-id','wx','--step','specify','--state','in-progress','--operation-id','specify-in-progress','--session-ref','session-1','--initialize-legacy','--from-step','specify','--evidence','e','--reason','explicit-decision')
+  p=run('checkpoint',self.r,'--work-id','wx','--step','specify','--state','in-progress','--operation-id','specify-in-progress','--session-ref',orchestration_fixture.SESSION,'--initialize-legacy','--from-step','specify','--evidence','e','--reason','explicit-decision')
   self.assertEqual(p.returncode,0,p.stdout); state=json.loads(path.read_text()); self.assertEqual(state['development']['steps']['specify'],'in-progress'); self.assertTrue(all(state['development']['steps'][s]=='pending' for s in STEPS[1:])); self.assertEqual(len(state['development']['audit']),1)
  def test_legacy_posterior_initialization_is_unsafe(self):
   path=self.r/'.grill/work-items/wx/state.json'; path.write_text('{}'); before=path.read_bytes()

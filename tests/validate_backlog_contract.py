@@ -2,6 +2,8 @@
 """Executable contract for the preview-first bridge to the external backlog."""
 from __future__ import annotations
 
+import orchestration_fixture
+
 import contextlib
 import importlib.util
 import io
@@ -1028,7 +1030,7 @@ def workspace(*args: object) -> tuple[int, dict]:
     if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
         args += ("--runtime", "claude")
     process = subprocess.run(
-        [sys.executable, str(WORKSPACE), *(str(arg) for arg in args)],
+        orchestration_fixture.command(WORKSPACE, args),
         text=True, capture_output=True, check=False,
         env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1", "GRILL_SKIP_DEPENDENCIES": "1"},
     )

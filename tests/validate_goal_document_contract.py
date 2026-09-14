@@ -11,6 +11,8 @@ lives in exactly one place; see ``SingleSourceOfTruth`` below (SC-006).
 """
 from __future__ import annotations
 
+import orchestration_fixture
+
 import contextlib
 import hashlib
 import io
@@ -284,12 +286,12 @@ class WorkItemSealBoundary(unittest.TestCase):
             root = Path(raw_root).resolve()
             subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
             result = subprocess.run(
-                [
-                    sys.executable, str(GRILL_WORKSPACE), "init", str(root),
+                orchestration_fixture.command(GRILL_WORKSPACE, (
+                    "init", str(root),
                     "--runtime", "claude",
                     "--type", "feature", "--slug", "goal-seal-check",
                     "--work-id", "goal-seal-check", "--skip-backlog",
-                ],
+                )),
                 text=True, capture_output=True,
                 env={**os.environ, "GRILL_SKIP_DEPENDENCIES": "1"},
             )

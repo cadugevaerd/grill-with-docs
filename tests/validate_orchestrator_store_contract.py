@@ -282,7 +282,8 @@ class StoreContract(unittest.TestCase):
   self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}
   store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc(contexts)},now=CLOCK)
   def successor(document):
-   item=document['agent_orchestration']['work_items']['orchestration-work']; item['contexts']['ctx-1']['state']='SUPERSEDED'; item['contexts']['ctx-2']=ORCHESTRATION_CONTEXT('ctx-2',2,'ctx-1','receipts/continuity-1',state='ACTIVE'); item['current_context_id']='ctx-2'; return document
+   item=document['agent_orchestration']['work_items']['orchestration-work']; item['contexts']['ctx-1']['state']='SUPERSEDED'; item['contexts']['ctx-2']=ORCHESTRATION_CONTEXT('ctx-2',2,'ctx-1','continuity-1',state='ACTIVE'); item['current_context_id']='ctx-2'
+   item['operations']['continuity-1']={**ORCHESTRATION_OPERATION(), 'kind':'continuity-switch','subject_ids':['ctx-2'],'state':'CONFIRMED','result_ref':'receipts/continuity-result','result_sha256':'d'*64,'observation_ref':'receipts/continuity-observation'}; return document
   store.transact(self.r,successor,now=CLOCK)
   def regress(document): document['agent_orchestration']['work_items']['orchestration-work']['current_context_id']='ctx-1'; return document
   with self.assertRaises(store.StoreError): store.transact(self.r,regress,now=CLOCK)
@@ -291,7 +292,8 @@ class StoreContract(unittest.TestCase):
   self.tearDown(); self.setUp(); self.register()
   store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
   def bind(document):
-   context=document['agent_orchestration']['work_items']['orchestration-work']['contexts']['ctx-1']; context['activation']={'run':'first'}; context['campaign']={'run':'first'}; context['leader']['state']='RELEASING'; return document
+   context=document['agent_orchestration']['work_items']['orchestration-work']['contexts']['ctx-1']; context['activation']={'run':'first'}
+   context['campaign']={'project_id':'sha256:'+'1'*64,'run_id':'first','runtime':'codex','adapter':'orca','registry_sha256':'sha256:'+'2'*64,'recovery_generation_id':'rg-'+'3'*64,'plan_revision':1}; context['leader']['state']='RELEASING'; return document
   self.assertEqual(store.transact(self.r,bind,now=CLOCK).revision,3)
 
  def test_orchestration_prepared_successor_cas_is_legal_and_not_a_rollback(self):
@@ -299,10 +301,12 @@ class StoreContract(unittest.TestCase):
   store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc(contexts)},now=CLOCK)
   def prepare(document):
    item=document['agent_orchestration']['work_items']['orchestration-work']; successor=copy.deepcopy(item['contexts']['ctx-1'])
-   successor.update(context_id='ctx-2',epoch=2,predecessor_context_id='ctx-1',continuity_ref='receipts/continuity',state='PREPARED'); successor['leader'].update(owner_id='ctx-2',session_ref='session-2',incarnation='inc-2',fence=2,epoch=2)
+   successor.update(context_id='ctx-2',epoch=2,predecessor_context_id='ctx-1',continuity_ref='continuity-1',state='PREPARED'); successor['leader'].update(owner_id='ctx-2',session_ref='session-2',incarnation='inc-2',fence=2,epoch=2)
+   item['operations']['continuity-1']={**ORCHESTRATION_OPERATION(), 'kind':'continuity-switch','subject_ids':['ctx-2'],'state':'APPLIED'}
    item['contexts']['ctx-1']['state']='QUIESCING'; item['contexts']['ctx-2']=successor; return document
   prepared=store.transact(self.r,prepare,now=CLOCK)
   candidate=copy.deepcopy(prepared.document); item=candidate['agent_orchestration']['work_items']['orchestration-work']; item['contexts']['ctx-1']['state']='SUPERSEDED'; item['contexts']['ctx-2']['state']='ACTIVE'; item['current_context_id']='ctx-2'
+  item['operations']['continuity-1'].update(state='CONFIRMED',result_ref='receipts/continuity-result',result_sha256='d'*64,observation_ref='receipts/continuity-observation')
   promoted=store.write_snapshot(self.r,candidate,prepared.revision,now=CLOCK)
   self.assertEqual((promoted.document['agent_orchestration']['work_items']['orchestration-work']['current_context_id'],promoted.document['agent_orchestration']['work_items']['orchestration-work']['contexts']['ctx-2']['state']),('ctx-2','ACTIVE'))
   with self.assertRaises(store.StoreError): store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work'].update(current_context_id='ctx-1'),document)[1],now=CLOCK)
@@ -397,7 +401,7 @@ class StoreContract(unittest.TestCase):
    document['agent_orchestration']=self._orchestration_doc(contexts); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':ORCHESTRATION_ACTIVITY()}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE()}; item['visual_decisions']={'decision-1':ORCHESTRATION_DECISION()}; return document
   store.transact(self.r,adopt,now=CLOCK)
   def begin(document):
-   item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']['activity-1']['state']='BOOTSTRAPPING'; item['resources']['resource-1']['state']='CLOSE_PENDING'; return document
+   item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']['activity-1'].update(state='BOOTSTRAPPING',session_resource_id='resource-1',launch_observation_ref='receipts/launch'); item['resources']['resource-1']['state']='CLOSE_PENDING'; return document
   store.transact(self.r,begin,now=CLOCK)
   def advance(document):
    item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']['activity-1'].update(state='VERIFIED',effective_model='gpt-6-astra',effective_effort='high',resolved_model_id='gpt-6-astra'); item['resources']['resource-1']['state']='CLOSED'; return document

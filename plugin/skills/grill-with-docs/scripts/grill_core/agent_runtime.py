@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import stat
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -230,6 +231,12 @@ def presentation_state(*, policy: dict[str, Any], policy_sha256: str,
     elif trusted["state"] != "ready":
         diagnostics.append(_diagnostic("STYLE-TRUST-PENDING", "trust", "startup trust not observed", "collect startup observation"))
     prerequisites = status == "present" and compatible == "approved" and enabled["state"] == "enabled" and trusted["state"] == "ready"
+    request = ({"loader": PRESENTATION_LOADER, "component": PRESENTATION_COMPONENT,
+                "version": reference["version"], "skill_ref": reference["skill_ref"],
+                "skill_sha256": reference["skill_sha256"], "body_sha256": reference["body_sha256"],
+                "policy_sha256": policy_sha256, "gwd_skill_sha256": gwd_skill_sha256,
+                "scope": scope, "session_identity": session_identity,
+                "config_fingerprint": config_fingerprint} if reference else None)
     requested = None
     loaded = False
     loading_state = "unconfirmed"
@@ -237,6 +244,7 @@ def presentation_state(*, policy: dict[str, Any], policy_sha256: str,
         loading_state = "stale"
     elif isinstance(loading, dict) and reference is not None:
         loaded = (loading.get("evidence_kind") == "full_read"
+                  and loading.get("load_request") == request
                   and isinstance(loading.get("event_ref"), str) and bool(loading.get("event_ref"))
                   and isinstance(loading.get("event_sha256"), str) and bool(_HEX.fullmatch(loading.get("event_sha256")))
                   and loading.get("session_identity") == session_identity
@@ -246,11 +254,7 @@ def presentation_state(*, policy: dict[str, Any], policy_sha256: str,
                   and loading.get("body_sha256") == reference["body_sha256"])
         loading_state = "loaded" if loaded else "unconfirmed"
     if prerequisites and reference is not None and not loaded and application == "active":
-        requested = {"loader": PRESENTATION_LOADER, "component": PRESENTATION_COMPONENT,
-                     "version": reference["version"], "skill_ref": reference["skill_ref"],
-                     "skill_sha256": reference["skill_sha256"], "body_sha256": reference["body_sha256"],
-                     "policy_sha256": policy_sha256, "scope": scope,
-                     "session_identity": session_identity, "config_fingerprint": config_fingerprint}
+        requested = request
         diagnostics.append(_diagnostic("STYLE-LOAD-UNCONFIRMED", "loading", "full read not observed for this session", "read the exact load_request then collect its full-read event"))
     valid_suspension = (isinstance(suspension, dict) and suspension.get("command") == "stop adhd mode"
                         and isinstance(suspension.get("source_ref"), str) and suspension.get("source_ref")
@@ -302,11 +306,13 @@ def _source_digest(*parts: bytes) -> str:
 
 
 def _object(raw: bytes, label: str) -> dict[str, Any]:
+    if not isinstance(raw, bytes):
+        _fail(f"invalid {label} response")
     try:
         value = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RuntimeError(f"invalid {label} response") from exc
-    if not isinstance(value, dict) or not value.get("ok") or not isinstance(value.get("result"), dict):
+    if not isinstance(value, dict) or value.get("ok") is not True or not isinstance(value.get("result"), dict):
         _fail(f"invalid {label} response")
     return value["result"]
 
@@ -339,6 +345,206 @@ def session_identity(value: dict[str, Any]) -> tuple[Any, ...]:
     if any(not value.get(key) for key in keys):
         _fail("runtime identity incomplete")
     return tuple(value[key] for key in keys)
+
+
+def leader_session_identity(value: dict[str, Any]) -> str:
+    """Canonical runtime-issued identity used by presentation correlation."""
+    return json.dumps(session_identity(value), ensure_ascii=False, separators=(",", ":"))
+
+
+def _tool_results(transcript: dict[str, Any]):
+    """Only unambiguous adjacent native tool calls/results, never assistant prose."""
+    previous = None
+    for message in transcript.get("messages", []):
+        blocks = message.get("blocks", []) if isinstance(message, dict) else []
+        if not isinstance(blocks, list) or len(blocks) != 1 or not isinstance(blocks[0], dict):
+            previous = None
+            continue
+        block = blocks[0]
+        if message.get("role") == "tool" and block.get("type") == "tool-result" and previous and message.get("id"):
+            yield previous, message.get("id"), block.get("output")
+        previous = block if message.get("role") == "assistant" and block.get("type") == "tool-call" else None
+
+
+def _tool_command(call: dict[str, Any]) -> list[str]:
+    if call.get("name") not in ("Bash", "exec_command", "functions.exec_command"):
+        return []
+    value = call.get("input")
+    try:
+        value = json.loads(value) if isinstance(value, str) else value
+        command = value.get("command", value.get("cmd")) if isinstance(value, dict) else None
+        return shlex.split(command) if isinstance(command, str) else []
+    except (ValueError, TypeError):
+        return []
+
+
+def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]) -> dict[str, Any]:
+    """Extract only native plugin-list fields. Orca has no startup-trust field.
+
+    This injectable probe is not a serialized assertion interface. In particular,
+    neither a live worker nor a successful tool exit proves hook approval.
+    """
+    evidence: dict[str, Any] = {"installation": {}, "enablement": {}, "trust": {}}
+    for call, event_id, output in _tool_results(transcript):
+        if _tool_command(call) != [observed["provider"], "plugin", "list", "--json"]:
+            continue
+        evidence = {"installation": {}, "enablement": {}, "trust": {}}
+        try:
+            payload = json.loads(output)
+        except (TypeError, ValueError):
+            continue
+        records = payload.get("installed") if isinstance(payload, dict) else payload
+        if not isinstance(records, list):
+            continue
+        records = [entry for entry in records if isinstance(entry, dict)
+                   and entry.get("pluginId", entry.get("id")) == PRESENTATION_COMPONENT]
+        if len(records) != 1 or not isinstance(event_id, str):
+            continue
+        entry = records[0]
+        if type(entry.get("enabled")) is bool:
+            evidence["enablement"] = {"state": "enabled" if entry["enabled"] else "disabled",
+                "source_ref": observed["source_ref"] + ":" + event_id,
+                "source_sha256": _sha256(output.encode())}
+        # Do not choose a cache version or guess a path absent from native output.
+        path, version = entry.get("installPath"), entry.get("version")
+        if isinstance(path, str) and Path(path).is_absolute() and isinstance(version, str):
+            evidence["installation"] = {"status": "present", "version": version,
+                "install_root": path, "skill_ref": str(Path(path) / "skills/i-have-adhd/SKILL.md")}
+    return evidence
+
+
+@dataclass
+class LeaderBoundary:
+    """Read-only Orca session adapter. Callables are the offline injection seam.
+
+    Session refs select a Dispatch; they contain no asserted session or style
+    facts. Digests identify observed content, not cryptographic/execution proof.
+    """
+
+    session_ref: str
+    root: Path
+    runtime: str
+    terminal_handle: str | None
+    read: Callable[[list[str]], bytes]
+    presentation_probe: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] = _orca_presentation_axes
+
+    def observe(self) -> dict[str, Any]:
+        if not isinstance(self.session_ref, str) or not re.fullmatch(r"orca:ctx[-_][A-Za-z0-9_-]+", self.session_ref):
+            _fail("LEADER-ADAPTER-UNSUPPORTED")
+        dispatch_id = self.session_ref.removeprefix("orca:")
+        raw = self.read(["orchestration", "worker-show", "--dispatch", dispatch_id, "--json"])
+        show = _object(raw, "Orca worker-show")
+        dispatch = _mapping(show.get("dispatch"), "dispatch")
+        worker = _mapping(show.get("worker"), "worker")
+        terminal = _mapping(show.get("terminal"), "current terminal")
+        resource = _mapping(show.get("terminalResource"), "terminal resource")
+        projection = _mapping(show.get("projection"), "projection")
+        launch = _mapping(_mapping(worker.get("startOptions"), "startOptions").get("launch"), "launch")
+        requested, effective = _mapping(launch.get("requested"), "requested"), _mapping(launch.get("effective"), "effective")
+        _same("dispatch", dispatch_id, dispatch.get("id"), worker.get("dispatchId"), resource.get("ownerDispatchId"))
+        handle = _same("current terminal", self.terminal_handle, terminal.get("handle"), worker.get("agentTerminalHandle"), resource.get("terminalHandle"))
+        worktree = _same("worktree", terminal.get("worktreeId"), worker.get("worktreeId"), resource.get("worktreeId"))
+        incarnation = _string(terminal.get("incarnationId"), "incarnation")
+        process = _same("dispatch incarnation", dispatch.get("processIncarnation"), resource.get("endpointIncarnation"))
+        if process != _string(terminal.get("ptyId"), "pty") + ":" + incarnation:
+            _fail("LEADER-AUTHORITY-UNPROVEN")
+        activity = {"ready": "active", "running": "active", "idle": "idle"}.get(_string(worker.get("state"), "worker state"))
+        if (terminal.get("worktreePath") != str(self.root) or terminal.get("orphaned") is not False
+                or _mapping(show.get("observation"), "observation").get("exactWorker") is not True
+                or _mapping(projection.get("liveness"), "liveness").get("verdict") != "live"
+                or projection["liveness"].get("source") != "agent_status"
+                or resource.get("releaseState") != "not_requested"
+                or dispatch.get("status") not in ("dispatched", "running")
+                or "capabilityRevokedAt" not in dispatch or dispatch["capabilityRevokedAt"] is not None
+                or activity is None):
+            _fail("LEADER-AUTHORITY-UNPROVEN")
+        provider = _same("provider", self.runtime, terminal.get("agentIdentity"), effective.get("agent"),
+                         _mapping(projection.get("provider"), "provider").get("id"))
+        observed = {"schema": "grill-agent-observation/v1", "adapter": "orca", "provider": provider,
+            "handle": handle, "incarnation": incarnation, "dispatch_incarnation": process,
+            "runtime_instance": _same("runtime instance", worker.get("runtimeEpoch"), resource.get("endpointId")),
+            "host": _same("host", terminal.get("executionHostId"), _mapping(dispatch.get("hostScope"), "host").get("hostId")),
+            "owner_dispatch": dispatch_id, "task_id": _same("task", dispatch.get("taskId"), projection.get("taskId")),
+            "worktree_id": worktree, "source_ref": self.session_ref,
+            "requested_model": requested.get("model"), "requested_effort": requested.get("effort"),
+            "effective_model": effective.get("model"), "effective_effort": effective.get("effort"),
+            "resolved_model_id": None, "activity": activity, "close": "not_requested"}
+        # Stable native fields only: timestamps/previews change on every read.
+        observed["source_sha256"] = _sha256(json.dumps(observed, sort_keys=True).encode())
+        return validate_observation(observed)
+
+    def transcript(self, observed: dict[str, Any]) -> dict[str, Any]:
+        raw = self.read(["orchestration", "worker-read", "--dispatch", observed["owner_dispatch"],
+                         "--source", "transcript", "--limit", "1000", "--json"])
+        value = _object(raw, "Orca worker-read")
+        if (value.get("dispatchId") != observed["owner_dispatch"] or value.get("provider") != self.runtime
+                or value.get("source") != "transcript" or value.get("sourceExact") is not True
+                or value.get("contentComplete") is not True or value.get("clipping")
+                or not isinstance(value.get("sourceIdentity"), str) or not value["sourceIdentity"]):
+            _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        transcript = _mapping(value.get("transcript"), "transcript")
+        if not isinstance(transcript.get("messages"), list) or transcript.get("limited") is not False:
+            _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        return {**transcript, "sourceIdentity": value["sourceIdentity"]}
+
+
+def _full_read(observed: dict[str, Any], transcript: dict[str, Any], request: dict[str, Any] | None) -> dict[str, Any] | None:
+    if request is None:
+        return None
+    requested = False
+    script = str(Path(__file__).resolve().parents[1] / "grill_workspace.py")
+    for call, event_id, output in _tool_results(transcript):
+        command = _tool_command(call)
+        # The native tool result must contain this exact core-issued request.
+        arguments = command[2:] if len(command) > 1 and command[1] == "-B" else command[1:]
+        if (command and re.fullmatch(r"python(?:3(?:\.\d+)?)?(?:\.exe)?", Path(command[0]).name)
+                and len(arguments) >= 3 and arguments[0] == script
+                and arguments[1] in {"init", "gauntlet-orchestration-adopt"}
+                and arguments[2] == request["scope"].get("root")):
+            try:
+                payload = json.loads(output)
+            except (TypeError, ValueError):
+                continue
+            presentation = payload.get("presentation") if isinstance(payload, dict) else None
+            requested = (isinstance(presentation, dict) and presentation.get("load_request") == request
+                         and payload.get("verdict") == "BLOCKED" and payload.get("code") == "STYLE-LOAD-UNCONFIRMED"
+                         and all(arguments.count(flag) == 1 and arguments.index(flag) + 1 < len(arguments)
+                                 and arguments[arguments.index(flag) + 1] == expected
+                                 for flag, expected in (("--session-ref", observed["source_ref"]),
+                                                        ("--runtime", observed["provider"]),
+                                                        ("--work-id", request["scope"].get("work_id")))))
+            continue
+        if not requested or command != ["cat", "--", request["skill_ref"]] or not isinstance(output, str) or not isinstance(event_id, str):
+            continue
+        raw = output.encode()
+        if _sha256(raw) != request["skill_sha256"]:
+            continue
+        return {"evidence_kind": "full_read", "event_ref": observed["source_ref"] + ":" + event_id,
+                "event_sha256": _sha256(raw), "load_request": request,
+                **{key: request[key] for key in ("session_identity", "config_fingerprint", "scope", "skill_sha256", "body_sha256")}}
+    return None
+
+
+def project_leader_presentation(value: Any, *, policy: dict[str, Any], policy_sha256: str,
+                                gwd_skill_sha256: str, runtime: str,
+                                scope: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Observe through the adapter; a caller-authored projection is not a source."""
+    if not isinstance(value, LeaderBoundary) or value.runtime != runtime:
+        _fail("LEADER-AUTHORITY-UNPROVEN")
+    observed = value.observe()
+    transcript = value.transcript(observed)
+    axes = value.presentation_probe(observed, transcript)
+    kwargs = dict(policy=policy, policy_sha256=policy_sha256, gwd_skill_sha256=gwd_skill_sha256,
+        runtime=runtime, session_identity=leader_session_identity(observed), scope=scope,
+        config_fingerprint=_sha256(json.dumps({"source": transcript["sourceIdentity"], "axes": axes}, sort_keys=True).encode()),
+        installation=axes.get("installation"), enablement=axes.get("enablement"), trust=axes.get("trust"))
+    presentation = presentation_state(**kwargs)
+    loading = _full_read(observed, transcript, presentation["load_request"])
+    if loading:
+        presentation = presentation_state(**kwargs, loading=loading)
+    if value.observe() != observed:
+        _fail("LEADER-AUTHORITY-UNPROVEN")
+    return observed, presentation
 
 
 def _identity(value: dict[str, Any]) -> tuple[Any, ...]:

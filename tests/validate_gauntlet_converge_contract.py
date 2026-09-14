@@ -17,6 +17,8 @@ with Phases 2-6 (T009/T016, T019/T024, T025/T027).
 """
 from __future__ import annotations
 
+import orchestration_fixture
+
 import hashlib
 import importlib.util
 import json
@@ -119,7 +121,7 @@ def invoke(program: Path, *args: object) -> tuple[subprocess.CompletedProcess[st
         args += ("--session-ref", "fixture-leader", "--operation-id", "cp-" + hashlib.sha256(repr(args).encode()).hexdigest()[:12])
     """Run one public command and require exactly one JSON object on stdout."""
     process = subprocess.run(
-        [sys.executable, str(program), *(str(value) for value in args)],
+        orchestration_fixture.command(program, args),
         text=True,
         capture_output=True,
         check=False,
@@ -372,8 +374,10 @@ class GauntletConvergeContractHarness(unittest.TestCase):
     # --- artefacts -----------------------------------------------------
 
     def write_dag(self, document: dict[str, Any], name: str = "execution-dag.json") -> str:
-        (self.root / name).write_text(json.dumps(document), encoding="utf-8")
-        return name
+        path = Path("specs/converge-fixture") / (name if name.startswith("execution-dag") else "execution-dag-" + name)
+        (self.root / path).parent.mkdir(parents=True, exist_ok=True)
+        (self.root / path).write_text(json.dumps(document), encoding="utf-8")
+        return path.as_posix()
 
     def write_authorization(self, bundle: dict[str, Any], name: str = "run-abandon.json") -> str:
         path = self.root / name
@@ -443,7 +447,7 @@ class GauntletConvergeContractHarness(unittest.TestCase):
         if process.returncode != 0 or payload.get("wave_id") != expected:
             raise AssertionError((process.returncode, payload, process.stderr))
 
-    def dispatch(self, wave_id: str, node_id: str, *, dag_path: str = "execution-dag.json",
+    def dispatch(self, wave_id: str, node_id: str, *, dag_path: str = "specs/converge-fixture/execution-dag.json",
                  files: list[str] | None = None) -> None:
         process, payload = self.worker_declare(wave_id, node_id, dag_path=dag_path, files=files)
         if process.returncode != 0 or payload.get("verdict") != "WORKER-PREPARED":
@@ -475,7 +479,7 @@ class GauntletConvergeContractHarness(unittest.TestCase):
         return invoke(WORKSPACE, *arguments)
 
     def worker_declare(
-        self, wave_id: str, node_id: str, *, dag_path: str = "execution-dag.json",
+        self, wave_id: str, node_id: str, *, dag_path: str = "specs/converge-fixture/execution-dag.json",
         tier: str = "medium", files: list[str] | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
         arguments = [
@@ -497,7 +501,7 @@ class GauntletConvergeContractHarness(unittest.TestCase):
             arguments.extend(("--failure-class", failure_class))
         return invoke(WORKSPACE, *arguments)
 
-    def converge(self, wave_id: str, *, dag_path: str = "execution-dag.json") -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
+    def converge(self, wave_id: str, *, dag_path: str = "specs/converge-fixture/execution-dag.json") -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
         return invoke(
             WORKSPACE, "gauntlet-converge", self.root, "--work-id", WORK_ID, "--run-id", self.run_id,
             "--dag", dag_path, "--wave-id", wave_id,

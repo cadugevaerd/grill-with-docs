@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Matriz pública do contrato grill_workspace.py status (somente interface CLI)."""
 from __future__ import annotations
+
+import orchestration_fixture
 import argparse, concurrent.futures, hashlib, importlib.util, json, os, shutil, subprocess, sys, tempfile, unittest
 from unittest import mock
 from pathlib import Path
@@ -21,7 +23,7 @@ def cli(script,*args):
     if script == WS and args and args[0] == "checkpoint" and "--operation-id" not in args:
         CHECKPOINT_COUNTER += 1
         args += ("--session-ref", "fixture-leader", "--operation-id", f"cp-{CHECKPOINT_COUNTER:012d}")
-    return subprocess.run([sys.executable,str(script),*(str(x) for x in args)],text=True,capture_output=True,env={**os.environ,"PYTHONDONTWRITEBYTECODE":"1"})
+    return subprocess.run(orchestration_fixture.command(script, args),text=True,capture_output=True,env={**os.environ,"PYTHONDONTWRITEBYTECODE":"1"})
 def status(root,*args):
     # Exercise the public CORE entry point; direct grill_status invocation
     # would bypass status governance and timeout handling.

@@ -10,6 +10,8 @@ Store, and Git worktree state independently.
 """
 from __future__ import annotations
 
+import orchestration_fixture
+
 import importlib.util
 import hashlib
 import json
@@ -85,7 +87,7 @@ def invoke(program: Path, *args: object) -> tuple[subprocess.CompletedProcess[st
         args += ("--session-ref", "fixture-leader")
     """Run one public command and require exactly one JSON object on stdout."""
     process = subprocess.run(
-        [sys.executable, str(program), *(str(value) for value in args)],
+        orchestration_fixture.command(program, args),
         text=True,
         capture_output=True,
         check=False,
@@ -609,7 +611,8 @@ class GauntletRunContractHarness(unittest.TestCase):
         self.assertEqual(resumed_process.stderr, "")
         self.assertEqual(
             resumed,
-            {"verdict": "RESUME-RECORDED", "work_id": WORK_ID, "run_id": run_id, "recovery_count": 1},
+            {"verdict": "RESUME-RECORDED", "work_id": WORK_ID, "run_id": run_id, "recovery_count": 1,
+             "coordinator_recommendation": "Opus", "active_model_changed": False},
         )
         self.assert_no_execution_artifacts(root_before, worktree_before)
         recovered = run_snapshot(self.root, WORK_ID, run_id)
@@ -623,7 +626,8 @@ class GauntletRunContractHarness(unittest.TestCase):
         self.assertEqual(repeat_process.stderr, "")
         self.assertEqual(
             repeat,
-            {"verdict": "RESUME-REUSED", "work_id": WORK_ID, "run_id": run_id, "recovery_count": 1},
+            {"verdict": "RESUME-REUSED", "work_id": WORK_ID, "run_id": run_id, "recovery_count": 1,
+             "coordinator_recommendation": "Opus", "active_model_changed": False},
         )
         self.assertEqual(store_snapshot(self.root), store_before)
         self.assert_no_execution_artifacts(root_before, worktree_before)

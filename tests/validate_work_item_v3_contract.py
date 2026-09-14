@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Contract matrix for grill-work-item/v3: dual-read, qualified ids, preview-first migration."""
+import orchestration_fixture
 import contextlib, importlib.util, io, json, os, shlex, shutil, socket, stat, subprocess, sys, tempfile, threading, time, unittest
 from pathlib import Path
 from unittest import mock
@@ -106,7 +107,7 @@ def build_v2_bundle(destination):
   subprocess.run(['git','-C',str(root),'config','user.name','t'],check=True)
   subprocess.run(['git','-C',str(root),'add','.'],check=True)
   subprocess.run(['git','-C',str(root),'commit','-qm','init'],check=True)
-  done=subprocess.run([sys.executable,str(WORKSPACE),'init',str(root),'--runtime','claude','--type','feature','--slug','x','--work-id',WORK_ID,'--skip-backlog'],text=True,capture_output=True)
+  done=subprocess.run(orchestration_fixture.command(WORKSPACE, ('init',str(root),'--runtime','claude','--type','feature','--slug','x','--work-id',WORK_ID,'--skip-backlog')),text=True,capture_output=True)
   assert done.returncode==0,done.stdout
   shutil.copytree(root/'.grill/work-items'/WORK_ID,destination)
 
@@ -118,7 +119,7 @@ def build_v2_repo(root):
  subprocess.run(['git','-C',str(root),'config','user.name','t'],check=True)
  subprocess.run(['git','-C',str(root),'add','.'],check=True)
  subprocess.run(['git','-C',str(root),'commit','-qm','init'],check=True)
- done=subprocess.run([sys.executable,str(WORKSPACE),'init',str(root),'--runtime','claude','--type','feature','--slug','x','--work-id',WORK_ID,'--skip-backlog'],text=True,capture_output=True)
+ done=subprocess.run(orchestration_fixture.command(WORKSPACE, ('init',str(root),'--runtime','claude','--type','feature','--slug','x','--work-id',WORK_ID,'--skip-backlog')),text=True,capture_output=True)
  assert done.returncode==0,done.stdout
 
 def cli_status(root):
