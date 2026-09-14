@@ -43,9 +43,9 @@ _CAMPAIGN_FIELDS = ("project_id", "run_id", "runtime", "adapter", "registry_sha2
 _ATTESTATION_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _RECOVERY_GENERATION = re.compile(r"^rg-[0-9a-f]{64}$")
 
-# The leader's recommendation is deliberately absent here.  These are the
-# only pairs that may author or review a technical decision; an unavailable
-# pair blocks instead of falling back to the leader or a frontier worker.
+# These are the only pairs that may author or review a technical decision; an
+# unavailable pair blocks instead of falling back to the leader or a frontier
+# worker.
 SPECIALIST_PAIRS = {
     "codex": {"author": ("gpt-6-astra", "xhigh"), "reviewer": ("gpt-6-astra", "high")},
     "claude": {"author": ("fable", "xhigh"), "reviewer": ("fable", "high")},
@@ -101,6 +101,16 @@ def _known_text(value: Any, label: str) -> None:
     _text(value, label)
     if value in {"unknown", "undetermined"}:
         _fail(f"invalid {label}")
+
+
+def coordinator_recommendation(policy: Mapping[str, Any], runtime: str) -> str:
+    """Read the leader recommendation from the versioned policy."""
+    try:
+        recommendation = policy["roles"][runtime]["leader_recommendation"]
+    except (KeyError, TypeError) as exc:
+        raise OrchestrationError("COORDINATOR-RECOMMENDATION-UNPROVEN") from exc
+    _text(recommendation, "coordinator recommendation")
+    return recommendation
 
 
 def _json(value: Any, label: str) -> None:

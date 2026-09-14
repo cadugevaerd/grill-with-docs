@@ -241,6 +241,15 @@ class AgentOrchestrationContract(unittest.TestCase):
 
     def test_runtime_continuity(self):
         """A switch preserves logical work and refuses activity inferred from silence."""
+        policy = json.loads((SCRIPTS.parent / "assets/agent-orchestration.v1.json").read_text(encoding="utf-8"))
+        for runtime, expected in (("codex", "Sol"), ("claude", "Opus")):
+            with self.subTest(runtime=runtime):
+                self.assertEqual(agent_orchestration.coordinator_recommendation(policy, runtime), expected)
+                response = grill_workspace._with_coordinator_response({"active_model": None}, runtime)
+                self.assertEqual(response, {"active_model": None, "coordinator_recommendation": expected,
+                                            "active_model_changed": False})
+        self.assertEqual(agent_orchestration.specialist_pair("codex", "author"), ("gpt-6-astra", "xhigh"))
+        self.assertEqual(agent_orchestration.specialist_pair("claude", "reviewer"), ("fable", "high"))
         old = {"project_id": "sha256:" + "1" * 64, "run_id": "leader-work-x", "runtime": "codex",
                "adapter": "codex", "registry_sha256": "sha256:" + "2" * 64,
                "recovery_generation_id": "rg-" + "3" * 64, "plan_revision": 7}

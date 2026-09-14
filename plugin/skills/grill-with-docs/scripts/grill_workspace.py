@@ -1227,6 +1227,21 @@ def backlog_is_bound(report: dict[str, Any]) -> bool:
     return (report.get("backlog") or {}).get("status") == "BOUND"
 
 
+def _coordinator_response(runtime: str) -> dict[str, Any]:
+    """Report the policy recommendation without touching the active model."""
+    contract = grill_core_module("agent_orchestration")
+    try:
+        policy = json.loads((ASSETS / "agent-orchestration.v1.json").read_text(encoding="utf-8"))
+        recommendation = contract.coordinator_recommendation(policy, runtime)
+    except (OSError, json.JSONDecodeError, contract.OrchestrationError) as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", str(exc)) from exc
+    return {"coordinator_recommendation": recommendation, "active_model_changed": False}
+
+
+def _with_coordinator_response(payload: dict[str, Any], runtime: str) -> dict[str, Any]:
+    return {**payload, **_coordinator_response(runtime)}
+
+
 def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Report and optionally repair the environment without creating a work item."""
     root = project_root(args.root)
@@ -1242,7 +1257,7 @@ def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     payload["verdict"] = payload["dependencies"].get("verdict", "BLOCKED")
     if payload["dependencies"].get("code"):
         payload["code"] = payload["dependencies"]["code"]
-    return payload, EXIT_OK if payload["verdict"] == "OK" else EXIT_BLOCKED
+    return _with_coordinator_response(payload, args.runtime), EXIT_OK if payload["verdict"] == "OK" else EXIT_BLOCKED
 
 
 # A spec reference that does not resolve is a routing failure, not a missing
@@ -1754,7 +1769,8 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if getattr(args, "require_dependencies", False) and dependencies.get("verdict") != "OK":
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "MISSING-DEPENDENCY",
                          ",".join(dependencies.get("missing_required") or ["unknown"]))
-    environment = {"workflow": workflow, "goal": goal, "runtime": args.runtime, "dependencies": dependencies}
+    environment = {"workflow": workflow, "goal": goal, "runtime": args.runtime, "dependencies": dependencies,
+                   **_coordinator_response(args.runtime)}
     skipped_backlog = bool(getattr(args, "skip_backlog", False))
     if not skipped_backlog:
         # Binding no longer waits for --allow-install: the prerequisite is the
@@ -2794,6 +2810,7 @@ def gauntlet_init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int
             "max_workers": args.max_workers,
             "stall_minutes": 15,
             "runtime": args.runtime,
+            **_coordinator_response(args.runtime),
         }, EXIT_OK
     finally:
         if item_fd is not None:
@@ -3028,9 +3045,10 @@ def _gauntlet_scheduler_resume_command(args: argparse.Namespace) -> tuple[dict[s
         if state != "ACTIVATED":
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVATION-REQUIRED", "a current Gauntlet activation is required", extra={"work_id": args.work_id})
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SCHEDULING-NOT-AVAILABLE", "durable recovery requires --run-id", extra={"work_id": args.work_id})
-    root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
+    root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
     try:
-        return gauntlet_runs.record_resume_decision(root, args.work_id, args.run_id, admission), EXIT_OK
+        payload = gauntlet_runs.record_resume_decision(root, args.work_id, args.run_id, admission)
+        return _with_coordinator_response(payload, record["runtime"]["id"]), EXIT_OK
     except (gauntlet_runs.GauntletRunError, gauntlet_runs.store.StoreError) as error:
         code = gauntlet_runs.store.KEBAB_ALIASES.get(error.code, error.code) if isinstance(error, gauntlet_runs.store.StoreError) else error.code
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
@@ -3271,7 +3289,7 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         "campaign": expected_campaign, "activation": activation,
         "expected_sha256": store.jcs_sha256({"revision": snapshot.revision, "checkpoint": args.checkpoint,
             "runtime": args.runtime, "session_ref": args.session_ref, "identity": identity, "campaign": expected_campaign}),
-        "coordinator_recommendation": "Sol" if args.runtime == "codex" else "Opus", "active_model_changed": False}
+        **_coordinator_response(args.runtime)}
     if not args.apply:
         return preview, EXIT_OK
     if args.expected_sha256 != preview["expected_sha256"]:
@@ -3316,7 +3334,7 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         "context_id": context_id, "epoch": snapshot.document["agent_orchestration"]["work_items"][args.work_id]["contexts"][source_id]["epoch"] + 1,
         "campaign": expected_campaign, "pending_attempts": pending, "preserved_resources": retained,
         "operations_to_reconcile": reconcile, "store_revision": committed.revision,
-        "coordinator_recommendation": preview["coordinator_recommendation"], "active_model_changed": False}
+        **_coordinator_response(args.runtime)}
 
 
 @_gauntlet_authorized
