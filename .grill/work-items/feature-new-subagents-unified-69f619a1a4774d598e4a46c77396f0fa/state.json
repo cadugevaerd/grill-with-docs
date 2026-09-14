@@ -22,18 +22,18 @@
       "runtime": "codex"
     },
     "attested_executions": {
-      "analyze": "se-f9a7b640a30d14ccc0fc1ef74cebbe42773374c6a65e2a4415ec0c1e860b46cc",
+      "analyze": "se-e2cba9b99b0f37ce79350d2861176e77ab0e0535c7603ffc267e653fb098baab",
       "checklist": "se-b78e66b7fc9e4b9ca7ecd57d3d9c08d307ee0f5682b2be336b4da055863e5302",
       "partition": "se-285ae0b685eb35cffcbfc6cd614068098572ebd9ce97ab80af078fc738530c37",
       "plan": "se-5eec4c655290cdcf2310850791dd7af0777c5c080d4d8a2ca60bdc2dd3eb3fcf",
       "specify": "se-b7e91b3ead1cb4ef994ac5e8541ae2c81ade98d1aeb3e684d0095d6a308f1a7e",
-      "tasks": "se-0d31b507090cbcb0591ac78c7450a85b915f215b7523e95431a1542c0b0f742f"
+      "tasks": "se-2e53971f08a84a6f0c2d720a4f5a0d3cffeee4345c0dd36019707f24415aa79c"
     },
     "attested_outputs": {
       "analyze": {
-        "output_sha256": "sha256:42c45d75a9cf5ba14023a8f60faef468e6ff2977d630ff6ed9ac286610a64e1e",
+        "output_sha256": "sha256:28fbd7f74d833883a47a67dd37c413de8635a6a5ff9eea3143293503898a528b",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-2.terminal.json",
         "step_id": "analyze"
       },
       "checklist": {
@@ -61,9 +61,9 @@
         "step_id": "specify"
       },
       "tasks": {
-        "output_sha256": "sha256:946a43207a2e9e5768371dc7ab43e51e7e6427de8c375d96b5091bc50183dc3d",
+        "output_sha256": "sha256:c616a92f4025b27c665213d31390c585cd95e16d09340ac58ca760b3515cb95f",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-2.terminal.json",
         "step_id": "tasks"
       }
     },
@@ -236,9 +236,44 @@
         "reason": "Leader invokes canonical grill-implement-parallel; 43/43 checklist PASS, no mandatory fanout hooks, bundle58files intact; preflight verifies historical worktree base and publication of read-only planning inputs before first worker.",
         "state": "in-progress",
         "step": "implement-parallel"
+      },
+      {
+        "chain_stale": [
+          "analyze",
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": "specs/030-agent-orchestration/tasks.md",
+            "sha256": "c616a92f4025b27c665213d31390c585cd95e16d09340ac58ca760b3515cb95f"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Ampliação autorizada de T004: inclui gauntlet_runs.py no grant para aplicar o guard comum no ponto de entrada direto; escopo, 30 tarefas e teste existente preservados.",
+        "state": "complete",
+        "step": "tasks",
+        "supersedes": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/tasks-attestation.json"
+      },
+      {
+        "chain_stale": [
+          "partition"
+        ],
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/ANALYZE-REPORT-R2.md",
+            "sha256": "28fbd7f74d833883a47a67dd37c413de8635a6a5ff9eea3143293503898a528b"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Análise sucessora: T004 exact3→4 resolve H3 com gauntlet_runs.py; 30 tasks e cobertura 24FR/8SC preservadas; sem HIGH/CRITICAL.",
+        "state": "complete",
+        "step": "analyze",
+        "supersedes": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/analyze-attestation.json"
       }
     ],
-    "chain_stale": [],
+    "chain_stale": [
+      "partition"
+    ],
     "current_step": "implement-parallel",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
@@ -270,6 +305,20 @@
       "verify": "pending"
     },
     "superseded_outputs": {
+      "analyze": [
+        {
+          "attempt_id": "analyze-1",
+          "attestation": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/analyze-attestation.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:42c45d75a9cf5ba14023a8f60faef468e6ff2977d630ff6ed9ac286610a64e1e",
+          "provenance": "current-generation",
+          "reason": "Análise sucessora: T004 exact3→4 resolve H3 com gauntlet_runs.py; 30 tasks e cobertura 24FR/8SC preservadas; sem HIGH/CRITICAL.",
+          "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+          "step_execution_id": "se-f9a7b640a30d14ccc0fc1ef74cebbe42773374c6a65e2a4415ec0c1e860b46cc",
+          "step_id": "analyze",
+          "superseded_by_step_execution_id": "se-e2cba9b99b0f37ce79350d2861176e77ab0e0535c7603ffc267e653fb098baab"
+        }
+      ],
       "specify": [
         {
           "attempt_id": "specify-1",
@@ -282,6 +331,20 @@
           "step_execution_id": "se-438bc69fd77b8c639469e213b08c916b030a6d71ae49c1e22a418f78efe7d4da",
           "step_id": "specify",
           "superseded_by_step_execution_id": "se-b7e91b3ead1cb4ef994ac5e8541ae2c81ade98d1aeb3e684d0095d6a308f1a7e"
+        }
+      ],
+      "tasks": [
+        {
+          "attempt_id": "tasks-1",
+          "attestation": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/tasks-attestation.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:946a43207a2e9e5768371dc7ab43e51e7e6427de8c375d96b5091bc50183dc3d",
+          "provenance": "current-generation",
+          "reason": "Ampliação autorizada de T004: inclui gauntlet_runs.py no grant para aplicar o guard comum no ponto de entrada direto; escopo, 30 tarefas e teste existente preservados.",
+          "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+          "step_execution_id": "se-0d31b507090cbcb0591ac78c7450a85b915f215b7523e95431a1542c0b0f742f",
+          "step_id": "tasks",
+          "superseded_by_step_execution_id": "se-2e53971f08a84a6f0c2d720a4f5a0d3cffeee4345c0dd36019707f24415aa79c"
         }
       ]
     },
