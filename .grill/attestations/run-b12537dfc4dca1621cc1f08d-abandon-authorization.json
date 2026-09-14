@@ -1,0 +1,8 @@
+{
+  "authorized_by": "human-user",
+  "content_sha256": "sha256:c71295494f98b295a12ceebae19ecfd12df46e8b2affc53a63e2a8c47fdda9ca",
+  "decision": "APPROVED",
+  "receipt_ref": "conversation:user-authorized-run-abandonment-after-t004-expansion",
+  "schema": "human-authorization/v1",
+  "scope": "run-b12537dfc4dca1621cc1f08d"
+}

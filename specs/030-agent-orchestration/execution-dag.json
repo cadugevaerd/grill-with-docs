@@ -21,6 +21,7 @@
       "files": [
         "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
         "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py",
         "plugin/skills/grill-with-docs/scripts/grill_core/store.py",
         "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
         "specs/030-agent-orchestration/implement/p02-a.tasks.json",
