@@ -14,6 +14,7 @@ a reordering must not silently change who may execute what.
 """
 from __future__ import annotations
 
+import copy
 import sys
 import tempfile
 import unittest
@@ -284,6 +285,30 @@ class MintedChainIsAccepted(unittest.TestCase):
             self.chain(), project_id=self.project_id, work_item_id="wi-1", step_id="specify")
         self.assertEqual(verdict["campaign"]["project_id"], self.project_id)
         self.assertEqual(verdict["campaign"]["run_id"], "run-1")
+
+    def test_exact_campaign_bridge_admits_only_the_first_successor_receipt(self) -> None:
+        old = self.chain()
+        old_campaign = A.judge_checkpoint_attestation(
+            old, project_id=self.project_id, work_item_id="wi-1", step_id="specify")["campaign"]
+        successor = self.chain(recovery_generation_id=self.fx.rg("g2"))
+        new_campaign = A.judge_checkpoint_attestation(
+            successor, project_id=self.project_id, work_item_id="wi-1", step_id="specify")["campaign"]
+        bridge = {"from_campaign": old_campaign, "to_campaign": new_campaign,
+                  "accepted_outputs": {"specify": {"output_sha256": self.artefact_sha256}},
+                  "worktree_identity": {"branch": "main"}}
+        self.assertEqual(A.judge_checkpoint_attestation(
+            successor, project_id=self.project_id, work_item_id="wi-1", step_id="specify",
+            campaign=old_campaign, campaign_bridge=bridge)["campaign"], new_campaign)
+        with self.assertRaisesRegex(A.AttestationError, "CHECKPOINT_CAMPAIGN_STALE"):
+            A.judge_checkpoint_attestation(successor, project_id=self.project_id, work_item_id="wi-1",
+                                           step_id="specify", campaign=old_campaign)
+        with self.assertRaisesRegex(A.AttestationError, "CHECKPOINT_CAMPAIGN_STALE"):
+            A.judge_checkpoint_attestation(old, project_id=self.project_id, work_item_id="wi-1",
+                                           step_id="specify", campaign=new_campaign, campaign_bridge=bridge)
+        divergent = copy.deepcopy(bridge); divergent["to_campaign"]["plan_revision"] += 1
+        with self.assertRaisesRegex(A.AttestationError, "CHECKPOINT_CAMPAIGN_STALE"):
+            A.judge_checkpoint_attestation(successor, project_id=self.project_id, work_item_id="wi-1",
+                                           step_id="specify", campaign=old_campaign, campaign_bridge=divergent)
 
     def test_the_step_output_is_anchored_on_the_artefact(self) -> None:
         """The anchor is not a second, separate digest -- it IS the artefact's."""

@@ -1,0 +1,12 @@
+{
+  "worker": "p11-a",
+  "feature": "030-agent-orchestration",
+  "completed": [],
+  "tasks": {
+    "T026": {
+      "status": "blocked",
+      "summary": "Added one focused CLI-boundary regression to AgentOrchestrationContract.test_task_phase_barriers_and_migration_are_hash_fenced. It requires wave-declare, worker-declare, prepare-worker and remediate to translate TASK-PHASE-PENDING before their scheduler cores receive a request; the seam creates no live run, work item or worker.",
+      "evidence": "Detached candidate /tmp/grill-t026.n4IUYU at 1ec0766c7a9ac0fb922e69b06c09671bb2c12854: PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_task_phase_barriers_and_migration_are_hash_fenced exited 1 with four intentional failures: declare_wave, declare_worker, prepare_worker and remediate_node bypassed task_phase_barrier. Production remediation must wire the common v2 phase guard before grill_workspace.gauntlet_wave_declare_command, gauntlet_worker_declare_command, gauntlet_prepare_worker_command and gauntlet_remediate_command call their gauntlet_runs cores; current task_phase_barrier is only called by gauntlet_partition_brief_command. The original four granted tests passed against the detached integrated candidate before this regression; the 70598d2 worktree baseline cannot import grill_core.agent_runtime and was not accepted as baseline."
+    }
+  }
+}
