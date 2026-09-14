@@ -24,7 +24,7 @@
     "attested_executions": {
       "analyze": "se-e2cba9b99b0f37ce79350d2861176e77ab0e0535c7603ffc267e653fb098baab",
       "checklist": "se-b78e66b7fc9e4b9ca7ecd57d3d9c08d307ee0f5682b2be336b4da055863e5302",
-      "partition": "se-285ae0b685eb35cffcbfc6cd614068098572ebd9ce97ab80af078fc738530c37",
+      "partition": "se-d79c591be690c28905232cc66266e8c80f8beaa7c0ec215f2c2837f4b6919695",
       "plan": "se-5eec4c655290cdcf2310850791dd7af0777c5c080d4d8a2ca60bdc2dd3eb3fcf",
       "specify": "se-b7e91b3ead1cb4ef994ac5e8541ae2c81ade98d1aeb3e684d0095d6a308f1a7e",
       "tasks": "se-2e53971f08a84a6f0c2d720a4f5a0d3cffeee4345c0dd36019707f24415aa79c"
@@ -43,9 +43,9 @@
         "step_id": "checklist"
       },
       "partition": {
-        "output_sha256": "sha256:748abdc506985b6d2979ff85bba66eed72c001bb2d56d7763097cdf5e1b14c6e",
+        "output_sha256": "sha256:264df6c1e61f9db61f7df28b749e3cef418fbe10ac9891b3687cf9d75cad2e14",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-2.terminal.json",
         "step_id": "partition"
       },
       "plan": {
@@ -269,11 +269,23 @@
         "state": "complete",
         "step": "analyze",
         "supersedes": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/analyze-attestation.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/030-agent-orchestration/execution-dag.json",
+            "sha256": "264df6c1e61f9db61f7df28b749e3cef418fbe10ac9891b3687cf9d75cad2e14"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Partition sucessora após ampliação autorizada: run-a68b9871b8b7ff9c3a07ea5c admitida em 8cda907, DAG-VALID pin b361baed, p02-a com nove paths; run histórica preservada BLOCKED.",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/partition-attestation.json"
       }
     ],
-    "chain_stale": [
-      "partition"
-    ],
+    "chain_stale": [],
     "current_step": "implement-parallel",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
@@ -317,6 +329,20 @@
           "step_execution_id": "se-f9a7b640a30d14ccc0fc1ef74cebbe42773374c6a65e2a4415ec0c1e860b46cc",
           "step_id": "analyze",
           "superseded_by_step_execution_id": "se-e2cba9b99b0f37ce79350d2861176e77ab0e0535c7603ffc267e653fb098baab"
+        }
+      ],
+      "partition": [
+        {
+          "attempt_id": "partition-1",
+          "attestation": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/partition-attestation.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:748abdc506985b6d2979ff85bba66eed72c001bb2d56d7763097cdf5e1b14c6e",
+          "provenance": "current-generation",
+          "reason": "Partition sucessora após ampliação autorizada: run-a68b9871b8b7ff9c3a07ea5c admitida em 8cda907, DAG-VALID pin b361baed, p02-a com nove paths; run histórica preservada BLOCKED.",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+          "step_execution_id": "se-285ae0b685eb35cffcbfc6cd614068098572ebd9ce97ab80af078fc738530c37",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-d79c591be690c28905232cc66266e8c80f8beaa7c0ec215f2c2837f4b6919695"
         }
       ],
       "specify": [
