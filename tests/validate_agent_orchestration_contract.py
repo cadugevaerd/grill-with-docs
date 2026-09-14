@@ -227,6 +227,26 @@ class AgentOrchestrationContract(unittest.TestCase):
         )
         return activity, bootstrap, payload, observed, closed, context
 
+    def accepted_deterministic(self, activity_id, *, step="verify"):
+        manifest = {"files": [], "required_activity_ids": [], "author_activity_ids": [],
+                    "task_binding": None, "human_authorization": None}
+        context = {"context_id": "ctx-1", "runtime": "codex", "leader": {"fence": 1}}
+        activity = agent_orchestration.new_activity(
+            activity_id=activity_id, context_id="ctx-1", step_id=step, activity_scope="cycle",
+            activity_type="deterministic_check", attempt=1, input_manifest=manifest,
+            policy_sha256="a" * 64, write_files=[],
+        )
+        activity = agent_orchestration.prepare_activity(activity, context)
+        activity = agent_orchestration.record_verified_activity(activity)
+        activity, payload = agent_orchestration.dispatch_activity(activity, context)
+        result = {"ref": f"results/{activity_id}.json", "sha256": "b" * 64}
+        output = {"files": [], "return_ref": result, "effect_ref": None}
+        activity = agent_orchestration.record_activity_result(
+            activity, result_ref=result["ref"], result_sha256=result["sha256"], output_manifest=output,
+        )
+        return agent_orchestration.accept_activity(
+            activity, context=context, observation=None, acceptance_ref=result["ref"]), payload
+
     def test_specialist_admission(self):
         activity, bootstrap, payload, observed, closed, context = self.accepted_specialist("author-plan")
         self.assertEqual((activity["state"], activity["effective_model"], activity["effective_effort"]),
@@ -261,6 +281,54 @@ class AgentOrchestrationContract(unittest.TestCase):
         malformed["accepted_by_context"] = malformed["acceptance_ref"] = malformed["review_verdict"] = None
         with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "SPECIALIST-CAPABILITY-UNPROVEN"):
             agent_orchestration.record_verified_activity(malformed, observed)
+
+        author, _bootstrap, _payload, author_observed, _closed, _context = self.accepted_specialist("author-source")
+        reviewer, _bootstrap, _payload, reviewer_observed, reviewer_closed, _context = self.accepted_specialist(
+            "reviewer-source", role="reviewer", author_ids=["author-source"])
+        _resource_id, author_resource = agent_orchestration.session_resource(
+            author, author_observed, collected_at="2026-01-01T00:00:00Z")
+        item = {"author-source": author, "reviewer-source": reviewer}
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "REVIEWER-NOT-INDEPENDENT"):
+            agent_orchestration.require_reviewer_independence(
+                reviewer, reviewer_observed, activities=item, resources={author["session_resource_id"]: author_resource})
+
+        independent = copy.deepcopy(reviewer_observed)
+        independent.update({"handle": "term-review", "incarnation": "inc-review",
+                            "dispatch_incarnation": "dispatch-inc-review", "owner_dispatch": "ctx-review",
+                            "task_id": "task-review", "worktree_id": "worktree-review"})
+        agent_orchestration.require_reviewer_independence(
+            reviewer, independent, activities=item, resources={author["session_resource_id"]: author_resource})
+
+        omitted = copy.deepcopy(reviewer); omitted["author_activity_ids"] = []
+        omitted["input_manifest"]["author_activity_ids"] = []
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "REVIEWER-NOT-INDEPENDENT"):
+            agent_orchestration.require_reviewer_independence(
+                omitted, independent, activities=item, resources={author["session_resource_id"]: author_resource})
+
+        second_author, *_ = self.accepted_specialist("author-second")
+        composite = copy.deepcopy(reviewer)
+        composite["input_manifest"]["required_activity_ids"] = ["author-source", "author-second"]
+        composite_item = {**item, "author-second": second_author}
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "REVIEWER-NOT-INDEPENDENT"):
+            agent_orchestration.require_reviewer_independence(
+                composite, independent, activities=composite_item,
+                resources={author["session_resource_id"]: author_resource})
+
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "reviewer writes files"):
+            agent_orchestration.new_activity(
+                activity_id="reviewer-write", context_id="ctx-1", step_id="plan", activity_scope="cycle",
+                activity_type="reviewer", attempt=1,
+                input_manifest={"files": [], "required_activity_ids": [], "author_activity_ids": [],
+                                "task_binding": None, "human_authorization": None},
+                policy_sha256="a" * 64, write_files=["review.md"])
+
+        recorded_review = copy.deepcopy(reviewer)
+        recorded_review.update({"state": "RESULT_RECORDED", "released_at": None,
+                                "accepted_by_context": None, "acceptance_ref": None, "review_verdict": None})
+        stale = agent_orchestration.accept_activity(
+            recorded_review, context=context, observation=reviewer_closed,
+            acceptance_ref="results/reviewer-source.json", current_input_sha256="c" * 64)
+        self.assertEqual(stale["review_verdict"], "STALE")
 
     def test_activity_coverage(self):
         policy = json.loads((SCRIPTS.parent / "assets/agent-orchestration.v1.json").read_text(encoding="utf-8"))
@@ -298,6 +366,49 @@ class AgentOrchestrationContract(unittest.TestCase):
             task_template={"path": "template", "sha256": "e" * 64}, frontend=True,
         )
         self.assertEqual(invocation["limitation"], "context-delivery-is-not-skill-invocation")
+
+        deterministic, deterministic_payload = self.accepted_deterministic("verify-gates")
+        self.assertEqual((deterministic["runtime"], deterministic["requested_model"],
+                          deterministic["requested_effort"], deterministic["review_verdict"]),
+                         (None, None, None, "APPROVED"))
+        self.assertIsNone(deterministic_payload["runtime"])
+        review_only = agent_orchestration.activity_coverage(
+            {"activities": {"verify-gates": deterministic}}, policy,
+            context_id="ctx-1", step_id="review")
+        self.assertEqual(review_only["missing"], ["reviewer"])
+
+        matrix_item = {"activities": {}}
+        matrix_cases = (
+            ("specify", True), ("plan", False), ("checklist", False), ("tasks", False),
+            ("analyze", True), ("partition", False), ("implement-parallel", True),
+            ("converge", True), ("verify", True), ("review", False), ("ship", True),
+        )
+        for step_id, new_how in matrix_cases:
+            roles = agent_orchestration.activity_requirements(
+                policy, step_id=step_id, activity_scope="cycle", new_how=new_how)
+            author_id = f"matrix-author-{step_id}"
+            if "author" in roles or "reviewer" in roles:
+                source_author, *_ = self.accepted_specialist(author_id, step=step_id)
+                matrix_item["activities"][author_id] = source_author
+            if "reviewer" in roles:
+                reviewer_id = f"matrix-reviewer-{step_id}"
+                source_reviewer, *_ = self.accepted_specialist(
+                    reviewer_id, step=step_id, role="reviewer", author_ids=[author_id])
+                matrix_item["activities"][reviewer_id] = source_reviewer
+            coverage = agent_orchestration.require_activity_coverage(
+                matrix_item, policy, context_id="ctx-1", step_id=step_id, new_how=new_how)
+            self.assertEqual(coverage["missing"], [], step_id)
+
+        changes_required = copy.deepcopy(reviewer_tasks); changes_required["review_verdict"] = "CHANGES_REQUIRED"
+        stale = copy.deepcopy(reviewer_tasks); stale["review_verdict"] = "STALE"
+        for verdict, review in (("CHANGES_REQUIRED", changes_required), ("STALE", stale)):
+            coverage = agent_orchestration.activity_coverage(
+                {"activities": {"author-tasks": author_tasks, "reviewer-tasks": review}}, policy,
+                context_id="ctx-1", step_id="tasks")
+            self.assertEqual(coverage["missing"], ["reviewer"])
+            self.assertEqual(coverage[verdict.lower()], ["reviewer-tasks"])
+            with self.assertRaises(attestation.AttestationError):
+                attestation.require_activity_coverage(coverage, step_id="tasks")
 
     def test_native_bytes_prove_effective_pair_and_full_identity(self):
         boundary, observed, calls = self.verified()

@@ -536,14 +536,19 @@ def guard_capability_access(invocation_started: Mapping[str, Any] | None, *, cap
 
 
 def require_activity_coverage(coverage: Mapping[str, Any], *, step_id: str) -> None:
-    """A delivered supplement is context, not a substitute for its author."""
+    """Only current approvals, not checks or requested changes, satisfy a gate."""
     if not isinstance(coverage, Mapping):
         raise _blocked("ACTIVITY_REQUIRED", step_id=step_id)
     missing = coverage.get("missing")
     if not isinstance(missing, list) or any(not isinstance(role, str) for role in missing):
         raise _blocked("ACTIVITY_REQUIRED", step_id=step_id)
+    for key in ("changes_required", "stale"):
+        value = coverage.get(key)
+        if not isinstance(value, list) or any(not isinstance(activity_id, str) for activity_id in value):
+            raise _blocked("ACTIVITY_REQUIRED", step_id=step_id)
     if missing:
-        raise _blocked("ACTIVITY_REQUIRED", step_id=step_id, missing=sorted(missing))
+        raise _blocked("ACTIVITY_REQUIRED", step_id=step_id, missing=sorted(missing),
+                       changes_required=sorted(coverage["changes_required"]), stale=sorted(coverage["stale"]))
 
 
 # --------------------------------------------------------------------------

@@ -4180,7 +4180,7 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         root, args.work_id, args.context_id, args.epoch, args.session_ref)
     manifest, _manifest_ref = _activity_json(root, args.input_manifest, "INPUT-MANIFEST-INVALID")
     try:
-        contract.activity_input_sha256(manifest)
+        current_input_sha256 = contract.activity_input_sha256(manifest)
     except contract.OrchestrationError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INPUT-MANIFEST-INVALID", str(exc)) from exc
     if args.author_activity and manifest.get("author_activity_ids") != args.author_activity:
@@ -4197,6 +4197,10 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     snapshot = store.read_snapshot(root)
     item, bound = current(snapshot.document)
     existing = item["activities"].get(args.activity_id)
+    if existing is not None and (existing.get("activity_type") != args.kind
+                                 or existing.get("activity_scope") != scope
+                                 or existing.get("step_id") != step_id):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
     if args.phase == "prepare":
         try:
             if existing is None:
@@ -4219,39 +4223,55 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
             return document
         committed = store.transact(root, prepare)
         activity = committed.document["agent_orchestration"]["work_items"][args.work_id]["activities"][args.activity_id]
+        if activity["activity_type"] == "deterministic_check":
+            return {"verdict": "PREPARED", "activity_id": args.activity_id,
+                    "store_revision": committed.revision}, EXIT_OK
         return {"verdict": "BOOTSTRAP-REQUIRED", "activity_id": args.activity_id,
                 "bootstrap": contract.bootstrap_request(activity), "store_revision": committed.revision}, EXIT_OK
 
-    if existing is None or existing.get("input_sha256") != contract.activity_input_sha256(manifest):
+    input_divergent = existing is not None and existing.get("input_sha256") != current_input_sha256
+    if existing is None or (input_divergent and not (args.phase == "accept"
+                                                      and args.kind == "reviewer"
+                                                      and existing.get("state") == "DISPATCHED")):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-INPUT-DIVERGENT", args.activity_id)
     if args.phase == "dispatch":
-        if not args.observation:
+        if args.kind != "deterministic_check" and not args.observation:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SPECIALIST-CAPABILITY-UNPROVEN", "observation is required")
-        observation, _observation_ref = _activity_json(root, args.observation, "SPECIALIST-CAPABILITY-UNPROVEN")
+        observation = None
+        if args.kind != "deterministic_check":
+            observation, _observation_ref = _activity_json(root, args.observation, "SPECIALIST-CAPABILITY-UNPROVEN")
         try:
             verified = contract.record_verified_activity(existing, observation) if existing["state"] == "BOOTSTRAPPING" else existing
             if existing["state"] == "BOOTSTRAPPING":
-                resource_id, resource = contract.session_resource(
-                    verified, observation, collected_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
-                if verified["session_resource_id"] != resource_id:
-                    raise contract.OrchestrationError("SPECIALIST-CAPABILITY-UNPROVEN")
+                resource_id = resource = None
+                if args.kind != "deterministic_check":
+                    assert observation is not None
+                    contract.require_reviewer_independence(
+                        verified, observation, activities=item["activities"], resources=item["resources"])
+                    resource_id, resource = contract.session_resource(
+                        verified, observation, collected_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+                    if verified["session_resource_id"] != resource_id:
+                        raise contract.OrchestrationError("SPECIALIST-CAPABILITY-UNPROVEN")
                 def verify(document: dict[str, Any]) -> dict[str, Any]:
                     target, _target_context = current(document)
                     if target["activities"].get(args.activity_id) != existing:
                         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
-                    if resource_id in target["resources"]:
+                    if resource_id is not None and resource_id in target["resources"]:
                         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", resource_id)
                     target["activities"][args.activity_id] = verified
-                    target["resources"][resource_id] = resource
+                    if resource_id is not None:
+                        target["resources"][resource_id] = resource
                     return document
                 store.transact(root, verify)
             snapshot = store.read_snapshot(root); item, bound = current(snapshot.document)
             verified = item["activities"][args.activity_id]
             if verified["state"] == "DISPATCHED":
-                readback = contract.verify_specialist(verified, observation)
-                resource = item["resources"].get(verified["session_resource_id"])
-                if not isinstance(resource, dict) or readback["owner_dispatch"] != resource.get("identity", {}).get("owner_dispatch"):
-                    raise contract.OrchestrationError("SPECIALIST-CAPABILITY-UNPROVEN")
+                if args.kind != "deterministic_check":
+                    assert observation is not None
+                    readback = contract.verify_specialist(verified, observation)
+                    resource = item["resources"].get(verified["session_resource_id"])
+                    if not isinstance(resource, dict) or readback["owner_dispatch"] != resource.get("identity", {}).get("owner_dispatch"):
+                        raise contract.OrchestrationError("SPECIALIST-CAPABILITY-UNPROVEN")
                 payload = contract.activity_payload(verified, bound)
                 return {"verdict": "REUSED", "activity_id": args.activity_id, "payload": payload}, EXIT_OK
             dispatched, payload = contract.dispatch_activity(verified, bound)
@@ -4292,13 +4312,27 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-INVALID", str(exc)) from exc
     def record(document: dict[str, Any]) -> dict[str, Any]:
         updated = _replace_activity(document, args.work_id, args.activity_id, existing, recorded)
-        resource_id = recorded["session_resource_id"]
-        resource = updated["agent_orchestration"]["work_items"][args.work_id]["resources"].get(resource_id)
-        if not isinstance(resource, dict) or resource.get("state") != "REGISTERED":
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
-        resource["state"] = "CLOSE_PENDING"
+        if recorded["activity_type"] != "deterministic_check":
+            resource_id = recorded["session_resource_id"]
+            resource = updated["agent_orchestration"]["work_items"][args.work_id]["resources"].get(resource_id)
+            if not isinstance(resource, dict) or resource.get("state") != "REGISTERED":
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
+            resource["state"] = "CLOSE_PENDING"
         return updated
     committed = store.transact(root, record)
+    if args.kind == "deterministic_check":
+        snapshot = store.read_snapshot(root); item, bound = current(snapshot.document)
+        recorded = item["activities"][args.activity_id]
+        try:
+            accepted = contract.accept_activity(
+                recorded, context=bound, observation=None, acceptance_ref=result["ref"],
+                current_input_sha256=current_input_sha256)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-INVALID", str(exc)) from exc
+        committed = store.transact(root, lambda document: _replace_activity(
+            document, args.work_id, args.activity_id, recorded, accepted))
+        return {"verdict": "ACCEPTED", "activity_id": args.activity_id,
+                "store_revision": committed.revision}, EXIT_OK
     if not args.observation:
         return {"verdict": "RESULT-RECORDED", "activity_id": args.activity_id,
                 "store_revision": committed.revision}, EXIT_OK
@@ -4307,7 +4341,9 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     recorded = item["activities"][args.activity_id]
     try:
         accepted = contract.accept_activity(recorded, context=bound, observation=observation,
-                                            acceptance_ref=result["ref"])
+                                            acceptance_ref=result["ref"],
+                                            review_verdict=args.review_verdict,
+                                            current_input_sha256=current_input_sha256)
     except contract.OrchestrationError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SPECIALIST-CAPABILITY-UNPROVEN", str(exc)) from exc
     def accept(document: dict[str, Any]) -> dict[str, Any]:
@@ -4321,7 +4357,9 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
             resource, observation, acceptance_ref=result["ref"])
         return updated
     committed = store.transact(root, accept)
-    return {"verdict": "ACCEPTED", "activity_id": args.activity_id, "store_revision": committed.revision}, EXIT_OK
+    verdict = accepted["review_verdict"] if args.kind == "reviewer" else "ACCEPTED"
+    return {"verdict": verdict, "activity_id": args.activity_id,
+            "store_revision": committed.revision}, EXIT_OK if verdict in {"APPROVED", "ACCEPTED"} else EXIT_BLOCKED
 
 
 def _replace_activity(document: dict[str, Any], work_id: str, activity_id: str,
@@ -4350,13 +4388,12 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     item = resolve_development_item(root, args.work_id)
     attestation = grill_core_module("attestation")
-    if args.step in {"specify", "plan", "tasks"}:
-        coverage = _step_activity_coverage(root, args.work_id, args.step)
-        if coverage is not None:
-            try:
-                attestation.require_activity_coverage(coverage, step_id=args.step)
-            except attestation.AttestationError as exc:
-                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", exc.reason) from exc
+    coverage = _step_activity_coverage(root, args.work_id, args.step)
+    if coverage is not None:
+        try:
+            attestation.require_activity_coverage(coverage, step_id=args.step)
+        except attestation.AttestationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", exc.reason) from exc
     versions = grill_core_module("workflow_versions")
     step_skills_module = grill_core_module("step_skills")
     store = grill_core_module("store")
@@ -4653,7 +4690,7 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         # código nomeado.
         if sequence != development_sequence(development) or not isinstance(steps, dict) or not isinstance(development.setdefault("audit", []), list):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
-        if args.state in {"in-progress", "complete"} and args.step in {"specify", "plan", "tasks"}:
+        if args.state in {"in-progress", "complete"}:
             coverage = _step_activity_coverage(root, args.work_id, args.step)
             if coverage is not None:
                 try:
@@ -5079,6 +5116,7 @@ def build_parser() -> JsonParser:
     activity_parser.add_argument("--observation")
     activity_parser.add_argument("--result")
     activity_parser.add_argument("--diagnostic")
+    activity_parser.add_argument("--review-verdict", choices=("APPROVED", "CHANGES_REQUIRED"), default="APPROVED")
     gauntlet_init_parser = subparsers.add_parser("gauntlet-init")
     gauntlet_init_parser.add_argument("root")
     gauntlet_init_parser.add_argument("--work-id", required=True)
