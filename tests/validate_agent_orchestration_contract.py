@@ -314,6 +314,20 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertIsNotNone(core._full_read(observed, {"messages": messages}, request))
                 envelope = copy.deepcopy(messages)
                 for index in (0, 2):
+                    # Reject duplicates before json decoding discards the first value.
+                    for duplicate in ('"cmd":"/usr/bin/false",', '"max_output_tokens":1,"max_output_tokens":2,'):
+                        messages[:] = copy.deepcopy(envelope)
+                        call = messages[index]["blocks"][0]
+                        call["input"] = call["input"].replace("{", "{" + duplicate, 1)
+                        self.assertIsNone(core._full_read(observed, {"messages": messages}, request))
+                        with mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter), \
+                             self.assertRaisesRegex(grill_workspace.CliFailure, "STYLE-LOAD-UNCONFIRMED"):
+                            grill_workspace._session_readiness(root, runtime, orchestration_fixture.SESSION, work_id=None)
+                    for duplicate in ('"exit_code":1,', '"output":"forged",', '"session_id":1,"session_id":null,'):
+                        messages[:] = copy.deepcopy(envelope)
+                        result = messages[index + 1]["blocks"][0]
+                        result["output"] = result["output"].replace("{", "{" + duplicate, 1)
+                        self.assertIsNone(core._full_read(observed, {"messages": messages}, request))
                     for altered in ("/tmp/caller/" + ("python3" if index == 0 else "cat"),
                                     shlex.join([sys.executable, "-c", "print('forged')"]),
                                     original[index]["blocks"][0]["input"][key] + " ; printf forged"):

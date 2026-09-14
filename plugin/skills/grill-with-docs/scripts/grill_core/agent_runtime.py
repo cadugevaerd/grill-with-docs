@@ -13,6 +13,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+try:
+    from .store import StoreError, loads as _json_loads
+except ImportError:
+    from grill_core.store import StoreError, loads as _json_loads
+
 _HEX = re.compile(r"^[0-9a-f]{64}$")
 _OBSERVATION_KEYS = {
     "schema", "adapter", "provider", "handle", "incarnation",
@@ -315,8 +320,8 @@ def _object(raw: bytes, label: str) -> dict[str, Any]:
     if not isinstance(raw, bytes):
         _fail(f"invalid {label} response")
     try:
-        value = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        value = _json_loads(raw.decode("utf-8"))
+    except (ValueError, StoreError) as exc:
         raise RuntimeError(f"invalid {label} response") from exc
     if not isinstance(value, dict) or value.get("ok") is not True or not isinstance(value.get("result"), dict):
         _fail(f"invalid {label} response")
@@ -374,8 +379,8 @@ def _tool_results(transcript: dict[str, Any]):
                 # JavaScript, concatenate outputs, or strip arbitrary prose.
                 match = re.fullmatch(r"Script completed\nWall time [0-9.]+ seconds\nOutput:\n([\s\S]+)", output or "") if isinstance(output, str) else None
                 try:
-                    result = json.loads(match[1]) if match else None
-                except ValueError:
+                    result = _json_loads(match[1]) if match else None
+                except (ValueError, StoreError):
                     result = None
                 if (not isinstance(result, dict) or type(result.get("exit_code")) is not int
                         or result["exit_code"] not in (0, 2) or result.get("session_id") is not None
@@ -394,10 +399,10 @@ def _tool_command(call: dict[str, Any]) -> list[str]:
             match = re.fullmatch(r"text\(await tools\.exec_command\((\{[\s\S]+\})\)\);?\n?", value) if isinstance(value, str) else None
             if not match:
                 return []
-            value = json.loads(match[1])
+            value = _json_loads(match[1])
         elif call.get("name") not in ("Bash", "exec_command", "functions.exec_command"):
             return []
-        value = json.loads(value) if isinstance(value, str) else value
+        value = _json_loads(value) if isinstance(value, str) else value
         if not isinstance(value, dict) or set(value) - {"command", "cmd", "max_output_tokens", "yield_time_ms", "timeout", "description"}:
             return []
         if ("command" in value) == ("cmd" in value):
@@ -407,7 +412,7 @@ def _tool_command(call: dict[str, Any]) -> list[str]:
         # Only canonical literal shell words. This excludes operators,
         # redirects, substitutions, comments, expansions and extra commands.
         return arguments if arguments and command == shlex.join(arguments) else []
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, StoreError):
         return []
 
 
@@ -423,8 +428,8 @@ def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]
             continue
         evidence = {"installation": {}, "enablement": {}, "trust": {}}
         try:
-            payload = json.loads(output)
-        except (TypeError, ValueError):
+            payload = _json_loads(output)
+        except (TypeError, ValueError, StoreError):
             continue
         records = payload.get("installed") if isinstance(payload, dict) else payload
         if not isinstance(records, list):
@@ -568,8 +573,8 @@ def _full_read(observed: dict[str, Any], transcript: dict[str, Any], request: di
         # The native tool result must contain this exact core-issued request.
         if _load_request_command(command, observed, request):
             try:
-                payload = json.loads(output)
-            except (TypeError, ValueError):
+                payload = _json_loads(output)
+            except (TypeError, ValueError, StoreError):
                 continue
             presentation = payload.get("presentation") if isinstance(payload, dict) else None
             requested = (isinstance(presentation, dict) and presentation.get("load_request") == request
