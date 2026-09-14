@@ -189,13 +189,14 @@ class StoreContract(unittest.TestCase):
   author=ORCHESTRATION_ACTIVITY()
   task_binding={'task_id':'T010','phase':'Phase 4','tasks_semantic_sha256':'8'*64,'dag_content_sha256':'9'*64}
   reviewer=ORCHESTRATION_ACTIVITY('reviewer-1'); reviewer['activity_type']=reviewer['role']='reviewer'; reviewer['author_activity_ids']=['activity-1']; reviewer['task_binding']=task_binding; reviewer['input_manifest']=INPUT_MANIFEST(task_binding=task_binding,authors=['activity-1']); reviewer['input_sha256']=store.jcs_sha256(reviewer['input_manifest'])
-  check=ORCHESTRATION_ACTIVITY('check-1'); check.update(activity_scope='cycle',step_id='T010',activity_type='deterministic_check',role='deterministic_check',runtime=None,requested_model=None,requested_effort=None)
+  check=ORCHESTRATION_ACTIVITY('check-1'); check.update(activity_scope='cycle',step_id='verify',activity_type='deterministic_check',role='deterministic_check',runtime=None,requested_model=None,requested_effort=None)
   worktree_identity={'git_common_dir':'/fixture/.git','worktree_key':'worktree-1','real_path':'/fixture/worktree','branch_ref':'refs/heads/feature','base_commit':'1'*40}
+  windows_worktree_identity={'git_common_dir':'C:/fixture/.git','worktree_key':'worktree-windows-1','real_path':'C:/fixture/worktree','branch_ref':'refs/heads/feature','base_commit':'1'*40}
   branch_identity={'git_common_dir':'/fixture/.git','branch_ref':'refs/heads/feature','creation_oid':'1'*40,'expected_oid':'1'*40}
   def resource(kind,identity):
    value=ORCHESTRATION_RESOURCE(f'{kind}-1'); value.update(kind=kind,identity=identity,creation_observation={'kind':kind,'identity':dict(identity),'source_ref':f'receipts/create-{kind}','source_sha256':'e'*64,'collected_at':CLOCK()}); return value
   def adopt(document):
-   document['agent_orchestration']=self._orchestration_doc(contexts); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':author,'reviewer-1':reviewer,'check-1':check}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE(),'worktree-1':resource('worktree',worktree_identity),'branch-1':resource('branch',branch_identity)}; resource_1=item['resources']['resource-1']; observation=REF('receipts/observation'); resource_1['evidence_manifest']['receipts']=[observation]; resource_1['last_observation']=observation; return document
+   document['agent_orchestration']=self._orchestration_doc(contexts); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':author,'reviewer-1':reviewer,'check-1':check}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE(),'worktree-1':resource('worktree',worktree_identity),'windows-worktree-1':resource('worktree',windows_worktree_identity),'branch-1':resource('branch',branch_identity)}; resource_1=item['resources']['resource-1']; observation=REF('receipts/observation'); resource_1['evidence_manifest']['receipts']=[observation]; resource_1['last_observation']='receipts/observation'; return document
   stored=store.transact(self.r,adopt,now=CLOCK)
   item=store.read_snapshot(self.r).document['agent_orchestration']['work_items']['orchestration-work']
   self.assertEqual(item['activities']['activity-1']['input_sha256'],store.jcs_sha256(item['activities']['activity-1']['input_manifest']))
@@ -208,12 +209,55 @@ class StoreContract(unittest.TestCase):
    with self.assertRaises(store.StoreError) as caught: store.transact(self.r,mutate,now=CLOCK)
    self.assertEqual(caught.exception.code,'ORCHESTRATOR_INVALID')
   invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1']['identity'].pop('handle'),document)[1])
+  invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1'].update(last_observation=REF('receipts/observation')),document)[1])
+  invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1'].update(preservation_reasons=[{}]),document)[1])
+  invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1'].update(activity_scope=[]),document)[1])
   invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1']['input_manifest'].update(unknown=True),document)[1])
   invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1']['input_manifest']['files'].append(FILE(size=True)),document)[1])
   invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1']['evidence_manifest'].update(receipts=[REF('receipts/duplicate'),REF('receipts/duplicate','f'*64)]),document)[1])
   invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1']['evidence_manifest']['files'].pop(),document)[1])
   invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['resources']['branch-1']['creation_observation']['identity'].update(expected_oid='2'*40),document)[1])
   invalid(lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1'].update(input_sha256='f'*64),document)[1])
+
+ def test_orchestration_r1_rejects_impossible_creation_values_and_cycle_task_ids(self):
+  contexts={'ctx-1':ORCHESTRATION_CONTEXT()}
+  def candidate(document, change):
+   document['agent_orchestration']=self._orchestration_doc(contexts); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':ORCHESTRATION_ACTIVITY()}; item['resources']={'resource-1':ORCHESTRATION_RESOURCE()}; change(item); return document
+  def reject(change):
+   self.tearDown(); self.setUp(); self.register()
+   with self.assertRaises(store.StoreError) as caught: store.transact(self.r,lambda document: candidate(document,change),now=CLOCK)
+   self.assertEqual(caught.exception.code,'ORCHESTRATOR_INVALID')
+  def resource_identity(item,kind,identity):
+   resource=item['resources']['resource-1']; resource.update(kind=kind,identity=identity); resource['creation_observation'].update(kind=kind,identity=copy.deepcopy(identity))
+  def unknown_identity(item):
+   resource=item['resources']['resource-1']; resource['identity'].update(incarnation='unknown',worktree_id='unknown'); resource['creation_observation']['identity']=copy.deepcopy(resource['identity'])
+  branch={'git_common_dir':'/fixture/.git','branch_ref':'refs/heads/feature','creation_oid':'1'*40,'expected_oid':'1'*40}
+  worktree={'git_common_dir':'/fixture/.git','worktree_key':'worktree-1','real_path':'/fixture/worktree','branch_ref':'refs/heads/feature','base_commit':'1'*40}
+  reject(unknown_identity)
+  reject(lambda item: resource_identity(item,'branch',{**branch,'branch_ref':'refs/heads/'}))
+  reject(lambda item: resource_identity(item,'worktree',{**worktree,'real_path':'/fixture/\x00worktree'}))
+  reject(lambda item: item['resources']['resource-1']['creation_observation'].update(collected_at='2026-99-99T99:99:99Z'))
+  reject(lambda item: item['activities']['activity-1'].update(activity_scope='cycle',step_id='T010'))
+  self.tearDown(); self.setUp(); self.register()
+  windows={**worktree,'git_common_dir':'C:/fixture/.git','real_path':'C:/fixture/worktree'}
+  stored=store.transact(self.r,lambda document: candidate(document,lambda item: resource_identity(item,'worktree',windows)),now=CLOCK)
+  self.assertEqual(stored.document['agent_orchestration']['work_items']['orchestration-work']['resources']['resource-1']['identity'],windows)
+
+ def test_orchestration_r1_deterministic_check_progresses_from_verified(self):
+  self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}
+  def adopt(document):
+   check=ORCHESTRATION_ACTIVITY(); check.update(activity_type='deterministic_check',role='deterministic_check',runtime=None,requested_model=None,requested_effort=None)
+   document['agent_orchestration']=self._orchestration_doc(contexts); item=document['agent_orchestration']['work_items']['orchestration-work']; item['activities']={'activity-1':check}; return document
+  store.transact(self.r,adopt,now=CLOCK)
+  for state,updates in (
+   ('BOOTSTRAPPING',{}),
+   ('VERIFIED',{}),
+   ('DISPATCHED',{'payload_sha256':'b'*64}),
+   ('RESULT_RECORDED',{'result_ref':'receipts/result','result_sha256':'d'*64,'output_manifest':{'files':[],'return_ref':REF('receipts/return'),'effect_ref':None}}),
+   ('ACCEPTED',{'accepted_by_context':'ctx-1','acceptance_ref':'receipts/acceptance','review_verdict':'APPROVED'}),
+  ):
+   store.transact(self.r,lambda document,state=state,updates=updates: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1'].update(state=state,**updates),document)[1],now=CLOCK)
+  self.assertEqual(store.read_snapshot(self.r).document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1']['state'],'ACCEPTED')
 
  def test_orchestration_epochs_scope_and_first_binding_have_closed_transitions(self):
   self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}
@@ -325,7 +369,7 @@ class StoreContract(unittest.TestCase):
     if state=='ACCEPTED': activity.update(accepted_by_context='ctx-1',acceptance_ref='receipts/acceptance',review_verdict='APPROVED')
     return document
    store.transact(self.r,advance,now=CLOCK)
-  for updates in ({'session_resource_id':'resource-2'},{'result_ref':'receipts/replacement','result_sha256':'e'*64,'output_manifest':{'artifact':'e'*64}},{'acceptance_ref':'receipts/replacement-acceptance','review_verdict':'CHANGES_REQUIRED'}):
+  for updates in ({'session_resource_id':'resource-2'},{'result_ref':'receipts/replacement','result_sha256':'e'*64,'output_manifest':{'files':[],'return_ref':REF('receipts/replacement-return','e'*64),'effect_ref':None}},{'acceptance_ref':'receipts/replacement-acceptance','review_verdict':'CHANGES_REQUIRED'}):
    with self.subTest(updates=updates), self.assertRaises(store.StoreError): store.transact(self.r,lambda document, updates=updates: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1'].update(updates),document)[1],now=CLOCK)
 
  def test_orchestration_preserves_resource_activity_and_visual_histories(self):

@@ -10,8 +10,15 @@ import copy
 import hashlib
 import json
 import math
+from datetime import datetime, timezone
+from pathlib import PurePosixPath, PureWindowsPath
 import re
 from typing import Any
+
+try:
+    from .workflow_versions import SEQUENCE_V4
+except ImportError:
+    from grill_core.workflow_versions import SEQUENCE_V4
 
 SCHEMA = "grill-agent-orchestration/v1"
 EVENT_SCHEMA = "grill-orchestration-event/v1"
@@ -65,7 +72,13 @@ def _object(value: Any, required: set[str], optional: set[str], label: str) -> d
 def _text(value: Any, label: str, *, nullable: bool = False) -> None:
     if value is None and nullable:
         return
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in value):
+        _fail(f"invalid {label}")
+
+
+def _known_text(value: Any, label: str) -> None:
+    _text(value, label)
+    if value in {"unknown", "undetermined"}:
         _fail(f"invalid {label}")
 
 
@@ -173,7 +186,28 @@ def _manifest_sha256(value: dict[str, Any]) -> str:
 
 
 def _absolute_path(value: Any, label: str) -> None:
-    if not isinstance(value, str) or not value.startswith("/") or "/../" in value or value.endswith("/.."):
+    if not isinstance(value, str) or not value or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in value):
+        _fail(f"invalid {label}")
+    posix, windows = PurePosixPath(value), PureWindowsPath(value)
+    if not (posix.is_absolute() or windows.is_absolute()) or ".." in posix.parts or ".." in windows.parts:
+        _fail(f"invalid {label}")
+
+
+def _branch_ref(value: Any, label: str) -> None:
+    _text(value, label)
+    name = value.removeprefix("refs/heads/")
+    if name == value or name in {"", "unknown", "undetermined"} or any(part in {"", ".", ".."} for part in name.split("/")):
+        _fail(f"invalid {label}")
+
+
+def _utc_rfc3339(value: Any, label: str) -> None:
+    if not isinstance(value, str) or not _UTC_RFC3339.fullmatch(value):
+        _fail(f"invalid {label}")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError:
+        _fail(f"invalid {label}")
+    if parsed.tzinfo != timezone.utc:
         _fail(f"invalid {label}")
 
 
@@ -319,12 +353,14 @@ def _activity(activity_id: str, value: Any, contexts: dict[str, Any]) -> None:
     _id(activity_id, "activity id")
     if value["activity_id"] != activity_id or value["context_id"] not in contexts or type(value["attempt"]) is not int or value["attempt"] < 1:
         _fail("invalid activity identity")
-    if value["activity_scope"] not in {"interview", "cycle"} or value["activity_type"] not in {"author", "reviewer", "deterministic_check"} or value["role"] != value["activity_type"] or value["state"] not in _ACTIVITY_STATES:
+    if not all(isinstance(value[key], str) for key in ("activity_scope", "activity_type", "role", "state")) or value["activity_scope"] not in {"interview", "cycle"} or value["activity_type"] not in {"author", "reviewer", "deterministic_check"} or value["role"] != value["activity_type"] or value["state"] not in _ACTIVITY_STATES:
         _fail("invalid activity state")
     if value["activity_scope"] == "interview":
         if value["step_id"] is not None: _fail("interview activity has step")
     else:
         _id(value["step_id"], "activity step_id")
+        if value["step_id"] not in SEQUENCE_V4:
+            _fail("invalid activity step_id")
     if value["activity_type"] == "deterministic_check":
         if any(value[key] is not None for key in ("runtime", "requested_model", "requested_effort", "effective_model", "effective_effort", "resolved_model_id", "session_resource_id", "launch_observation_ref", "presentation_observation_ref", "released_at")):
             _fail("deterministic activity has runtime slots")
@@ -348,7 +384,7 @@ def _activity(activity_id: str, value: Any, contexts: dict[str, Any]) -> None:
         _fail("reviewer writes files")
     for key in ("session_resource_id", "launch_observation_ref", "effective_model", "effective_effort", "resolved_model_id", "released_at", "presentation_observation_ref", "result_ref", "diagnostic_ref", "accepted_by_context", "acceptance_ref"):
         _text(value[key], f"activity {key}", nullable=True)
-    if value["review_verdict"] not in {None, "APPROVED", "CHANGES_REQUIRED"}:
+    if value["review_verdict"] is not None and not isinstance(value["review_verdict"], str) or value["review_verdict"] not in {None, "APPROVED", "CHANGES_REQUIRED"}:
         _fail("invalid activity review verdict")
     for key in ("payload_sha256", "result_sha256"):
         _nullable_digest(value[key], f"activity {key}")
@@ -363,7 +399,7 @@ def _activity(activity_id: str, value: Any, contexts: dict[str, Any]) -> None:
         _fail("activity payload before dispatch")
     if value["state"] in {"DECLARED", "BOOTSTRAPPING", "VERIFIED", "DISPATCHED"} and value["result_ref"] is not None:
         _fail("activity result before record")
-    if value["state"] == "VERIFIED" and (value["effective_model"] is None or value["effective_effort"] is None):
+    if value["activity_type"] != "deterministic_check" and value["state"] == "VERIFIED" and (value["effective_model"] is None or value["effective_effort"] is None):
         _fail("verified activity lacks model observation")
     if value["state"] == "DISPATCHED" and value["payload_sha256"] is None:
         _fail("dispatched activity lacks payload")
@@ -387,7 +423,7 @@ def _resource(resource_id: str, value: Any, contexts: dict[str, Any]) -> None:
     required = {"kind", "agent_id", "activity_id", "scheduler_run_id", "worker_id", "wave_id", "origin_context_id", "identity", "creation_observation", "result_acceptance_ref", "evidence_manifest", "state", "last_observation", "preservation_reasons", "operation_id"}
     value = _object(value, required, set(), "resource")
     _id(resource_id, "resource id")
-    if value["kind"] not in {"session", "worktree", "branch"} or value["origin_context_id"] not in contexts or value["state"] not in _RESOURCE_STATES:
+    if not isinstance(value["kind"], str) or not isinstance(value["state"], str) or value["kind"] not in {"session", "worktree", "branch"} or value["origin_context_id"] not in contexts or value["state"] not in _RESOURCE_STATES:
         _fail("invalid resource state")
     for key in ("agent_id", "result_acceptance_ref", "operation_id"):
         _text(value[key], f"resource {key}", nullable=True)
@@ -403,28 +439,27 @@ def _resource(resource_id: str, value: Any, contexts: dict[str, Any]) -> None:
     identity = value["identity"]
     if value["kind"] == "session":
         identity = _object(identity, {"provider", "adapter", "host", "runtime_instance", "handle", "incarnation", "owner_dispatch", "task_id", "dispatch_incarnation", "worktree_id"}, set(), "session identity")
-        if identity["provider"] not in {"codex", "claude"} or identity["adapter"] != "orca":
+        if not isinstance(identity["provider"], str) or not isinstance(identity["adapter"], str) or identity["provider"] not in {"codex", "claude"} or identity["adapter"] != "orca":
             _fail("invalid session identity")
         for key in ("host", "runtime_instance", "handle", "incarnation", "worktree_id"):
-            _text(identity[key], f"session identity {key}")
+            _known_text(identity[key], f"session identity {key}")
         dispatch = (identity["owner_dispatch"], identity["task_id"], identity["dispatch_incarnation"])
         if any(member is None for member in dispatch) and any(member is not None for member in dispatch):
             _fail("incomplete session dispatch identity")
         for key in ("owner_dispatch", "task_id", "dispatch_incarnation"):
-            _text(identity[key], f"session identity {key}", nullable=True)
+            if identity[key] is not None:
+                _known_text(identity[key], f"session identity {key}")
     elif value["kind"] == "worktree":
         identity = _object(identity, {"git_common_dir", "worktree_key", "real_path", "branch_ref", "base_commit"}, set(), "worktree identity")
         for key in ("git_common_dir", "real_path"):
             _absolute_path(identity[key], f"worktree identity {key}")
-        _text(identity["worktree_key"], "worktree identity worktree_key")
-        if not isinstance(identity["branch_ref"], str) or not identity["branch_ref"].startswith("refs/heads/"):
-            _fail("invalid worktree identity branch_ref")
+        _known_text(identity["worktree_key"], "worktree identity worktree_key")
+        _branch_ref(identity["branch_ref"], "worktree identity branch_ref")
         _oid(identity["base_commit"], "worktree identity base_commit")
     else:
         identity = _object(identity, {"git_common_dir", "branch_ref", "creation_oid", "expected_oid"}, set(), "branch identity")
         _absolute_path(identity["git_common_dir"], "branch identity git_common_dir")
-        if not isinstance(identity["branch_ref"], str) or not identity["branch_ref"].startswith("refs/heads/"):
-            _fail("invalid branch identity branch_ref")
+        _branch_ref(identity["branch_ref"], "branch identity branch_ref")
         _oid(identity["creation_oid"], "branch identity creation_oid")
         _oid(identity["expected_oid"], "branch identity expected_oid")
     creation = _object(value["creation_observation"], {"kind", "identity", "source_ref", "source_sha256", "collected_at"}, set(), "resource creation_observation")
@@ -432,8 +467,7 @@ def _resource(resource_id: str, value: Any, contexts: dict[str, Any]) -> None:
         _fail("resource creation identity mismatch")
     _text(creation["source_ref"], "resource creation source_ref")
     _digest(creation["source_sha256"], "resource creation source_sha256")
-    if not isinstance(creation["collected_at"], str) or not _UTC_RFC3339.fullmatch(creation["collected_at"]):
-        _fail("invalid resource creation collected_at")
+    _utc_rfc3339(creation["collected_at"], "resource creation collected_at")
     evidence = _object(value["evidence_manifest"], {"files", "receipts", "terminal_head", "integrated_head"}, set(), "resource evidence_manifest")
     if not isinstance(evidence["files"], list) or not isinstance(evidence["receipts"], list):
         _fail("invalid resource evidence manifest")
@@ -455,11 +489,11 @@ def _resource(resource_id: str, value: Any, contexts: dict[str, Any]) -> None:
     else:
         _oid(evidence["terminal_head"], "resource terminal_head", nullable=True)
         _oid(evidence["integrated_head"], "resource integrated_head", nullable=True)
-    _ref(value["last_observation"], "resource last_observation", nullable=True)
-    if value["last_observation"] is not None and value["last_observation"] not in evidence["receipts"]:
+    _text(value["last_observation"], "resource last_observation", nullable=True)
+    if value["last_observation"] is not None and value["last_observation"] not in receipt_refs:
         _fail("resource observation is not preserved")
     reasons = {"RESULT_NOT_DURABLE", "SESSION_ACTIVE", "SESSION_CLOSE_UNCONFIRMED", "IDENTITY_UNPROVEN", "IDENTITY_CHANGED", "WORKTREE_DIRTY", "IGNORED_CONTENT", "WORK_NOT_INTEGRATED", "EXCLUSIVE_EVIDENCE", "BRANCH_IN_USE", "REF_CHANGED", "PROVIDER_UNAVAILABLE"}
-    if not isinstance(value["preservation_reasons"], list) or any(reason not in reasons for reason in value["preservation_reasons"]) or len(set(value["preservation_reasons"])) != len(value["preservation_reasons"]):
+    if not isinstance(value["preservation_reasons"], list) or any(not isinstance(reason, str) or reason not in reasons for reason in value["preservation_reasons"]) or len(set(value["preservation_reasons"])) != len(value["preservation_reasons"]):
         _fail("invalid resource preservation_reasons")
 
 
