@@ -171,6 +171,8 @@ def item_payload(
                                              if resource.get("state") not in {"CLOSED", "REMOVED"}),
                 "operations_requiring_reconcile": sorted(operation_id for operation_id, operation in record.get("operations", {}).items()
                                                           if operation.get("state") in {"INTENT", "APPLIED", "UNKNOWN"})}
+            if isinstance(context.get("presentation"), dict):
+                result["presentation"] = copy.deepcopy(context["presentation"])
     return result
 
 

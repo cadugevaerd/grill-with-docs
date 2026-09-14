@@ -241,6 +241,27 @@
           ["codex", "plugin", "add", "ponytail@ponytail"]
         ]
       }
+    },
+    {
+      "id": "i-have-adhd",
+      "kind": "harness-plugin",
+      "required": true,
+      "plugin": "i-have-adhd",
+      "marketplace": "i-have-adhd",
+      "marketplace_source": "ayghri/i-have-adhd",
+      "min": "0.3.0",
+      "owner": "plugin i-have-adhd",
+      "reason": "referencia de apresentacao obrigatoria e local do grill-with-docs",
+      "install_by_runtime": {
+        "claude": [
+          ["claude", "plugin", "marketplace", "add", "ayghri/i-have-adhd"],
+          ["claude", "plugin", "install", "i-have-adhd@i-have-adhd", "--scope", "user"]
+        ],
+        "codex": [
+          ["codex", "plugin", "marketplace", "add", "ayghri/i-have-adhd", "--ref", "main"],
+          ["codex", "plugin", "add", "i-have-adhd@i-have-adhd"]
+        ]
+      }
     }
   ]
 }

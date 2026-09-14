@@ -4185,6 +4185,10 @@ def _activity_policy(root: Path, work_id: str, context_id: str, epoch: int,
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
     if not isinstance(context, dict):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", context_id)
+    try:
+        contract.require_presentation_work_ready(context)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", str(exc), "presentation is not ready") from exc
     policy_path = ASSETS / "agent-orchestration.v1.json"
     try:
         policy = json.loads(policy_path.read_text(encoding="utf-8"))

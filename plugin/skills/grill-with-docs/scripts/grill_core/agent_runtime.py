@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 _HEX = re.compile(r"^[0-9a-f]{64}$")
@@ -21,14 +24,248 @@ _ORCA_CAPABILITIES = {
     "orchestration.federation-lifecycle-settlement.v1",
     "orchestration.federation-release-archive.v1",
 }
+PRESENTATION_SCHEMA = "grill-gwd-presentation/v1"
+PRESENTATION_COMPONENT = "i-have-adhd@i-have-adhd"
+PRESENTATION_LOADER = "gwd-reference/v1"
+_PRESENTATION_STATES = {"present", "outdated", "missing", "undetermined"}
+_PRESENTATION_ENABLEMENT = {"enabled", "disabled", "undetermined"}
+_PRESENTATION_TRUST = {"ready", "pending", "undetermined"}
+_PRESENTATION_LOADING = {"required", "loaded", "stale", "unconfirmed"}
+_PRESENTATION_APPLICATION = {"active", "suspended_by_user", "out_of_scope", "blocked"}
+_PRESENTATION_BEHAVIOR = {"not_tested", "conformant", "nonconformant", "unconfirmed"}
 
 
 class RuntimeError(ValueError):
     pass
 
 
+class PresentationError(ValueError):
+    """A presentation axis was not proven from correlated evidence."""
+
+    pass
+
+
 def _fail(message: str) -> None:
     raise RuntimeError(message)
+
+
+def _presentation_fail(code: str) -> None:
+    raise PresentationError(code)
+
+
+def _sha256(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def _safe_reference_bytes(value: str | Path) -> bytes:
+    """Read one installed reference without following a symlink or executing it."""
+    path = Path(value)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        _presentation_fail("STYLE-CONTENT-INCOMPATIBLE")
+        raise AssertionError("unreachable") from exc
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            _presentation_fail("STYLE-CONTENT-INCOMPATIBLE")
+        chunks: list[bytes] = []
+        while True:
+            chunk = os.read(descriptor, 1024 * 1024)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def presentation_body(raw: bytes) -> bytes:
+    """Remove only the initial YAML frontmatter from the approved skill bytes."""
+    if not isinstance(raw, bytes) or not raw.startswith(b"---\n"):
+        _presentation_fail("STYLE-CONTENT-INCOMPATIBLE")
+    closing = raw.find(b"\n---\n", len(b"---\n"))
+    if closing < 0:
+        _presentation_fail("STYLE-CONTENT-INCOMPATIBLE")
+    body = raw[closing + len(b"\n---\n"):]
+    if not body:
+        _presentation_fail("STYLE-CONTENT-INCOMPATIBLE")
+    try:
+        body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        _presentation_fail("STYLE-CONTENT-INCOMPATIBLE")
+        raise AssertionError("unreachable") from exc
+    return body
+
+
+def approved_presentation_reference(*, policy: dict[str, Any], version: str,
+                                    skill_ref: str | Path) -> dict[str, Any]:
+    """Resolve the exact installed bytes approved by the supplementary policy."""
+    presentation = policy.get("presentation") if isinstance(policy, dict) else None
+    approved = presentation.get("approved") if isinstance(presentation, dict) else None
+    if (not isinstance(version, str) or not isinstance(approved, list)
+            or not isinstance(presentation, dict)):
+        _presentation_fail("STYLE-CONTENT-INCOMPATIBLE")
+    expected = next((entry.get("skill_sha256") for entry in approved
+                     if isinstance(entry, dict) and entry.get("version") == version), None)
+    if not isinstance(expected, str) or not expected.startswith("sha256:"):
+        _presentation_fail("STYLE-CONTENT-INCOMPATIBLE")
+    raw = _safe_reference_bytes(skill_ref)
+    skill_sha256 = _sha256(raw)
+    if skill_sha256 != expected.removeprefix("sha256:"):
+        _presentation_fail("STYLE-CONTENT-INCOMPATIBLE")
+    body = presentation_body(raw)
+    return {
+        "version": version, "skill_ref": str(skill_ref), "skill_sha256": skill_sha256,
+        "body_sha256": _sha256(body), "body": body,
+    }
+
+
+def _axis(value: Any, *, states: set[str], default: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {"state": default, "source_ref": None, "source_sha256": None}
+    state = value.get("state", default)
+    source_ref, source_sha256 = value.get("source_ref"), value.get("source_sha256")
+    if state not in states:
+        state = default
+    if state != default and (not isinstance(source_ref, str) or not source_ref
+                             or not isinstance(source_sha256, str) or not _HEX.fullmatch(source_sha256)):
+        state, source_ref, source_sha256 = default, None, None
+    return {"state": state, "source_ref": source_ref, "source_sha256": source_sha256}
+
+
+def _diagnostic(code: str, field: str, reason: str, recovery: str) -> dict[str, str]:
+    return {"code": code, "field": field, "reason": reason, "recovery": recovery}
+
+
+def presentation_state(*, policy: dict[str, Any], policy_sha256: str,
+                       gwd_skill_sha256: str, runtime: str, session_identity: str,
+                       config_fingerprint: str, scope: dict[str, Any],
+                       installation: dict[str, Any] | None,
+                       enablement: dict[str, Any] | None,
+                       trust: dict[str, Any] | None,
+                       loading: dict[str, Any] | None = None,
+                       suspension: dict[str, Any] | None = None,
+                       application: str = "active",
+                       behavior: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Project presentation readiness from distinct, correlated observations.
+
+    This is intentionally pure. The session owns observation and injection; the
+    core only accepts a full-read event, never a listing, exit status, or model
+    self-report as evidence that the reference was loaded.
+    """
+    if (runtime not in {"codex", "claude"} or not isinstance(session_identity, str)
+            or not session_identity or not isinstance(config_fingerprint, str)
+            or not config_fingerprint or not isinstance(scope, dict)
+            or scope.get("kind") != "gwd" or not _HEX.fullmatch(policy_sha256)
+            or not _HEX.fullmatch(gwd_skill_sha256)):
+        _presentation_fail("STYLE-SCOPE-CONFLICT")
+    configured = policy.get("presentation") if isinstance(policy, dict) else None
+    if (not isinstance(configured, dict) or configured.get("schema") != PRESENTATION_SCHEMA
+            or configured.get("component") != PRESENTATION_COMPONENT
+            or configured.get("loader") != PRESENTATION_LOADER):
+        _presentation_fail("STYLE-CONTENT-INCOMPATIBLE")
+    installation = dict(installation or {})
+    status = installation.get("status", "undetermined")
+    if status not in _PRESENTATION_STATES:
+        status = "undetermined"
+    version = installation.get("version") if isinstance(installation.get("version"), str) else None
+    skill_ref = installation.get("skill_ref")
+    compatible, reference = "undetermined", None
+    diagnostics: list[dict[str, str]] = []
+    if status == "missing":
+        diagnostics.append(_diagnostic("STYLE-DEPENDENCY-MISSING", "installation", "component absent", "install through the harness"))
+    elif status == "outdated":
+        diagnostics.append(_diagnostic("STYLE-DEPENDENCY-OUTDATED", "installation", "version below policy minimum", "install approved version through the harness"))
+    elif status == "undetermined":
+        diagnostics.append(_diagnostic("STYLE-DEPENDENCY-UNDETERMINED", "installation", "installation source unreadable or ambiguous", "repair the runtime registry and observe again"))
+    elif not isinstance(skill_ref, str) or not version:
+        status, compatible = "undetermined", "undetermined"
+        diagnostics.append(_diagnostic("STYLE-DEPENDENCY-UNDETERMINED", "installation", "effective skill path not observed", "collect runtime-correlated installation observation"))
+    else:
+        try:
+            reference = approved_presentation_reference(policy=policy, version=version, skill_ref=skill_ref)
+            compatible = "approved"
+        except PresentationError:
+            compatible = "incompatible"
+            diagnostics.append(_diagnostic("STYLE-CONTENT-INCOMPATIBLE", "installation", "version or approved bytes differ", "review policy or repair selected installation"))
+    install_record = {"status": status, "version": version, "marketplace": installation.get("marketplace"),
+                      "install_root": installation.get("install_root"), "manifest_ref": installation.get("manifest_ref"),
+                      "skill_ref": skill_ref, "skill_sha256": reference["skill_sha256"] if reference else None,
+                      "body_sha256": reference["body_sha256"] if reference else None}
+    enabled = _axis(enablement, states=_PRESENTATION_ENABLEMENT, default="undetermined")
+    trusted = _axis(trust, states=_PRESENTATION_TRUST, default="undetermined")
+    if enabled["state"] == "disabled":
+        diagnostics.append(_diagnostic("STYLE-DISABLED", "enablement", "runtime plugin disabled", "use the runtime's native enable control"))
+    elif enabled["state"] != "enabled":
+        diagnostics.append(_diagnostic("STYLE-ENABLEMENT-UNPROVEN", "enablement", "no correlated enabled observation", "collect plugin state from this session"))
+    if trusted["state"] == "pending":
+        diagnostics.append(_diagnostic("STYLE-TRUST-PENDING", "trust", "runtime startup trust pending", "resolve trust in the harness UI"))
+    elif trusted["state"] != "ready":
+        diagnostics.append(_diagnostic("STYLE-TRUST-PENDING", "trust", "startup trust not observed", "collect startup observation"))
+    prerequisites = status == "present" and compatible == "approved" and enabled["state"] == "enabled" and trusted["state"] == "ready"
+    requested = None
+    loaded = False
+    loading_state = "unconfirmed"
+    if isinstance(loading, dict) and loading.get("stale") is True:
+        loading_state = "stale"
+    elif isinstance(loading, dict) and reference is not None:
+        loaded = (loading.get("evidence_kind") == "full_read"
+                  and isinstance(loading.get("event_ref"), str) and bool(loading.get("event_ref"))
+                  and isinstance(loading.get("event_sha256"), str) and bool(_HEX.fullmatch(loading.get("event_sha256")))
+                  and loading.get("session_identity") == session_identity
+                  and loading.get("config_fingerprint") == config_fingerprint
+                  and loading.get("scope") == scope
+                  and loading.get("skill_sha256") == reference["skill_sha256"]
+                  and loading.get("body_sha256") == reference["body_sha256"])
+        loading_state = "loaded" if loaded else "unconfirmed"
+    if prerequisites and reference is not None and not loaded and application == "active":
+        requested = {"loader": PRESENTATION_LOADER, "component": PRESENTATION_COMPONENT,
+                     "version": reference["version"], "skill_ref": reference["skill_ref"],
+                     "skill_sha256": reference["skill_sha256"], "body_sha256": reference["body_sha256"],
+                     "policy_sha256": policy_sha256, "scope": scope,
+                     "session_identity": session_identity, "config_fingerprint": config_fingerprint}
+        diagnostics.append(_diagnostic("STYLE-LOAD-UNCONFIRMED", "loading", "full read not observed for this session", "read the exact load_request then collect its full-read event"))
+    valid_suspension = (isinstance(suspension, dict) and suspension.get("command") == "stop adhd mode"
+                        and isinstance(suspension.get("source_ref"), str) and suspension.get("source_ref")
+                        and isinstance(suspension.get("source_sha256"), str) and _HEX.fullmatch(suspension.get("source_sha256"))
+                        and suspension.get("session_identity") == session_identity
+                        and suspension.get("config_fingerprint") == config_fingerprint
+                        and suspension.get("scope") == scope)
+    if application == "suspended_by_user" and not valid_suspension:
+        application = "blocked"
+        diagnostics.append(_diagnostic("STYLE-SCOPE-CONFLICT", "suspension", "suspension is not bound to this session and scope", "collect the explicit user instruction again"))
+    elif application not in _PRESENTATION_APPLICATION:
+        application = "blocked"
+    use_ready = prerequisites and loaded and application == "active"
+    work_ready = prerequisites and (use_ready or (application == "suspended_by_user" and valid_suspension))
+    observed_behavior = "not_tested"
+    if isinstance(behavior, dict) and behavior.get("state") in _PRESENTATION_BEHAVIOR:
+        candidate = behavior["state"]
+        if candidate == "conformant" and not (isinstance(behavior.get("evidence_ref"), str) and behavior.get("evidence_ref")
+                                                 and isinstance(behavior.get("review_ref"), str) and behavior.get("review_ref")):
+            observed_behavior = "unconfirmed"
+        else:
+            observed_behavior = candidate
+    functional_verified = use_ready and observed_behavior == "conformant"
+    if observed_behavior == "nonconformant":
+        diagnostics.append(_diagnostic("STYLE-BEHAVIOR-NONCONFORMANT", "behavior", "reviewed live sample failed", "correct integration and repeat both runtime cases"))
+    elif observed_behavior == "unconfirmed":
+        diagnostics.append(_diagnostic("STYLE-BEHAVIOR-UNPROVEN", "behavior", "behavior claim lacks reviewed live evidence", "persist complete prompts, responses, and review"))
+    return {"schema": PRESENTATION_SCHEMA, "component": PRESENTATION_COMPONENT,
+            "minimum_version": configured.get("minimum_version"), "loader": PRESENTATION_LOADER,
+            "runtime": runtime, "session_identity": session_identity, "config_fingerprint": config_fingerprint,
+            "scope": scope, "policy_sha256": policy_sha256, "gwd_skill_sha256": gwd_skill_sha256,
+            "installation": install_record, "compatibility": compatible,
+            "enablement": enabled["state"], "trust": trusted["state"], "loading": loading_state,
+            "behavior": observed_behavior, "application": application,
+            "suspension": dict(suspension) if valid_suspension else None,
+            "evidence": {"enablement": enabled, "trust": trusted,
+                         "loading": dict(loading) if isinstance(loading, dict) else None,
+                         "behavior": dict(behavior) if isinstance(behavior, dict) else None},
+            "load_request": requested, "use_ready": use_ready, "work_ready": work_ready,
+            "functional_verified": functional_verified, "diagnostics": diagnostics}
 
 
 def _source_digest(*parts: bytes) -> str:

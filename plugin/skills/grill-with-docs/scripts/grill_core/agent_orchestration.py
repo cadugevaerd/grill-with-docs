@@ -485,6 +485,13 @@ def invocation_context(*, policy: Mapping[str, Any], policy_sha256: str,
         _fail("INVALID-INVOCATION-CONTEXT")
     requirements = activity_requirements(policy, step_id=step_id, activity_scope="cycle",
                                          new_how=new_how, frontend=frontend)
+    presentation = context.get("presentation")
+    if presentation is not None:
+        _presentation(presentation)
+        if not presentation["work_ready"]:
+            codes = [entry.get("code") for entry in presentation["diagnostics"]
+                     if isinstance(entry, dict) and isinstance(entry.get("code"), str)]
+            _fail(codes[0] if codes else "STYLE-LOAD-UNCONFIRMED")
     return {
         "schema": _ACTIVITY_CONTEXT_SCHEMA,
         "context_id": context["context_id"],
@@ -495,6 +502,7 @@ def invocation_context(*, policy: Mapping[str, Any], policy_sha256: str,
         "supplement": copy.deepcopy(dict(supplement)),
         "task_template": copy.deepcopy(dict(task_template)),
         "required_activities": list(requirements),
+        "presentation": copy.deepcopy(presentation),
         "limitation": "context-delivery-is-not-skill-invocation",
     }
 
@@ -1068,8 +1076,8 @@ def cleanup_reasons(resource: Mapping[str, Any], observation: Mapping[str, Any])
 
 
 def _presentation(value: Any) -> None:
-    required = {"schema", "component", "minimum_version", "loader", "runtime", "session_identity", "config_fingerprint", "scope", "policy_sha256", "gwd_skill_sha256", "installation", "compatibility", "enablement", "trust", "loading", "behavior", "application", "suspension", "use_ready", "work_ready", "functional_verified", "diagnostics"}
-    value = _object(value, required, set(), "presentation")
+    required = {"schema", "component", "minimum_version", "loader", "runtime", "session_identity", "config_fingerprint", "scope", "policy_sha256", "gwd_skill_sha256", "installation", "compatibility", "enablement", "trust", "loading", "behavior", "application", "suspension", "evidence", "use_ready", "work_ready", "functional_verified", "diagnostics"}
+    value = _object(value, required, {"load_request"}, "presentation")
     if value["schema"] != "grill-gwd-presentation/v1" or value["runtime"] not in {"codex", "claude"}:
         _fail("invalid presentation")
     for key in ("component", "minimum_version", "loader", "session_identity", "config_fingerprint", "compatibility", "enablement", "trust", "loading", "behavior", "application"):
@@ -1079,8 +1087,48 @@ def _presentation(value: Any) -> None:
     for key in ("scope", "installation", "suspension"):
         if value[key] is not None and not isinstance(value[key], dict): _fail(f"invalid presentation {key}")
         _json(value[key], f"presentation {key}")
+    if not isinstance(value["evidence"], dict): _fail("invalid presentation evidence")
+    _json(value["evidence"], "presentation evidence")
     if not all(type(value[key]) is bool for key in ("use_ready", "work_ready", "functional_verified")) or not isinstance(value["diagnostics"], list):
         _fail("invalid presentation projections")
+    if value["compatibility"] not in {"approved", "incompatible", "undetermined"}:
+        _fail("invalid presentation compatibility")
+    if value["enablement"] not in {"enabled", "disabled", "undetermined"}:
+        _fail("invalid presentation enablement")
+    if value["trust"] not in {"ready", "pending", "undetermined"}:
+        _fail("invalid presentation trust")
+    if value["loading"] not in {"required", "loaded", "stale", "unconfirmed"}:
+        _fail("invalid presentation loading")
+    if value["behavior"] not in {"not_tested", "conformant", "nonconformant", "unconfirmed"}:
+        _fail("invalid presentation behavior")
+    if value["application"] not in {"active", "suspended_by_user", "out_of_scope", "blocked"}:
+        _fail("invalid presentation application")
+    if value["use_ready"] and not (value["compatibility"] == "approved" and value["enablement"] == "enabled"
+                                     and value["trust"] == "ready" and value["loading"] == "loaded"
+                                     and value["application"] == "active"):
+        _fail("invalid presentation use_ready")
+    if value["work_ready"] and not (value["compatibility"] == "approved" and value["enablement"] == "enabled"
+                                      and value["trust"] == "ready" and (value["use_ready"]
+                                      or (value["application"] == "suspended_by_user" and value["suspension"] is not None))):
+        _fail("invalid presentation work_ready")
+    if value["functional_verified"] and not (value["use_ready"] and value["behavior"] == "conformant"):
+        _fail("invalid presentation functional_verified")
+    if value.get("load_request") is not None:
+        if not isinstance(value["load_request"], dict): _fail("invalid presentation load_request")
+        _json(value["load_request"], "presentation load_request")
+
+
+def require_presentation_work_ready(context: Mapping[str, Any]) -> dict[str, Any]:
+    """Gate work only for contexts that adopted the presentation contract."""
+    presentation = context.get("presentation")
+    if presentation is None:
+        return {"legacy": True, "work_ready": True}
+    _presentation(presentation)
+    if not presentation["work_ready"]:
+        codes = [entry.get("code") for entry in presentation["diagnostics"]
+                 if isinstance(entry, dict) and isinstance(entry.get("code"), str)]
+        _fail(codes[0] if codes else "STYLE-LOAD-UNCONFIRMED")
+    return copy.deepcopy(presentation)
 
 
 def _visual_decision(decision_id: str, value: Any, contexts: dict[str, Any]) -> None:
@@ -1446,6 +1494,9 @@ def new_work_item(inputs: dict[str, Any], *, policy_ref: str, policy_sha256: str
         "state": "ACTIVE", "policy_sha256": policy_sha256,
         "inputs_sha256": adoption_sha256(inputs),
     }
+    if inputs.get("presentation") is not None:
+        _presentation(inputs["presentation"])
+        item["contexts"][context_id]["presentation"] = copy.deepcopy(inputs["presentation"])
     item["current_context_id"] = context_id
     return item
 

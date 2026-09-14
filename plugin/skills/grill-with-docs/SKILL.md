@@ -25,6 +25,12 @@ worktree C ──> .grill/work-items/<work-id-C>/ ─┘
 8. Feature e fix permanecem plan-only; hotfix só entrega HOTFIX-GO para ship externo e reconciliação/auditoria documental completa são pós-ship.
 7. A sessão termina em `PLAN_ONLY_STOP`; não implementa código, não executa `specify|plan` e não faz commit/merge.
 
+## Bootstrap de apresentação obrigatório
+
+Em toda entrada GWD (`iniciar`, `retomar`, reentrada após compactação e sessão de especialista), aplique `i-have-adhd@i-have-adhd` como referência de apresentação **local deste fluxo** antes da primeira resposta de trabalho. Resolva a instalação efetiva do runtime, confirme habilitação e confiança por observações separadas, leia integralmente o `SKILL.md` aprovado indicado pelo `load_request` e registre o evento correlacionado à mesma sessão, configuração e escopo GWD. Não peça ao usuário para invocar a skill upstream, não execute seu hook e não crie flag/configuração global.
+
+Instalado, enabled, saída zero, catálogo, hash impresso ou autorrelato não comprovam `loaded` nem comportamento. Só `work_ready` permite entrada ou despacho: normalmente exige `use_ready`; `stop adhd mode` documentado na mesma sessão/incarnation/escopo mantém apenas `work_ready` após compactação, com `use_ready=false`, sem reinjetar o corpo. Nova sessão, troca de runtime/incarnation e reativação explícita voltam ao padrão ativo e exigem nova leitura. Preserve Ponytail, instruções superiores, conteúdo solicitado, exceções upstream, arquivos/grants e o escopo local; saída do fluxo GWD é `out_of_scope`.
+
 ## Triagem: da causa raiz para a rota
 
 O core é determinístico e **não classifica linguagem natural**. Quem interpreta um problema relatado é a skill de diagnóstico (`code-debug`), que investiga e emite um laudo de causa raiz; o que o core faz é verificar que o laudo prova o que afirma e que a evidência exigida pela rota escolhida está de fato presente, e então selar essa decisão.

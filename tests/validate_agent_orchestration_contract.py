@@ -13,7 +13,8 @@ from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "plugin/skills/grill-with-docs/scripts"
 sys.path.insert(0, str(SCRIPTS))
-from grill_core.agent_runtime import RuntimeBoundary, RuntimeError, validate_observation
+from grill_core.agent_runtime import (RuntimeBoundary, RuntimeError, approved_presentation_reference,
+                                      presentation_state, validate_observation)
 from grill_core import agent_orchestration, attestation, gauntlet_runs, store
 import grill_workspace
 
@@ -51,6 +52,86 @@ def release_source(dispatch="ctx-1"):
 
 
 class AgentOrchestrationContract(unittest.TestCase):
+    def presentation_fixture(self):
+        temporary = tempfile.TemporaryDirectory()
+        reference = Path(temporary.name) / "SKILL.md"
+        raw = b"---\nname: fixture\n---\n# Fixture\n\nRule one.\n"
+        reference.write_bytes(raw)
+        policy = {
+            "presentation": {
+                "schema": "grill-gwd-presentation/v1", "component": "i-have-adhd@i-have-adhd",
+                "minimum_version": "0.3.0", "loader": "gwd-reference/v1",
+                "approved": [{"version": "0.3.0", "skill_sha256": "sha256:" + __import__("hashlib").sha256(raw).hexdigest()}],
+            }
+        }
+        scope = {"kind": "gwd", "root": "fixture", "invocation_ref": "gwd-entry"}
+        kwargs = {"policy": policy, "policy_sha256": "a" * 64, "gwd_skill_sha256": "b" * 64,
+                  "runtime": "codex", "session_identity": "session-1", "config_fingerprint": "config-1",
+                  "scope": scope, "installation": {"status": "present", "version": "0.3.0",
+                  "skill_ref": str(reference), "marketplace": "i-have-adhd", "install_root": str(reference.parent)},
+                  "enablement": {"state": "enabled", "source_ref": "plugin-list", "source_sha256": "c" * 64},
+                  "trust": {"state": "ready", "source_ref": "startup", "source_sha256": "d" * 64}}
+        return temporary, reference, kwargs
+
+    def test_presentation_bootstrap(self):
+        temporary, reference, kwargs = self.presentation_fixture()
+        with temporary:
+            pending = presentation_state(**kwargs)
+            self.assertFalse(pending["use_ready"])
+            self.assertFalse(pending["work_ready"])
+            self.assertEqual(pending["loading"], "unconfirmed")
+            request = pending["load_request"]
+            self.assertEqual(request["skill_ref"], str(reference))
+            loaded = presentation_state(**kwargs, loading={"evidence_kind": "full_read", "event_ref": "tool-read-1",
+                "event_sha256": "e" * 64, "session_identity": "session-1", "config_fingerprint": "config-1",
+                "scope": kwargs["scope"], "skill_sha256": request["skill_sha256"], "body_sha256": request["body_sha256"]})
+            self.assertEqual((loaded["loading"], loaded["use_ready"], loaded["work_ready"],
+                              loaded["behavior"], loaded["functional_verified"]),
+                             ("loaded", True, True, "not_tested", False))
+            for changed in ({"session_identity": "other"}, {"config_fingerprint": "other"},
+                            {"evidence_kind": "exit_0"}, {"scope": {"kind": "gwd"}}):
+                invalid = {"evidence_kind": "full_read", "event_ref": "tool-read-1", "event_sha256": "e" * 64,
+                           "session_identity": "session-1", "config_fingerprint": "config-1", "scope": kwargs["scope"],
+                           "skill_sha256": request["skill_sha256"], "body_sha256": request["body_sha256"], **changed}
+                self.assertFalse(presentation_state(**kwargs, loading=invalid)["use_ready"])
+            reference.write_bytes(b"---\nname: fixture\n---\ntruncated")
+            self.assertEqual(presentation_state(**kwargs)["compatibility"], "incompatible")
+
+    def test_presentation_context(self):
+        temporary, _reference, kwargs = self.presentation_fixture()
+        with temporary:
+            pending = presentation_state(**kwargs)
+            request = pending["load_request"]
+            suspended = presentation_state(**kwargs, application="suspended_by_user", loading={"stale": True},
+                suspension={"command": "stop adhd mode", "source_ref": "human-1", "source_sha256": "f" * 64,
+                            "session_identity": "session-1", "config_fingerprint": "config-1", "scope": kwargs["scope"]})
+            self.assertEqual((suspended["application"], suspended["loading"], suspended["work_ready"],
+                              suspended["use_ready"], suspended["functional_verified"], suspended["load_request"]),
+                             ("suspended_by_user", "stale", True, False, False, None))
+            invalid = presentation_state(**kwargs, application="suspended_by_user", loading={"stale": True},
+                suspension={"command": "stop adhd mode", "source_ref": "human-1", "source_sha256": "f" * 64,
+                            "session_identity": "other", "config_fingerprint": "config-1", "scope": kwargs["scope"]})
+            self.assertFalse(invalid["work_ready"])
+            active = presentation_state(**kwargs, loading={"evidence_kind": "full_read", "event_ref": "read-1",
+                "event_sha256": "e" * 64, "session_identity": "session-1", "config_fingerprint": "config-1",
+                "scope": kwargs["scope"], "skill_sha256": request["skill_sha256"], "body_sha256": request["body_sha256"]})
+            self.assertTrue(active["use_ready"])
+
+    def test_presentation_scope_preservation(self):
+        temporary, _reference, kwargs = self.presentation_fixture()
+        with temporary:
+            pending = presentation_state(**kwargs)
+            request = pending["load_request"]
+            presentation = presentation_state(**kwargs, loading={"evidence_kind": "full_read", "event_ref": "read-1",
+                "event_sha256": "e" * 64, "session_identity": "session-1", "config_fingerprint": "config-1",
+                "scope": kwargs["scope"], "skill_sha256": request["skill_sha256"], "body_sha256": request["body_sha256"]})
+            context = {"context_id": "ctx-1", "epoch": 1, "presentation": presentation}
+            invocation = agent_orchestration.invocation_context(policy={"activity_matrix": {"plan": {"required": []}}},
+                policy_sha256="a" * 64, context=context, step_id="plan", canonical_entrypoint={"kind": "canonical"},
+                supplement={"path": "supplement", "sha256": "b" * 64}, task_template={"path": "template", "sha256": "c" * 64})
+            self.assertEqual(invocation["presentation"], presentation)
+            self.assertEqual(presentation["scope"]["kind"], "gwd")
+
     def test_cleanup_lifecycle(self):
         run = {
             "admission": {"activation_sha256": "a" * 64, "work_item_sha256": "b" * 64,
