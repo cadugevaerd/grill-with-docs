@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve()
+if str(HERE.parent) not in sys.path:
+    sys.path.insert(0, str(HERE.parent))
 spec = importlib.util.spec_from_file_location("grill_workspace_status", HERE.with_name("grill_workspace.py"))
 if spec is None or spec.loader is None:
     raise ImportError("cannot load grill_workspace")
@@ -152,7 +154,8 @@ def item_payload(
         planning=planning, development=development, governance=governance,
         findings=findings, blockers=blocked, sequence=item_sequence,
     )
-    return {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": planning, "development": development, "governance": governance, "blockers": blocked, "findings": sorted(findings), "closed": closed, "operational_status": operational_status, "pending_reasons": pending_reasons, "next_gate": "BLOCKED" if findings or blocked else (item_sequence[len(completed)] if len(completed) < len(item_sequence) else "complete")}
+    cleanup = workspace.grill_core_module("gauntlet_runs").cleanup_projection(root, bundle.work_id)
+    return {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": planning, "development": development, "governance": governance, "cleanup": cleanup, "blockers": blocked, "findings": sorted(findings), "closed": closed, "operational_status": operational_status, "pending_reasons": pending_reasons, "next_gate": "BLOCKED" if findings or blocked else (item_sequence[len(completed)] if len(completed) < len(item_sequence) else "complete")}
 
 
 def classify_item(*, planning: dict[str, Any], development: dict[str, Any], governance: dict[str, Any], findings: list[str], blockers: list[str], sequence: list[str] | None = None) -> tuple[bool, str, list[str]]:
