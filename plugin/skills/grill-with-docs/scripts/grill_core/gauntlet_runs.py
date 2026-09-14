@@ -1244,6 +1244,14 @@ def _require_active_lease(lease: Mapping[str, Any]) -> None:
         _fail("LEASE-NOT-ACTIVE", "worker lease has expired; explicit recovery is required")
 
 
+def _require_orchestration_authority(root: str | Path, work_id: str, purpose: str) -> None:
+    """Keep a selected work item from borrowing another caller's authority."""
+    try:
+        store.require_orchestration_authority(root, work_id, purpose=purpose)
+    except store.StoreError as exc:
+        _fail("LEADER-AUTHORITY-UNPROVEN", exc.message)
+
+
 def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
                    scope_paths: Any, admission: Mapping[str, str], *,
                    node_id: str | None = None, remediates: str | None = None,
@@ -1288,7 +1296,12 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
     scopes = _strict_scopes(scope_paths)
     if any(_dag_scope_violation(path) for path in scopes):
         _fail("GRANT-OUT-OF-SCOPE", "worker grant targets out-of-scope evidence")
+    # Recovery and a PREPARED reuse are effects in their own right: without
+    # this first guard, a ContextVar for A could reach B's run through the
+    # root-only recovery reader before the eventual transaction fenced it.
+    _require_orchestration_authority(root, work_id, "prepare")
     store.recover_pending_transition(root)
+    _require_orchestration_authority(root, work_id, "prepare")
     run = _run_for_worker(root, work_id, run_id, identity)
     # ADR-0023: every receipt/event this call mints from here on must anchor
     # to the run's own recorded admission, never the freshly re-derived live
@@ -1307,6 +1320,7 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
                 _fail("WORKER-CONFLICT", "worker declaration differs from requested grant")
             if _workspace_git_state(root, target, expected_workspace) != "EXACT":
                 _fail("WORKSPACE-PRESERVED", "prepared worker worktree is not exact")
+            _require_orchestration_authority(root, work_id, "prepare")
             return _prepared_response(work_id, run_id, worker_id, expected_workspace, reused=True)
         if existing.get("state") == "ORPHANED":
             _fail("WORKSPACE-PRESERVED", "orphaned worker is preserved")
@@ -1386,6 +1400,7 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
         # Re-check after the durable PREPARING intent: it must never act as
         # an implicit lease renewal if time passed while recording evidence.
         _require_active_lease(current_lease)
+        _require_orchestration_authority(root, work_id, "prepare")
         target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         added = _git(root, "worktree", "add", "-b", expected_workspace["branch"], str(target), expected_workspace["base_commit"])
         if added.returncode != 0:

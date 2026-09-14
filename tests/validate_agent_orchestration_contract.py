@@ -80,7 +80,9 @@ class AgentOrchestrationContract(unittest.TestCase):
             with mock.patch.dict("os.environ", {"GRILL_SKIP_DEPENDENCIES": ""}), \
                  mock.patch.object(dependencies.Toolchain, "which", sentinel_tool), \
                  mock.patch.object(dependencies.Toolchain, "run", sentinel_probe):
-                code, init = self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x", "--runtime", "codex", "--skip-backlog")
+                self.assertEqual(self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x", "--runtime", "codex", "--skip-backlog")[0], 2)
+                self.assertFalse((root / ".grill").exists())
+                code, init = self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x", "--runtime", "codex", "--session-ref", "observed-session", "--skip-backlog")
                 self.assertEqual(code, 0); self.assertEqual(init["orchestration"], "INITIALIZED")
                 before = store.read_snapshot(root).content_sha256
                 args = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex", "--session-ref", "observed-session", "--scope-file", "src/a.py")
@@ -93,10 +95,30 @@ class AgentOrchestrationContract(unittest.TestCase):
                 document = store.read_snapshot(root).document
                 context = document["agent_orchestration"]["work_items"]["work-x"]["contexts"][adopted["context_id"]]
                 self.assertIsNone(context["activation"]); self.assertIsNone(context["campaign"]); self.assertEqual(context["scheduler_runs"], {})
+                checkpoint_args = ("checkpoint", str(root), "--work-id", "work-x", "--step", "specify", "--state", "in-progress", "--operation-id", "checkpoint-1", "--session-ref", "observed-session")
+                code, checkpoint = self.run_cli(*checkpoint_args)
+                self.assertEqual((code, checkpoint["verdict"]), (0, "UPDATED"))
+                self.assertEqual(self.run_cli(*checkpoint_args)[1]["verdict"], "REUSED")
                 stale = self.run_cli(*args, "--scope-file", "src/b.py", "--apply", "--expected-sha256", preview["expected_sha256"])
                 self.assertEqual(stale[0], 2)
             self.assertTrue(probes); self.assertTrue(commands)
             self.assertTrue(all(argv[0].startswith("/offline/") for argv in commands))
+
+    def test_adopted_direct_effect_requires_the_current_context_proof(self):
+        temp, root = self.fixture()
+        with temp:
+            store.bootstrap(root)
+            origin = {"state_sha256": "1" * 64, "metadata_sha256": "2" * 64, "activation": None,
+                      "campaign": None, "lifecycle": "ACTIVE", "worktree": {"root": str(root), "branch": "main"}}
+            contract = grill_workspace.grill_core_module("agent_orchestration")
+            inputs = contract.adoption_inputs(work_id="work-x", runtime="codex", session_ref="session-1", scope_files=[], origin=origin)
+            item = contract.new_work_item(inputs, policy_ref="policy/v1", policy_sha256="a" * 64,
+                                          adopted_at="2026-01-01T00:00:00Z", context_id="ctx-1")
+            store.transact(root, lambda document: {**document, "agent_orchestration": {"schema": contract.SCHEMA, "work_items": {"work-x": item}}})
+            with self.assertRaises(store.StoreError):
+                store.require_orchestration_authority(root, "work-x", purpose="prepare")
+            with store.orchestration_authority(root, "work-x", context_id="ctx-1", epoch=1, session_ref="session-1"):
+                store.require_orchestration_authority(root, "work-x", purpose="prepare")
     def boundary(self, probe=None, after=None, release=None, adapter="orca", capabilities=None, calls=None):
         probe = probe or native_sources()
         after = after or native_sources(released=True)

@@ -7,6 +7,7 @@ recovery) apply the same rules instead of relying on CLI callers.
 from __future__ import annotations
 
 import copy
+import base64
 import hashlib
 import json
 import math
@@ -23,6 +24,9 @@ except ImportError:
 SCHEMA = "grill-agent-orchestration/v1"
 EVENT_SCHEMA = "grill-orchestration-event/v1"
 CHECKPOINT_SCHEMA = "grill-continuity-checkpoint/v1"
+CHECKPOINT_REQUEST_SCHEMA = "grill-checkpoint-request/v1"
+CHECKPOINT_CONTENT_SCHEMA = "grill-checkpoint-content/v1"
+MAX_CHECKPOINT_STATE_BYTES = 8 * 1024 * 1024
 _HEX = re.compile(r"^[0-9a-f]{64}$")
 _OID = re.compile(r"^[0-9a-f]{40}$")
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -299,7 +303,7 @@ def _context(context_id: str, value: Any) -> None:
 def _operation(operation_id: str, value: Any) -> None:
     _id(operation_id, "operation id")
     required = {"kind", "context_id", "fence", "subject_ids", "input_sha256", "expected_before", "intended_after", "idempotency_key", "state", "result_ref", "result_sha256", "observation_ref", "error"}
-    value = _object(value, required, set(), "operation")
+    value = _object(value, required, {"request", "content_ref"}, "operation")
     if not isinstance(value["kind"], str) or not value["kind"] or type(value["fence"]) is not int or value["fence"] <= 0:
         _fail("invalid operation identity")
     _id(value["context_id"], "operation context")
@@ -316,6 +320,11 @@ def _operation(operation_id: str, value: Any) -> None:
     _text(value["error"], "operation error", nullable=True)
     _json(value["expected_before"], "operation expected_before")
     _json(value["intended_after"], "operation intended_after")
+    if ("request" in value) != ("content_ref" in value):
+        _fail("incomplete checkpoint operation content")
+    if "request" in value:
+        validate_checkpoint_request(value["request"])
+        _text(value["content_ref"], "operation content_ref")
 
 
 def _checkpoint_digest(value: dict[str, Any]) -> str:
@@ -339,9 +348,12 @@ def _checkpoint(checkpoint_id: str, value: Any) -> None:
     _text(value["created_at"], "checkpoint created_at")
     for key in ("state_sha256", "workflow_sha256", "constitution_sha256", "policy_sha256", "checkpoint_sha256"):
         _digest(value[key], f"checkpoint {key}")
-    for key in ("worktree_identity", "journal_anchor", "inputs_manifest", "development_sequence", "step_states", "accepted_outputs", "accepted_executions", "pending_attempts", "scheduler_runs", "operations", "cleanup_obligations", "preserved_resources", "visual_state"):
+    for key in ("worktree_identity", "journal_anchor", "inputs_manifest", "step_states", "accepted_outputs", "accepted_executions", "pending_attempts", "scheduler_runs", "operations", "cleanup_obligations", "preserved_resources", "visual_state"):
         if not isinstance(value[key], dict): _fail(f"invalid checkpoint {key}")
         _json(value[key], f"checkpoint {key}")
+    if not isinstance(value["development_sequence"], (dict, list)):
+        _fail("invalid checkpoint development_sequence")
+    _json(value["development_sequence"], "checkpoint development_sequence")
     for key in ("activation", "campaign"):
         if value[key] is not None and not isinstance(value[key], dict): _fail(f"invalid checkpoint {key}")
         _json(value[key], f"checkpoint {key}")
@@ -682,8 +694,8 @@ def validate_transition(previous: Any, candidate: Any) -> None:
         for operation_id, operation in old["operations"].items():
             if operation_id not in new["operations"]: _fail("operation removed")
             later = new["operations"][operation_id]
-            for key in ("kind", "context_id", "fence", "subject_ids", "input_sha256", "expected_before", "intended_after", "idempotency_key"):
-                if later[key] != operation[key]: _fail("operation identity changed")
+            for key in ("kind", "context_id", "fence", "subject_ids", "input_sha256", "expected_before", "intended_after", "idempotency_key", "request", "content_ref"):
+                if later.get(key) != operation.get(key): _fail("operation identity changed")
             if operation["state"] == "CONFIRMED" and later != operation: _fail("confirmed operation changed")
             if later["state"] not in _OPERATION_EDGES[operation["state"]]: _fail("invalid operation transition")
             if operation["state"] == "UNKNOWN":
@@ -796,3 +808,123 @@ def new_work_item(inputs: dict[str, Any], *, policy_ref: str, policy_sha256: str
 def operation_fingerprint(kind: str, context_id: str, subjects: list[str], inputs: Any) -> str:
     data = json.dumps({"kind": kind, "context_id": context_id, "subjects": subjects, "inputs": inputs}, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
     return hashlib.sha256(data).hexdigest()
+
+
+def checkpoint_request(*, store_origin: dict[str, Any], work_id: str, operation_id: str,
+                       context_id: str, step: str, state: str,
+                       evidence: list[dict[str, str]], reason: str,
+                       attestation: dict[str, str] | None,
+                       supersedes_attestation: dict[str, str] | None,
+                       initialize_legacy: bool, from_step: str | None) -> dict[str, Any]:
+    """Return the immutable request identity used for checkpoint retries."""
+    request = {
+        "schema": CHECKPOINT_REQUEST_SCHEMA, "store_origin": copy.deepcopy(store_origin),
+        "work_id": work_id, "operation_id": operation_id, "context_id": context_id,
+        "step": step, "state": state, "evidence": copy.deepcopy(evidence),
+        "reason": reason, "attestation": copy.deepcopy(attestation),
+        "supersedes_attestation": copy.deepcopy(supersedes_attestation),
+        "initialize_legacy": initialize_legacy, "from_step": from_step,
+    }
+    validate_checkpoint_request(request)
+    return request
+
+
+def validate_checkpoint_request(value: Any) -> dict[str, Any]:
+    required = {"schema", "store_origin", "work_id", "operation_id", "context_id", "step", "state", "evidence", "reason", "attestation", "supersedes_attestation", "initialize_legacy", "from_step"}
+    value = _object(value, required, set(), "checkpoint request")
+    if value["schema"] != CHECKPOINT_REQUEST_SCHEMA:
+        _fail("invalid checkpoint request schema")
+    for key in ("work_id", "operation_id", "context_id", "step"):
+        _id(value[key], f"checkpoint request {key}")
+    if value["state"] not in {"in-progress", "complete", "blocked"}:
+        _fail("invalid checkpoint request state")
+    if not isinstance(value["store_origin"], dict):
+        _fail("invalid checkpoint request store_origin")
+    _json(value["store_origin"], "checkpoint request store_origin")
+    if not isinstance(value["evidence"], list):
+        _fail("invalid checkpoint request evidence")
+    paths = []
+    for entry in value["evidence"]:
+        entry = _object(entry, {"path", "sha256"}, set(), "checkpoint request evidence")
+        _safe_path(entry["path"]); _digest(entry["sha256"], "checkpoint request evidence sha256")
+        paths.append(entry["path"])
+    if paths != sorted(paths) or len(paths) != len(set(paths)):
+        _fail("checkpoint request evidence is not canonical")
+    if not isinstance(value["reason"], str) or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in value["reason"]):
+        _fail("invalid checkpoint request reason")
+    _ref(value["attestation"], "checkpoint request attestation", nullable=True)
+    _ref(value["supersedes_attestation"], "checkpoint request supersedes_attestation", nullable=True)
+    if type(value["initialize_legacy"]) is not bool:
+        _fail("invalid checkpoint request initialize_legacy")
+    _text(value["from_step"], "checkpoint request from_step", nullable=True)
+    return value
+
+
+def _state_bytes(value: Any, label: str, *, nullable: bool = False) -> bytes | None:
+    if value is None and nullable:
+        return None
+    if not isinstance(value, str):
+        _fail(f"invalid {label}")
+    try:
+        raw = base64.b64decode(value.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, ValueError) as exc:
+        raise OrchestrationError(f"invalid {label}") from exc
+    if len(raw) > MAX_CHECKPOINT_STATE_BYTES:
+        _fail(f"{label} exceeds limit")
+    return raw
+
+
+def validate_checkpoint_content(value: Any) -> dict[str, Any]:
+    """Validate the immutable payload written before its checkpoint receipt."""
+    required = {"schema", "work_id", "operation_id", "request", "checkpoint", "before_base64", "state_write", "binding_transition", "result"}
+    value = _object(value, required, set(), "checkpoint content")
+    if value["schema"] != CHECKPOINT_CONTENT_SCHEMA:
+        _fail("invalid checkpoint content schema")
+    for key in ("work_id", "operation_id"):
+        _id(value[key], f"checkpoint content {key}")
+    request = validate_checkpoint_request(value["request"])
+    if request["work_id"] != value["work_id"] or request["operation_id"] != value["operation_id"]:
+        _fail("checkpoint content request mismatch")
+    _checkpoint(value["checkpoint"].get("checkpoint_id") if isinstance(value["checkpoint"], dict) else "", value["checkpoint"])
+    state_write = _object(value["state_write"], {"work_id", "destination", "before_sha256", "after_base64", "after_sha256", "expected_store_revision", "expected_journal_anchor"}, set(), "checkpoint state_write")
+    if state_write["work_id"] != value["work_id"]:
+        _fail("checkpoint state_write work id mismatch")
+    _safe_path(state_write["destination"])
+    _nullable_digest(state_write["before_sha256"], "checkpoint state_write before_sha256")
+    after = _state_bytes(state_write["after_base64"], "checkpoint state_write after_base64")
+    if hashlib.sha256(after).hexdigest() != state_write["after_sha256"]:
+        _fail("checkpoint state_write after digest mismatch")
+    _digest(state_write["after_sha256"], "checkpoint state_write after_sha256")
+    if type(state_write["expected_store_revision"]) is not int or state_write["expected_store_revision"] < 1:
+        _fail("invalid checkpoint state_write revision")
+    if not isinstance(state_write["expected_journal_anchor"], dict):
+        _fail("invalid checkpoint state_write journal anchor")
+    _json(state_write["expected_journal_anchor"], "checkpoint state_write journal anchor")
+    before = _state_bytes(value["before_base64"], "checkpoint before_base64", nullable=True)
+    if (before is None) != (state_write["before_sha256"] is None):
+        _fail("checkpoint before absence mismatch")
+    if before is not None and hashlib.sha256(before).hexdigest() != state_write["before_sha256"]:
+        _fail("checkpoint before digest mismatch")
+    if value["binding_transition"] is not None:
+        if not isinstance(value["binding_transition"], dict):
+            _fail("invalid checkpoint binding_transition")
+        _json(value["binding_transition"], "checkpoint binding_transition")
+    result = _object(value["result"], {"work_id", "context_id", "epoch", "operation_id", "checkpoint_id", "step", "state", "evidence", "reason", "execution_branch", "supersedes", "current_step"}, set(), "checkpoint result")
+    if result["work_id"] != value["work_id"] or result["operation_id"] != value["operation_id"] or result["checkpoint_id"] != value["checkpoint"]["checkpoint_id"]:
+        _fail("checkpoint result correlation mismatch")
+    _id(result["context_id"], "checkpoint result context")
+    if type(result["epoch"]) is not int or result["epoch"] < 1:
+        _fail("invalid checkpoint result epoch")
+    for key in ("step", "state", "execution_branch", "current_step"):
+        _text(result[key], f"checkpoint result {key}", nullable=key in {"execution_branch", "current_step"})
+    if not isinstance(result["reason"], str) or any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in result["reason"]):
+        _fail("invalid checkpoint result reason")
+    if not isinstance(result["evidence"], list):
+        _fail("invalid checkpoint result evidence")
+    _ref(result["supersedes"], "checkpoint result supersedes", nullable=True)
+    return value
+
+
+def checkpoint_content_sha256(value: dict[str, Any]) -> str:
+    validate_checkpoint_content(value)
+    return _manifest_sha256(value)

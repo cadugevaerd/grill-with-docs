@@ -1575,8 +1575,136 @@ def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any
         raise
     except store.StoreError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
-    return {"verdict": "ORCHESTRATION-ADOPTED", "work_id": args.work_id, "context_id": context_id,
+    committed_context_id = snapshot.document["agent_orchestration"]["work_items"][args.work_id]["current_context_id"]
+    return {"verdict": "ORCHESTRATION-ADOPTED", "work_id": args.work_id, "context_id": committed_context_id,
             "expected_sha256": expected, "store_revision": snapshot.revision}, EXIT_OK
+
+
+def _checkpoint_ref(root: Path, value: str | None) -> dict[str, str] | None:
+    if value is None:
+        return None
+    path = Path(value)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-EVIDENCE-PATH", value)
+    full = root / path
+    if not full.is_file() or full.is_symlink():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "EVIDENCE-MISSING", value)
+    return {"ref": path.as_posix(), "sha256": hash_bytes(safe_read_regular_fd(root, full))}
+
+
+def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: bytes,
+                                    state: dict[str, Any], args: argparse.Namespace,
+                                    payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Use the v2 Store WAL only for an already-adopted work item.
+
+    Legacy checkpoints keep their established bytes and transition behavior;
+    an adopted item must provide a stable operation id and the bound session.
+    """
+    store = grill_core_module("store")
+    snapshot = store.read_snapshot(root, required=False)
+    if snapshot is None:
+        return None
+    block = snapshot.document.get("agent_orchestration")
+    item = block.get("work_items", {}).get(args.work_id) if isinstance(block, dict) else None
+    if item is None:
+        return None
+    if not getattr(args, "operation_id", None):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "OPERATION-ID-REQUIRED", args.work_id)
+    if not getattr(args, "session_ref", None):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "session_ref is required")
+    contract = grill_core_module("agent_orchestration")
+    context_id = item.get("current_context_id")
+    context = item.get("contexts", {}).get(context_id)
+    try:
+        if not isinstance(context, dict):
+            raise contract.OrchestrationError("no current context")
+        contract.require_authority(item, context_id, context["epoch"], args.session_ref)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+    existing = item.get("operations", {}).get(args.operation_id)
+    prior_origin = existing.get("request", {}).get("store_origin") if isinstance(existing, dict) else None
+    evidence = sorted(({"path": record["path"], "sha256": record["sha256"]} for record in payload["evidence"]), key=lambda record: record["path"])
+    request = contract.checkpoint_request(
+        store_origin=prior_origin if isinstance(prior_origin, dict) else {"revision": snapshot.revision, "content_sha256": snapshot.content_sha256},
+        work_id=args.work_id, operation_id=args.operation_id, context_id=context_id,
+        step=args.step, state=args.state, evidence=evidence, reason=payload["reason"],
+        attestation=_checkpoint_ref(root, args.attestation),
+        supersedes_attestation=_checkpoint_ref(root, args.supersedes_attestation),
+        initialize_legacy=bool(args.initialize_legacy), from_step=args.from_step,
+    )
+    if existing is not None:
+        if existing.get("request") != request:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "OPERATION-ID-COLLISION", args.operation_id)
+        if existing.get("state") != "CONFIRMED" or not isinstance(existing.get("content_ref"), str):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "OPERATION-RECOVERY-REQUIRED", args.operation_id)
+        content_path = root / existing["content_ref"]
+        try:
+            content = json.loads(safe_read_regular_fd(root, content_path).decode("utf-8"))
+            contract.validate_checkpoint_content(content)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, contract.OrchestrationError) as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CONTENT-INVALID", args.operation_id) from exc
+        if contract.checkpoint_content_sha256(content) != existing.get("result_sha256"):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CONTENT-INVALID", args.operation_id)
+        return {"verdict": "REUSED", "work_id": args.work_id, **content["result"], "store_revision": snapshot.revision}
+    state_after = (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
+    relative_state = state_path.relative_to(root).as_posix()
+    checkpoint_id = "cp-" + store.jcs_sha256({"store_origin": request["store_origin"], "work_id": args.work_id, "operation_id": args.operation_id})
+    checkpoint = {
+        "schema": contract.CHECKPOINT_SCHEMA, "checkpoint_id": checkpoint_id, "context_id": context_id,
+        "previous_checkpoint_id": item.get("checkpoint_head"), "worktree_identity": context.get("worktree_identity", {}),
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "store_revision": snapshot.revision + 1,
+        "journal_anchor": snapshot.document["journal_head"], "state_sha256": hash_bytes(state_after),
+        "inputs_manifest": {"evidence": evidence}, "workflow_sha256": context["inputs_sha256"],
+        "constitution_sha256": item["origin"]["metadata_sha256"], "policy_sha256": item["policy_sha256"],
+        "activation": context["activation"], "campaign": context["campaign"],
+        "development_sequence": state.get("development", {}).get("sequence", []),
+        "current_step": state.get("development", {}).get("current_step"), "step_states": state.get("development", {}).get("steps", {}),
+        "accepted_outputs": state.get("development", {}).get("attested_outputs", {}),
+        "accepted_executions": state.get("development", {}).get("attested_executions", {}),
+        "pending_attempts": {}, "scheduler_runs": context["scheduler_runs"], "operations": item["operations"],
+        "cleanup_obligations": {}, "preserved_resources": {}, "blocking_activity": None, "visual_state": {},
+        "presentation": context.get("presentation"), "checkpoint_sha256": "",
+    }
+    checkpoint["checkpoint_sha256"] = store.jcs_sha256({key: value for key, value in checkpoint.items() if key != "checkpoint_sha256"})
+    import base64
+    state_write = {"work_id": args.work_id, "destination": relative_state, "before_sha256": hash_bytes(state_before),
+                   "after_base64": base64.b64encode(state_after).decode("ascii"), "after_sha256": hash_bytes(state_after),
+                   "expected_store_revision": snapshot.revision, "expected_journal_anchor": snapshot.document["journal_head"]}
+    result = {"work_id": args.work_id, "context_id": context_id, "epoch": context["epoch"], "operation_id": args.operation_id,
+              "checkpoint_id": checkpoint_id, "step": args.step, "state": args.state, "evidence": evidence,
+              "reason": payload["reason"], "execution_branch": payload.get("execution_branch"),
+              "supersedes": _checkpoint_ref(root, args.supersedes_attestation),
+              "current_step": state.get("development", {}).get("current_step")}
+    content = {"schema": contract.CHECKPOINT_CONTENT_SCHEMA, "work_id": args.work_id, "operation_id": args.operation_id,
+               "request": request, "checkpoint": checkpoint, "before_base64": base64.b64encode(state_before).decode("ascii"),
+               "state_write": state_write, "binding_transition": None, "result": result}
+    digest = contract.checkpoint_content_sha256(content)
+    content_ref = f".grill/work-items/{args.work_id}/agent-orchestration/checkpoints/{args.operation_id}.json"
+    operation = {"kind": "checkpoint", "context_id": context_id, "fence": context["leader"]["fence"], "subject_ids": [relative_state],
+                 "input_sha256": store.jcs_sha256(request), "expected_before": {"state_sha256": state_write["before_sha256"]},
+                 "intended_after": {"state_sha256": state_write["after_sha256"]}, "idempotency_key": args.operation_id,
+                 "state": "CONFIRMED", "result_ref": content_ref, "result_sha256": digest, "observation_ref": content_ref,
+                 "error": None, "request": request, "content_ref": content_ref}
+    receipt = {"schema": "grill-orchestration-receipt/v1", "category": "runtime", "name": "checkpoint-" + checkpoint_id,
+               "work_id": args.work_id, "context_id": context_id, "operation_id": args.operation_id,
+               "input_sha256": operation["input_sha256"], "output_sha256": digest}
+    event = {"schema": "grill-orchestration-event/v1", "event": "agent.orchestration.checkpoint", "work_id": args.work_id,
+             "context_id": context_id, "operation_id": args.operation_id, "input_sha256": operation["input_sha256"],
+             "output_sha256": digest, "receipt_sha256": store.jcs_sha256(receipt)}
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        target = document["agent_orchestration"]["work_items"][args.work_id]
+        if args.operation_id in target["operations"]:
+            raise store.StoreError(store.STATE_DIVERGENCE, "checkpoint operation appeared during commit")
+        target["operations"][args.operation_id] = operation
+        target["checkpoints"][checkpoint_id] = checkpoint
+        target["checkpoint_head"] = checkpoint_id
+        return document
+    try:
+        committed = store.transact_checkpoint_with_content(root, mutate, event=event, receipt=receipt,
+                                                           content_ref=content_ref, content=content)
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    return {"verdict": "UPDATED", "work_id": args.work_id, **result, "store_revision": committed.revision}
 
 
 def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -1586,6 +1714,8 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     work_id = args.work_id or f"{args.type}-{args.slug}-{uuid.uuid4().hex}"
     if not WORK_ID_RE.fullmatch(work_id):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", work_id)
+    if not args.session_ref:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "session_ref is required before init effects")
     workflow = ensure_project_workflow(root)
     goal = ensure_project_goal(root)
     dependencies = dependency_report(
@@ -3810,6 +3940,7 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     lock = acquire_lock(root, args.work_id, item)
     try:
         path, state = read_development_state(root, item, args.work_id)
+        state_before = safe_read_regular_fd(root, path)
         development = state.get("development")
         if development_workflow_version(development) is None:
             if not args.initialize_legacy:
@@ -3951,6 +4082,9 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 payload["chain_stale"] = mark_chain_stale(development, args.step)
             outputs[args.step] = attestation_result["output"]
         development["current_step"] = next((s for s in sequence if steps.get(s) != "complete"), "complete")
+        orchestrated = _commit_orchestrated_checkpoint(root, path, state_before, state, args, payload)
+        if orchestrated is not None:
+            return orchestrated, EXIT_OK
         atomic_write(root, path, (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode())
         return {"verdict":"UPDATED", "work_id":args.work_id, **payload, "current_step":development["current_step"]}, EXIT_OK
     finally:
@@ -4338,6 +4472,8 @@ def build_parser() -> JsonParser:
     checkpoint_parser.add_argument("--reason", default="")
     checkpoint_parser.add_argument("--initialize-legacy", action="store_true")
     checkpoint_parser.add_argument("--from-step")
+    checkpoint_parser.add_argument("--operation-id")
+    checkpoint_parser.add_argument("--session-ref")
     phase_turn_parser = subparsers.add_parser("phase-turn")
     phase_turn_parser.add_argument("root")
     phase_turn_parser.add_argument("--work-id", required=True)
