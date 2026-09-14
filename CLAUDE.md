@@ -48,6 +48,10 @@ A ordem canônica de cada versão vive em `grill_core/workflow_versions.py`, que
 
 Subcomandos auxiliares: `preflight ROOT --runtime claude|codex [--allow-install] [--skip-backlog]` e `backlog-sync ROOT --work-id ID [--apply] [--db PATH]`.
 
+## Bootstrap local GWD
+
+Somente ao iniciar ou retomar trabalho no projeto/fluxo GWD, siga o bootstrap da skill `grill-with-docs` efetivamente selecionada e de seu `references/session-protocol.md` antes da primeira resposta de trabalho. Confirme instalação, habilitação e confiança de `i-have-adhd@i-have-adhd`, leia integralmente a referência aprovada indicada pelo `load_request` e correlacione a leitura à sessão; ausência de prova exige diagnóstico, nunca declarar estilo funcional. Revalide na compactação: aplicação ativa requer carga atual; `stop adhd mode` comprovado na mesma sessão permite continuar sem reinjeção, preservando os demais pré-requisitos. Nova sessão inicia ativa com carga própria; fora do GWD não aplique este bootstrap. Preserve Ponytail, conteúdo solicitado e configurações alheias; não crie flag global, não edite cache upstream nem peça invocação manual de i-have-adhd.
+
 ## Ponytail na stack
 
 O plugin [ponytail](https://github.com/DietrichGebert/ponytail) é o modo de trabalho oficial deste projeto (lazy senior dev: YAGNI, stdlib primeiro, menor diff correto) e faz parte da stack oficial desde a 5.4.0, declarado em `dependencies.json` como `kind: harness-plugin`, `required: true`, mínimo `4.9.0`.

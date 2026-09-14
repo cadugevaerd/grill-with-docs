@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.0.0
+
+- Breaking: contrato suplementar `grill-agent-orchestration/v1` obrigatório em trabalhos novos; legado exige adoção explícita antes de executar no binário novo. Preservar campanhas, receipts e DAGs selados; migração de tasks usa proposta revisada, preview/hashes e sucessão explícita para trabalho restante.
+- Cleanup por recurso nos fechamentos de etapa/wave e antes da troca: resultado ou diagnóstico durável precede close confirmado, inclusive falha/read-only. Worktree e branch exigem identidade, integração, árvore limpa e ausência de evidência exclusiva; preservação/UNKNOWN têm motivo e não viram sucesso. Resultado aceito com cleanup pendente não é reexecutado.
+- Files JSON passa a ser a única autoridade do grant, incluindo raiz, novos arquivos e `./`; Result por tarefa deve estar declarado, sem sidecar inferido da prosa. DAG v2 mantém barreiras e aceites de read-only/deferred por fase; sem trabalhadores reais, `PARTITION-NO-WORKERS` bloqueia antes de admissão.
+- Continuidade Codex↔Claude na mesma worktree por checkpoint, quiescência observada, fence/CAS e contexto/campanha sucessores; preservar aceites e reconciliar efeitos antes de repetir tentativa não aceita. Início/retomada recomendam Sol/Opus, sem trocar modelo ativo.
+- Todo COMO usa autor `gpt-6-astra/xhigh` no Codex ou `fable/xhigh` no Claude; toda revisão de julgamento usa o modelo obrigatório com `high`, em sessão independente dos autores. Efetivo/capacidade são verificados antes do payload e no aceite; workers de implementação mantêm binding não-frontier.
+- Design frontend dentro de plan integra Impeccable observado, HTML autocontido, capturas PNG, manifest e revisão independente; tasks depende de aprovação humana do digest atual. Sem frontend, `NOT_APPLICABLE`; sequência de onze macroetapas preservada.
+- i-have-adhd >=0.3.0 entra na stack obrigatória: GWD lê a referência integral aprovada no início/retomada, separando presença, habilitação, confiança, carga e comportamento. Alcance local ao projeto/fluxo, sem flag global ou invocação manual; compactação revalida carga ativa e suspensão humana local continua sem reinjeção. Ponytail, conteúdo integral e configurações externas são preservados.
+- Documentação pública, bootstrap local de AGENTS/CLAUDE e oito pontos de distribuição sincronizados. Suplementos não substituem skills canônicas nem alteram pins v3/v4, Constituição ou WORKFLOW; feature/fix mantêm `PLAN_ONLY_STOP` e hotfix mantém `HOTFIX-GO`.
+- Aceite funcional continua condicionado a checks offline, orquestração/estilo live em ambos os CLIs e revisão independente; hashes/receipts são evidência estrutural auditável, sem prova criptográfica de execução. O ciclo histórico só adota a candidata depois de encerrado; verify/review/ship e publicação por tag imutável/Release no pipeline permanecem governados pelos gates existentes.
+
 ## 5.4.1
 
 - Fix: o vínculo do backlog passa a ser reconhecido a partir de qualquer worktree
