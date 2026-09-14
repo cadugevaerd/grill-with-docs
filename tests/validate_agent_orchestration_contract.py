@@ -14,7 +14,7 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parents[1] / "plugin/skills/grill-with-docs/scripts"
 sys.path.insert(0, str(SCRIPTS))
 from grill_core.agent_runtime import RuntimeBoundary, RuntimeError, validate_observation
-from grill_core import agent_orchestration, gauntlet_runs, store
+from grill_core import agent_orchestration, attestation, gauntlet_runs, store
 import grill_workspace
 
 ORCA_CAPABILITIES = {
@@ -29,18 +29,18 @@ def pack(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
 
-def native_sources(released=False):
+def native_sources(released=False, *, provider="codex", model="gpt-6-astra", effort="high"):
     dispatch = "ctx-1"; task = "task-1"; worktree = "worktree-1"; handle = "term-1"
     launch = {"ok": True, "result": {
         "dispatchId": dispatch, "taskId": task,
-        "launch": {"requested": {"agent": "codex", "model": "gpt-6-astra", "effort": "high"}, "effective": {"agent": "codex", "model": "gpt-6-astra", "effort": "high"}},
+        "launch": {"requested": {"agent": provider, "model": model, "effort": effort}, "effective": {"agent": provider, "model": model, "effort": effort}},
         "prompt": {"processIncarnation": "inc-1"},
     }}
     show = {"ok": True, "result": {
         "dispatch": {"id": dispatch, "taskId": task, "hostScope": {"hostId": "host-1"}, "status": "completed" if released else "dispatched"},
         "worker": {"dispatchId": dispatch, "runtimeEpoch": "runtime-1", "worktreeId": worktree, "agentTerminalHandle": handle, "state": "succeeded" if released else "ready", "stage": "settled" if released else "input_accepted", "startOptions": {"launch": copy.deepcopy(launch["result"]["launch"])}},
         "terminalResource": {"terminalHandle": handle, "worktreeId": worktree, "endpointId": "runtime-1", "endpointIncarnation": "dispatch-inc-1", "ownerDispatchId": dispatch, "releaseState": "released" if released else "not_requested"},
-        "projection": {"taskId": task, "provider": {"id": "codex"}, "host": {"id": "host-1"}, "liveness": {"verdict": "exited" if released else "live", "source": "resource_release" if released else "agent_status"}, "resource": {"ownerDispatchId": dispatch, "releaseState": "released" if released else "not_requested"}},
+        "projection": {"taskId": task, "provider": {"id": provider}, "host": {"id": "host-1"}, "liveness": {"verdict": "exited" if released else "live", "source": "resource_release" if released else "agent_status"}, "resource": {"ownerDispatchId": dispatch, "releaseState": "released" if released else "not_requested"}},
         "terminal": None if released else {"handle": handle, "incarnationId": "inc-1", "worktreeId": worktree, "executionHostId": "host-1"},
     }}
     return pack(launch), pack(show)
@@ -136,8 +136,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertIsNone(context["activation"]); self.assertIsNone(context["campaign"]); self.assertEqual(context["scheduler_runs"], {})
                 checkpoint_args = ("checkpoint", str(root), "--work-id", "work-x", "--step", "specify", "--state", "in-progress", "--operation-id", "checkpoint-1", "--session-ref", "observed-session")
                 code, checkpoint = self.run_cli(*checkpoint_args)
-                self.assertEqual((code, checkpoint["verdict"]), (0, "UPDATED"))
-                self.assertEqual(self.run_cli(*checkpoint_args)[1]["verdict"], "REUSED")
+                self.assertEqual((code, checkpoint["code"]), (2, "ACTIVITY-REQUIRED"))
                 stale = self.run_cli(*args, "--scope-file", "src/b.py", "--apply", "--expected-sha256", preview["expected_sha256"])
                 self.assertEqual(stale[0], 2)
             self.assertTrue(probes); self.assertTrue(commands)
@@ -197,6 +196,108 @@ class AgentOrchestrationContract(unittest.TestCase):
     def verified(self):
         boundary, calls = self.boundary()
         return boundary, boundary.verified("gpt-6-astra", "high"), calls
+
+    def accepted_specialist(self, activity_id, *, step="plan", scope="cycle", role="author",
+                            author_ids=None, runtime="codex"):
+        model, effort = agent_orchestration.specialist_pair(runtime, role)
+        launch, show = native_sources(provider=runtime, model=model, effort=effort)
+        after = native_sources(released=True, provider=runtime, model=model, effort=effort)
+        boundary, _calls = self.boundary(probe=(launch, show), after=after)
+        observed = boundary.verified(model, effort)
+        manifest = {"files": [], "required_activity_ids": [], "author_activity_ids": author_ids or [],
+                    "task_binding": None, "human_authorization": None}
+        activity = agent_orchestration.new_activity(
+            activity_id=activity_id, context_id="ctx-1", step_id=None if scope == "interview" else step,
+            activity_scope=scope, activity_type=role, attempt=1, input_manifest=manifest,
+            policy_sha256="a" * 64, write_files=[],
+        )
+        context = {"context_id": "ctx-1", "runtime": runtime, "leader": {"fence": 1}}
+        activity = agent_orchestration.prepare_activity(activity, context)
+        bootstrap = agent_orchestration.bootstrap_request(activity)
+        activity = agent_orchestration.record_verified_activity(activity, observed)
+        activity, payload = agent_orchestration.dispatch_activity(activity, context)
+        result = {"ref": f"results/{activity_id}.json", "sha256": "b" * 64}
+        output = {"files": [], "return_ref": result, "effect_ref": None}
+        activity = agent_orchestration.record_activity_result(
+            activity, result_ref=result["ref"], result_sha256=result["sha256"], output_manifest=output,
+        )
+        closed = boundary.close(observed)
+        activity = agent_orchestration.accept_activity(
+            activity, context=context, observation=closed, acceptance_ref=result["ref"],
+        )
+        return activity, bootstrap, payload, observed, closed, context
+
+    def test_specialist_admission(self):
+        activity, bootstrap, payload, observed, closed, context = self.accepted_specialist("author-plan")
+        self.assertEqual((activity["state"], activity["effective_model"], activity["effective_effort"]),
+                         ("ACCEPTED", "gpt-6-astra", "xhigh"))
+        self.assertEqual(bootstrap["transport"], "bootstrap")
+        self.assertNotIn("input_manifest", bootstrap)
+        self.assertNotIn("write_files", bootstrap)
+        self.assertEqual((payload["activity_id"], payload["context_id"], payload["fence"]),
+                         ("author-plan", "ctx-1", 1))
+        self.assertEqual(payload["input_sha256"], activity["input_sha256"])
+
+        wrong_effort = copy.deepcopy(closed); wrong_effort["effective_effort"] = "high"
+        recorded = copy.deepcopy(activity); recorded["state"] = "RESULT_RECORDED"
+        recorded["released_at"] = None; recorded["accepted_by_context"] = None
+        recorded["acceptance_ref"] = None; recorded["review_verdict"] = None
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "SPECIALIST-EFFORT-DIVERGENT"):
+            agent_orchestration.accept_activity(recorded, context=context, observation=wrong_effort,
+                                                acceptance_ref="results/author-plan.json")
+
+        unclosed = copy.deepcopy(observed)
+        provisional = copy.deepcopy(recorded)
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "SESSION-CLOSE-UNPROVEN"):
+            agent_orchestration.accept_activity(provisional, context=context, observation=unclosed,
+                                                acceptance_ref="results/author-plan.json")
+
+        malformed = copy.deepcopy(activity); malformed["state"] = "BOOTSTRAPPING"
+        malformed["requested_effort"] = "high"
+        malformed["effective_model"] = malformed["effective_effort"] = malformed["resolved_model_id"] = None
+        malformed["session_resource_id"] = malformed["launch_observation_ref"] = None
+        malformed["payload_sha256"] = malformed["result_ref"] = malformed["result_sha256"] = None
+        malformed["output_manifest"] = malformed["released_at"] = None
+        malformed["accepted_by_context"] = malformed["acceptance_ref"] = malformed["review_verdict"] = None
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "SPECIALIST-CAPABILITY-UNPROVEN"):
+            agent_orchestration.record_verified_activity(malformed, observed)
+
+    def test_activity_coverage(self):
+        policy = json.loads((SCRIPTS.parent / "assets/agent-orchestration.v1.json").read_text(encoding="utf-8"))
+        author, _bootstrap, _payload, _observed, _closed, _context = self.accepted_specialist("author-plan")
+        reviewer, *_ = self.accepted_specialist("reviewer-plan", role="reviewer", author_ids=["author-plan"])
+        item = {"activities": {"author-plan": author, "reviewer-plan": reviewer}}
+        missing = agent_orchestration.activity_coverage(item, policy, context_id="ctx-1", step_id="tasks")
+        self.assertEqual(missing["missing"], ["author", "reviewer"])
+        with self.assertRaises(attestation.AttestationError):
+            attestation.require_activity_coverage(missing, step_id="tasks")
+
+        author_tasks, *_ = self.accepted_specialist("author-tasks", step="tasks")
+        reviewer_tasks, *_ = self.accepted_specialist("reviewer-tasks", step="tasks", role="reviewer", author_ids=["author-tasks"])
+        author_specify, *_ = self.accepted_specialist("author-specify", step="specify")
+        reviewer_specify, *_ = self.accepted_specialist("reviewer-specify", step="specify", role="reviewer", author_ids=["author-specify"])
+        interview_author, *_ = self.accepted_specialist("author-interview", scope="interview")
+        interview_reviewer, *_ = self.accepted_specialist("reviewer-interview", scope="interview", role="reviewer", author_ids=["author-interview"])
+        item["activities"].update({
+            "author-tasks": author_tasks, "reviewer-tasks": reviewer_tasks,
+            "author-specify": author_specify, "reviewer-specify": reviewer_specify,
+            "author-interview": interview_author, "reviewer-interview": interview_reviewer,
+        })
+        for kwargs in (
+            {"step_id": "plan", "frontend": True}, {"step_id": "tasks"},
+            {"step_id": "specify", "new_how": True},
+            {"step_id": None, "activity_scope": "interview"},
+        ):
+            coverage = agent_orchestration.require_activity_coverage(item, policy, context_id="ctx-1", **kwargs)
+            self.assertEqual(coverage["missing"], [])
+
+        invocation = agent_orchestration.invocation_context(
+            policy=policy, policy_sha256="c" * 64, context={"context_id": "ctx-1", "epoch": 1},
+            step_id="plan", canonical_entrypoint={"kind": "canonical"},
+            supplement={"path": "supplement", "sha256": "d" * 64},
+            task_template={"path": "template", "sha256": "e" * 64}, frontend=True,
+        )
+        self.assertEqual(invocation["limitation"], "context-delivery-is-not-skill-invocation")
 
     def test_native_bytes_prove_effective_pair_and_full_identity(self):
         boundary, observed, calls = self.verified()

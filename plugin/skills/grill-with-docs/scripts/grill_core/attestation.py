@@ -535,6 +535,17 @@ def guard_capability_access(invocation_started: Mapping[str, Any] | None, *, cap
         raise _policy_violation(step_id=step_id, capability=capability)
 
 
+def require_activity_coverage(coverage: Mapping[str, Any], *, step_id: str) -> None:
+    """A delivered supplement is context, not a substitute for its author."""
+    if not isinstance(coverage, Mapping):
+        raise _blocked("ACTIVITY_REQUIRED", step_id=step_id)
+    missing = coverage.get("missing")
+    if not isinstance(missing, list) or any(not isinstance(role, str) for role in missing):
+        raise _blocked("ACTIVITY_REQUIRED", step_id=step_id)
+    if missing:
+        raise _blocked("ACTIVITY_REQUIRED", step_id=step_id, missing=sorted(missing))
+
+
 # --------------------------------------------------------------------------
 # the chain judge (plan 4.1)
 # --------------------------------------------------------------------------
