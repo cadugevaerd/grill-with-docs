@@ -12,7 +12,9 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import stat
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -580,7 +582,10 @@ def record_resume_decision(root: str | Path, work_id: str, run_id: str,
 # Tracking: a stateless validator has nowhere durable to leave a "this DAG was
 # already validated" fact, and re-running a side-effect-free check is cheap).
 DAG_SCHEMA = "grill-gauntlet-execution-dag/v1"
+TASK_FILES_SCHEMA = "task-files/v1"
+DAG_V2_SCHEMA = "grill-gauntlet-execution-dag/v2"
 _DAG_NODE_KEYS = frozenset({"id", "depends_on", "tier", "parallel", "files"})
+_DAG_V2_NODE_KEYS = _DAG_NODE_KEYS | frozenset({"task_ids", "result_files"})
 TIER_ORDER = {"small": 0, "medium": 1, "large": 2}
 # FR-002 SSOT: the tier order itself (small < medium < large) is intrinsic
 # structure, not policy -- it stays a module constant.  The *floors* applied
@@ -607,11 +612,15 @@ def _is_safe_relative_path(value: Any) -> bool:
     exactly the same escape-proof rule a worker grant scope already does,
     without duplicating the character class.
     """
-    if (not isinstance(value, str) or not value or value.startswith("/")
-            or "\\" in value or any(ord(ch) < 32 or ord(ch) == 127 for ch in value)):
+    if (not isinstance(value, str) or not value or value.startswith("/") or value.startswith("//")
+            or "\\" in value or ":" in value or any(ch in value for ch in "*?[")
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in value)):
         return False
     pieces = value.split("/")
-    return not (any(piece in {"", ".", ".."} for piece in pieces) or pieces[0] == ".git")
+    devices = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+    return not (any(piece in {"", ".", ".."} or piece.endswith((".", " "))
+                       or piece.upper().split(".", 1)[0] in devices for piece in pieces)
+                or pieces[0] == ".git")
 
 
 def _repo_relative_path(root: str | Path, value: Any, label: str) -> Path:
@@ -655,10 +664,22 @@ def _require_acyclic(nodes_by_id: Mapping[str, dict[str, Any]]) -> None:
 
 
 def _validate_dag_structure(document: Any) -> dict[str, dict[str, Any]]:
-    if not isinstance(document, dict) or set(document) != {"schema", "feature", "max_workers", "nodes"}:
+    if not isinstance(document, dict):
         _fail("DAG-MALFORMED", "Execution DAG document is invalid")
-    if document["schema"] != DAG_SCHEMA:
+    schema = document.get("schema")
+    v2 = schema == DAG_V2_SCHEMA
+    expected = ({"schema", "feature", "max_workers", "nodes"} if not v2 else
+                {"schema", "tasks_contract", "feature", "max_workers", "tasks_semantic_sha256", "accepted_tasks", "nodes"})
+    if set(document) != expected:
+        _fail("DAG-MALFORMED", "Execution DAG document is invalid")
+    if schema not in {DAG_SCHEMA, DAG_V2_SCHEMA}:
         _fail("DAG-MALFORMED", "Execution DAG schema is unrecognized")
+    if v2:
+        if document["tasks_contract"] != TASK_FILES_SCHEMA or not _hex64(document["tasks_semantic_sha256"]):
+            _fail("DAG-MALFORMED", "Execution DAG task contract is invalid")
+        if not isinstance(document["accepted_tasks"], dict) or any(not isinstance(key, str) or not isinstance(value, dict)
+                                                                     for key, value in document["accepted_tasks"].items()):
+            _fail("DAG-MALFORMED", "Execution DAG accepted tasks are invalid")
     if not isinstance(document["feature"], str) or not document["feature"]:
         _fail("DAG-MALFORMED", "Execution DAG feature is invalid")
     max_workers = document["max_workers"]
@@ -669,7 +690,7 @@ def _validate_dag_structure(document: Any) -> dict[str, dict[str, Any]]:
         _fail("DAG-MALFORMED", "Execution DAG nodes are invalid")
     nodes_by_id: dict[str, dict[str, Any]] = {}
     for node in nodes:
-        if not isinstance(node, dict) or set(node) != _DAG_NODE_KEYS:
+        if not isinstance(node, dict) or set(node) != (_DAG_V2_NODE_KEYS if v2 else _DAG_NODE_KEYS):
             _fail("DAG-MALFORMED", "Execution DAG node is invalid")
         node_id = node["id"]
         if not isinstance(node_id, str) or not store.SAFE_NAME_RE.fullmatch(node_id):
@@ -690,6 +711,15 @@ def _validate_dag_structure(document: Any) -> dict[str, dict[str, Any]]:
         if (not isinstance(files, list) or not files or len(set(files)) != len(files)
                 or any(not _is_safe_relative_path(f) for f in files)):
             _fail("DAG-MALFORMED", "Execution DAG node files are invalid")
+        if v2:
+            task_ids = node["task_ids"]
+            result_files = node["result_files"]
+            if (not isinstance(task_ids, list) or not task_ids or len(set(task_ids)) != len(task_ids)
+                    or any(not isinstance(task_id, str) or not re.fullmatch(r"T\d+", task_id) for task_id in task_ids)):
+                _fail("DAG-MALFORMED", "Execution DAG node task ids are invalid")
+            if (not isinstance(result_files, dict) or set(result_files) != set(task_ids)
+                    or any(not isinstance(path, str) or path not in files for path in result_files.values())):
+                _fail("DAG-MALFORMED", "Execution DAG node result files are invalid")
         nodes_by_id[node_id] = node
     for node in nodes_by_id.values():
         for dep in node["depends_on"]:
@@ -786,6 +816,39 @@ def validate_execution_dag(root: str | Path, work_id: str, run_id: str, dag_path
             for node_id, node in nodes_by_id.items()
         ],
     }
+
+
+def task_phase_barrier(dag: Mapping[str, Any], report: Mapping[str, Any], *, target_phase: int,
+                       dag_content_sha256: str) -> dict[str, Any]:
+    """Return the v2 task receipts still required before a later phase can run.
+
+    The scheduler owns worker waves; this helper owns the complementary fact
+    that an accepted checkbox or a diagnostic alone never releases a deferred
+    or read-only predecessor.
+    """
+    if (not isinstance(dag, Mapping) or dag.get("schema") != DAG_V2_SCHEMA
+            or not isinstance(report, Mapping) or report.get("schema") != "grill-partition-report/v2"
+            or type(target_phase) is not int or target_phase < 1 or not _hex64(dag_content_sha256)):
+        _fail("TASK-PHASE-PENDING", "task phase barrier inputs are invalid")
+    semantic = dag.get("tasks_semantic_sha256")
+    accepted = dag.get("accepted_tasks")
+    if not _hex64(semantic) or not isinstance(accepted, Mapping):
+        _fail("TASK-PHASE-PENDING", "task phase barrier lacks accepted-task records")
+    pending: list[str] = []
+    for phase in report.get("phases", []):
+        if not isinstance(phase, Mapping) or type(phase.get("phase")) is not int or not isinstance(phase.get("task_ids"), list):
+            _fail("TASK-PHASE-PENDING", "partition report phase is invalid")
+        if phase["phase"] >= target_phase:
+            continue
+        for task_id in phase["task_ids"]:
+            receipt = accepted.get(task_id)
+            binding = receipt.get("task_binding") if isinstance(receipt, Mapping) else None
+            expected = {"task_id": task_id, "phase": str(phase["phase"]),
+                        "tasks_semantic_sha256": semantic, "dag_content_sha256": dag_content_sha256}
+            if not isinstance(receipt, Mapping) or receipt.get("state") != "ACCEPTED" or binding != expected:
+                pending.append(task_id)
+    return {"pending": sorted(pending), "tasks_semantic_sha256": semantic,
+            "dag_content_sha256": dag_content_sha256}
 
 
 def _node_lineage_head_entry(run: Mapping[str, Any], node_id: str) -> tuple[str, Mapping[str, Any]] | None:
@@ -1052,16 +1115,40 @@ def _strict_scopes(scopes: Any) -> list[str]:
         _fail("GRANT-INVALID", "at least one scoped path is required")
     result: list[str] = []
     for scope in scopes:
-        if (not isinstance(scope, str) or not scope or scope.startswith("/")
-                or "\\" in scope or any(ord(ch) < 32 or ord(ch) == 127 for ch in scope)):
+        if not isinstance(scope, str):
             _fail("GRANT-INVALID", "grant scope path is invalid")
-        pieces = scope.split("/")
-        if any(piece in {"", ".", ".."} for piece in pieces) or pieces[0] == ".git":
+        canonical = scope[2:] if scope.startswith("./") else scope
+        if scope.startswith("././") or not _is_safe_relative_path(canonical):
             _fail("GRANT-INVALID", "grant scope path is invalid")
-        if scope in result:
+        if canonical in result or canonical.casefold() in {item.casefold() for item in result}:
             _fail("GRANT-INVALID", "grant scope paths must be unique")
-        result.append(scope)
+        result.append(canonical)
     return result
+
+
+def _validate_scope_boundary(root: str | Path, scopes: list[str]) -> None:
+    """Refuse links, directories, and reparse-like parents before granting."""
+    base = Path(root)
+    try:
+        observed = os.lstat(base)
+    except OSError as exc:
+        _fail("GRANT-INVALID", f"could not inspect grant root: {exc}")
+    if stat.S_ISLNK(observed.st_mode) or not stat.S_ISDIR(observed.st_mode):
+        _fail("GRANT-INVALID", "grant root is not a real directory")
+    for scope in scopes:
+        cursor = base
+        for index, piece in enumerate(scope.split("/")):
+            cursor /= piece
+            try:
+                observed = os.lstat(cursor)
+            except FileNotFoundError:
+                break
+            except OSError as exc:
+                _fail("GRANT-INVALID", f"could not inspect grant scope: {exc}")
+            if stat.S_ISLNK(observed.st_mode) or (index < len(scope.split("/")) - 1 and not stat.S_ISDIR(observed.st_mode)):
+                _fail("GRANT-INVALID", "grant scope escapes a no-follow boundary")
+            if index == len(scope.split("/")) - 1 and not stat.S_ISREG(observed.st_mode):
+                _fail("GRANT-INVALID", "grant scope leaf is not a regular file")
 
 
 def _workspace_identity(root: str | Path, work_id: str, run_id: str, worker_id: str,
@@ -1366,6 +1453,7 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
     scopes = _strict_scopes(scope_paths)
     if any(_dag_scope_violation(path) for path in scopes):
         _fail("GRANT-OUT-OF-SCOPE", "worker grant targets out-of-scope evidence")
+    _validate_scope_boundary(root, scopes)
     # Recovery and a PREPARED reuse are effects in their own right: without
     # this first guard, a ContextVar for A could reach B's run through the
     # root-only recovery reader before the eventual transaction fenced it.
@@ -1553,6 +1641,7 @@ def declare_worker(root: str | Path, work_id: str, run_id: str, node_id: str, wa
     scopes = _strict_scopes(scope_paths)
     if any(_dag_scope_violation(path) for path in scopes):
         _fail("DAG-NODE-OUT-OF-SCOPE", "worker grant targets out-of-scope evidence")
+    _validate_scope_boundary(root, scopes)
     if tier not in TIER_ORDER:
         _fail("DAG-NODE-TIER-UNRESOLVED", "worker tier is invalid")
     floor = markdown_floor if _is_markdown_only(scopes) else agent_execute_floor

@@ -534,6 +534,33 @@ class AgentOrchestrationContract(unittest.TestCase):
                 boundary.close(observed)
             self.assertEqual(calls, ["probe", "observe", "release", "readback"])
 
+    def test_task_phase_barriers_and_migration_are_hash_fenced(self):
+        semantic, dag_hash = "a" * 64, "b" * 64
+        tasks = [{"task_id": "T001", "phase": 1}, {"task_id": "T002", "phase": 2}]
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "TASK-PHASE-PENDING"):
+            agent_orchestration.require_task_phase_barrier(
+                tasks, {}, target_phase=2, tasks_semantic_sha256=semantic, dag_content_sha256=dag_hash)
+        accepted = {"T001": {"state": "ACCEPTED", "task_binding": {
+            "task_id": "T001", "phase": "1", "tasks_semantic_sha256": semantic,
+            "dag_content_sha256": dag_hash,
+        }}}
+        agent_orchestration.require_task_phase_barrier(
+            tasks, accepted, target_phase=2, tasks_semantic_sha256=semantic, dag_content_sha256=dag_hash)
+        guard = gauntlet_runs.task_phase_barrier(
+            {"schema": gauntlet_runs.DAG_V2_SCHEMA, "tasks_semantic_sha256": semantic,
+             "accepted_tasks": accepted},
+            {"schema": "grill-partition-report/v2", "phases": [{"phase": 1, "task_ids": ["T001"]}]},
+            target_phase=2, dag_content_sha256=dag_hash)
+        self.assertEqual(guard["pending"], [])
+        current = "- [X] T001 old\n"
+        proposal = "<!-- grill-task-files:v1 -->\n- [X] T001 old\n"
+        preview = agent_orchestration.task_files_migration_preview(
+            current, proposal, expected_sha256=__import__("hashlib").sha256(current.encode()).hexdigest(),
+            accepted_task_ids=["T001"])
+        self.assertEqual(preview["preserved_task_ids"], ["T001"])
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "TASKS-SOURCE-STALE"):
+            agent_orchestration.task_files_migration_preview(current, proposal, expected_sha256="0" * 64)
+
 
 if __name__ == "__main__":
     unittest.main()
