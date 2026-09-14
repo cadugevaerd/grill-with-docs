@@ -651,6 +651,74 @@ class AgentOrchestrationContract(unittest.TestCase):
         with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "TASKS-SOURCE-STALE"):
             agent_orchestration.task_files_migration_preview(current, proposal, expected_sha256="0" * 64)
 
+    def test_visual_gate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            html = b"<!doctype html><html><body>preview</body></html>"
+            png = b"\x89PNG\r\n\x1a\nminimal"
+            (root / "design.html").write_bytes(html)
+            (root / "wide.png").write_bytes(png)
+            digest = lambda raw: __import__("hashlib").sha256(raw).hexdigest()
+            files = [
+                {"path": "design.html", "media_type": "text/html", "sha256": digest(html), "size": len(html)},
+                {"path": "wide.png", "media_type": "image/png", "sha256": digest(png), "size": len(png)},
+            ]
+            author = {"state": "ACCEPTED", "activity_type": "author", "context_id": "ctx", "step_id": "plan",
+                      "runtime": "codex", "requested_model": "gpt-6-astra", "requested_effort": "xhigh",
+                      "effective_model": "gpt-6-astra", "effective_effort": "xhigh", "resolved_model_id": "gpt-6-astra",
+                      "session_resource_id": "author-session", "output_manifest": {"files": files}, "acceptance_ref": "author-receipt"}
+            reviewer = {"state": "ACCEPTED", "activity_type": "reviewer", "context_id": "ctx", "step_id": "plan",
+                        "runtime": "codex", "requested_model": "gpt-6-astra", "requested_effort": "high",
+                        "effective_model": "gpt-6-astra", "effective_effort": "high", "resolved_model_id": "gpt-6-astra",
+                        "session_resource_id": "reviewer-session", "input_manifest": {"files": files},
+                        "author_activity_ids": ["design-author"], "review_verdict": "APPROVED", "acceptance_ref": "review-receipt"}
+            manifest = {
+                "schema": "grill-design-preview/v1", "feature": "030-agent-orchestration", "phase": "plan", "du": "DU-001",
+                "classification": {source: {"development_type": "frontend", "visual_surface": True}
+                                   for source in ("handoff", "du", "plan_context")},
+                "input_sha256": "a" * 64,
+                "impeccable": {"schema": "grill-impeccable-observation/v1", "capability": "impeccable",
+                               "skill_path": "/observed/impeccable/SKILL.md", "version": "1.0.0", "skill_sha256": "b" * 64,
+                               "entrypoint": "$impeccable", "invocation_ref": "session-call-1", "invocation_sha256": "c" * 64},
+                "author_activity_id": "design-author", "review_activity_id": "design-review",
+                "files": files, "entrypoint": "design.html", "captures": [{"viewport": "1280x800", "state": "default", "path": "wide.png"}],
+            }
+            preview = agent_orchestration.inspect_visual_preview(
+                manifest, preview_sha256=digest(pack(manifest)), context_id="ctx",
+                activities={"design-author": author, "design-review": reviewer},
+                read_file=lambda path: (root / path).read_bytes())
+            self.assertEqual(preview["state"], "REVIEWED")
+            self.assertEqual(agent_orchestration.visual_gate_state({}, preview, decision=None), "PENDING_APPROVAL")
+            decision = {"preview_sha256": preview["preview_sha256"], "review_ref": preview["review_ref"], "decision": "approved"}
+            self.assertEqual(agent_orchestration.visual_gate_state({}, preview, decision=decision), "APPROVED")
+            brief = copy.deepcopy(manifest); brief["files"][0]["sha256"] = digest(b"brief")
+            (root / "design.html").write_bytes(b"brief")
+            with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "PREVIEW-STALE"):
+                agent_orchestration.inspect_visual_preview(brief, preview_sha256=digest(pack(brief)), context_id="ctx",
+                    activities={"design-author": author, "design-review": reviewer}, read_file=lambda path: (root / path).read_bytes())
+            (root / "design.html").write_bytes(html)
+            missing_capture = copy.deepcopy(manifest); missing_capture["captures"] = []
+            with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "PREVIEW-NOT-VISUAL"):
+                agent_orchestration.inspect_visual_preview(missing_capture, preview_sha256=digest(pack(missing_capture)), context_id="ctx",
+                    activities={"design-author": author, "design-review": reviewer}, read_file=lambda path: (root / path).read_bytes())
+            invalid_reviewer = copy.deepcopy(reviewer); invalid_reviewer["session_resource_id"] = "author-session"
+            with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "REVIEWER-NOT-INDEPENDENT"):
+                agent_orchestration.inspect_visual_preview(manifest, preview_sha256=digest(pack(manifest)), context_id="ctx",
+                    activities={"design-author": author, "design-review": invalid_reviewer}, read_file=lambda path: (root / path).read_bytes())
+            contradictory = copy.deepcopy(manifest); contradictory["classification"]["du"] = {"development_type": "platform-devops", "visual_surface": False}
+            with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "FRONTEND-CLASSIFICATION-DIVERGENT"):
+                agent_orchestration.inspect_visual_preview(contradictory, preview_sha256=digest(pack(contradictory)), context_id="ctx",
+                    activities={"design-author": author, "design-review": reviewer}, read_file=lambda path: (root / path).read_bytes())
+            not_applicable = copy.deepcopy(manifest)
+            not_applicable["classification"] = {source: {"development_type": "platform-devops", "visual_surface": False}
+                                                for source in ("handoff", "du", "plan_context")}
+            not_applicable.update({"impeccable": None, "author_activity_id": None, "review_activity_id": None,
+                                   "files": [], "entrypoint": None, "captures": []})
+            status = agent_orchestration.inspect_visual_preview(not_applicable, preview_sha256=digest(pack(not_applicable)),
+                context_id="ctx", activities={}, read_file=lambda _path: b"")
+            self.assertEqual((status["state"], agent_orchestration.visual_gate_state({}, status, decision=None)),
+                             ("NOT_APPLICABLE", "NOT_APPLICABLE"))
+
 
 if __name__ == "__main__":
     unittest.main()

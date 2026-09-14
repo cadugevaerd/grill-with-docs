@@ -3429,6 +3429,7 @@ def partition_emit_command(args: argparse.Namespace) -> tuple[dict[str, Any], in
     """
     root = project_root(args.root)
     resolve_gauntlet_subject(root, args.work_id)
+    _require_visual_gate(root, args.work_id)
     partition = grill_core_module("partition")
     directory, dag_ref, report_ref = _feature_paths(root, args.feature)
     tasks_path = directory / "tasks.md"
@@ -3460,6 +3461,7 @@ def partition_emit_command(args: argparse.Namespace) -> tuple[dict[str, Any], in
     if not args.apply:
         return {**payload, "verdict": "PREVIEW", "partition_verdict": report["verdict"],
                 "execution_dag": dag, "partition_report": report}, EXIT_OK
+    _require_visual_gate(root, args.work_id)
     for target, document in ((root / dag_ref, dag), (root / report_ref, report)):
         reject_symlink_chain(root, target, allow_missing=True)
         if adopted and target.exists():
@@ -4230,6 +4232,123 @@ def _activity_json(root: Path, value: str, code: str) -> tuple[dict[str, Any], d
     return document, reference
 
 
+def _visual_manifest(root: Path, value: str) -> tuple[dict[str, Any], dict[str, str]]:
+    try:
+        return _activity_json(root, value, "PREVIEW-MISSING")
+    except CliFailure as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-MISSING", value) from exc
+
+
+def _visual_preview(root: Path, contract: Any, item: dict[str, Any], context: dict[str, Any],
+                    manifest: dict[str, Any], reference: dict[str, str]) -> dict[str, Any]:
+    def read_file(path: str) -> bytes:
+        target = root / path
+        reject_symlink_chain(root, target, allow_missing=False)
+        return safe_read_regular_fd(root, target)
+    try:
+        return contract.inspect_visual_preview(
+            manifest, preview_sha256=reference["sha256"], context_id=context["context_id"],
+            activities=item["activities"], read_file=read_file,
+        )
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", str(exc), "visual preview is not current") from exc
+
+
+def _visual_registration(item: dict[str, Any]) -> dict[str, Any] | None:
+    records = []
+    for operation_id, operation in item.get("operations", {}).items():
+        if not isinstance(operation, dict) or operation.get("kind") != "visual-preview" or operation.get("state") != "CONFIRMED":
+            continue
+        state = operation.get("intended_after", {}).get("visual_state")
+        if isinstance(state, dict) and isinstance(state.get("recorded_at"), str):
+            records.append((state["recorded_at"], operation_id, state))
+    return dict(max(records)[2]) if records else None
+
+
+def _visual_decision(item: dict[str, Any], preview_sha256: str, context_id: str) -> dict[str, Any] | None:
+    decisions = [(decision_id, decision) for decision_id, decision in item.get("visual_decisions", {}).items()
+                 if isinstance(decision, dict) and decision.get("preview_sha256") == preview_sha256
+                 and decision.get("context_id") == context_id]
+    if not decisions:
+        return None
+    return dict(max((decision["recorded_at"], decision_id, decision)
+                    for decision_id, decision in decisions)[2])
+
+
+def _current_human_preview_decision(root: Path, decision: dict[str, Any], preview_sha256: str) -> None:
+    source = decision.get("source_ref")
+    if not isinstance(source, str) or "#sha256:" not in source:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "human decision reference is incomplete")
+    path, expected = source.rsplit("#sha256:", 1)
+    try:
+        document, reference = _activity_json(root, path, "PREVIEW-STALE")
+    except CliFailure as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "human decision evidence changed") from exc
+    if reference.get("sha256") != expected:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "human decision evidence changed")
+    _human_preview_decision(document, preview_sha256=preview_sha256, requested=decision.get("decision"))
+
+
+def _current_visual_state(root: Path, contract: Any, item: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    registration = _visual_registration(item)
+    if registration is None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-MISSING", "no registered visual classification")
+    reference = registration.get("manifest")
+    if not isinstance(reference, dict) or not isinstance(reference.get("ref"), str) or not isinstance(reference.get("sha256"), str):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "visual registration is incomplete")
+    manifest, current = _visual_manifest(root, reference["ref"])
+    if current != reference:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "visual manifest changed after registration")
+    context = item.get("contexts", {}).get(item.get("current_context_id"))
+    if not isinstance(context, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "visual context is unavailable")
+    preview = _visual_preview(root, contract, item, context, manifest, current)
+    if preview.get("preview_sha256") != registration.get("preview_sha256"):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "visual preview digest changed")
+    decision = _visual_decision(item, current["sha256"], context["context_id"])
+    if decision is not None:
+        _current_human_preview_decision(root, decision, current["sha256"])
+    state = contract.visual_gate_state(item, preview, decision=decision)
+    return state, preview
+
+
+def _require_visual_gate(root: Path, work_id: str) -> str | None:
+    """Use the same current-preview projection at every tasks boundary."""
+    store = grill_core_module("store")
+    contract = grill_core_module("agent_orchestration")
+    snapshot = store.read_snapshot(root, required=False)
+    block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+    item = block.get("work_items", {}).get(work_id) if isinstance(block, dict) else None
+    if not isinstance(item, dict):
+        return None
+    context = item.get("contexts", {}).get(item.get("current_context_id"))
+    if not isinstance(context, dict) or not item.get("scope_files"):
+        return None
+    state, _preview = _current_visual_state(root, contract, item)
+    attestation = grill_core_module("attestation")
+    try:
+        attestation.require_visual_gate(state)
+    except attestation.AttestationError as exc:
+        code = "PREVIEW-STALE" if exc.reason == "PREVIEW_STALE" else "PREVIEW-APPROVAL-REQUIRED"
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, f"visual state is {state}") from exc
+    return state
+
+
+def _human_preview_decision(document: dict[str, Any], *, preview_sha256: str,
+                            requested: str) -> dict[str, Any]:
+    required = {"schema", "evidence_kind", "preview_sha256", "decision", "actor_ref", "source_ref", "source_sha256", "recorded_at"}
+    if set(document) != required or document.get("schema") != "grill-human-preview-decision/v1" or document.get("evidence_kind") != "human_interaction":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-APPROVAL-REQUIRED", "human preview evidence is invalid")
+    if document.get("preview_sha256") != preview_sha256 or document.get("decision") != requested:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-APPROVAL-REQUIRED", "human decision is not bound to this preview")
+    for key in ("actor_ref", "source_ref", "recorded_at"):
+        if not isinstance(document.get(key), str) or not document[key]:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-APPROVAL-REQUIRED", "human decision source is incomplete")
+    if not isinstance(document.get("source_sha256"), str) or not re.fullmatch(r"[0-9a-f]{64}", document["source_sha256"]):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-APPROVAL-REQUIRED", "human decision source digest is invalid")
+    return document
+
+
 def _activity_descriptors(policy: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Keep the canonical eleven-entry registry untouched; add only supplements."""
     references = policy.get("references")
@@ -4269,6 +4388,8 @@ def _step_activity_coverage(root: Path, work_id: str, step_id: str) -> dict[str,
     context = item.get("contexts", {}).get(context_id)
     if not isinstance(context, dict):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", work_id)
+    if not item.get("scope_files"):
+        return None
     policy_path = ASSETS / "agent-orchestration.v1.json"
     if item.get("policy_sha256") != hash_bytes(policy_path.read_bytes()):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", work_id)
@@ -4287,6 +4408,8 @@ def gauntlet_step_enter_command(args: argparse.Namespace) -> tuple[dict[str, Any
     root = project_root(args.root)
     if args.step not in SEQUENCE:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STEP", args.step)
+    if args.step == "tasks":
+        _require_visual_gate(root, args.work_id)
     _store, contract, _document, _item, context = _activity_policy(
         root, args.work_id, args.context_id, args.epoch, args.session_ref)
     policy_path = ASSETS / "agent-orchestration.v1.json"
@@ -4315,6 +4438,102 @@ def gauntlet_step_enter_command(args: argparse.Namespace) -> tuple[dict[str, Any
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", str(exc)) from exc
     return {"verdict": "STEP-ENTERED", "work_id": args.work_id, "invocation_context": invocation,
             "limitation": "context delivery does not prove canonical skill invocation"}, EXIT_OK
+
+
+def gauntlet_preview_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Register a byte-checked visual preview or a corroborated non-frontend classification."""
+    root = project_root(args.root)
+    store, contract, _document, item, context = _activity_policy(
+        root, args.work_id, args.context_id, args.epoch, args.session_ref)
+    manifest, reference = _visual_manifest(root, args.manifest)
+    preview = _visual_preview(root, contract, item, context, manifest, reference)
+    if preview["state"] == "REVIEWED" and (args.author_activity != preview["author_activity_id"]
+                                            or args.review_activity != preview["review_activity_id"]):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-APPROVAL-REQUIRED", "preview activity arguments diverge")
+    if preview["state"] == "NOT_APPLICABLE" and (args.author_activity is not None or args.review_activity is not None):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FRONTEND-CLASSIFICATION-DIVERGENT", "non-frontend preview has specialist activities")
+    operation_id = "visual-" + store.jcs_sha256({"manifest": reference})[:24]
+    existing = item["operations"].get(operation_id)
+    if existing is not None:
+        state = existing.get("intended_after", {}).get("visual_state") if isinstance(existing, dict) else None
+        if (not isinstance(state, dict) or existing.get("kind") != "visual-preview"
+                or state.get("manifest") != reference or state.get("preview_sha256") != reference["sha256"]):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "registered preview differs")
+        return {"verdict": "REUSED", "work_id": args.work_id, "visual_state": preview["state"],
+                "preview_sha256": reference["sha256"], "store_revision": store.read_snapshot(root).revision}, EXIT_OK
+    recorded = {**preview, "manifest": reference,
+                "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    operation = {
+        "kind": "visual-preview", "context_id": context["context_id"], "fence": context["leader"]["fence"],
+        "subject_ids": [reference["ref"]], "input_sha256": reference["sha256"],
+        "expected_before": {"visual_decisions": sorted(item["visual_decisions"])},
+        "intended_after": {"visual_state": recorded}, "idempotency_key": operation_id,
+        "state": "CONFIRMED", "result_ref": reference["ref"], "result_sha256": reference["sha256"],
+        "observation_ref": reference["ref"], "error": None,
+    }
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        target = document["agent_orchestration"]["work_items"][args.work_id]
+        try:
+            contract.require_authority(target, args.context_id, args.epoch, args.session_ref)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+        if operation_id in target["operations"]:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "preview appeared during commit")
+        target["operations"][operation_id] = operation
+        return document
+    try:
+        committed = store.transact(root, mutate)
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    return {"verdict": preview["state"], "work_id": args.work_id, "preview_sha256": reference["sha256"],
+            "store_revision": committed.revision}, EXIT_OK
+
+
+def gauntlet_preview_decide_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Persist an observed human decision; --decision alone never approves a preview."""
+    root = project_root(args.root)
+    store, contract, _document, item, context = _activity_policy(
+        root, args.work_id, args.context_id, args.epoch, args.session_ref)
+    manifest, reference = _visual_manifest(root, args.manifest)
+    state, preview = _current_visual_state(root, contract, item)
+    if preview.get("preview_sha256") != reference["sha256"] or state not in {"PENDING_APPROVAL", "REJECTED"}:
+        code = "PREVIEW-STALE" if state == "STALE" else "PREVIEW-APPROVAL-REQUIRED"
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, f"visual state is {state}")
+    human, human_ref = _activity_json(root, args.human_evidence, "PREVIEW-APPROVAL-REQUIRED")
+    human = _human_preview_decision(human, preview_sha256=reference["sha256"], requested=args.decision)
+    expected = store.jcs_sha256({"preview": reference, "decision": args.decision,
+                                 "human_evidence": human_ref, "visual_decisions": item["visual_decisions"]})
+    if not args.apply:
+        return {"verdict": "PREVIEW", "work_id": args.work_id, "visual_state": state,
+                "preview_sha256": reference["sha256"], "expected_sha256": expected}, EXIT_OK
+    if args.expected_sha256 != expected:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "preview decision inputs changed")
+    decision_id = "visual-decision-" + store.jcs_sha256({"preview": reference["sha256"], "human": human_ref})[:24]
+    decision = {"decision_id": decision_id, "preview_sha256": reference["sha256"],
+                "review_ref": preview["review_ref"], "actor_ref": human["actor_ref"],
+                "decision": args.decision, "source_ref": human_ref["ref"] + "#sha256:" + human_ref["sha256"],
+                "recorded_at": human["recorded_at"], "context_id": context["context_id"]}
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        target = document["agent_orchestration"]["work_items"][args.work_id]
+        try:
+            contract.require_authority(target, args.context_id, args.epoch, args.session_ref)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+        fresh = store.jcs_sha256({"preview": reference, "decision": args.decision,
+                                  "human_evidence": human_ref, "visual_decisions": target["visual_decisions"]})
+        if fresh != args.expected_sha256:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "preview decision changed before commit")
+        previous = target["visual_decisions"].get(decision_id)
+        if previous is not None and previous != decision:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREVIEW-STALE", "decision id collides")
+        target["visual_decisions"][decision_id] = decision
+        return document
+    try:
+        committed = store.transact(root, mutate)
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    return {"verdict": "APPROVED" if args.decision == "approved" else "REJECTED", "work_id": args.work_id,
+            "preview_sha256": reference["sha256"], "store_revision": committed.revision}, EXIT_OK
 
 
 def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -4534,6 +4753,8 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     accepted".
     """
     root = project_root(args.root)
+    if args.step == "tasks":
+        _require_visual_gate(root, args.work_id)
     item = resolve_development_item(root, args.work_id)
     attestation = grill_core_module("attestation")
     coverage = _step_activity_coverage(root, args.work_id, args.step)
@@ -4811,6 +5032,8 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     if args.step not in SEQUENCE:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-STEP", args.step)
+    if args.step == "tasks" and args.state in {"in-progress", "complete"}:
+        _require_visual_gate(root, args.work_id)
     item = resolve_development_item(root, args.work_id)
     snapshot_global = global_snapshotter(root)
     global_before = snapshot_global()
@@ -5247,6 +5470,26 @@ def build_parser() -> JsonParser:
     step_enter_parser.add_argument("--step", required=True)
     step_enter_parser.add_argument("--new-how", action="store_true")
     step_enter_parser.add_argument("--frontend", action="store_true")
+    preview_parser = subparsers.add_parser("gauntlet-preview")
+    preview_parser.add_argument("root")
+    preview_parser.add_argument("--work-id", required=True)
+    preview_parser.add_argument("--context-id", required=True)
+    preview_parser.add_argument("--epoch", type=int, required=True)
+    preview_parser.add_argument("--session-ref", required=True)
+    preview_parser.add_argument("--manifest", required=True)
+    preview_parser.add_argument("--author-activity")
+    preview_parser.add_argument("--review-activity")
+    preview_decide_parser = subparsers.add_parser("gauntlet-preview-decide")
+    preview_decide_parser.add_argument("root")
+    preview_decide_parser.add_argument("--work-id", required=True)
+    preview_decide_parser.add_argument("--context-id", required=True)
+    preview_decide_parser.add_argument("--epoch", type=int, required=True)
+    preview_decide_parser.add_argument("--session-ref", required=True)
+    preview_decide_parser.add_argument("--manifest", required=True)
+    preview_decide_parser.add_argument("--decision", choices=("approved", "rejected"), required=True)
+    preview_decide_parser.add_argument("--human-evidence", required=True)
+    preview_decide_parser.add_argument("--apply", action="store_true")
+    preview_decide_parser.add_argument("--expected-sha256")
     activity_parser = subparsers.add_parser("gauntlet-activity")
     activity_parser.add_argument("root")
     activity_parser.add_argument("--work-id", required=True)
@@ -5451,6 +5694,8 @@ def main(argv: list[str] | None = None) -> int:
             "migrate-v4": migrate_v4_command,
             "gauntlet-orchestration-adopt": orchestration_adopt_command,
             "gauntlet-step-enter": gauntlet_step_enter_command,
+            "gauntlet-preview": gauntlet_preview_command,
+            "gauntlet-preview-decide": gauntlet_preview_decide_command,
             "gauntlet-activity": gauntlet_activity_command,
             "gauntlet-init": gauntlet_init_command,
             "gauntlet-status": gauntlet_status_command,

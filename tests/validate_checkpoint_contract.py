@@ -8,6 +8,7 @@ SCRIPT=PLUGIN/'skills/grill-with-docs/scripts/grill_workspace.py'
 TEMPLATE=PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.template.md'
 sys.path.insert(0, str(PLUGIN/'skills/grill-with-docs/scripts'))
 from grill_core import agent_orchestration as contract
+from grill_core import attestation
 from grill_core import store
 STEPS = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
 
@@ -126,6 +127,12 @@ class CheckpointContract(unittest.TestCase):
  def test_state_symlink_is_blocked_without_external_read(self):
   state=self.r/'.grill/work-items/wx/state.json'; outside=Path(self.t.name)/'external-state'; outside.write_text('TOP-SECRET'); state.unlink(); state.symlink_to(outside)
   p=self.call('specify','in-progress'); self.assertEqual(p.returncode,2); self.assertNotIn('TOP-SECRET',p.stdout); self.assertEqual(outside.read_text(),'TOP-SECRET')
+
+class VisualGateContract(unittest.TestCase):
+ def test_visual_gate_requires_current_approval(self):
+  for state in ('PENDING_APPROVAL','REJECTED','STALE'):
+   with self.assertRaises(attestation.AttestationError): attestation.require_visual_gate(state)
+  attestation.require_visual_gate('APPROVED'); attestation.require_visual_gate('NOT_APPLICABLE')
 
 class CommittedCheckpointContract(CheckpointContract):
  def test_content_wal_recovers_state_and_commits_head(self):

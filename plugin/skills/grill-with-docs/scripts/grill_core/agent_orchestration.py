@@ -14,7 +14,7 @@ import math
 from datetime import datetime, timezone
 from pathlib import PurePosixPath, PureWindowsPath
 import re
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 try:
     from .workflow_versions import SEQUENCE_V4
@@ -56,6 +56,10 @@ _SESSION_IDENTITY_FIELDS = (
 )
 _ACTIVITY_CONTEXT_SCHEMA = "grill-activity-context/v1"
 _ACTIVITY_PAYLOAD_SCHEMA = "grill-activity-payload/v1"
+_VISUAL_SCHEMA = "grill-design-preview/v1"
+_VISUAL_SOURCES = ("handoff", "du", "plan_context")
+_PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+_EXTERNAL_RESOURCE = re.compile(r"(?:https?:)?//|(?:src|href)\s*=\s*[\"'](?:https?:|//)|url\s*\(\s*[\"']?(?:https?:|//)|@import", re.I)
 
 
 class OrchestrationError(ValueError):
@@ -1149,6 +1153,155 @@ def _visual_decision(decision_id: str, value: Any, contexts: dict[str, Any]) -> 
     _id(decision_id, "decision id")
     _digest(value["preview_sha256"], "visual preview_sha256")
     for key in ("review_ref", "actor_ref", "source_ref", "recorded_at"): _text(value[key], f"visual {key}")
+
+
+def visual_classification(value: Any) -> str:
+    """Classify only from the three corroborating planning sources."""
+    if not isinstance(value, dict) or set(value) != set(_VISUAL_SOURCES):
+        _fail("FRONTEND-CLASSIFICATION-DIVERGENT")
+    states: list[tuple[str, bool]] = []
+    for source in _VISUAL_SOURCES:
+        entry = value[source]
+        if not isinstance(entry, dict) or set(entry) != {"development_type", "visual_surface"}:
+            _fail("FRONTEND-CLASSIFICATION-DIVERGENT")
+        development_type, surface = entry["development_type"], entry["visual_surface"]
+        if development_type not in {"frontend", "platform-devops"} or type(surface) is not bool:
+            _fail("FRONTEND-CLASSIFICATION-DIVERGENT")
+        states.append((development_type, surface))
+    if len(set(states)) != 1:
+        _fail("FRONTEND-CLASSIFICATION-DIVERGENT")
+    return "NOT_APPLICABLE" if states[0] == ("platform-devops", False) else "REQUIRED"
+
+
+def _visual_activity(activity: Any, *, role: str, context_id: str,
+                     files: Mapping[str, Mapping[str, Any]], author_id: str | None = None) -> None:
+    if not isinstance(activity, Mapping) or activity.get("state") != "ACCEPTED":
+        _fail("PREVIEW-APPROVAL-REQUIRED")
+    if (activity.get("activity_type") != role or activity.get("context_id") != context_id
+            or activity.get("step_id") != "plan"):
+        _fail("PREVIEW-APPROVAL-REQUIRED")
+    expected_model, expected_effort = specialist_pair(activity.get("runtime"), role)
+    if (activity.get("requested_model"), activity.get("requested_effort"),
+            activity.get("effective_model"), activity.get("effective_effort"),
+            activity.get("resolved_model_id")) != (expected_model, expected_effort,
+                                                       expected_model, expected_effort, expected_model):
+        _fail("PREVIEW-APPROVAL-REQUIRED")
+    if role == "author":
+        output = activity.get("output_manifest")
+        produced = output.get("files") if isinstance(output, Mapping) else None
+    else:
+        produced = activity.get("input_manifest", {}).get("files") if isinstance(activity.get("input_manifest"), Mapping) else None
+        if author_id not in activity.get("author_activity_ids", []):
+            _fail("REVIEWER-NOT-INDEPENDENT")
+        if activity.get("review_verdict") != "APPROVED":
+            _fail("PREVIEW-APPROVAL-REQUIRED")
+    if not isinstance(produced, list):
+        _fail("PREVIEW-APPROVAL-REQUIRED")
+    produced_by_path = {entry.get("path"): entry for entry in produced if isinstance(entry, Mapping)}
+    for path, expected in files.items():
+        actual = produced_by_path.get(path)
+        if not isinstance(actual, Mapping) or any(actual.get(key) != expected[key] for key in ("path", "media_type", "sha256", "size")):
+            _fail("PREVIEW-STALE")
+
+
+def inspect_visual_preview(manifest: Any, *, preview_sha256: str, context_id: str,
+                           activities: Mapping[str, Any], read_file: Callable[[str], bytes]) -> dict[str, Any]:
+    """Validate bytes and evidence for a design preview; signatures never judge UX."""
+    _digest(preview_sha256, "visual preview sha256")
+    if not isinstance(manifest, dict):
+        _fail("PREVIEW-MISSING")
+    required = {"schema", "feature", "phase", "du", "classification", "input_sha256", "impeccable",
+                "author_activity_id", "review_activity_id", "files", "entrypoint", "captures"}
+    if set(manifest) != required or manifest["schema"] != _VISUAL_SCHEMA:
+        _fail("PREVIEW-MISSING")
+    for key in ("feature", "phase", "du"):
+        _text(manifest[key], f"visual {key}")
+    if manifest["phase"] != "plan":
+        _fail("PREVIEW-MISSING")
+    _digest(manifest["input_sha256"], "visual input sha256")
+    classification = visual_classification(manifest["classification"])
+    if classification == "NOT_APPLICABLE":
+        if any(manifest[key] not in (None, [], "") for key in ("impeccable", "author_activity_id", "review_activity_id", "files", "entrypoint", "captures")):
+            _fail("FRONTEND-CLASSIFICATION-DIVERGENT")
+        return {"state": "NOT_APPLICABLE", "preview_sha256": preview_sha256,
+                "feature": manifest["feature"], "phase": manifest["phase"], "du": manifest["du"]}
+    try:
+        from .agent_runtime import validate_impeccable_observation
+    except ImportError:
+        from grill_core.agent_runtime import validate_impeccable_observation
+    try:
+        validate_impeccable_observation(manifest["impeccable"])
+    except Exception as exc:
+        raise OrchestrationError("IMPECCABLE-CAPABILITY-UNPROVEN") from exc
+    if not isinstance(manifest["files"], list) or not manifest["files"]:
+        _fail("PREVIEW-NOT-VISUAL")
+    files: dict[str, Mapping[str, Any]] = {}
+    raw_files: dict[str, bytes] = {}
+    for entry in manifest["files"]:
+        _file(entry, "visual file")
+        path = entry["path"]
+        if entry["media_type"] not in {"text/html", "image/png"} or path in files:
+            _fail("PREVIEW-NOT-VISUAL")
+        try:
+            raw = read_file(path)
+        except Exception as exc:
+            raise OrchestrationError("PREVIEW-MISSING") from exc
+        if not isinstance(raw, bytes) or len(raw) != entry["size"] or hashlib.sha256(raw).hexdigest() != entry["sha256"]:
+            _fail("PREVIEW-STALE")
+        files[path], raw_files[path] = entry, raw
+    entrypoint = manifest["entrypoint"]
+    if not isinstance(entrypoint, str) or entrypoint not in files or files[entrypoint]["media_type"] != "text/html":
+        _fail("PREVIEW-NOT-VISUAL")
+    try:
+        html = raw_files[entrypoint].decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise OrchestrationError("PREVIEW-NOT-VISUAL") from exc
+    if not html.lstrip().lower().startswith(("<!doctype html", "<html")) or _EXTERNAL_RESOURCE.search(html):
+        _fail("PREVIEW-NOT-VISUAL")
+    if not isinstance(manifest["captures"], list) or not manifest["captures"]:
+        _fail("PREVIEW-NOT-VISUAL")
+    captures: set[str] = set()
+    states: set[tuple[str, str]] = set()
+    for capture in manifest["captures"]:
+        if not isinstance(capture, dict) or set(capture) != {"viewport", "state", "path"}:
+            _fail("PREVIEW-NOT-VISUAL")
+        viewport, state, path = capture["viewport"], capture["state"], capture["path"]
+        _text(viewport, "visual viewport"); _text(state, "visual state")
+        if path in captures or (viewport, state) in states or path not in files or files[path]["media_type"] != "image/png":
+            _fail("PREVIEW-NOT-VISUAL")
+        if not raw_files[path].startswith(_PNG_SIGNATURE):
+            _fail("PREVIEW-NOT-VISUAL")
+        captures.add(path); states.add((viewport, state))
+    if captures != {path for path, entry in files.items() if entry["media_type"] == "image/png"}:
+        _fail("PREVIEW-NOT-VISUAL")
+    author_id, review_id = manifest["author_activity_id"], manifest["review_activity_id"]
+    _id(author_id, "visual author activity"); _id(review_id, "visual review activity")
+    if author_id == review_id:
+        _fail("REVIEWER-NOT-INDEPENDENT")
+    _visual_activity(activities.get(author_id), role="author", context_id=context_id, files=files)
+    _visual_activity(activities.get(review_id), role="reviewer", context_id=context_id, files=files, author_id=author_id)
+    if activities[author_id].get("session_resource_id") == activities[review_id].get("session_resource_id"):
+        _fail("REVIEWER-NOT-INDEPENDENT")
+    return {"state": "REVIEWED", "preview_sha256": preview_sha256,
+            "feature": manifest["feature"], "phase": manifest["phase"], "du": manifest["du"],
+            "author_activity_id": author_id, "review_activity_id": review_id,
+            "review_ref": activities[review_id]["acceptance_ref"],
+            "files": [dict(files[path]) for path in sorted(files)]}
+
+
+def visual_gate_state(item: Mapping[str, Any], preview: Mapping[str, Any], *, decision: Mapping[str, Any] | None) -> str:
+    """Project the only state which may release tasks from current evidence."""
+    if preview.get("state") == "NOT_APPLICABLE":
+        return "NOT_APPLICABLE"
+    if preview.get("state") != "REVIEWED":
+        return "PREVIEW_READY"
+    if decision is None:
+        return "PENDING_APPROVAL"
+    if decision.get("preview_sha256") != preview.get("preview_sha256"):
+        return "STALE"
+    if decision.get("review_ref") != preview.get("review_ref"):
+        return "STALE"
+    return "APPROVED" if decision.get("decision") == "approved" else "REJECTED"
 
 
 def _scope_history(value: Any, revision: int, files: list[str]) -> None:

@@ -33,6 +33,10 @@ _PRESENTATION_TRUST = {"ready", "pending", "undetermined"}
 _PRESENTATION_LOADING = {"required", "loaded", "stale", "unconfirmed"}
 _PRESENTATION_APPLICATION = {"active", "suspended_by_user", "out_of_scope", "blocked"}
 _PRESENTATION_BEHAVIOR = {"not_tested", "conformant", "nonconformant", "unconfirmed"}
+_IMPECCABLE_OBSERVATION_KEYS = {
+    "schema", "capability", "skill_path", "version", "skill_sha256", "entrypoint",
+    "invocation_ref", "invocation_sha256",
+}
 
 
 class RuntimeError(ValueError):
@@ -55,6 +59,27 @@ def _presentation_fail(code: str) -> None:
 
 def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def validate_impeccable_observation(value: Any) -> dict[str, Any]:
+    """Accept a closed observation of an already-resolved Impeccable invocation.
+
+    The visual gate never resolves, installs, or executes the skill.  It only
+    consumes this leader-observed record, so a hand-written capability flag is
+    not enough to pass the boundary.
+    """
+    if not isinstance(value, dict) or set(value) != _IMPECCABLE_OBSERVATION_KEYS:
+        _fail("IMPECCABLE-CAPABILITY-UNPROVEN")
+    if value.get("schema") != "grill-impeccable-observation/v1" or value.get("capability") != "impeccable":
+        _fail("IMPECCABLE-CAPABILITY-UNPROVEN")
+    for key in ("skill_path", "version", "entrypoint", "invocation_ref"):
+        field = value.get(key)
+        if not isinstance(field, str) or not field or any(ord(character) < 32 for character in field):
+            _fail("IMPECCABLE-CAPABILITY-UNPROVEN")
+    for key in ("skill_sha256", "invocation_sha256"):
+        if not isinstance(value.get(key), str) or not _HEX.fullmatch(value[key]):
+            _fail("IMPECCABLE-CAPABILITY-UNPROVEN")
+    return dict(value)
 
 
 def _safe_reference_bytes(value: str | Path) -> bytes:
