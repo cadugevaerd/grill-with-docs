@@ -18,9 +18,9 @@
   },
   "checks": [
     "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_partition_contract.py",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_gauntlet_converge_contract.py",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_gauntlet_scheduler_contract.py",
     "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py"
   ],
-  "limitations": [
-    "Focused legacy scheduler/converge fixtures block before their scenarios with ACTIVITY-REQUIRED: author, reviewer; the v3 fixtures do not create the policy activities required by the integrated orchestration boundary."
-  ]
+  "limitations": []
 }
