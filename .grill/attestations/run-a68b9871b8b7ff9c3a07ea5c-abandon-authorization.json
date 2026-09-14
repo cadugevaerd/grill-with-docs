@@ -1,0 +1,8 @@
+{
+  "authorized_by": "human-user",
+  "content_sha256": "sha256:9d7235e62f0c8dae36438fb921aadd6118ba838fbcbe5e30cda6a2ffbb6ba9cb",
+  "decision": "APPROVED",
+  "receipt_ref": "conversation:user-authorized-abandon-run-a68b9871b8b7ff9c3a07ea5c",
+  "schema": "human-authorization/v1",
+  "scope": "run-a68b9871b8b7ff9c3a07ea5c"
+}
