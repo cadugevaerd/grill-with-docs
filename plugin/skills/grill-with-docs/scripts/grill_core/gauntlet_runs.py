@@ -498,6 +498,23 @@ def cleanup_projection(root: str | Path, work_id: str) -> dict[str, list[dict[st
     return result
 
 
+def continuity_worker_quiescence(runs: Mapping[str, Any]) -> tuple[list[str], list[str]]:
+    """Report durable worker activity without treating a lease timeout as exit."""
+    active: list[str] = []
+    unknown: list[str] = []
+    for run_id, run in runs.items():
+        if not isinstance(run, Mapping):
+            unknown.append(f"run:{run_id}")
+            continue
+        for worker_id, worker in run.get("workers", {}).items():
+            state = worker.get("state") if isinstance(worker, Mapping) else None
+            if state in store.NON_TERMINAL_WORKER_STATES:
+                active.append(f"worker:{run_id}:{worker_id}")
+            elif state in {"ORPHANED", "STALLED", "CONFLICT"} or state is None:
+                unknown.append(f"worker:{run_id}:{worker_id}")
+    return sorted(active), sorted(unknown)
+
+
 def record_resume_decision(root: str | Path, work_id: str, run_id: str,
                            admission: Mapping[str, str]) -> dict[str, Any]:
     """Record the sole explicit recovery decision; it never relaunches work."""

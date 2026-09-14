@@ -39,6 +39,9 @@ _RESOURCE_STATES = {"REGISTERED", "CLOSE_PENDING", "REMOVE_PENDING", "CLOSED", "
 _OPERATION_EDGES = {"INTENT": {"INTENT", "APPLIED", "UNKNOWN", "REFUSED"}, "APPLIED": {"APPLIED", "CONFIRMED", "UNKNOWN"}, "CONFIRMED": {"CONFIRMED"}, "UNKNOWN": {"UNKNOWN", "CONFIRMED"}, "REFUSED": {"REFUSED"}}
 _ACTIVITY_EDGES = {"DECLARED": {"DECLARED", "BOOTSTRAPPING", "BLOCKED"}, "BOOTSTRAPPING": {"BOOTSTRAPPING", "VERIFIED", "BLOCKED"}, "VERIFIED": {"VERIFIED", "DISPATCHED", "BLOCKED"}, "DISPATCHED": {"DISPATCHED", "RESULT_RECORDED", "FAILED"}, "RESULT_RECORDED": {"RESULT_RECORDED", "ACCEPTED"}, "ACCEPTED": {"ACCEPTED"}, "BLOCKED": {"BLOCKED"}, "FAILED": {"FAILED"}}
 _RESOURCE_EDGES = {"REGISTERED": {"REGISTERED", "CLOSE_PENDING", "REMOVE_PENDING", "PRESERVED", "UNKNOWN"}, "CLOSE_PENDING": {"CLOSE_PENDING", "CLOSED", "PRESERVED", "UNKNOWN"}, "REMOVE_PENDING": {"REMOVE_PENDING", "REMOVED", "PRESERVED", "UNKNOWN"}, "PRESERVED": {"PRESERVED", "CLOSE_PENDING", "REMOVE_PENDING"}, "UNKNOWN": {"UNKNOWN", "CLOSE_PENDING", "REMOVE_PENDING"}, "CLOSED": {"CLOSED"}, "REMOVED": {"REMOVED"}}
+_CAMPAIGN_FIELDS = ("project_id", "run_id", "runtime", "adapter", "registry_sha256", "recovery_generation_id", "plan_revision")
+_ATTESTATION_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+_RECOVERY_GENERATION = re.compile(r"^rg-[0-9a-f]{64}$")
 
 
 class OrchestrationError(ValueError):
@@ -105,6 +108,53 @@ def _json(value: Any, label: str) -> None:
             _json(member, label)
         return
     _fail(f"invalid {label}")
+
+
+def campaign(value: Any) -> dict[str, Any]:
+    """Validate the seven immutable fields which identify one campaign."""
+    value = _object(value, set(_CAMPAIGN_FIELDS), set(), "campaign")
+    if (not isinstance(value["project_id"], str) or not _ATTESTATION_DIGEST.fullmatch(value["project_id"])
+            or not isinstance(value["run_id"], str) or not value["run_id"]
+            or value["runtime"] not in {"codex", "claude"}
+            or not isinstance(value["adapter"], str) or not value["adapter"]
+            or not isinstance(value["registry_sha256"], str) or not _ATTESTATION_DIGEST.fullmatch(value["registry_sha256"])
+            or not isinstance(value["recovery_generation_id"], str) or not _RECOVERY_GENERATION.fullmatch(value["recovery_generation_id"])
+            or type(value["plan_revision"]) is not int or value["plan_revision"] < 0):
+        _fail("invalid campaign")
+    return value
+
+
+def successor_campaign(previous: Mapping[str, Any], *, runtime: str, adapter: str,
+                       registry_sha256: str, bridge_seed: Mapping[str, Any]) -> dict[str, Any]:
+    """Mint only the recovery generation while carrying the logical campaign."""
+    previous = campaign(dict(previous))
+    if runtime not in {"codex", "claude"} or not isinstance(adapter, str) or not adapter:
+        _fail("invalid successor runtime")
+    if not isinstance(registry_sha256, str) or not _ATTESTATION_DIGEST.fullmatch(registry_sha256):
+        _fail("invalid successor registry")
+    digest = hashlib.sha256(json.dumps({"previous": previous, "runtime": runtime,
+        "adapter": adapter, "registry_sha256": registry_sha256, "bridge": bridge_seed},
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+    return campaign({"project_id": previous["project_id"], "run_id": previous["run_id"],
+        "runtime": runtime, "adapter": adapter, "registry_sha256": registry_sha256,
+        "recovery_generation_id": "rg-" + digest, "plan_revision": previous["plan_revision"]})
+
+
+def campaign_bridge(previous: Mapping[str, Any], successor: Mapping[str, Any], *,
+                    accepted_outputs: Mapping[str, Any], worktree_identity: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the exact historical bridge accepted for one successor entry."""
+    old, new = campaign(dict(previous)), campaign(dict(successor))
+    if old["project_id"] != new["project_id"] or old["run_id"] != new["run_id"] or old["plan_revision"] != new["plan_revision"]:
+        _fail("campaign bridge substitutes project, run, or plan")
+    if old["recovery_generation_id"] == new["recovery_generation_id"]:
+        _fail("campaign bridge did not mint a successor generation")
+    if not isinstance(accepted_outputs, Mapping) or not isinstance(worktree_identity, Mapping):
+        _fail("invalid campaign bridge")
+    _json(dict(accepted_outputs), "campaign bridge accepted outputs")
+    _json(dict(worktree_identity), "campaign bridge worktree identity")
+    return {"from_campaign": copy.deepcopy(old), "to_campaign": copy.deepcopy(new),
+            "accepted_outputs": copy.deepcopy(dict(accepted_outputs)),
+            "worktree_identity": copy.deepcopy(dict(worktree_identity))}
 
 
 def _nullable_digest(value: Any, label: str) -> None:
@@ -292,6 +342,8 @@ def _context(context_id: str, value: Any) -> None:
     if value["predecessor_context_id"] is not None:
         _id(value["predecessor_context_id"], "context predecessor")
     _text(value["continuity_ref"], "context continuity_ref", nullable=True)
+    if value["campaign"] is not None:
+        campaign(value["campaign"])
     if "worktree_identity" in value:
         identity = _object(value["worktree_identity"], {"project_id", "work_id", "phase", "du", "git_common_dir", "real_path", "branch"}, set(), "worktree identity")
         for key in identity:
@@ -632,6 +684,32 @@ def validate_block(block: Any) -> dict[str, Any]:
             identity = (operation["kind"], operation["context_id"], tuple(operation["subject_ids"]), operation["input_sha256"])
             prior = idempotency.setdefault(operation["idempotency_key"], identity)
             if prior != identity: _fail("idempotency key collides with different operation")
+        for context in item["contexts"].values():
+            if context["predecessor_context_id"] is None:
+                continue
+            operation = item["operations"].get(context["continuity_ref"])
+            if not isinstance(operation, dict) or operation.get("kind") != "continuity-switch":
+                _fail("successor context has no continuity operation")
+            bridge = operation.get("intended_after", {}).get("campaign_bridge")
+            if context["campaign"] is None:
+                if bridge is not None:
+                    _fail("pre-campaign continuity has a fictitious bridge")
+                continue
+            if not isinstance(bridge, dict):
+                _fail("successor context has no campaign bridge")
+            required_bridge = {"from_campaign", "to_campaign", "accepted_outputs", "worktree_identity"}
+            if set(bridge) != required_bridge:
+                _fail("invalid campaign bridge")
+            old, new = campaign(bridge["from_campaign"]), campaign(bridge["to_campaign"])
+            predecessor = item["contexts"][context["predecessor_context_id"]]
+            if predecessor["campaign"] != old or context["campaign"] != new:
+                _fail("campaign bridge diverges from contexts")
+            checkpoint_id = operation.get("expected_before", {}).get("checkpoint_id")
+            checkpoint = item["checkpoints"].get(checkpoint_id)
+            if not isinstance(checkpoint_id, str) or not isinstance(checkpoint, dict):
+                _fail("campaign bridge has no checkpoint")
+            if bridge["accepted_outputs"] != checkpoint["accepted_outputs"]:
+                _fail("campaign bridge accepted outputs diverge")
         for checkpoint_id, checkpoint in item["checkpoints"].items():
             _checkpoint(checkpoint_id, checkpoint)
             if checkpoint["context_id"] not in item["contexts"] or (checkpoint["previous_checkpoint_id"] is not None and checkpoint["previous_checkpoint_id"] not in item["checkpoints"]):
@@ -698,7 +776,7 @@ def validate_transition(previous: Any, candidate: Any) -> None:
             newer = new["contexts"][context_id]
             immutable = {k: v for k, v in context.items() if k not in {"state", "activation", "campaign", "scheduler_runs", "leader", "presentation"}}
             if any(newer.get(k) != v for k, v in immutable.items()): _fail("context immutable field changed")
-            allowed = {"PREPARED": {"PREPARED", "ACTIVE"}, "ACTIVE": {"ACTIVE", "QUIESCING", "SUPERSEDED"}, "QUIESCING": {"QUIESCING", "RELEASED", "SUPERSEDED"}, "RELEASED": {"RELEASED"}, "SUPERSEDED": {"SUPERSEDED"}}
+            allowed = {"PREPARED": {"PREPARED", "ACTIVE"}, "ACTIVE": {"ACTIVE", "QUIESCING", "SUPERSEDED"}, "QUIESCING": {"QUIESCING", "RELEASED", "SUPERSEDED"}, "RELEASED": {"RELEASED", "SUPERSEDED"}, "SUPERSEDED": {"SUPERSEDED"}}
             if newer["state"] not in allowed[context["state"]]: _fail("invalid context transition")
             for key in ("activation", "campaign"):
                 if context[key] is not None and newer[key] != context[key]: _fail(f"context {key} is write-once")
