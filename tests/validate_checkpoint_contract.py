@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """Contract smoke matrix for the persistent eleven-step checkpoint ledger."""
-import concurrent.futures, json, os, subprocess, sys, tempfile, unittest
+import base64, concurrent.futures, hashlib, json, os, subprocess, sys, tempfile, unittest
 from pathlib import Path
 REPO=Path(__file__).resolve().parents[1]
 PLUGIN=REPO/'plugin'
 SCRIPT=PLUGIN/'skills/grill-with-docs/scripts/grill_workspace.py'
 TEMPLATE=PLUGIN/'skills/grill-with-docs/assets/WORKFLOW.template.md'
+sys.path.insert(0, str(PLUGIN/'skills/grill-with-docs/scripts'))
+from grill_core import agent_orchestration as contract
+from grill_core import store
 STEPS = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "implement-parallel", "converge", "verify", "review", "ship"]
 
 def run(*a):
  a=tuple(a)
  if a and a[0] in {"init","preflight","gauntlet-init"} and "--runtime" not in a: a += ("--runtime","claude")
+ if a and a[0] == "init" and "--session-ref" not in a: a += ("--session-ref", "session-1")
  return subprocess.run([sys.executable,str(SCRIPT),*map(str,a)],text=True,capture_output=True)
 class CheckpointContract(unittest.TestCase):
  def setUp(self):
@@ -20,6 +24,7 @@ class CheckpointContract(unittest.TestCase):
  def tearDown(self): self.t.cleanup()
  def call(self,step,state,**kw):
   a=['checkpoint',self.r,'--work-id','wx','--step',step,'--state',state]
+  a += ['--operation-id',f'{step}-{state}','--session-ref','session-1']
   for x in kw.get('evidence',[]): a += ['--evidence',x]
   if 'reason' in kw: a += ['--reason',kw['reason']]
   return run(*a)
@@ -112,7 +117,7 @@ class CheckpointContract(unittest.TestCase):
   p=self.call('specify','complete',evidence=['e'],reason='done'); self.assertEqual((p.returncode,json.loads(p.stdout)['code']),(2,'STATE-DIVERGENCE'))
  def test_legacy_explicit_specify_initialization_succeeds_without_inference(self):
   path=self.r/'.grill/work-items/wx/state.json'; path.write_text('{}')
-  p=run('checkpoint',self.r,'--work-id','wx','--step','specify','--state','in-progress','--initialize-legacy','--from-step','specify','--evidence','e','--reason','explicit-decision')
+  p=run('checkpoint',self.r,'--work-id','wx','--step','specify','--state','in-progress','--operation-id','specify-in-progress','--session-ref','session-1','--initialize-legacy','--from-step','specify','--evidence','e','--reason','explicit-decision')
   self.assertEqual(p.returncode,0,p.stdout); state=json.loads(path.read_text()); self.assertEqual(state['development']['steps']['specify'],'in-progress'); self.assertTrue(all(state['development']['steps'][s]=='pending' for s in STEPS[1:])); self.assertEqual(len(state['development']['audit']),1)
  def test_legacy_posterior_initialization_is_unsafe(self):
   path=self.r/'.grill/work-items/wx/state.json'; path.write_text('{}'); before=path.read_bytes()
@@ -121,4 +126,25 @@ class CheckpointContract(unittest.TestCase):
  def test_state_symlink_is_blocked_without_external_read(self):
   state=self.r/'.grill/work-items/wx/state.json'; outside=Path(self.t.name)/'external-state'; outside.write_text('TOP-SECRET'); state.unlink(); state.symlink_to(outside)
   p=self.call('specify','in-progress'); self.assertEqual(p.returncode,2); self.assertNotIn('TOP-SECRET',p.stdout); self.assertEqual(outside.read_text(),'TOP-SECRET')
+
+class CommittedCheckpointContract(CheckpointContract):
+ def test_content_wal_recovers_state_and_commits_head(self):
+  state_path=self.r/'.grill/work-items/wx/state.json'; before=state_path.read_bytes(); after=b'{"checkpoint":true}\n'
+  snapshot=store.read_snapshot(self.r); item=snapshot.document['agent_orchestration']['work_items']['wx']; context_id=item['current_context_id']; context=item['contexts'][context_id]
+  request=contract.checkpoint_request(store_origin={'revision':snapshot.revision,'content_sha256':snapshot.content_sha256},work_id='wx',operation_id='op-1',context_id=context_id,step='specify',state='in-progress',evidence=[],reason='',attestation=None,supersedes_attestation=None,initialize_legacy=False,from_step=None)
+  checkpoint={'schema':contract.CHECKPOINT_SCHEMA,'checkpoint_id':'cp-op-1','context_id':context_id,'previous_checkpoint_id':None,'worktree_identity':{},'created_at':'2026-01-01T00:00:00Z','store_revision':snapshot.revision+1,'journal_anchor':snapshot.document['journal_head'],'state_sha256':hashlib.sha256(after).hexdigest(),'inputs_manifest':{},'workflow_sha256':'3'*64,'constitution_sha256':'4'*64,'policy_sha256':item['policy_sha256'],'activation':None,'campaign':None,'development_sequence':{},'current_step':'specify','step_states':{},'accepted_outputs':{},'accepted_executions':{},'pending_attempts':{},'scheduler_runs':{},'operations':{},'cleanup_obligations':{},'preserved_resources':{},'blocking_activity':None,'visual_state':{},'presentation':None,'checkpoint_sha256':''}
+  checkpoint['checkpoint_sha256']=store.jcs_sha256({k:v for k,v in checkpoint.items() if k!='checkpoint_sha256'})
+  state_write={'work_id':'wx','destination':'.grill/work-items/wx/state.json','before_sha256':hashlib.sha256(before).hexdigest(),'after_base64':base64.b64encode(after).decode(),'after_sha256':hashlib.sha256(after).hexdigest(),'expected_store_revision':snapshot.revision,'expected_journal_anchor':snapshot.document['journal_head']}
+  result={'work_id':'wx','context_id':context_id,'epoch':context['epoch'],'operation_id':'op-1','checkpoint_id':'cp-op-1','step':'specify','state':'in-progress','evidence':[],'reason':'','execution_branch':'main','supersedes':None,'current_step':'specify'}
+  content={'schema':contract.CHECKPOINT_CONTENT_SCHEMA,'work_id':'wx','operation_id':'op-1','request':request,'checkpoint':checkpoint,'before_base64':base64.b64encode(before).decode(),'state_write':state_write,'binding_transition':None,'result':result}
+  digest=contract.checkpoint_content_sha256(content); ref='.grill/work-items/wx/agent-orchestration/checkpoints/op-1.json'
+  operation={'kind':'checkpoint','context_id':context_id,'fence':context['leader']['fence'],'subject_ids':['state'],'input_sha256':store.jcs_sha256(request),'expected_before':{'state_sha256':state_write['before_sha256']},'intended_after':{'state_sha256':state_write['after_sha256']},'idempotency_key':'op-1','state':'CONFIRMED','result_ref':ref,'result_sha256':digest,'observation_ref':ref,'error':None,'request':request,'content_ref':ref}
+  receipt={'schema':'grill-orchestration-receipt/v1','category':'runtime','name':'checkpoint-op-1','work_id':'wx','context_id':context_id,'operation_id':'op-1','input_sha256':operation['input_sha256'],'output_sha256':digest}
+  event={'schema':'grill-orchestration-event/v1','event':'agent.orchestration.checkpoint','work_id':'wx','context_id':context_id,'operation_id':'op-1','input_sha256':operation['input_sha256'],'output_sha256':digest,'receipt_sha256':store.jcs_sha256(receipt)}
+  def mutate(document):
+   target=document['agent_orchestration']['work_items']['wx']; target['operations']['op-1']=operation; target['checkpoints']['cp-op-1']=checkpoint; target['checkpoint_head']='cp-op-1'; return document
+  with self.assertRaisesRegex(RuntimeError,'fault'):
+   store.transact_checkpoint_with_content(self.r,mutate,event=event,receipt=receipt,content_ref=ref,content=content,fault=lambda point: (_ for _ in ()).throw(RuntimeError('fault')) if point=='after-state' else None)
+  recovered=store.recover_pending_transition(self.r)
+  self.assertEqual((state_path.read_bytes(),recovered.document['agent_orchestration']['work_items']['wx']['checkpoint_head']),(after,'cp-op-1'))
 if __name__=='__main__': unittest.main()

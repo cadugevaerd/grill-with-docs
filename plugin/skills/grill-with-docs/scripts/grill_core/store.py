@@ -72,6 +72,7 @@ conventions are reconciled once, at the wiring boundary, through
 from __future__ import annotations
 
 import copy
+import contextvars
 import errno
 import hashlib
 import json
@@ -113,6 +114,7 @@ FILE_MODE = 0o600
 LOCK_TIMEOUT = 15.0
 LOCK_POLL = 0.03
 ORCHESTRATOR_LOCK = "orchestrator.lock"
+_ORCHESTRATION_AUTHORITY: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar("grill_orchestration_authority", default=None)
 
 ORCHESTRATOR_INVALID = "ORCHESTRATOR_INVALID"
 PROJECT_IDENTITY_DIVERGENCE = "PROJECT_IDENTITY_DIVERGENCE"
@@ -220,7 +222,7 @@ EVENTS_GENESIS_SHA256 = "0" * 64
 ALLOWED_TOP_LEVEL_KEYS = frozenset(
     {
         "schema", "revision", "project", "dispatch_control", "work_items",
-        "backlog_links", "updated_at", "content_sha256", "journal_head",
+        "backlog_links", "agent_orchestration", "updated_at", "content_sha256", "journal_head",
     }
 )
 
@@ -237,6 +239,43 @@ class StoreError(Exception):
 
     def payload(self) -> dict[str, Any]:
         return {"verdict": self.verdict, "code": self.code, "error": self.message}
+
+
+@contextmanager
+def orchestration_authority(root: str | Path, work_id: str, *, context_id: str,
+                            epoch: int, session_ref: str) -> Iterator[None]:
+    """Install one caller proof for the narrow duration of a domain effect."""
+    token = _ORCHESTRATION_AUTHORITY.set({"root": str(Path(root).resolve()), "work_id": work_id,
+                                          "context_id": context_id, "epoch": epoch,
+                                          "session_ref": session_ref})
+    try:
+        yield
+    finally:
+        _ORCHESTRATION_AUTHORITY.reset(token)
+
+
+def require_orchestration_authority(root: str | Path, work_id: str, *, purpose: str) -> None:
+    """Fence an adopted work item before a direct non-Store effect.
+
+    Legacy snapshots intentionally remain readable and retain their historical
+    Gauntlet paths.  Once an item has adopted the orchestration contract,
+    absence, a different root/work item, or a stale context is a hard stop.
+    """
+    snapshot = read_snapshot(root, required=False)
+    if snapshot is None:
+        return
+    block = snapshot.document.get("agent_orchestration")
+    item = block.get("work_items", {}).get(work_id) if isinstance(block, dict) else None
+    if item is None:
+        return
+    proof = _ORCHESTRATION_AUTHORITY.get()
+    if not isinstance(proof, dict) or proof.get("root") != str(Path(root).resolve()) or proof.get("work_id") != work_id:
+        _fail(STATE_DIVERGENCE, f"LEADER-AUTHORITY-UNPROVEN for {purpose}")
+    try:
+        contract = _checkpoint_contract()
+        contract.require_authority(item, proof.get("context_id"), proof.get("epoch"), proof.get("session_ref"))
+    except Exception as exc:
+        _fail(STATE_DIVERGENCE, f"LEADER-AUTHORITY-UNPROVEN for {purpose}: {exc}")
 
 
 def _fail(code: str, message: Any) -> NoReturn:
@@ -951,6 +990,15 @@ def _validate_document(document: Any, path: Path) -> dict[str, Any]:
     _validate_dispatch_control(document["dispatch_control"])
     _validate_work_items(document["work_items"])
     _validate_backlog_links(document["backlog_links"])
+    if "agent_orchestration" in document:
+        try:
+            from .agent_orchestration import OrchestrationError, validate_block
+        except ImportError:  # grill_workspace loads core modules by path.
+            from grill_core.agent_orchestration import OrchestrationError, validate_block
+        try:
+            validate_block(document["agent_orchestration"])
+        except OrchestrationError as exc:
+            _invalid(str(exc))
     if "journal_head" in document:
         _validate_journal_head(document["journal_head"])
     if not isinstance(document.get("updated_at"), str) or not RFC3339_RE.match(document["updated_at"]):
@@ -977,6 +1025,24 @@ def _next_wave_id(current: str) -> str | None:
     if match is None:
         return None
     return f"wave-{int(match.group(1)) + 1:04d}"
+
+
+def _validate_orchestration_transition(previous: dict[str, Any], candidate: dict[str, Any]) -> None:
+    """The optional v1 block becomes mandatory to preserve once adopted."""
+    old = previous.get("agent_orchestration")
+    new = candidate.get("agent_orchestration")
+    if old is None and new is None:
+        return
+    if old is not None and new is None:
+        _invalid("adopted agent_orchestration cannot be removed")
+    try:
+        from .agent_orchestration import OrchestrationError, validate_transition
+    except ImportError:  # grill_workspace loads core modules by path.
+        from grill_core.agent_orchestration import OrchestrationError, validate_transition
+    try:
+        validate_transition(old, new)
+    except OrchestrationError as exc:
+        _invalid(str(exc))
 
 
 def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: dict[str, Any], *, allow_existing_gauntlet_changes: bool = False) -> None:
@@ -1449,6 +1515,7 @@ def write_snapshot(
             _fail(STATE_DIVERGENCE, "revision must increase monotonically")
         _validate_document(candidate, paths.orchestrator)
         _validate_gauntlet_state_transitions(current.document, candidate)
+        _validate_orchestration_transition(current.document, candidate)
         if jcs(candidate["project"]) != jcs(current.document["project"]):
             _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
         candidate = _finalize_commit(paths, candidate, now)
@@ -1477,6 +1544,7 @@ def transact(
         candidate = stamp(proposed, current.revision + 1, _now(now))
         _validate_document(candidate, paths.orchestrator)
         _validate_gauntlet_state_transitions(current.document, candidate)
+        _validate_orchestration_transition(current.document, candidate)
         if jcs(candidate["project"]) != jcs(current.document["project"]):
             _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
         candidate = _finalize_commit(paths, candidate, now)
@@ -1501,6 +1569,22 @@ def _remove_pending(paths: StorePaths) -> None:
 
 def _transition_fields(event: Any, receipt: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     if not isinstance(event, dict) or not isinstance(receipt, dict): _invalid("transition event and receipt must be objects")
+    if event.get("schema") == "grill-orchestration-event/v1":
+        required = {"schema", "event", "work_id", "context_id", "operation_id", "input_sha256", "output_sha256", "receipt_sha256"}
+        if set(event) != required or not isinstance(event["event"], str) or not event["event"].startswith("agent.orchestration."):
+            _invalid("invalid agent orchestration event keys")
+        _id = lambda value, label: isinstance(value, str) and SAFE_NAME_RE.match(value)
+        if not _id(event["work_id"], "work_id") or not _id(event["context_id"], "context_id") or not _id(event["operation_id"], "operation_id"):
+            _invalid("invalid agent orchestration event identity")
+        for key in ("input_sha256", "receipt_sha256"):
+            if not isinstance(event[key], str) or not HEX64_RE.match(event[key]): _invalid(f"invalid agent orchestration {key}")
+        if event["output_sha256"] is not None and (not isinstance(event["output_sha256"], str) or not HEX64_RE.match(event["output_sha256"])): _invalid("invalid agent orchestration output_sha256")
+        receipt_required = {"schema", "category", "name", "work_id", "context_id", "operation_id", "input_sha256", "output_sha256"}
+        if set(receipt) != receipt_required or receipt.get("schema") != "grill-orchestration-receipt/v1" or receipt.get("category") not in RECEIPT_CATEGORIES or not _id(receipt.get("name"), "name"):
+            _invalid("invalid agent orchestration receipt keys")
+        for key in ("work_id", "context_id", "operation_id", "input_sha256", "output_sha256"):
+            if receipt.get(key) != event[key]: _invalid(f"receipt/event correlation mismatch: {key}")
+        return copy.deepcopy(event), copy.deepcopy(receipt)
     required = {"event", "work_id", "run_id", "wave_id", "base_commit", "input_sha256", "output_sha256", "receipt_sha256"}
     optional = {"worker_id", "lease_id", "fencing_token"}
     if set(event) - required - optional or not required.issubset(event): _invalid("invalid transition event keys")
@@ -1525,6 +1609,8 @@ def _transition_fields(event: Any, receipt: Any) -> tuple[dict[str, Any], dict[s
 def _receipt_payload(event: dict[str, Any], receipt: dict[str, Any]) -> dict[str, Any]:
     """The durable receipt deliberately excludes its own digest, avoiding a
     circular hash.  Its JCS SHA-256 is the authoritative receipt reference."""
+    if event.get("schema") == "grill-orchestration-event/v1":
+        return {key: receipt[key] for key in sorted(receipt)}
     return {"category": receipt["category"], "name": receipt["name"], **{key: event[key] for key in event if key not in {"event", "receipt_sha256"}}}
 
 
@@ -1568,6 +1654,16 @@ def _verify_transition_receipt(path: Path, event: dict[str, Any], receipt: dict[
 
 
 def _candidate_transition(candidate: dict[str, Any], event: dict[str, Any], sequence: int, now: Callable[[], str] | None) -> dict[str, Any]:
+    if event.get("schema") == "grill-orchestration-event/v1":
+        try:
+            item = candidate["agent_orchestration"]["work_items"][event["work_id"]]
+            if item["current_context_id"] != event["context_id"]: raise KeyError
+            operation = item["operations"][event["operation_id"]]
+            if operation["context_id"] != event["context_id"] or operation["input_sha256"] != event["input_sha256"] or operation["result_sha256"] != event["output_sha256"]: raise KeyError
+        except (KeyError, TypeError):
+            _invalid("transition does not correlate candidate orchestration operation")
+        item["last_transition"] = {"event_sequence": sequence, "receipt_sha256": event["receipt_sha256"], "operation_id": event["operation_id"]}
+        return stamp(candidate, candidate["revision"], _now(now))
     try:
         run = candidate["work_items"][event["work_id"]]["gauntlet"]["runs"][event["run_id"]]
     except (KeyError, TypeError):
@@ -1584,6 +1680,16 @@ def _candidate_transition(candidate: dict[str, Any], event: dict[str, Any], sequ
 
 
 def _validate_candidate_transition(candidate: dict[str, Any], event: dict[str, Any], sequence: int) -> None:
+    if event.get("schema") == "grill-orchestration-event/v1":
+        try:
+            item = candidate["agent_orchestration"]["work_items"][event["work_id"]]
+            operation = item["operations"][event["operation_id"]]
+            valid = (item["current_context_id"] == event["context_id"] and operation["context_id"] == event["context_id"]
+                     and operation["input_sha256"] == event["input_sha256"] and operation["result_sha256"] == event["output_sha256"]
+                     and item.get("last_transition") == {"event_sequence": sequence, "receipt_sha256": event["receipt_sha256"], "operation_id": event["operation_id"]})
+        except (KeyError, TypeError): valid = False
+        if not valid: _fail(STATE_DIVERGENCE, "pending orchestration transition correlation diverges")
+        return
     try:
         run = candidate["work_items"][event["work_id"]]["gauntlet"]["runs"][event["run_id"]]
     except (KeyError, TypeError):
@@ -1622,6 +1728,22 @@ def transact_with_event(root: str | Path, mutate: Callable[[dict[str, Any]], dic
             if _read_regular(receipt_target) != jcs(receipt_payload) + b"\n":
                 _fail(STATE_DIVERGENCE, f"receipt collision with different bytes: {receipt_target}")
         current = _require(paths)
+        if event.get("schema") == "grill-orchestration-event/v1":
+            matches = [record for record in _validated_journal_records(paths) if record.get("event") == event["event"] and all(record.get(key) == value for key, value in event.items() if key not in {"event", "receipt_sha256"})]
+            if len(matches) > 1:
+                _fail(STATE_DIVERGENCE, "duplicate semantic event")
+            if matches:
+                if matches[0].get("receipt_sha256") != event["receipt_sha256"]:
+                    _fail(STATE_DIVERGENCE, "inconsistent orchestration event replay")
+                proposed = mutate(copy.deepcopy(current.document))
+                try:
+                    item = current.document["agent_orchestration"]["work_items"][event["work_id"]]
+                    replayed = (proposed == current.document and item.get("last_transition") == {"event_sequence": matches[0]["sequence"], "receipt_sha256": event["receipt_sha256"], "operation_id": event["operation_id"]})
+                except (KeyError, TypeError):
+                    replayed = False
+                if not replayed:
+                    _fail(STATE_DIVERGENCE, "inconsistent orchestration event replay")
+                return current
         proposed = mutate(copy.deepcopy(current.document))
         if not isinstance(proposed, dict) or proposed.get("revision") != current.revision: _fail(STATE_DIVERGENCE, "transition mutation carries a stale revision")
         # The next semantic record is known under the global lock and is part
@@ -1631,6 +1753,7 @@ def transact_with_event(root: str | Path, mutate: Callable[[dict[str, Any]], dic
         candidate = _candidate_transition(proposed, event, sequence, now)
         _validate_document(candidate, paths.orchestrator)
         _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
+        _validate_orchestration_transition(current.document, candidate)
         if jcs(candidate["project"]) != jcs(current.document["project"]): _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
         intent = {"schema": "grill-transition-wal/v1", "candidate": candidate, "event": event, "receipt": receipt}
         _atomic_write_json(_pending_path(paths), intent); _fault(fault, "after-intent")
@@ -1650,6 +1773,184 @@ def transact_with_event(root: str | Path, mutate: Callable[[dict[str, Any]], dic
         return snapshot
 
 
+def append_agent_orchestration_event(root: str | Path, mutate: Callable[[dict[str, Any]], dict[str, Any]], *, event: dict[str, Any], receipt: dict[str, Any], now: Callable[[], str] | None = None, timeout: float = LOCK_TIMEOUT, fault: Callable[[str], Any] | None = None) -> Snapshot:
+    """Versioned scheduler-free event union, sharing the Store WAL exactly."""
+    if not isinstance(event, dict) or event.get("schema") != "grill-orchestration-event/v1":
+        _invalid("agent orchestration event schema required")
+    return transact_with_event(root, mutate, event=event, receipt=receipt, now=now, timeout=timeout, fault=fault)
+
+
+def _checkpoint_contract() -> Any:
+    """Load the pure checkpoint schema lazily; Store remains CLI-independent."""
+    try:
+        from . import agent_orchestration
+    except ImportError:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("grill_core._agent_orchestration", Path(__file__).with_name("agent_orchestration.py"))
+        if spec is None or spec.loader is None:
+            _invalid("checkpoint contract is unavailable")
+        agent_orchestration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(agent_orchestration)
+    return agent_orchestration
+
+
+def _checkpoint_path(root: str | Path, reference: str) -> Path:
+    if not isinstance(reference, str) or not reference.startswith(".grill/work-items/"):
+        _invalid("invalid checkpoint content reference")
+    relative = Path(reference)
+    if relative.is_absolute() or ".." in relative.parts or any(not part for part in relative.parts):
+        _invalid("invalid checkpoint content reference")
+    return Path(root) / relative
+
+
+def _atomic_write_bytes(path: Path, payload: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, temporary_name = tempfile.mkstemp(prefix=".checkpoint-", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(handle, "wb") as stream:
+            stream.write(payload); stream.flush(); os.fsync(stream.fileno())
+        os.replace(temporary_name, path); temporary = None
+    finally:
+        if temporary is not None:
+            try: temporary.unlink()
+            except FileNotFoundError: pass
+    _fsync_directory(path.parent)
+
+
+def _write_checkpoint_state(root: str | Path, state_write: dict[str, Any]) -> None:
+    destination = _checkpoint_path(root, state_write["destination"])
+    after = _checkpoint_contract()._state_bytes(state_write["after_base64"], "checkpoint state")
+    expected = state_write["before_sha256"]
+    try:
+        current = _read_regular(destination)
+    except FileNotFoundError:
+        current = None
+    actual = None if current is None else hashlib.sha256(current).hexdigest()
+    if actual == state_write["after_sha256"]:
+        return
+    if actual != expected:
+        _fail(STATE_DIVERGENCE, "checkpoint state differs from its before image")
+    _atomic_write_bytes(destination, after)
+
+
+def transact_checkpoint_with_content(root: str | Path, mutate: Callable[[dict[str, Any]], dict[str, Any]], *,
+                                     event: dict[str, Any], receipt: dict[str, Any],
+                                     content_ref: str, content: dict[str, Any],
+                                     now: Callable[[], str] | None = None,
+                                     timeout: float = LOCK_TIMEOUT,
+                                     fault: Callable[[str], Any] | None = None) -> Snapshot:
+    """Publish checkpoint content, state, receipt, event and head from one WAL.
+
+    The v1 transition path is intentionally untouched.  This narrow v2 path
+    owns only checkpoint content and refuses to reuse a v1 intent.
+    """
+    contract = _checkpoint_contract()
+    content = copy.deepcopy(content)
+    contract.validate_checkpoint_content(content)
+    digest = contract.checkpoint_content_sha256(content)
+    event, receipt = _transition_fields(event, receipt); event = _bind_receipt_hash(event, receipt)
+    if event.get("schema") != "grill-orchestration-event/v1" or event.get("output_sha256") != digest:
+        _invalid("checkpoint content does not match orchestration event")
+    state_write = content["state_write"]
+    content_target = _checkpoint_path(root, content_ref)
+    receipt_target = receipt_path(root, receipt["category"], receipt["name"])
+    paths = store_paths(root)
+    with orchestrator_lock(paths, timeout):
+        if _lstat(_pending_path(paths)) is not None:
+            _fail(STATE_DIVERGENCE, "pending transition requires recovery")
+        current = _require(paths)
+        if state_write["expected_store_revision"] != current.revision or state_write["expected_journal_anchor"] != current.document.get("journal_head"):
+            _fail(STATE_DIVERGENCE, "checkpoint store origin changed")
+        proposed = mutate(copy.deepcopy(current.document))
+        if not isinstance(proposed, dict) or proposed.get("revision") != current.revision:
+            _fail(STATE_DIVERGENCE, "checkpoint mutation carries a stale revision")
+        sequence, _ = _next_seq_and_prev(paths)
+        proposed = stamp(proposed, current.revision + 1, _now(now))
+        candidate = _candidate_transition(proposed, event, sequence, now)
+        _validate_document(candidate, paths.orchestrator)
+        _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
+        _validate_orchestration_transition(current.document, candidate)
+        if jcs(candidate["project"]) != jcs(current.document["project"]):
+            _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
+        intent = {"schema": "grill-transition-wal/v2", "candidate": candidate, "event": event,
+                  "receipt": receipt, "state_write": state_write,
+                  "content": {"ref": content_ref, "sha256": digest, "payload": content}}
+        _atomic_write_json(_pending_path(paths), intent); _fault(fault, "after-intent")
+        content_target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if _write_immutable_receipt(content_target, content) != digest:
+            _fail(STATE_DIVERGENCE, "checkpoint content digest differs")
+        _fault(fault, "after-content")
+        _write_checkpoint_state(root, state_write); _fault(fault, "after-state")
+        durable_digest = _write_immutable_receipt(receipt_target, _receipt_payload(event, receipt))
+        if durable_digest != event["receipt_sha256"]:
+            _fail(STATE_DIVERGENCE, "durable receipt hash differs from transition")
+        _fault(fault, "after-receipt")
+        semantic = _append_record_locked(paths, event, now)
+        if semantic["sequence"] != sequence:
+            _fail(STATE_DIVERGENCE, "semantic event sequence changed under lock")
+        _fault(fault, "after-event")
+        candidate["journal_head"] = {"sequence": _append_record_locked(paths, _commit_fields(candidate["revision"], candidate["content_sha256"]), now)["sequence"], "record_sha256": ""}
+        candidate["journal_head"]["record_sha256"] = _validated_journal_records(paths)[-1]["content_sha256"]
+        _write_worktree_receipts(paths, candidate); _fault(fault, "after-anchor")
+        snapshot = _write_document(paths, candidate); _fault(fault, "after-snapshot")
+        _remove_pending(paths); _fault(fault, "after-intent-removal")
+        return snapshot
+
+
+def _recover_checkpoint_transition_locked(paths: StorePaths, root: str | Path,
+                                          intent: dict[str, Any], *, now: Callable[[], str] | None) -> Snapshot:
+    required = {"schema", "candidate", "event", "receipt", "state_write", "content"}
+    if set(intent) != required or intent.get("schema") != "grill-transition-wal/v2":
+        _invalid("invalid checkpoint transition intent")
+    content_info = intent["content"]
+    if not isinstance(content_info, dict) or set(content_info) != {"ref", "sha256", "payload"}:
+        _invalid("invalid checkpoint transition content")
+    contract = _checkpoint_contract()
+    content = content_info["payload"]
+    contract.validate_checkpoint_content(content)
+    if content_info["sha256"] != contract.checkpoint_content_sha256(content):
+        _fail(STATE_DIVERGENCE, "checkpoint content digest differs from pending transition")
+    if intent["state_write"] != content["state_write"]:
+        _fail(STATE_DIVERGENCE, "checkpoint state write differs from content")
+    event, receipt = _transition_fields(intent["event"], intent["receipt"]); event = _bind_receipt_hash(event, receipt)
+    if event.get("output_sha256") != content_info["sha256"]:
+        _fail(STATE_DIVERGENCE, "checkpoint event digest differs from content")
+    candidate = _validate_document(intent["candidate"], paths.orchestrator)
+    content_target = _checkpoint_path(root, content_info["ref"])
+    content_target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    _write_immutable_receipt(content_target, content)
+    _write_checkpoint_state(root, intent["state_write"])
+    _write_immutable_receipt(receipt_path(root, receipt["category"], receipt["name"]), _receipt_payload(event, receipt))
+    current = _snapshot_from(_read_regular(paths.orchestrator), paths.orchestrator)
+    records = _validated_journal_records(paths)
+    matches = [record for record in records if record.get("event") == event["event"] and all(record.get(key) == value for key, value in event.items() if key != "event")]
+    if len(matches) > 1:
+        _fail(STATE_DIVERGENCE, "duplicate checkpoint semantic event")
+    if not matches:
+        matches = [_append_record_locked(paths, event, now)]
+        records = _validated_journal_records(paths)
+    _validate_candidate_transition(candidate, event, matches[0]["sequence"])
+    if current.revision == candidate["revision"]:
+        if current.content_sha256 != candidate["content_sha256"]:
+            _fail(STATE_DIVERGENCE, "published checkpoint snapshot differs from candidate")
+        _remove_pending(paths)
+        return _require(paths)
+    if current.revision != candidate["revision"] - 1:
+        _fail(STATE_DIVERGENCE, "checkpoint pending revision is not next")
+    _validate_orchestration_transition(current.document, candidate)
+    anchors = [record for record in records if record.get("event") == COMMIT_EVENT and record.get("revision") == candidate["revision"]]
+    if len(anchors) > 1 or (anchors and anchors[0].get("snapshot_sha256") != candidate["content_sha256"]):
+        _fail(STATE_DIVERGENCE, "checkpoint commit anchor diverges")
+    anchor = anchors[0] if anchors else _append_record_locked(paths, _commit_fields(candidate["revision"], candidate["content_sha256"]), now)
+    candidate = dict(candidate)
+    candidate["journal_head"] = {"sequence": anchor["sequence"], "record_sha256": anchor["content_sha256"]}
+    _write_worktree_receipts(paths, candidate)
+    _write_document(paths, candidate)
+    _remove_pending(paths)
+    return _require(paths)
+
+
 def _recover_pending_transition_locked(paths: StorePaths, root: str | Path, *, now: Callable[[], str] | None = None) -> Snapshot:
     """Finish exactly one WAL candidate, or abandon pre-semantic residue."""
     pending = _pending_path(paths)
@@ -1659,9 +1960,26 @@ def _recover_pending_transition_locked(paths: StorePaths, root: str | Path, *, n
 
     if _lstat(pending) is None: return _require(paths)
     intent = loads(_decode(_read_regular(pending), pending))
+    if isinstance(intent, dict) and intent.get("schema") == "grill-transition-wal/v2":
+        return _recover_checkpoint_transition_locked(paths, root, intent, now=now)
     if not isinstance(intent, dict) or set(intent) != {"schema", "candidate", "event", "receipt"} or intent["schema"] != "grill-transition-wal/v1": _invalid("invalid pending transition intent")
     event, receipt = _transition_fields(intent["event"], intent["receipt"]); event = _bind_receipt_hash(event, receipt)
     candidate = _validate_document(intent["candidate"], paths.orchestrator)
+    # A fault after the commit anchor makes the old snapshot intentionally
+    # fail its normal tail-anchor check.  Recovery reads that snapshot raw,
+    # validates its structure, and applies the same transition gate before
+    # publishing a still-pending candidate.
+    current = _snapshot_from(_read_regular(paths.orchestrator), paths.orchestrator)
+    if current.revision == candidate["revision"]:
+        if current.content_sha256 != candidate["content_sha256"]:
+            _fail(STATE_DIVERGENCE, "published snapshot differs from pending candidate")
+    else:
+        if current.revision != candidate["revision"] - 1:
+            _fail(STATE_DIVERGENCE, "pending candidate revision is not the next revision")
+        _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
+        _validate_orchestration_transition(current.document, candidate)
+        if jcs(candidate["project"]) != jcs(current.document["project"]):
+            _fail(PROJECT_IDENTITY_DIVERGENCE, "project block is immutable after registration")
     records = _validated_journal_records(paths)
     matches = [r for r in records if r.get("event") == event["event"] and all(r.get(k) == v for k, v in event.items() if k != "event")]
     if len(matches) > 1: _fail(STATE_DIVERGENCE, "duplicate semantic event in pending transition")
@@ -1671,8 +1989,6 @@ def _recover_pending_transition_locked(paths: StorePaths, root: str | Path, *, n
     receipt_file = receipt_path(root, receipt["category"], receipt["name"])
     _verify_transition_receipt(receipt_file, event, receipt)
     _validate_candidate_transition(candidate, event, matches[0]["sequence"])
-    current = _snapshot_from(_read_regular(paths.orchestrator), paths.orchestrator)
-    _validate_gauntlet_state_transitions(current.document, candidate, allow_existing_gauntlet_changes=True)
     if current.revision == candidate["revision"]:
         if current.content_sha256 != candidate["content_sha256"]: _fail(STATE_DIVERGENCE, "published snapshot differs from pending candidate")
         _remove_pending(paths); return _require(paths)
