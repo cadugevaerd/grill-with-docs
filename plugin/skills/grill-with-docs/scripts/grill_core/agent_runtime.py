@@ -68,7 +68,8 @@ def _same(label: str, *values: Any) -> str:
     return values[0]
 
 
-def _identity(value: dict[str, Any]) -> tuple[Any, ...]:
+def session_identity(value: dict[str, Any]) -> tuple[Any, ...]:
+    """Return the runtime-issued session identity used for reviewer separation."""
     keys = (
         "adapter", "provider", "handle", "incarnation", "dispatch_incarnation",
         "runtime_instance", "host", "owner_dispatch", "task_id", "worktree_id",
@@ -76,6 +77,10 @@ def _identity(value: dict[str, Any]) -> tuple[Any, ...]:
     if any(not value.get(key) for key in keys):
         _fail("runtime identity incomplete")
     return tuple(value[key] for key in keys)
+
+
+def _identity(value: dict[str, Any]) -> tuple[Any, ...]:
+    return session_identity(value)
 
 
 def validate_observation(value: Any, source: tuple[bytes, ...] | None = None) -> dict[str, Any]:

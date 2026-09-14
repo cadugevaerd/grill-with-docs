@@ -1,0 +1,18 @@
+{
+  "schema": "grill-task-result/v1",
+  "worker": "p06-a",
+  "feature": "030-agent-orchestration",
+  "completed": ["T012", "T013"],
+  "tasks": {
+    "T012": {
+      "status": "done",
+      "summary": "Reviewer admission now requires the Astra/fable high pair, no write grant, every declared author, and a runtime session identity distinct from each author. Review results preserve APPROVED, CHANGES_REQUIRED, or STALE; only a current APPROVED review satisfies coverage.",
+      "evidence": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_specialist_admission passed; the overlay of f7cf56ba590057fcca1245212718658e210b2d8f also passed the complete contract validator."
+    },
+    "T013": {
+      "status": "done",
+      "summary": "Activity coverage interprets the eleven-step policy for author/reviewer obligations, keeps deterministic checks model-free, and gates attest/checkpoint boundaries through the same coverage. Deterministic success cannot satisfy a required review, and ship receives no execution or authorization from this policy.",
+      "evidence": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_activity_coverage passed; the f7 overlay passed validate_tier_model_binding_contract.py."
+    }
+  }
+}

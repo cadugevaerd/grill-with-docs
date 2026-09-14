@@ -50,6 +50,10 @@ SPECIALIST_PAIRS = {
     "codex": {"author": ("gpt-6-astra", "xhigh"), "reviewer": ("gpt-6-astra", "high")},
     "claude": {"author": ("fable", "xhigh"), "reviewer": ("fable", "high")},
 }
+_SESSION_IDENTITY_FIELDS = (
+    "provider", "adapter", "host", "runtime_instance", "handle", "incarnation",
+    "owner_dispatch", "task_id", "dispatch_incarnation", "worktree_id",
+)
 _ACTIVITY_CONTEXT_SCHEMA = "grill-activity-context/v1"
 _ACTIVITY_PAYLOAD_SCHEMA = "grill-activity-payload/v1"
 
@@ -270,7 +274,8 @@ def activity_payload(activity: Mapping[str, Any], context: Mapping[str, Any]) ->
     if activity.get("state") not in {"VERIFIED", "DISPATCHED"}:
         _fail("ACTIVITY-NOT-VERIFIED")
     if (activity.get("context_id") != context.get("context_id")
-            or activity.get("runtime") != context.get("runtime")
+            or (activity.get("activity_type") != "deterministic_check"
+                and activity.get("runtime") != context.get("runtime"))
             or not isinstance(context.get("leader"), dict)):
         _fail("CONTEXT-FENCED")
     fence = context["leader"].get("fence")
@@ -349,15 +354,79 @@ def activity_requirements(policy: Mapping[str, Any], *, step_id: str | None,
     if not isinstance(entry, Mapping):
         _fail("ACTIVITY-REQUIRED")
     required = entry.get("required")
-    if not isinstance(required, list):
+    if not isinstance(required, list) or any(not isinstance(role, str) for role in required):
         _fail("ACTIVITY-REQUIRED")
     roles = {role for role in required if role in {"author", "reviewer"}}
-    if new_how and (entry.get("author_for_new_how") is True or step_id in {"plan", "tasks"}):
-        roles.add("author")
-    if frontend and step_id == "plan":
-        roles.add("author")
+    if "reviewer_independent_of_all_authors" in required:
         roles.add("reviewer")
+    if new_how and "reviewer_if_judgment" in required:
+        roles.add("reviewer")
+    if new_how and "author_and_reviewer_for_new_judgment" in required:
+        roles.update(("author", "reviewer"))
+    if new_how and any(entry.get(key) is True for key in (
+            "author_for_new_how", "author_for_redesign", "author_for_new_decision",
+            "author_for_additional_plan")):
+        roles.add("author")
+    if new_how and entry.get("reviewer_for_judgment") is True:
+        roles.add("reviewer")
+    if frontend and step_id == "plan":
+        roles.update(("author", "reviewer"))
     return tuple(sorted(roles))
+
+
+def _reviewer_authors(activity: Mapping[str, Any], activities: Mapping[str, Any], *,
+                      require_accepted: bool) -> tuple[Mapping[str, Any], ...]:
+    """Resolve the declared complete author chain for a reviewer."""
+    if activity.get("activity_type") != "reviewer":
+        return ()
+    author_ids = activity.get("author_activity_ids")
+    if not isinstance(author_ids, list) or not author_ids:
+        _fail("REVIEWER-NOT-INDEPENDENT")
+    authors: list[Mapping[str, Any]] = []
+    for author_id in author_ids:
+        author = activities.get(author_id)
+        if not isinstance(author, Mapping) or author.get("activity_type") != "author":
+            _fail("REVIEWER-NOT-INDEPENDENT")
+        if require_accepted and author.get("state") != "ACCEPTED":
+            _fail("REVIEWER-NOT-INDEPENDENT")
+        authors.append(author)
+    required_ids = activity.get("input_manifest", {}).get("required_activity_ids")
+    if isinstance(required_ids, list):
+        required_authors = {
+            author_id for author_id in required_ids
+            if isinstance(activities.get(author_id), Mapping)
+            and activities[author_id].get("activity_type") == "author"
+        }
+        if required_authors and required_authors != set(author_ids):
+            _fail("REVIEWER-NOT-INDEPENDENT")
+    return tuple(authors)
+
+
+def require_reviewer_independence(activity: Mapping[str, Any], observation: Mapping[str, Any], *,
+                                  activities: Mapping[str, Any], resources: Mapping[str, Any]) -> None:
+    """A different activity id is not a different reviewer session."""
+    if activity.get("activity_type") != "reviewer":
+        return
+    try:
+        from .agent_runtime import session_identity, validate_observation
+    except ImportError:
+        from grill_core.agent_runtime import session_identity, validate_observation
+    observed = validate_observation(dict(observation))
+    reviewer_identity = session_identity(observed)
+    for author in _reviewer_authors(activity, activities, require_accepted=True):
+        resource_id = author.get("session_resource_id")
+        resource = resources.get(resource_id)
+        if not isinstance(resource, Mapping) or resource.get("activity_id") != author.get("activity_id"):
+            _fail("REVIEWER-NOT-INDEPENDENT")
+        identity = resource.get("identity")
+        if not isinstance(identity, Mapping):
+            _fail("REVIEWER-NOT-INDEPENDENT")
+        try:
+            author_identity = session_identity(dict(identity))
+        except Exception as exc:
+            raise OrchestrationError("REVIEWER-NOT-INDEPENDENT") from exc
+        if author_identity == reviewer_identity:
+            _fail("REVIEWER-NOT-INDEPENDENT")
 
 
 def activity_coverage(item: Mapping[str, Any], policy: Mapping[str, Any], *, context_id: str,
@@ -367,16 +436,32 @@ def activity_coverage(item: Mapping[str, Any], policy: Mapping[str, Any], *, con
     required = activity_requirements(policy, step_id=step_id, activity_scope=activity_scope,
                                      new_how=new_how, frontend=frontend)
     accepted: dict[str, list[str]] = {role: [] for role in required}
+    changes_required: list[str] = []
+    stale: list[str] = []
     for activity_id, activity in item.get("activities", {}).items():
         if not isinstance(activity, Mapping) or activity.get("state") != "ACCEPTED":
             continue
         if (activity.get("context_id") != context_id or activity.get("activity_scope") != activity_scope
                 or activity.get("step_id") != step_id or activity.get("activity_type") not in accepted):
             continue
+        if activity["activity_type"] == "reviewer":
+            verdict = activity.get("review_verdict")
+            if verdict == "CHANGES_REQUIRED":
+                changes_required.append(activity_id)
+                continue
+            if verdict == "STALE":
+                stale.append(activity_id)
+                continue
+            if verdict != "APPROVED":
+                continue
+            try:
+                _reviewer_authors(activity, item.get("activities", {}), require_accepted=True)
+            except OrchestrationError:
+                continue
         accepted[activity["activity_type"]].append(activity_id)
     missing = [role for role, ids in accepted.items() if not ids]
     return {"required": list(required), "accepted": {role: sorted(ids) for role, ids in accepted.items()},
-            "missing": missing}
+            "changes_required": sorted(changes_required), "stale": sorted(stale), "missing": missing}
 
 
 def require_activity_coverage(item: Mapping[str, Any], policy: Mapping[str, Any], *, context_id: str,
@@ -630,7 +715,8 @@ def _activity(activity_id: str, value: Any, contexts: dict[str, Any]) -> None:
         _fail("reviewer writes files")
     for key in ("session_resource_id", "launch_observation_ref", "effective_model", "effective_effort", "resolved_model_id", "released_at", "presentation_observation_ref", "result_ref", "diagnostic_ref", "accepted_by_context", "acceptance_ref"):
         _text(value[key], f"activity {key}", nullable=True)
-    if value["review_verdict"] is not None and not isinstance(value["review_verdict"], str) or value["review_verdict"] not in {None, "APPROVED", "CHANGES_REQUIRED"}:
+    if (value["review_verdict"] is not None and not isinstance(value["review_verdict"], str)
+            or value["review_verdict"] not in {None, "APPROVED", "CHANGES_REQUIRED", "STALE"}):
         _fail("invalid activity review verdict")
     for key in ("payload_sha256", "result_sha256"):
         _nullable_digest(value[key], f"activity {key}")
@@ -647,6 +733,10 @@ def _activity(activity_id: str, value: Any, contexts: dict[str, Any]) -> None:
         _fail("activity result before record")
     if value["activity_type"] != "deterministic_check" and value["state"] == "VERIFIED" and (value["effective_model"] is None or value["effective_effort"] is None):
         _fail("verified activity lacks model observation")
+    if value["activity_type"] != "deterministic_check" and value["state"] in {"VERIFIED", "DISPATCHED", "RESULT_RECORDED", "ACCEPTED"}:
+        if any(value[key] is None for key in ("session_resource_id", "launch_observation_ref",
+                                              "effective_model", "effective_effort", "resolved_model_id")):
+            _fail("specialist activity lacks session observation")
     if value["state"] == "DISPATCHED" and value["payload_sha256"] is None:
         _fail("dispatched activity lacks payload")
     if value["state"] in {"RESULT_RECORDED", "ACCEPTED"} and value["result_ref"] is None:
@@ -680,6 +770,10 @@ def new_activity(*, activity_id: str, context_id: str, step_id: str | None,
     _id(context_id, "activity context")
     if type(attempt) is not int or attempt < 1:
         _fail("invalid activity attempt")
+    if activity_type not in {"author", "reviewer", "deterministic_check"}:
+        _fail("invalid activity type")
+    if activity_type == "reviewer" and write_files:
+        _fail("reviewer writes files")
     input_manifest = copy.deepcopy(input_manifest)
     input_sha256 = activity_input_sha256(input_manifest)
     if activity_type == "deterministic_check":
@@ -723,11 +817,18 @@ def prepare_activity(activity: Mapping[str, Any], context: Mapping[str, Any]) ->
     return prepared
 
 
-def record_verified_activity(activity: Mapping[str, Any], observation: Mapping[str, Any]) -> dict[str, Any]:
+def record_verified_activity(activity: Mapping[str, Any], observation: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Persist only a freshly verified effective identity before payload use."""
     verified = copy.deepcopy(dict(activity))
     if verified.get("state") != "BOOTSTRAPPING":
         _fail("INVALID-ACTIVITY-TRANSITION")
+    if verified.get("activity_type") == "deterministic_check":
+        if observation is not None:
+            _fail("deterministic activity has observation")
+        verified["state"] = "VERIFIED"
+        return verified
+    if observation is None:
+        _fail("SPECIALIST-CAPABILITY-UNPROVEN")
     observed = verify_specialist(verified, observation)
     verified.update({
         "session_resource_id": specialist_resource_id(verified["activity_id"]),
@@ -818,21 +919,37 @@ def record_activity_result(activity: Mapping[str, Any], *, result_ref: str, resu
 
 
 def accept_activity(activity: Mapping[str, Any], *, context: Mapping[str, Any],
-                    observation: Mapping[str, Any], acceptance_ref: str,
-                    review_verdict: str = "APPROVED") -> dict[str, Any]:
+                    observation: Mapping[str, Any] | None, acceptance_ref: str,
+                    review_verdict: str = "APPROVED", current_input_sha256: str | None = None) -> dict[str, Any]:
     """Revalidate identity/configuration at return, then record accepted close."""
     accepted = copy.deepcopy(dict(activity))
     if accepted.get("state") != "RESULT_RECORDED":
         _fail("INVALID-ACTIVITY-TRANSITION")
     if accepted.get("context_id") != context.get("context_id"):
         _fail("CONTEXT-FENCED")
-    observed = verify_specialist(accepted, observation, require_open=False)
-    if observed["close"] != "closed" or observed["activity"] != "exited":
-        _fail("SESSION-CLOSE-UNPROVEN")
+    if accepted.get("activity_type") == "deterministic_check":
+        if observation is not None:
+            _fail("deterministic activity has observation")
+        released_at = None
+    else:
+        if observation is None:
+            _fail("SESSION-CLOSE-UNPROVEN")
+        observed = verify_specialist(accepted, observation, require_open=False)
+        if observed["close"] != "closed" or observed["activity"] != "exited":
+            _fail("SESSION-CLOSE-UNPROVEN")
+        released_at = observed["source_ref"]
     _text(acceptance_ref, "activity acceptance_ref")
     if review_verdict not in {"APPROVED", "CHANGES_REQUIRED"}:
         _fail("invalid activity review verdict")
-    accepted.update({"released_at": observed["source_ref"], "accepted_by_context": context["context_id"],
+    if accepted.get("activity_type") != "reviewer" and review_verdict != "APPROVED":
+        _fail("invalid activity review verdict")
+    if current_input_sha256 is not None:
+        _digest(current_input_sha256, "current activity input sha256")
+        if accepted.get("activity_type") == "reviewer" and current_input_sha256 != accepted["input_sha256"]:
+            review_verdict = "STALE"
+        elif current_input_sha256 != accepted["input_sha256"]:
+            _fail("ACTIVITY-INPUT-DIVERGENT")
+    accepted.update({"released_at": released_at, "accepted_by_context": context["context_id"],
                      "acceptance_ref": acceptance_ref, "review_verdict": review_verdict,
                      "state": "ACCEPTED"})
     return accepted
@@ -1090,11 +1207,20 @@ def validate_block(block: Any) -> dict[str, Any]:
             resource_id = activity["session_resource_id"]
             if resource_id is not None and item["resources"][resource_id]["kind"] != "session":
                 _fail("activity resource is not a session")
-            if activity["activity_type"] == "reviewer" and resource_id is not None:
-                for author_id in activity["author_activity_ids"]:
-                    author_resource = item["activities"][author_id]["session_resource_id"]
-                    if author_resource is None or author_resource == resource_id:
-                        _fail("reviewer session is not independent")
+            if activity["activity_type"] == "reviewer":
+                authors = _reviewer_authors(activity, item["activities"], require_accepted=resource_id is not None)
+                if resource_id is not None:
+                    reviewer_resource = item["resources"][resource_id]
+                    reviewer_identity = reviewer_resource["identity"]
+                    for author in authors:
+                        author_resource_id = author["session_resource_id"]
+                        if author_resource_id is None:
+                            _fail("reviewer session is not independent")
+                        author_resource = item["resources"].get(author_resource_id)
+                        if (not isinstance(author_resource, dict)
+                                or author_resource.get("kind") != "session"
+                                or author_resource.get("identity") == reviewer_identity):
+                            _fail("reviewer session is not independent")
         for decision_id, decision in item["visual_decisions"].items(): _visual_decision(decision_id, decision, item["contexts"])
         if item["last_transition"] is not None:
             transition = _object(item["last_transition"], {"event_sequence", "receipt_sha256", "operation_id"}, set(), "orchestration last_transition")
