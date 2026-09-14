@@ -14,7 +14,7 @@ import math
 from datetime import datetime, timezone
 from pathlib import PurePosixPath, PureWindowsPath
 import re
-from typing import Any
+from typing import Any, Mapping
 
 try:
     from .workflow_versions import SEQUENCE_V4
@@ -511,6 +511,40 @@ def _resource(resource_id: str, value: Any, contexts: dict[str, Any]) -> None:
     reasons = {"RESULT_NOT_DURABLE", "SESSION_ACTIVE", "SESSION_CLOSE_UNCONFIRMED", "IDENTITY_UNPROVEN", "IDENTITY_CHANGED", "WORKTREE_DIRTY", "IGNORED_CONTENT", "WORK_NOT_INTEGRATED", "EXCLUSIVE_EVIDENCE", "BRANCH_IN_USE", "REF_CHANGED", "PROVIDER_UNAVAILABLE"}
     if not isinstance(value["preservation_reasons"], list) or any(not isinstance(reason, str) or reason not in reasons for reason in value["preservation_reasons"]) or len(set(value["preservation_reasons"])) != len(value["preservation_reasons"]):
         _fail("invalid resource preservation_reasons")
+
+
+def cleanup_reasons(resource: Mapping[str, Any], observation: Mapping[str, Any]) -> tuple[str, ...]:
+    """Derive retention from current facts; never treat an old flag as proof.
+
+    The caller owns observation I/O.  Keeping this policy pure makes the
+    session, worktree, and branch decisions independently auditable.
+    """
+    reasons: set[str] = set()
+    kind = resource.get("kind")
+    if resource.get("result_acceptance_ref") is None:
+        reasons.add("RESULT_NOT_DURABLE")
+    session = observation.get("session")
+    if session != "closed":
+        reasons.add("SESSION_ACTIVE" if session == "active" else "SESSION_CLOSE_UNCONFIRMED")
+    if observation.get("identity") is not True:
+        reasons.add("IDENTITY_UNPROVEN")
+    elif observation.get("identity_changed") is True:
+        reasons.add("IDENTITY_CHANGED")
+    if kind in {"worktree", "branch"}:
+        if observation.get("integrated") is not True:
+            reasons.add("WORK_NOT_INTEGRATED")
+        if observation.get("clean") is not True:
+            reasons.add("WORKTREE_DIRTY")
+        if observation.get("ignored") is True:
+            reasons.add("IGNORED_CONTENT")
+        if observation.get("exclusive_evidence") is True:
+            reasons.add("EXCLUSIVE_EVIDENCE")
+    if kind == "branch":
+        if observation.get("branch_in_use") is True:
+            reasons.add("BRANCH_IN_USE")
+        if observation.get("ref_matches") is not True:
+            reasons.add("REF_CHANGED")
+    return tuple(sorted(reasons))
 
 
 def _presentation(value: Any) -> None:

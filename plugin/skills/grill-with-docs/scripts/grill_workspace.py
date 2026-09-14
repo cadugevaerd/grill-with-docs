@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import errno
+import functools
 import hashlib
 import importlib.util
 import io
@@ -1592,6 +1593,21 @@ def _checkpoint_ref(root: Path, value: str | None) -> dict[str, str] | None:
     return {"ref": path.as_posix(), "sha256": hash_bytes(safe_read_regular_fd(root, full))}
 
 
+def _cleanup_checkpoint_projection(root: Path, work_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Capture already-known cleanup obligations without probing or mutating."""
+    gauntlet_runs = grill_core_module("gauntlet_runs")
+    projection = gauntlet_runs.cleanup_projection(root, work_id)
+    pending = {
+        f"{entry['run_id']}:{entry['worker_id']}": entry
+        for entry in projection["pending"]
+    }
+    preserved = {
+        f"{entry['run_id']}:{entry['worker_id']}": entry
+        for entry in projection["preserved"]
+    }
+    return pending, preserved
+
+
 def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: bytes,
                                     state: dict[str, Any], args: argparse.Namespace,
                                     payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -1649,6 +1665,7 @@ def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: 
     state_after = (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
     relative_state = state_path.relative_to(root).as_posix()
     checkpoint_id = "cp-" + store.jcs_sha256({"store_origin": request["store_origin"], "work_id": args.work_id, "operation_id": args.operation_id})
+    cleanup_obligations, preserved_resources = _cleanup_checkpoint_projection(root, args.work_id)
     checkpoint = {
         "schema": contract.CHECKPOINT_SCHEMA, "checkpoint_id": checkpoint_id, "context_id": context_id,
         "previous_checkpoint_id": item.get("checkpoint_head"), "worktree_identity": context.get("worktree_identity", {}),
@@ -1662,7 +1679,8 @@ def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: 
         "accepted_outputs": state.get("development", {}).get("attested_outputs", {}),
         "accepted_executions": state.get("development", {}).get("attested_executions", {}),
         "pending_attempts": {}, "scheduler_runs": context["scheduler_runs"], "operations": item["operations"],
-        "cleanup_obligations": {}, "preserved_resources": {}, "blocking_activity": None, "visual_state": {},
+        "cleanup_obligations": cleanup_obligations, "preserved_resources": preserved_resources,
+        "blocking_activity": None, "visual_state": {},
         "presentation": context.get("presentation"), "checkpoint_sha256": "",
     }
     checkpoint["checkpoint_sha256"] = store.jcs_sha256({key: value for key, value in checkpoint.items() if key != "checkpoint_sha256"})
@@ -2943,6 +2961,36 @@ def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[st
             os.close(grill_fd)
 
 
+def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str, Any], int]]) -> Callable[[argparse.Namespace], tuple[dict[str, Any], int]]:
+    """Require the adopted context fence around a mutable Gauntlet command."""
+    @functools.wraps(handler)
+    def wrapped(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+        root = project_root(args.root)
+        # ``gauntlet_runs`` owns the Store module identity on the direct-file
+        # CLI path.  Its ContextVar must be set on that exact module, not a
+        # second sibling import with an identical filename.
+        store = grill_core_module("gauntlet_runs").store
+        snapshot = store.read_snapshot(root, required=False)
+        block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+        item = block.get("work_items", {}).get(args.work_id) if isinstance(block, dict) else None
+        if item is None:
+            return handler(args)
+        context_id = item.get("current_context_id")
+        context = item.get("contexts", {}).get(context_id)
+        session_ref = getattr(args, "session_ref", None)
+        if not isinstance(context, dict) or not isinstance(session_ref, str):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
+        try:
+            with store.orchestration_authority(
+                root, args.work_id, context_id=context_id, epoch=context["epoch"], session_ref=session_ref,
+            ):
+                return handler(args)
+        except store.StoreError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    return wrapped
+
+
+@_gauntlet_authorized
 def gauntlet_run_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
     try:
@@ -2952,6 +3000,7 @@ def gauntlet_run_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     # Retain the FASE-001 control boundary for callers that did not select a
     # durable run.  FASE-002 recovery is deliberately opt-in via --run-id.
@@ -2968,6 +3017,7 @@ def gauntlet_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any], i
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     # Retain the FASE-001 control response for the legacy form.  The durable
     # worker lifecycle is selected only by the complete run/worker pair, so
@@ -2991,6 +3041,7 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
     return result, EXIT_OK if result.get("verdict") in {"CLEANED", "REUSED"} else EXIT_BLOCKED
 
 
+@_gauntlet_authorized
 def gauntlet_prepare_worker_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Prepare one passive, scoped worker workspace from a fresh admission."""
     root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
@@ -3202,6 +3253,7 @@ def gauntlet_dag_validate_command(args: argparse.Namespace) -> tuple[dict[str, A
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_wave_declare_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-004/FR-005, ADR-0013): declare the run's next Execution Wave."""
     root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
@@ -3218,6 +3270,7 @@ def gauntlet_wave_declare_command(args: argparse.Namespace) -> tuple[dict[str, A
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_converge_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-004 (FR-001-FR-005): integrate one wave into the execution branch.
 
@@ -3244,6 +3297,7 @@ def gauntlet_converge_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_run_abandon_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-004 (FR-014, ADR-0020): mark one irrecoverable run BLOCKED.
 
@@ -3283,6 +3337,7 @@ def gauntlet_run_abandon_command(args: argparse.Namespace) -> tuple[dict[str, An
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_worker_declare_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-007): mint one first-dispatch worker, ``worker_id = node_id``."""
     root, gauntlet_runs, admission, record = gauntlet_run_admission(args)
@@ -3299,6 +3354,7 @@ def gauntlet_worker_declare_command(args: argparse.Namespace) -> tuple[dict[str,
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_progress_record_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-008(d)): renew one worker's lease past its original window."""
     root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
@@ -3310,6 +3366,7 @@ def gauntlet_progress_record_command(args: argparse.Namespace) -> tuple[dict[str
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_worker_terminal_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-009/FR-010): terminate one worker, success or failure."""
     root, gauntlet_runs, admission, _record = gauntlet_run_admission(args)
@@ -3323,6 +3380,7 @@ def gauntlet_worker_terminal_command(args: argparse.Namespace) -> tuple[dict[str
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, error.message, extra={"work_id": args.work_id}) from error
 
 
+@_gauntlet_authorized
 def gauntlet_remediate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-007/FR-009/FR-010, ADR-0015): remediate one node's
     current worker.
@@ -4365,7 +4423,9 @@ def build_parser() -> JsonParser:
         control_parser.add_argument("--work-id", required=True)
         if command == "gauntlet-status":
             control_parser.add_argument("--run-id")
-        elif command == "gauntlet-cleanup":
+        else:
+            control_parser.add_argument("--session-ref")
+        if command == "gauntlet-cleanup":
             # Optional individually for the legacy FASE-001 command; the
             # handler requires the pair before selecting durable cleanup.
             control_parser.add_argument("--run-id")
@@ -4376,6 +4436,7 @@ def build_parser() -> JsonParser:
     prepare_worker_parser.add_argument("--run-id", required=True)
     prepare_worker_parser.add_argument("--worker-id", required=True)
     prepare_worker_parser.add_argument("--scope", action="append", required=True)
+    prepare_worker_parser.add_argument("--session-ref")
     partition_emit_parser = subparsers.add_parser("partition-emit")
     partition_emit_parser.add_argument("root")
     partition_emit_parser.add_argument("--work-id", required=True)
@@ -4403,17 +4464,20 @@ def build_parser() -> JsonParser:
     wave_declare_parser.add_argument("--run-id", required=True)
     wave_declare_parser.add_argument("--dag", required=True)
     wave_declare_parser.add_argument("--node-id", action="append", required=True)
+    wave_declare_parser.add_argument("--session-ref")
     converge_parser = subparsers.add_parser("gauntlet-converge")
     converge_parser.add_argument("root")
     converge_parser.add_argument("--work-id", required=True)
     converge_parser.add_argument("--run-id", required=True)
     converge_parser.add_argument("--dag", required=True)
     converge_parser.add_argument("--wave-id", required=True)
+    converge_parser.add_argument("--session-ref")
     run_abandon_parser = subparsers.add_parser("gauntlet-run-abandon")
     run_abandon_parser.add_argument("root")
     run_abandon_parser.add_argument("--work-id", required=True)
     run_abandon_parser.add_argument("--run-id", required=True)
     run_abandon_parser.add_argument("--attestation", required=True)
+    run_abandon_parser.add_argument("--session-ref")
     worker_declare_parser = subparsers.add_parser("gauntlet-worker-declare")
     worker_declare_parser.add_argument("root")
     worker_declare_parser.add_argument("--work-id", required=True)
@@ -4423,11 +4487,13 @@ def build_parser() -> JsonParser:
     worker_declare_parser.add_argument("--tier", required=True)
     worker_declare_parser.add_argument("--files", action="append", required=True)
     worker_declare_parser.add_argument("--dag", required=True)
+    worker_declare_parser.add_argument("--session-ref")
     progress_record_parser = subparsers.add_parser("gauntlet-progress-record")
     progress_record_parser.add_argument("root")
     progress_record_parser.add_argument("--work-id", required=True)
     progress_record_parser.add_argument("--run-id", required=True)
     progress_record_parser.add_argument("--worker-id", required=True)
+    progress_record_parser.add_argument("--session-ref")
     worker_terminal_parser = subparsers.add_parser("gauntlet-worker-terminal")
     worker_terminal_parser.add_argument("root")
     worker_terminal_parser.add_argument("--work-id", required=True)
@@ -4435,16 +4501,19 @@ def build_parser() -> JsonParser:
     worker_terminal_parser.add_argument("--worker-id", required=True)
     worker_terminal_parser.add_argument("--outcome", choices=("completed", "failed"), required=True)
     worker_terminal_parser.add_argument("--failure-class", choices=("process-timeout", "transport-failure"))
+    worker_terminal_parser.add_argument("--session-ref")
     remediate_parser = subparsers.add_parser("gauntlet-remediate")
     remediate_parser.add_argument("root")
     remediate_parser.add_argument("--work-id", required=True)
     remediate_parser.add_argument("--run-id", required=True)
     remediate_parser.add_argument("--worker-id", required=True)
     remediate_parser.add_argument("--reason", choices=("stall", "transient-failure"), required=True)
+    remediate_parser.add_argument("--session-ref")
     gauntlet_resume_parser = subparsers.add_parser("gauntlet-resume")
     gauntlet_resume_parser.add_argument("root")
     gauntlet_resume_parser.add_argument("--work-id", required=True)
     gauntlet_resume_parser.add_argument("--run-id")
+    gauntlet_resume_parser.add_argument("--session-ref")
     attest_parser = subparsers.add_parser("attest")
     attest_parser.add_argument("root")
     attest_parser.add_argument("--work-id", required=True)
