@@ -476,6 +476,45 @@ def run_projection(root: str | Path, work_id: str, run_id: str | None = None) ->
     return projection
 
 
+def cleanup_projection(root: str | Path, work_id: str) -> dict[str, list[dict[str, str]]]:
+    """Read the cleanup obligation without probing or changing resources."""
+    if not store.store_exists(root):
+        return {"cleaned": [], "pending": [], "preserved": []}
+    runs = _read_runs(root, work_id, absent_ok=True)
+    result: dict[str, list[dict[str, str]]] = {"cleaned": [], "pending": [], "preserved": []}
+    for run_id, run in sorted(runs.items()):
+        for worker_id, worker in sorted(run.get("workers", {}).items()):
+            workspace = worker.get("workspace") if isinstance(worker, Mapping) else None
+            if not isinstance(workspace, Mapping):
+                continue
+            record = {"run_id": run_id, "worker_id": worker_id}
+            state = worker.get("state")
+            if state == "CLEANED":
+                result["cleaned"].append(record)
+            elif state in {"TERMINAL", "CLEANING"} and workspace.get("converged") is True:
+                result["pending"].append({**record, "reason": "STEP-ACCEPTED-CLEANUP-PENDING"})
+            elif state in {"FAILED", "ORPHANED", "BLOCKED", "CONFLICT", "STALLED"}:
+                result["preserved"].append({**record, "reason": "WORK_NOT_INTEGRATED"})
+    return result
+
+
+def continuity_worker_quiescence(runs: Mapping[str, Any]) -> tuple[list[str], list[str]]:
+    """Report durable worker activity without treating a lease timeout as exit."""
+    active: list[str] = []
+    unknown: list[str] = []
+    for run_id, run in runs.items():
+        if not isinstance(run, Mapping):
+            unknown.append(f"run:{run_id}")
+            continue
+        for worker_id, worker in run.get("workers", {}).items():
+            state = worker.get("state") if isinstance(worker, Mapping) else None
+            if state in store.NON_TERMINAL_WORKER_STATES:
+                active.append(f"worker:{run_id}:{worker_id}")
+            elif state in {"ORPHANED", "STALLED", "CONFLICT"} or state is None:
+                unknown.append(f"worker:{run_id}:{worker_id}")
+    return sorted(active), sorted(unknown)
+
+
 def record_resume_decision(root: str | Path, work_id: str, run_id: str,
                            admission: Mapping[str, str]) -> dict[str, Any]:
     """Record the sole explicit recovery decision; it never relaunches work."""
@@ -784,7 +823,15 @@ def _node_ready(run: Mapping[str, Any], node_id: str) -> bool:
     A ``FAILED``/``BLOCKED``/``CONFLICT``/``ORPHANED`` (never remediated to a
     success) lineage head must never satisfy a dependent's readiness check."""
     head = _node_lineage_head(run, node_id)
-    return head is not None and head.get("state") == "TERMINAL"
+    if head is None:
+        return False
+    if head.get("state") == "TERMINAL":
+        return True
+    # Cleanup is downstream of a successful integration.  A legacy CLEANED
+    # record only preserves that dependency proof when convergence was itself
+    # recorded; FAILED never becomes ready merely because it is terminal.
+    workspace = head.get("workspace")
+    return head.get("state") == "CLEANED" and isinstance(workspace, Mapping) and workspace.get("converged") is True
 
 
 def _allocate_wave_id(newest_wave_id: str) -> str:
@@ -1103,6 +1150,27 @@ def _workspace_target_absent(root: str | Path, target: Path, workspace: Mapping[
     return True
 
 
+def _workspace_is_registered(root: str | Path, target: Path, workspace: Mapping[str, Any]) -> bool:
+    """Check the declared path/ref pair without mistaking a real worker commit
+    for an identity change.
+
+    Preparation needs ``HEAD == base_commit``; cleanup happens after a worker
+    has committed and that same comparison would reject every legitimate
+    integrated result.  The branch OID is fenced separately immediately
+    before deleting the ref.
+    """
+    if target.is_symlink() or not target.exists():
+        return False
+    target_real = str(target.resolve(strict=False))
+    branch_marker = f"branch refs/heads/{workspace['branch']}"
+    matches = []
+    for block in _worktree_blocks(root):
+        path_line = next((line for line in block if line.startswith("worktree ")), None)
+        if path_line is not None and str(Path(path_line[9:]).resolve(strict=False)) == target_real:
+            matches.append(block)
+    return len(matches) == 1 and branch_marker in matches[0]
+
+
 def _porcelain_entries(target: str | Path) -> list[str] | None:
     """One ``--untracked-files=all`` status read, or ``None`` if Git refused.
 
@@ -1156,7 +1224,7 @@ def _worker_receipt_event(name: str, event_name: str, work_id: str, run_id: str,
 
 
 def _run_for_worker(root: str | Path, work_id: str, run_id: str,
-                    admission: Mapping[str, str]) -> dict[str, Any]:
+                    admission: Mapping[str, str], *, purpose: str = "prepare") -> dict[str, Any]:
     identity = _validate_admission(admission)
     _require_base_commit(root, identity)
     if not RUN_ID_RE.fullmatch(run_id):
@@ -1168,7 +1236,9 @@ def _run_for_worker(root: str | Path, work_id: str, run_id: str,
     if (not isinstance(run_admission, Mapping)
             or any(run_admission.get(key) != identity[key] for key in _ADMISSION_IDENTITY_KEYS)):
         _fail("IDENTITY-STALE", "current activation differs from run admission")
-    if run.get("state") in {"BLOCKED", "COMPLETE"}:
+    if purpose not in {"prepare", "cleanup"}:
+        _fail("INVALID-ARGUMENTS", "worker run purpose is invalid")
+    if run.get("state") == "BLOCKED" or (purpose == "prepare" and run.get("state") == "COMPLETE"):
         _fail("RUN-NOT-ELIGIBLE", "run is not eligible for worker preparation")
     return run
 
@@ -1244,6 +1314,14 @@ def _require_active_lease(lease: Mapping[str, Any]) -> None:
         _fail("LEASE-NOT-ACTIVE", "worker lease has expired; explicit recovery is required")
 
 
+def _require_orchestration_authority(root: str | Path, work_id: str, purpose: str) -> None:
+    """Keep a selected work item from borrowing another caller's authority."""
+    try:
+        store.require_orchestration_authority(root, work_id, purpose=purpose)
+    except store.StoreError as exc:
+        _fail("LEADER-AUTHORITY-UNPROVEN", exc.message)
+
+
 def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
                    scope_paths: Any, admission: Mapping[str, str], *,
                    node_id: str | None = None, remediates: str | None = None,
@@ -1288,7 +1366,12 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
     scopes = _strict_scopes(scope_paths)
     if any(_dag_scope_violation(path) for path in scopes):
         _fail("GRANT-OUT-OF-SCOPE", "worker grant targets out-of-scope evidence")
+    # Recovery and a PREPARED reuse are effects in their own right: without
+    # this first guard, a ContextVar for A could reach B's run through the
+    # root-only recovery reader before the eventual transaction fenced it.
+    _require_orchestration_authority(root, work_id, "prepare")
     store.recover_pending_transition(root)
+    _require_orchestration_authority(root, work_id, "prepare")
     run = _run_for_worker(root, work_id, run_id, identity)
     # ADR-0023: every receipt/event this call mints from here on must anchor
     # to the run's own recorded admission, never the freshly re-derived live
@@ -1307,6 +1390,7 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
                 _fail("WORKER-CONFLICT", "worker declaration differs from requested grant")
             if _workspace_git_state(root, target, expected_workspace) != "EXACT":
                 _fail("WORKSPACE-PRESERVED", "prepared worker worktree is not exact")
+            _require_orchestration_authority(root, work_id, "prepare")
             return _prepared_response(work_id, run_id, worker_id, expected_workspace, reused=True)
         if existing.get("state") == "ORPHANED":
             _fail("WORKSPACE-PRESERVED", "orphaned worker is preserved")
@@ -1386,6 +1470,7 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
         # Re-check after the durable PREPARING intent: it must never act as
         # an implicit lease renewal if time passed while recording evidence.
         _require_active_lease(current_lease)
+        _require_orchestration_authority(root, work_id, "prepare")
         target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         added = _git(root, "worktree", "add", "-b", expected_workspace["branch"], str(target), expected_workspace["base_commit"])
         if added.returncode != 0:
@@ -1940,10 +2025,14 @@ def remediate_node(root: str | Path, work_id: str, run_id: str, worker_id: str, 
 
 def cleanup_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
                    admission: Mapping[str, str]) -> dict[str, Any]:
-    """Remove only a recorded, terminal, clean, converged exact worktree."""
+    """Remove a proved integrated worker worktree and its exact old ref.
+
+    Cleanup intentionally has a different run purpose from preparation: a
+    COMPLETE run has no new work to prepare, but can still drain resources.
+    """
     identity = _validate_admission(admission); worker_id = _safe_name(worker_id, "worker")
     store.recover_pending_transition(root)
-    run = _run_for_worker(root, work_id, run_id, identity)
+    run = _run_for_worker(root, work_id, run_id, identity, purpose="cleanup")
     # ADR-0023: every receipt/event this call mints from here on must anchor
     # to the run's own recorded admission, never the freshly re-derived live
     # one -- gauntlet-converge advances HEAD on purpose, so live base_commit
@@ -1959,19 +2048,28 @@ def cleanup_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
         return {"verdict": "PRESERVED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
     if worker.get("state") == "CLEANED":
         return {"verdict": "REUSED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
-    predicates = worker.get("state") == "TERMINAL" and all(workspace.get(key) is True for key in ("clean", "converged", "cleanup_eligible"))
+    predicates = worker.get("state") == "TERMINAL" and all(
+        workspace.get(key) is True for key in ("clean", "converged", "cleanup_eligible")
+    )
     if worker.get("state") != "CLEANING" and not predicates:
         return {"verdict": "PRESERVED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
-    git_state = _workspace_git_state(root, target, expected)
     if worker.get("state") == "CLEANING" and _workspace_target_absent(root, target, workspace):
-        pass
-    elif git_state != "EXACT":
+        old_oid = (_branch_head(root, workspace["branch"])
+                   if _git(root, "show-ref", "--verify", "--quiet", f"refs/heads/{workspace['branch']}").returncode == 0
+                   else None)
+    elif not _workspace_is_registered(root, target, workspace):
         return {"verdict": "PRESERVED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
     elif not _exact_worktree_is_clean(root, target):
         # ``workspace.clean`` is a coordinator-recorded predicate, but it is
         # not a substitute for checking the exact Git worktree immediately
         # before we make a destructive intent visible.
         return {"verdict": "PRESERVED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
+    else:
+        old_oid = _branch_head(root, workspace["branch"])
+        # A branch may legitimately differ from base_commit.  It must instead
+        # be an ancestor of the current execution HEAD before deletion.
+        if _git(root, "merge-base", "--is-ancestor", old_oid, "HEAD").returncode != 0:
+            return {"verdict": "PRESERVED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
     if worker.get("state") == "TERMINAL":
         def cleaning(document: dict[str, Any]) -> dict[str, Any]:
             candidate = document["work_items"][work_id]["gauntlet"]["runs"][run_id]["workers"][worker_id]
@@ -1979,15 +2077,21 @@ def cleanup_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
             candidate["state"] = "CLEANING"; return document
         if not isinstance(lease, Mapping): _fail("LEASE-INVALID", "worker has no coordinator lease")
         _transition_worker(root, work_id, run_id, identity, name=f"gauntlet-worker-cleaning-{run_id}-{worker_id}", event_name="gauntlet.worker.cleaning", worker_id=worker_id, lease=lease, mutate=cleaning)
-        if _workspace_git_state(root, target, expected) != "EXACT":
+        if not _workspace_is_registered(root, target, workspace):
             return {"verdict": "PRESERVED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
-    if _workspace_git_state(root, target, expected) == "EXACT":
+    if _workspace_is_registered(root, target, workspace):
         if not _exact_worktree_is_clean(root, target):
+            return {"verdict": "PRESERVED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
+        if _branch_head(root, workspace["branch"]) != old_oid:
             return {"verdict": "PRESERVED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
         removed = _git(root, "worktree", "remove", str(target))
         if removed.returncode != 0: _fail("WORKTREE-REMOVE-FAILED", "could not remove exact worker worktree")
     if not _workspace_target_absent(root, target, workspace):
         _fail("WORKSPACE-PRESERVED", "worker worktree removal did not converge")
+    if old_oid is not None:
+        removed_ref = _git(root, "update-ref", "-d", f"refs/heads/{workspace['branch']}", old_oid)
+        if removed_ref.returncode != 0 or _git(root, "show-ref", "--verify", "--quiet", f"refs/heads/{workspace['branch']}").returncode == 0:
+            _fail("WORKSPACE-PRESERVED", "worker ref changed or could not be removed")
     def cleaned(document: dict[str, Any]) -> dict[str, Any]:
         candidate = document["work_items"][work_id]["gauntlet"]["runs"][run_id]["workers"][worker_id]
         if candidate.get("state") != "CLEANING": _fail("WORKER-CONFLICT", "worker changed before cleanup finalization")
@@ -2036,10 +2140,14 @@ def _converged_lineage_head(run: Mapping[str, Any], node_id: str) -> bool:
     already integrated.  ``FAILED``/``STALLED``/``ORPHANED``/``CONFLICT`` are
     terminal but never merged, so they never satisfy this."""
     entry = _node_lineage_head_entry(run, node_id)
-    if entry is None or entry[1].get("state") != "TERMINAL":
+    if entry is None:
         return False
     workspace = entry[1].get("workspace")
-    return isinstance(workspace, Mapping) and workspace.get("converged") is True
+    if not isinstance(workspace, Mapping) or workspace.get("converged") is not True:
+        return False
+    # A worker may be cleaned only after this exact convergence proof.  Older
+    # CLEANED records remain valid only with that retained flag.
+    return entry[1].get("state") in {"TERMINAL", "CLEANED"}
 
 
 def _all_converged(run: Mapping[str, Any], node_ids: Any) -> bool:
@@ -2113,6 +2221,11 @@ def _mint_worker_converged(root: str | Path, work_id: str, run_id: str, admissio
         if candidate_worker.get("state") != "TERMINAL":
             _fail("WORKER-CONFLICT", "worker changed before convergence could be recorded")
         candidate_worker["workspace"]["converged"] = True
+        # This is the only positive lifecycle proof carried by the legacy
+        # worker record.  The destructive path rechecks Git cleanliness,
+        # worktree identity, ancestry, and the exact branch OID immediately
+        # before removal.
+        candidate_worker["workspace"]["cleanup_eligible"] = True
         # Absence is the "resolved" signal (FR-011): a member that merges
         # after a block clears it in the very transaction that proves it.
         candidate_run["waves"][wave_id].pop("last_conflict", None)
@@ -2123,6 +2236,28 @@ def _mint_worker_converged(root: str | Path, work_id: str, run_id: str, admissio
         event_name="gauntlet.converge.worker-converged", worker_id=worker_id, lease=lease,
         mutate=mutate, wave_id=wave_id,
     )
+
+
+def _drain_cleanup(root: str | Path, work_id: str, run_id: str,
+                   admission: Mapping[str, str], run: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Best-effort cleanup after an accepted convergence.
+
+    A cleanup refusal preserves the already accepted integration and is
+    reported for checkpoint/status instead of replaying the worker action.
+    """
+    outcomes: list[dict[str, str]] = []
+    for worker_id, worker in sorted(run.get("workers", {}).items()):
+        workspace = worker.get("workspace") if isinstance(worker, Mapping) else None
+        if worker.get("state") not in {"TERMINAL", "CLEANING"} or not isinstance(workspace, Mapping):
+            continue
+        if workspace.get("converged") is not True:
+            continue
+        try:
+            result = cleanup_worker(root, work_id, run_id, worker_id, admission)
+            outcomes.append({"worker_id": worker_id, "verdict": str(result["verdict"])})
+        except GauntletRunError as error:
+            outcomes.append({"worker_id": worker_id, "verdict": "PRESERVED", "code": error.code})
+    return outcomes
 
 
 def _mint_wave_converged(root: str | Path, work_id: str, run_id: str,
@@ -2325,10 +2460,12 @@ def converge_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, wa
         wave = run["waves"][wave_id]
 
     run = _close_convergence_chain(root, work_id, run_id, identity, run, wave_id, nodes_by_id)
+    cleanup = _drain_cleanup(root, work_id, run_id, identity, run)
+    run = _read_runs(root, work_id)[run_id]
     return {
         "verdict": "WAVE-CONVERGED", "work_id": work_id, "run_id": run_id, "wave_id": wave_id,
         "converged": converged, "wave_converged": run["waves"][wave_id].get("converged") is True,
-        "run_state": run.get("state"),
+        "run_state": run.get("state"), "cleanup": cleanup,
     }
 
 

@@ -7,6 +7,7 @@ workspace back into the core, keeping the public JSON boundary acyclic.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -559,6 +560,35 @@ def current_activation(
             "trusted_asset_document_sha256": _sha256(trusted_bytes),
         },
     }
+
+
+def effective_activation(record: Mapping[str, Any], proof: Mapping[str, Any],
+                         bound: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Resolve a runtime-local activation without mutating the sealed config.
+
+    The configuration activation remains the source of scheduler limits and
+    policy pins.  A successor context supplies a separately proved runtime
+    identity; it never edits that source record or retroactively changes a
+    scheduler admission.
+    """
+    _validate_record(str(record.get("work_item_id", "")), record)
+    required = {"work_item_id", "work_item", "workflow", "runtime", "catalog"}
+    if not isinstance(proof, Mapping) or set(proof) != required:
+        raise _fail("ACTIVATION-REQUIRED", "runtime activation proof is invalid")
+    runtime = proof.get("runtime")
+    if not isinstance(runtime, Mapping) or runtime.get("id") not in ADAPTER_BY_RUNTIME:
+        raise _fail("UNKNOWN-RUNTIME", "runtime activation proof is invalid")
+    candidate = {
+        **{key: copy.deepcopy(proof[key]) for key in required},
+        "limits": copy.deepcopy(record["limits"]),
+        "tier_policy": {**copy.deepcopy(record["tier_policy"]), "adapter": runtime["adapter"]},
+    }
+    _validate_record(candidate["work_item_id"], candidate)
+    if bound is not None:
+        _validate_record(candidate["work_item_id"], dict(bound))
+        if dict(bound) != candidate:
+            raise _fail("IDENTITY-STALE", "runtime activation differs from successor context")
+    return candidate
 
 
 def activate(
