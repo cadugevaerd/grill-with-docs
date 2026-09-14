@@ -1,0 +1,18 @@
+{
+  "schema": "grill-task-result/v1",
+  "feature": "030-agent-orchestration",
+  "worker": "p04-a",
+  "completed": ["T008", "T009"],
+  "tasks": {
+    "T008": {
+      "status": "done",
+      "summary": "Added strict seven-field campaign validation, successor generation minting, exact historical bridge validation, and effective successor activation selection without changing scheduler pins or accepted output provenance.",
+      "evidence": "Temporary archive overlay from 14fec65b3dbd4b98ec454a7042cf666195b08342: PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_attestation_emitter_contract.py (56 tests, OK); PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_runtime_continuity (1 test, OK)."
+    },
+    "T009": {
+      "status": "done",
+      "summary": "Added idempotent prepare-switch and continuity resume with explicit quiescence, committed continuity checkpoint, CAS epoch acquisition, retained-resource/reconciliation projection, and read-only continuity status.",
+      "evidence": "Temporary archive overlay from 14fec65b3dbd4b98ec454a7042cf666195b08342: PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_checkpoint_contract.py (77 tests in 176.983s, OK)."
+    }
+  }
+}

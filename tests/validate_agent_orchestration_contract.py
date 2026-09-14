@@ -158,6 +158,35 @@ class AgentOrchestrationContract(unittest.TestCase):
                 store.require_orchestration_authority(root, "work-x", purpose="prepare")
             with store.orchestration_authority(root, "work-x", context_id="ctx-1", epoch=1, session_ref="session-1"):
                 store.require_orchestration_authority(root, "work-x", purpose="prepare")
+
+    def test_runtime_continuity(self):
+        """A switch preserves logical work and refuses activity inferred from silence."""
+        old = {"project_id": "sha256:" + "1" * 64, "run_id": "leader-work-x", "runtime": "codex",
+               "adapter": "codex", "registry_sha256": "sha256:" + "2" * 64,
+               "recovery_generation_id": "rg-" + "3" * 64, "plan_revision": 7}
+        successor = agent_orchestration.successor_campaign(old, runtime="claude", adapter="claude",
+            registry_sha256=old["registry_sha256"], bridge_seed={"checkpoint": "cp-1", "context": "ctx-1"})
+        bridge = agent_orchestration.campaign_bridge(old, successor,
+            accepted_outputs={"specify": {"receipt_ref": "r", "output_sha256": "sha256:" + "4" * 64}},
+            worktree_identity={"project_id": old["project_id"], "work_id": "work-x", "phase": "specify",
+                                "du": "work-item", "git_common_dir": "/repo/.git", "real_path": "/repo",
+                                "branch": "main"})
+        self.assertEqual((successor["project_id"], successor["run_id"], successor["plan_revision"]),
+                         (old["project_id"], old["run_id"], old["plan_revision"]))
+        self.assertNotEqual(successor["recovery_generation_id"], old["recovery_generation_id"])
+        self.assertEqual(bridge["from_campaign"], old)
+        bad = copy.deepcopy(successor); bad["plan_revision"] += 1
+        with self.assertRaises(agent_orchestration.OrchestrationError):
+            agent_orchestration.campaign_bridge(old, bad, accepted_outputs={}, worktree_identity={})
+        active, unknown = grill_workspace._continuity_quiescence(
+            {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"workers": {
+                "w": {"state": "PREPARED", "lease": {"expires_at": "2000-01-01T00:00:00Z"}}}}}}}}},
+            {"activities": {}, "resources": {}}, "work-x")
+        self.assertEqual(active, ["worker:run-1:w"]); self.assertEqual(unknown, [])
+        active, unknown = grill_workspace._continuity_quiescence(
+            {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"workers": {"w": {"state": "ORPHANED"}}}}}}}},
+            {"activities": {}, "resources": {}}, "work-x")
+        self.assertEqual(active, []); self.assertEqual(unknown, ["worker:run-1:w"])
     def boundary(self, probe=None, after=None, release=None, adapter="orca", capabilities=None, calls=None):
         probe = probe or native_sources()
         after = after or native_sources(released=True)

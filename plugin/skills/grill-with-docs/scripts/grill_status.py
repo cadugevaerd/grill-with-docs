@@ -155,7 +155,23 @@ def item_payload(
         findings=findings, blockers=blocked, sequence=item_sequence,
     )
     cleanup = workspace.grill_core_module("gauntlet_runs").cleanup_projection(root, bundle.work_id)
-    return {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": planning, "development": development, "governance": governance, "cleanup": cleanup, "blockers": blocked, "findings": sorted(findings), "closed": closed, "operational_status": operational_status, "pending_reasons": pending_reasons, "next_gate": "BLOCKED" if findings or blocked else (item_sequence[len(completed)] if len(completed) < len(item_sequence) else "complete")}
+    result = {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": planning, "development": development, "governance": governance, "cleanup": cleanup, "blockers": blocked, "findings": sorted(findings), "closed": closed, "operational_status": operational_status, "pending_reasons": pending_reasons, "next_gate": "BLOCKED" if findings or blocked else (item_sequence[len(completed)] if len(completed) < len(item_sequence) else "complete")}
+    store = workspace.grill_core_module("store")
+    snapshot_store = store.read_snapshot(root, required=False)
+    record = (snapshot_store.document.get("agent_orchestration", {}).get("work_items", {}).get(bundle.work_id)
+              if snapshot_store is not None else None)
+    if isinstance(record, dict):
+        context_id = record.get("current_context_id")
+        context = record.get("contexts", {}).get(context_id)
+        if isinstance(context, dict):
+            result["continuity"] = {"context_id": context_id, "epoch": context.get("epoch"),
+                "runtime": context.get("runtime"), "state": context.get("state"),
+                "checkpoint_head": record.get("checkpoint_head"),
+                "resources_retained": sorted(resource_id for resource_id, resource in record.get("resources", {}).items()
+                                             if resource.get("state") not in {"CLOSED", "REMOVED"}),
+                "operations_requiring_reconcile": sorted(operation_id for operation_id, operation in record.get("operations", {}).items()
+                                                          if operation.get("state") in {"INTENT", "APPLIED", "UNKNOWN"})}
+    return result
 
 
 def classify_item(*, planning: dict[str, Any], development: dict[str, Any], governance: dict[str, Any], findings: list[str], blockers: list[str], sequence: list[str] | None = None) -> tuple[bool, str, list[str]]:
