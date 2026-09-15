@@ -401,6 +401,18 @@ class AgentOrchestrationContract(unittest.TestCase):
                     axes = core._orca_presentation_axes({"provider": "codex", "source_ref": "orca:ctx-fixture"}, transcript)
                     self.assertEqual(bool(axes["installation"]), expected, command)
                     self.assertEqual((axes["trust"], axes["enablement"]), ({}, {}))
+                with mock.patch.object(core, "_runtime_config_axes", return_value={
+                    "configuration": {"state": "observed"},
+                    "enablement": {"state": "enabled"},
+                    "trust": {"state": "ready"},
+                }):
+                    axes = core._orca_presentation_axes(
+                        {"provider": "codex", "source_ref": "orca:ctx-fixture"},
+                        {"messages": orchestration_fixture.tool_pair("codex", "/native/codex plugin list --json", listing, "listing")},
+                    )
+                    self.assertEqual(axes["configuration"]["state"], "observed")
+                    self.assertEqual(axes["enablement"]["state"], "enabled")
+                    self.assertEqual(axes["trust"]["state"], "ready")
 
     def ready_presentation(self, runtime="codex", scope=None):
         return {

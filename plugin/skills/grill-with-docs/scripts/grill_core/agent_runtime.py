@@ -486,7 +486,8 @@ def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]
     for call, event_id, output in _tool_results(transcript):
         if _tool_command(call) != [shutil.which(observed["provider"]), "plugin", "list", "--json"]:
             continue
-        evidence = {"installation": {}, "enablement": {}, "trust": {}}
+        evidence["installation"] = {}
+        evidence.pop("plugin_listing", None)
         try:
             payload = _json_loads(output)
         except (TypeError, ValueError, StoreError):
