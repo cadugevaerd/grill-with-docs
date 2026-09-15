@@ -1,7 +1,7 @@
 ## Converge Report
 
 Outcome: BLOCKED
-Source fingerprint: tree 9218dcbd579b7e2f2aa91bddc7e6b5c0063bf32c8af06aafb7c2f939393af760 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6
+Source fingerprint: tree 4c644a79df7c170c1655d3fcb54177b62272e47755af41d8bc8708e51d826d13 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6
 Work item: `feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa`
 
 ### Findings

@@ -1,7 +1,7 @@
 ## Verify Report
 
 Verdict: BLOCKED
-Source fingerprint: tree 9218dcbd579b7e2f2aa91bddc7e6b5c0063bf32c8af06aafb7c2f939393af760 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6
+Source fingerprint: tree 4c644a79df7c170c1655d3fcb54177b62272e47755af41d8bc8708e51d826d13 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6
 Converge: BLOCKED
 
 ### Operational Gates
@@ -12,7 +12,7 @@ Converge: BLOCKED
 | focused orchestration contract | `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py` | PASS | 32 tests, OK | leader |
 | distribution | `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_distribution.py` | PASS | `distribution: OK` in canonical suite | leader |
 | Claude live style load | supervised Claude session on `ab52268` | PASS for loading axis | `STYLE-LIVE-VALIDATION.md`: second preflight `OK`, `loading=loaded`, `use_ready=true`, `work_ready=true`, approved SHA | Claude worker + independent high review |
-| Codex live style matrix | fresh Codex session | BLOCKED | hosted primary `gpt-5.6-luna` hit `usage_limit_exceeded`; Luna Reserve TUI completed a real probe and loaded GWD+i-have-adhd, then blocked on `LEADER-ADAPTER-UNSUPPORTED`/`BACKLOG-UNAVAILABLE`; local Ollama probe did not run canonical GWD/matrix | Codex runtime |
+| Codex live style matrix | fresh Codex session | BLOCKED | hosted primary `gpt-5.6-luna` hit `usage_limit_exceeded`; Luna Reserve TUI and direct CLI probes completed and loaded GWD+i-have-adhd, then canonical GWD blocked on `LEADER-ADAPTER-UNSUPPORTED`/`BACKLOG-UNAVAILABLE`; supervised Orca Reserve retry failed at `agent_readiness: codex-interactive-prompt`; local Ollama probe did not run canonical GWD/matrix | Codex runtime |
 
 ### Diff Hygiene
 
