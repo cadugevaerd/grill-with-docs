@@ -4,7 +4,7 @@ Status: **BLOCKED**
 
 ## Source and evidence
 
-- Source head: `bb77707` (`cadugevaerd/feat-new-subagents`).
+- Source head: `92a497c` (`cadugevaerd/feat-new-subagents`).
 - Converge: `BLOCKED` — T028/T029/T030 pending; Codex live quota blocker.
 - Verify: `BLOCKED` — no fresh `CONVERGED` evidence and no Codex live gate.
 - Review: `BLOCKED` — prerequisite gates unavailable; independent Claude review confirms partial evidence.
