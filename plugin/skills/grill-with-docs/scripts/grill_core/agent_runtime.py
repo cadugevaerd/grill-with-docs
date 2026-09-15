@@ -429,6 +429,52 @@ def _tool_command(call: dict[str, Any]) -> list[str]:
         return []
 
 
+def _runtime_config_axes(observed: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Read only the owning runtime's local config and plugin registry."""
+    if observed.get("host") != "local" or observed.get("provider") not in {"codex", "claude"}:
+        return {"configuration": {}, "enablement": {}, "trust": {}}
+    runtime = observed["provider"]
+    home = Path(os.environ.get("CODEX_HOME" if runtime == "codex" else "CLAUDE_CONFIG_DIR")
+                or Path.home() / (".codex" if runtime == "codex" else ".claude"))
+    files: list[tuple[Path, bytes]] = []
+    try:
+        if runtime == "codex":
+            paths = [home / "config.toml"]
+        else:
+            paths = [home / "settings.json", home / "plugins" / "installed_plugins.json"]
+        for path in paths:
+            raw, _ = _native_bytes(path, 2 * 1024 * 1024)
+            files.append((path, raw))
+    except (OSError, ValueError, RuntimeError):
+        return {"configuration": {}, "enablement": {}, "trust": {}}
+    if not files:
+        return {"configuration": {}, "enablement": {}, "trust": {}}
+    source_ref = ",".join(str(path) for path, _ in files)
+    source_sha256 = _sha256(b"\0".join(raw for _, raw in files))
+    enabled = trusted = False
+    if runtime == "codex":
+        text = files[0][1].decode("utf-8")
+        plugin = re.search(r'(?ms)^\[plugins\."i-have-adhd@i-have-adhd"\]\s*(.*?)(?=^\[|\Z)', text)
+        hook = re.search(r'(?ms)^\[hooks\.state\."i-have-adhd@i-have-adhd:[^\"]+"\]\s*(.*?)(?=^\[|\Z)', text)
+        enabled = bool(plugin and re.search(r"(?m)^enabled\s*=\s*true\s*$", plugin.group(1)))
+        trusted = bool(hook and re.search(r'(?m)^trusted_hash\s*=\s*"sha256:[0-9a-f]{64}"\s*$', hook.group(1)))
+    else:
+        settings = _json_loads(files[0][1].decode("utf-8"))
+        registry = _json_loads(files[1][1].decode("utf-8"))
+        enabled = isinstance(settings, dict) and isinstance(settings.get("enabledPlugins"), dict) and \
+            settings["enabledPlugins"].get("i-have-adhd@i-have-adhd") is True
+        records = registry.get("plugins", {}).get("i-have-adhd@i-have-adhd") if isinstance(registry, dict) else None
+        trusted = enabled and isinstance(records, list) and len(records) == 1 and \
+            isinstance(records[0], dict) and records[0].get("version") == "0.3.0" and \
+            isinstance(records[0].get("installPath"), str) and Path(records[0]["installPath"]).is_absolute()
+    axes = {"configuration": {"state": "observed", "source_ref": source_ref, "source_sha256": source_sha256},
+            "enablement": {"state": "enabled" if enabled else "disabled", "source_ref": source_ref,
+                           "source_sha256": source_sha256},
+            "trust": {"state": "ready" if trusted else "undetermined", "source_ref": source_ref,
+                      "source_sha256": source_sha256}}
+    return axes
+
+
 def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]) -> dict[str, Any]:
     """Extract only native plugin-list fields. Orca has no startup-trust field.
 
@@ -436,6 +482,7 @@ def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]
     neither a live worker nor a successful tool exit proves hook approval.
     """
     evidence: dict[str, Any] = {"installation": {}, "enablement": {}, "trust": {}}
+    evidence.update(_runtime_config_axes(observed))
     for call, event_id, output in _tool_results(transcript):
         if _tool_command(call) != [shutil.which(observed["provider"]), "plugin", "list", "--json"]:
             continue
