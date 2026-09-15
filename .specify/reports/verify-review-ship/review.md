@@ -1,7 +1,7 @@
 ## Review Report
 
 Verdict: BLOCKED
-Source fingerprint: tree c08391f3d2dce303f36d2ac7e012f42aea8b3dadae55ab45ef9c0f3054f8d241 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6
+Source fingerprint: tree 71c0901d3ae6c2dd4f8e6f8bc58bfa9547bd917cc92d6ad4a2b384fecbd5e834 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6
 
 Required prerequisite evidence is unavailable: Converge is BLOCKED and Verify is BLOCKED. An independent high review of the Claude loading laudo exists at `STYLE-LIVE-INDEPENDENT-REVIEW.md`; it confirms the laudo is honest but partial and confirms zero live Codex evidence.
 
@@ -11,7 +11,7 @@ The 32-test orchestration contract passes. The required live behavioral matrix i
 
 ### Runtime Correctness
 
-The Claude transport fixes are covered by regression tests and the live Claude load sequence. The Codex runtime path has no live session evidence because the runtime quota rejected the attempt before a model turn.
+The Claude transport fixes are covered by regression tests and the live Claude load sequence. Hosted Codex Luna has no model-turn evidence because quota rejected it; the local OSS probe is outside the required canonical GWD matrix.
 
 ### Readability
 
