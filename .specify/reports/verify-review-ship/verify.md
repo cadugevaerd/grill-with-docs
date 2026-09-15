@@ -12,7 +12,7 @@ Converge: BLOCKED
 | focused orchestration contract | `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py` | PASS | 32 tests, OK | leader |
 | distribution | `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_distribution.py` | PASS | `distribution: OK` in canonical suite | leader |
 | Claude live style load | supervised Claude session on `ab52268` | PASS for loading axis | `STYLE-LIVE-VALIDATION.md`: second preflight `OK`, `loading=loaded`, `use_ready=true`, `work_ready=true`, approved SHA | Claude worker + independent high review |
-| Codex live style matrix | fresh Codex session | BLOCKED | hosted primary `gpt-5.6-luna` hit `usage_limit_exceeded`; Luna Reserve TUI and direct CLI probes completed and loaded GWD+i-have-adhd, then canonical GWD blocked on `LEADER-ADAPTER-UNSUPPORTED`/`BACKLOG-UNAVAILABLE`; supervised Orca Reserve retry failed at `agent_readiness: codex-interactive-prompt`; local Ollama probe did not run canonical GWD/matrix | Codex runtime |
+| Codex live style matrix | fresh Codex session | BLOCKED | hosted primary `gpt-5.6-luna` hit `usage_limit_exceeded`; Luna Reserve TUI and direct CLI probes completed and loaded GWD+i-have-adhd, then canonical GWD blocked on `LEADER-ADAPTER-UNSUPPORTED`/`BACKLOG-UNAVAILABLE`; supervised Orca Reserve retry and pre-open Luna terminal both failed at `agent_readiness: codex-interactive-prompt` (selection also `agent_prompt_blocked`); local Ollama probe did not run canonical GWD/matrix | Codex runtime |
 
 ### Diff Hygiene
 

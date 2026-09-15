@@ -3,7 +3,7 @@
 Verdict: BLOCKED
 Source fingerprint: tree 4c644a79df7c170c1655d3fcb54177b62272e47755af41d8bc8708e51d826d13 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6
 
-Required prerequisite evidence is unavailable: Converge is BLOCKED and Verify is BLOCKED. An independent high review of the Claude loading laudo exists at `STYLE-LIVE-INDEPENDENT-REVIEW.md`; it confirms the laudo is honest but partial. Luna Reserve now supplies a real Codex turn and bootstrap-loading evidence, but no accepted Orca-authorized C1/C2 result.
+Required prerequisite evidence is unavailable: Converge is BLOCKED and Verify is BLOCKED. An independent high review of the Claude loading laudo exists at `STYLE-LIVE-INDEPENDENT-REVIEW.md`; it confirms the laudo is honest but partial. Luna Reserve now supplies a real Codex turn and bootstrap-loading evidence, but no accepted Orca-authorized C1/C2 result; supervised prompt transport also remains blocked.
 
 ### Test Quality
 
@@ -11,7 +11,7 @@ The 32-test orchestration contract passes. The required live behavioral matrix i
 
 ### Runtime Correctness
 
-The Claude transport fixes are covered by regression tests and the live Claude load sequence. Hosted primary Codex Luna was quota-rejected; Luna Reserve completed real turns and loaded both skills but GWD blocked before work-item creation on missing Orca authority/backlog, while a supervised Orca Reserve retry stopped at `codex-interactive-prompt`. The local OSS probe is outside the required canonical GWD matrix.
+The Claude transport fixes are covered by regression tests and the live Claude load sequence. Hosted primary Codex Luna was quota-rejected; Luna Reserve completed real turns and loaded both skills but GWD blocked before work-item creation on missing Orca authority/backlog, while supervised Orca Reserve and pre-open Luna retries stopped at `codex-interactive-prompt` (`agent_prompt_blocked` on selection). The local OSS probe is outside the required canonical GWD matrix.
 
 ### Readability
 
