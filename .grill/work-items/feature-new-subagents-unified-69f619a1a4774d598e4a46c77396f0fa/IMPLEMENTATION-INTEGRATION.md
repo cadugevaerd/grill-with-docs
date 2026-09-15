@@ -71,3 +71,9 @@ Até ship encerrado, manter CLI absoluto e manifest do bundle histórico 5.4.1; 
 ## Critério para atualizar este dossiê
 
 O líder substitui pendência por resultado somente com fonte observada, identidade/contexto, bytes/digests e verificação correspondente. Julgamento high independente não é substituído por checks determinísticos. Evidência é estrutural auditável, sem prova criptográfica de execução de modelo/skill; instalação, habilitação, hook aprovado e exit 0 isolados não demonstram comportamento. Este draft não contém PASS live, aceite T028–T030, atestação canônica ou confirmação de publicação.
+
+## Atualização T029 — 2026-09-15
+
+Laudo líder em `STYLE-LIVE-VALIDATION.md`: Claude Code 2.1.272 executou a sequência canônica em sessão nova sobre `ab52268`; a segunda leitura retornou `loading=loaded`, `use_ready=true`, `work_ready=true`, com o SHA aprovado e fallback local do transcript confirmado. Codex mantém `i-have-adhd` 0.3.0 instalado no cache efetivo e com o mesmo SHA, porém a sessão live foi recusada pela quota do runtime (`You've hit your usage limit`, retomada informada para 2026-09-19); não há PASS live Codex.
+
+T028, T029 e T030 permanecem pendentes: a matriz exige os dois CLIs, respostas comportamentais e revisão high independente. Nenhuma tarefa ou gate posterior deve ser marcado como concluído com esta limitação.
