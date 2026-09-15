@@ -95,3 +95,7 @@ O worker enviou `worker_done` com outcome `succeeded` e foi liberado com archive
 ### Reteste direto Luna Reserve — 2026-09-15
 
 `codex exec --json --model gpt-reserve --sandbox read-only --cd <ROOT> 'Respond with exactly LUNA_FINAL_PROBE.'` concluiu com exit 0, resposta exata `LUNA_FINAL_PROBE` e `turn.completed`; thread `01a0a5be-1098-7a72-996d-34fae8176016`, transcript nativo `/home/carlosaraujo/.codex/sessions/2026/09/15/rollout-2026-09-15T12-44-51-01a0a5be-1098-7a72-996d-34fae8176016.jsonl`. Isto reforça que o Codex funciona no modelo Luna Reserve via CLI direto; não substitui a sessão Orca autorizada nem a matriz T029.
+
+### Reteste direto do transporte Orca — 2026-09-15
+
+Uma aba descartável no worktree `gwd-live-evidence` foi aberta com `codex -m gpt-reserve -s read-only -C <ROOT>`. A UI confirmou `model: Luna Reserve medium`, mas `orca terminal send --terminal term_c99514c6-8758-462c-855a-b6f265a3b2fd --text '2' --enter --wait-submit 5` falhou com `agent_prompt_blocked` (request `0b2b4ae4-8d4e-4980-aee5-b5d8c4b68043`); o retry exigido pelo mesmo ID falhou novamente com o mesmo código. A aba foi fechada com `ptyKilled=true`. Isso isola o bloqueio no transporte de entrada Orca, antes de qualquer turno, e não no modelo Luna Reserve.

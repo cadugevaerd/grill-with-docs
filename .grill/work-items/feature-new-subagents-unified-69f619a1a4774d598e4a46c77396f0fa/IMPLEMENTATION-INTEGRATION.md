@@ -90,4 +90,6 @@ Reteste com terminal Codex Luna Reserve pré-aberto (`task_3726d7cda3b4`, dispat
 
 Probe direto posterior: `codex exec --json --model gpt-reserve --sandbox read-only --cd <ROOT> 'Respond with exactly LUNA_FINAL_PROBE.'` retornou `LUNA_FINAL_PROBE`, exit 0 e `turn.completed` na thread `01a0a5be-1098-7a72-996d-34fae8176016`; confirma funcionamento do Codex Luna Reserve pelo CLI não interativo, sem alterar a pendência de C1/T029.
 
+Reteste de transporte: uma aba descartável iniciou `codex -m gpt-reserve -s read-only -C <ROOT>` e exibiu `Luna Reserve medium`, porém `orca terminal send` para selecionar `Continue with Luna Reserve` retornou `agent_prompt_blocked`; o retry pelo request `0b2b4ae4-8d4e-4980-aee5-b5d8c4b68043` repetiu a falha. A aba foi fechada com `ptyKilled=true`, confirmando bloqueio de entrada Orca antes do turno e sem alterar a prova direta do CLI.
+
 Nova evidência Claude A2: dispatch `ctx_c091ed30a3cc`, task `task_22d826d4ade4`, terminal `term_38bcdf93-10c1-4927-a340-1422ee672e3d`; plugin-list absoluto, preflight `STYLE-LOAD-UNCONFIRMED`, leitura integral pelo `cat` exato e segundo preflight `OK` com `loading=loaded`, `use_ready=true`, `work_ready=true`, `evidence_kind=full_read` e `worker_done` aceito. Isto fecha a prova de carga do A2, mantendo T029 pendente até comportamento, compactação, suspensão e revisão high.
