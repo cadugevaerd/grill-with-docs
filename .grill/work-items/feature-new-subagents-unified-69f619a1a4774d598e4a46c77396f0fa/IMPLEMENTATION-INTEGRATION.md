@@ -77,3 +77,9 @@ O líder substitui pendência por resultado somente com fonte observada, identid
 Laudo líder em `STYLE-LIVE-VALIDATION.md`: Claude Code 2.1.272 executou a sequência canônica em sessão nova sobre `ab52268`; a segunda leitura retornou `loading=loaded`, `use_ready=true`, `work_ready=true`, com o SHA aprovado e fallback local do transcript confirmado. Codex mantém `i-have-adhd` 0.3.0 instalado no cache efetivo e com o mesmo SHA, porém a sessão live foi recusada pela quota do runtime (`You've hit your usage limit`, retomada informada para 2026-09-19); não há PASS live Codex.
 
 T028, T029 e T030 permanecem pendentes: a matriz exige os dois CLIs, respostas comportamentais e revisão high independente. Nenhuma tarefa ou gate posterior deve ser marcado como concluído com esta limitação.
+
+### Atualização T029 — Luna Reserve — 2026-09-15
+
+Uma sessão TUI nativa iniciada com `codex -m gpt-5.6-luna -s read-only -C <worktree>` atingiu o limite do Luna primário e foi continuada pela opção `Continue with Luna Reserve`. O transcript nativo registra proveniência `gpt-5.6-luna`, provider `openai`, modelo efetivo `gpt-reserve`/Luna Reserve, esforço `medium` e probe real `LUNA_TUI_PROBE`; o prompt canônico subsequente carregou `grill-with-docs` e `i-have-adhd` antes de bloquear corretamente em `LEADER-ADAPTER-UNSUPPORTED` e `BACKLOG-UNAVAILABLE`, sem criar work item. Um probe adicional `codex exec --json --model gpt-reserve` respondeu `RESERVE_EXEC_PROBE` com exit 0 na sessão `01a0a5a8-ec4e-7b03-b9cb-289bc10bb947`.
+
+Esta evidência confirma que o caminho Codex/Luna Reserve e o bootstrap de apresentação funcionam, mas não fornece a sessão Orca `orca:ctx-*`, o backlog JSON ou a matriz C1/C2/A1/A2 exigidos por T028/T029; `functional_verified` permanece `false`.
