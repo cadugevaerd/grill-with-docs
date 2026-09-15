@@ -99,3 +99,13 @@ O worker enviou `worker_done` com outcome `succeeded` e foi liberado com archive
 ### Reteste direto do transporte Orca — 2026-09-15
 
 Uma aba descartável no worktree `gwd-live-evidence` foi aberta com `codex -m gpt-reserve -s read-only -C <ROOT>`. A UI confirmou `model: Luna Reserve medium`, mas `orca terminal send --terminal term_c99514c6-8758-462c-855a-b6f265a3b2fd --text '2' --enter --wait-submit 5` falhou com `agent_prompt_blocked` (request `0b2b4ae4-8d4e-4980-aee5-b5d8c4b68043`); o retry exigido pelo mesmo ID falhou novamente com o mesmo código. A aba foi fechada com `ptyKilled=true`. Isso isola o bloqueio no transporte de entrada Orca, antes de qualquer turno, e não no modelo Luna Reserve.
+
+### Reteste direto Orca com entrada canônica GWD — 2026-09-15
+
+O terminal `term_c052473b-5d6e-412f-8c24-df0a8b9fffd8` foi iniciado oficialmente com `codex -m gpt-reserve -s read-only -C <ROOT> --no-alt-screen`. O terminal mostrou `model: Luna Reserve medium`, respondeu exatamente `ORCA_RESERVE_INITIAL_PROBE` e `ORCA_RESERVE_SECOND_PROBE`, e `orca terminal send` observou `input_accepted` + `turn_started` para o segundo prompt (`requestId=d4e283a0-5c90-41bd-a68e-ffeb6ef1703e`).
+
+Na mesma sessão, `orca terminal send` aceitou a entrada canônica `$grill-with-docs:grill-with-docs iniciar <ROOT>` (`requestId=bb083101-c589-442e-87f9-7122819d3fa5`). A sessão leu `SKILL.md`, `session-protocol.md` e `agent-orchestration.md`, executou o preflight e encerrou sem criar work item: `LEADER-AUTHORITY-UNPROVEN`, seguido de `LEADER-ADAPTER-UNAVAILABLE`, porque a sessão manual não tinha Dispatch/worker Orca observável nem `session_ref=orca:ctx-*` válido.
+
+Tentativa de anexar esse terminal ao fluxo supervisionado (`ctx_a7061ff9904b`, `worker-start --terminal ... --worktree current`) falhou em `agent_readiness: codex-interactive-prompt`; o registro marcou `exactWorker=false`. A prova confirma inferência Luna Reserve e entrada canônica GWD pelo transporte de terminal, além do gate de autoridade, mas não satisfaz C1/C2, T028 ou T029: continua faltando worker Orca gerenciado com `orca:ctx-*`, matriz de prompts, compactação, suspensão, controles externos e revisão high.
+
+Observação: a sessão exibiu `Hook failed: hook returned invalid session start JSON output` para o hook upstream de `i-have-adhd`; o fluxo GWD continuou pelo carregamento referencial aprovado e não executou o hook upstream como parte do protocolo.
