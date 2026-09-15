@@ -1,7 +1,7 @@
 ## Verify Report
 
 Verdict: BLOCKED
-Source fingerprint: tree 71c0901d3ae6c2dd4f8e6f8bc58bfa9547bd917cc92d6ad4a2b384fecbd5e834 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6
+Source fingerprint: tree c2fd351bae1636e8ac9e7fa073cd3a3557c2a4d8be925c7ca63b7115de1211b1 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6
 Converge: BLOCKED
 
 ### Operational Gates
@@ -12,7 +12,7 @@ Converge: BLOCKED
 | focused orchestration contract | `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py` | PASS | 32 tests, OK | leader |
 | distribution | `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_distribution.py` | PASS | `distribution: OK` in canonical suite | leader |
 | Claude live style load | supervised Claude session on `ab52268` | PASS for loading axis | `STYLE-LIVE-VALIDATION.md`: second preflight `OK`, `loading=loaded`, `use_ready=true`, `work_ready=true`, approved SHA | Claude worker + independent high review |
-| Codex live style matrix | fresh Codex session | BLOCKED | hosted `gpt-5.6-luna` hit `usage_limit_exceeded` before a model turn; local Ollama probe answered but did not run canonical GWD/matrix; quota reset reported 2026-09-19 08:01 | Codex runtime |
+| Codex live style matrix | fresh Codex session | BLOCKED | hosted primary `gpt-5.6-luna` hit `usage_limit_exceeded`; Luna Reserve TUI completed a real probe and loaded GWD+i-have-adhd, then blocked on `LEADER-ADAPTER-UNSUPPORTED`/`BACKLOG-UNAVAILABLE`; local Ollama probe did not run canonical GWD/matrix | Codex runtime |
 
 ### Diff Hygiene
 
@@ -20,12 +20,12 @@ Worktree clean at `ab52268` lineage; no secrets or environment files added. Docu
 
 ### Executable Scenarios
 
-T028/T029/T030 remain unchecked. Claude evidence covers only automatic loading; behavior, compactation, suspension, external control, canonical GWD entry, and the Codex matrix remain unproven.
+T028/T029/T030 remain unchecked. Claude evidence covers only automatic loading; Luna Reserve covers a real Codex turn and bootstrap loading, while behavior, compactation, suspension, external control, canonical GWD entry with Orca authority, and the Codex matrix remain unproven.
 
 ### Failures / Blockers
 
 - Official Converge cannot return `CONVERGED` while T028/T029/T030 are pending.
-- Codex hosted live evidence is unavailable by external quota. The local OSS transcript proves only a Codex CLI turn, not FR-024/SC-008; installed cache presence and offline preflight remain insufficient.
+- Codex primary hosted capacity is unavailable by external quota. Luna Reserve is usable for a model turn but its canonical GWD attempt lacked Orca authority/backlog, so it does not prove FR-024/SC-008. The local OSS transcript proves only a Codex CLI turn; installed cache presence and offline preflight remain insufficient.
 
 ### Next Action
 
