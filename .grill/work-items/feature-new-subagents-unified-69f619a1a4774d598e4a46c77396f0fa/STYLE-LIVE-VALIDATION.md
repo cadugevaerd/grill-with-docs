@@ -79,3 +79,9 @@ Evidência de carga (`evidence.loading`): `evidence_kind=full_read`, `event_ref=
 - Tentativa supervisionada Orca adicional: task `task_951c5e9c310d`, dispatch `ctx_eca4f50c6767`, requested/effective `gpt-reserve/low`, worktree descartável `gwd-live-evidence`; falhou antes do turno em `agent_readiness: codex-interactive-prompt`. O terminal residual foi liberado (`worker-release`, archive capturado); não há evidência de payload nem de bootstrap nessa tentativa.
 - Na mesma sessão, prompt canônico `$grill-with-docs iniciar <worktree>` carregou `grill-with-docs` e `i-have-adhd` e executou o bootstrap. O fluxo encerrou corretamente sem criar work item por `LEADER-ADAPTER-UNSUPPORTED` (sem `session_ref` `orca:ctx-*`), `BACKLOG-UNAVAILABLE` e diretório temporário indisponível; portanto a prova confirma o caminho Luna/Codex e o carregamento do stack, mas não satisfaz C1/C2, T028 ou T029.
 - Conclusão: Luna Reserve permite turno Codex funcional e carregamento GWD; `functional_verified` continua `false` até uma sessão Orca com adapter, backlog JSON e a matriz C1/C2 completos.
+
+### Reteste de inicialização supervisionada Luna Reserve — 2026-09-15
+
+Foi criado o dispatch `ctx_6297e262c85f` (`task_3726d7cda3b4`) reutilizando o terminal Codex `term_1f904333-8a16-4a51-901e-48b37926800e` já aberto com `codex -m gpt-reserve`. A interface exibiu `Continue with Luna Reserve`, porém o envio Orca para selecionar a opção retornou `agent_prompt_blocked` (request `1ffcfcac-afd9-4677-b3e1-9f9b7b5079c0` também recusado no retry); o dispatch terminou em `agent_readiness: codex-interactive-prompt`, sem turno, bootstrap ou matriz GWD, e o terminal foi fechado.
+
+Este reteste confirma que o bloqueio é do transporte de prompt interativo supervisionado, não da inferência Luna Reserve já comprovada por `LUNA_TUI_PROBE` e `RESERVE_EXEC_PROBE`. Não há nova evidência C1/C2 ou T029; `functional_verified` permanece `false`.

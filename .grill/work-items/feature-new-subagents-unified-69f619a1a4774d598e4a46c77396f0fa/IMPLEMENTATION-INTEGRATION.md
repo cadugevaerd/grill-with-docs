@@ -85,3 +85,5 @@ Uma sessão TUI nativa iniciada com `codex -m gpt-5.6-luna -s read-only -C <work
 Esta evidência confirma que o caminho Codex/Luna Reserve e o bootstrap de apresentação funcionam, mas não fornece a sessão Orca `orca:ctx-*`, o backlog JSON ou a matriz C1/C2/A1/A2 exigidos por T028/T029; `functional_verified` permanece `false`.
 
 Uma tentativa Orca supervisionada adicional (`task_951c5e9c310d`, dispatch `ctx_eca4f50c6767`, requested/effective `gpt-reserve/low`) falhou antes do turno em `agent_readiness: codex-interactive-prompt`; o terminal residual foi liberado e arquivado. O limite é de inicialização do agente interativo Orca, independente da quota e do turno Codex Reserve já comprovado.
+
+Reteste com terminal Codex Luna Reserve pré-aberto (`task_3726d7cda3b4`, dispatch `ctx_6297e262c85f`, terminal `term_1f904333-8a16-4a51-901e-48b37926800e`) reproduziu o bloqueio: a UI ofereceu `Continue with Luna Reserve`, mas a seleção via transporte Orca retornou `agent_prompt_blocked` e o dispatch encerrou em `agent_readiness: codex-interactive-prompt`. O terminal foi fechado sem turno ou bootstrap; a prova direta Luna Reserve continua válida, porém C1/T029 não avançam.
