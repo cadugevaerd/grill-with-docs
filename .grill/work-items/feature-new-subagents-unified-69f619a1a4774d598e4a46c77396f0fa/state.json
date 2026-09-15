@@ -302,6 +302,30 @@
         "reason": "",
         "state": "complete",
         "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/converge.md",
+            "sha256": "388ffaecf72bda75444e00b1501970c5532a24f4828297616365d3eb941c7e30"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Converge executada; T028/T029/T030 permanecem pendentes por quota Codex",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".specify/reports/verify-review-ship/converge.md",
+            "sha256": "388ffaecf72bda75444e00b1501970c5532a24f4828297616365d3eb941c7e30"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Codex live indisponível por usage_limit_exceeded; matriz obrigatória dos dois CLIs não pode ser concluída",
+        "state": "blocked",
+        "step": "converge"
       }
     ],
     "chain_stale": [],
@@ -325,7 +349,7 @@
     "steps": {
       "analyze": "complete",
       "checklist": "complete",
-      "converge": "pending",
+      "converge": "blocked",
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
