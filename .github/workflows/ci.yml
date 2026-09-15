@@ -41,7 +41,8 @@ jobs:
       github.event_name == 'pull_request' ||
       !startsWith(github.event.head_commit.message, 'Merge pull request ')
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # A suíte completa da 6.x passa de 20 min nos runners; o corte cancelava a matriz.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

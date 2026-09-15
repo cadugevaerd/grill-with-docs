@@ -1,0 +1,11 @@
+{
+  "audit_verdict": "PREPARED",
+  "mode": "hotfix",
+  "post_ship": [
+    "reconcile",
+    "full-document-audit"
+  ],
+  "status": "prepared",
+  "version": "1.1.0",
+  "work_id": "hotfix-full-read-compaction-portability-279caac3f13b4064b0bc871a3fd88066"
+}

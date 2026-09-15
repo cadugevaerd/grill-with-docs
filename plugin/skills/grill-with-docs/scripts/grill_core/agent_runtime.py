@@ -825,6 +825,12 @@ class LeaderBoundary:
 def _full_read(observed: dict[str, Any], transcript: dict[str, Any], request: dict[str, Any] | None) -> dict[str, Any] | None:
     if request is None:
         return None
+    # A compaction drops the reference body from context: only reads after the last one count.
+    messages = transcript.get("messages", [])
+    last_compaction = max((index for index, message in enumerate(messages) if isinstance(message, dict)
+                           and any(isinstance(block, dict) and block.get("type") == "compaction"
+                                   for block in message.get("blocks") or [])), default=-1)
+    transcript = {**transcript, "messages": messages[last_compaction + 1:]}
     requested = False
     for call, event_id, output in _tool_results(transcript):
         command = _tool_command(call)

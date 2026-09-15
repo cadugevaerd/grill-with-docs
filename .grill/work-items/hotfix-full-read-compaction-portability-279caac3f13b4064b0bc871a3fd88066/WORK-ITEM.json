@@ -1,0 +1,66 @@
+{
+  "conflicts-with-adrs": [],
+  "depends-on-work": [],
+  "hotfix": {
+    "closed": true,
+    "constitution-evidence": "{\"path\": \".grill/triage-evidence/hotfix-6-0-1-constitution.md\", \"sha256\": \"4e0395651f8e447be30e2d563c3b9578d7d5d83c69a0737a643be88fdb3ff0b1\"}",
+    "correction-test": "test_exact_native_commands_and_envelope: leitura seguida de compaction -> None, releitura após compaction -> aceita; macOS CI validate_agent_orchestration_contract 32 OK; Windows CI smoke OK",
+    "evidence": ".grill/triage-evidence/hotfix-6-0-1-debug-report.md; triage tri-hotfix-6-0-1; CI runs 35009700240 e 35018334831",
+    "post_ship": [
+      "reconcile",
+      "full-document-audit"
+    ],
+    "reproduction": "29c9668: _full_read aceita cat -- anterior a bloco compaction; sessão Claude 064b802e pós /compact deu preflight OK com event_ref 92ae25c6 anterior. TMPDIR symlink reproduz 3 FAIL macOS; fixture SKILL.md em CRLF reproduz FAIL Windows STYLE-CONTENT-INCOMPATIBLE.",
+    "rollback": "Reverter o commit do hotfix 6.0.1 em main e republicar 6.0.0 pela tag imutável v6.0.0; nenhum estado persistente muda de formato",
+    "scope": ".gitattributes,.github/workflows/ci.yml,plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py,tests/validate_agent_orchestration_contract.py,tests/validate_distribution.py,plugin/.claude-plugin/plugin.json,plugin/.codex-plugin/plugin.json,.claude-plugin/marketplace.json,.agents/plugins/marketplace.json,plugin/skills/grill-with-docs/SKILL.md,plugin/skills/grill-with-docs/references/session-protocol.md,README.md,CHANGELOG.md,.grill/triage-evidence/hotfix-6-0-1-debug-report.md,.grill/triage-evidence/hotfix-6-0-1-constitution.md,.grill/triage/tri-hotfix-6-0-1.json",
+    "test-command": "python3 tests/validate_agent_orchestration_contract.py",
+    "test-timeout": 180
+  },
+  "hotfix_sha256": "894e04a49baf1258e39cdf570e0a46cad6f5bdfb2c0dda1ebc413f89967cb16d",
+  "immutable": {
+    "base_commit": "29c96681b714ac7ca827e79a5c4ba405795f71f2",
+    "base_ref": "origin/cadugevaerd/hotfix-6-0-1",
+    "branch": "cadugevaerd/hotfix-6-0-1",
+    "constitution": {
+      "path": ".specify/memory/constitution.md",
+      "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+      "state": "present"
+    },
+    "head": "29c96681b714ac7ca827e79a5c4ba405795f71f2",
+    "schema": "grill-work-item/v2",
+    "slug": "full-read-compaction-portability",
+    "type": "hotfix",
+    "work_id": "hotfix-full-read-compaction-portability-279caac3f13b4064b0bc871a3fd88066",
+    "workflow": {
+      "path": "WORKFLOW.md",
+      "sha256": "d2c4ea0806ea5e8235678582154aedaeb0ba686641bd836934bffe133db60ab5"
+    }
+  },
+  "immutable_sha256": "32168b0622ea7f0977a6132acdfe3180a94671682c79a2bcebc56339da510f71",
+  "initial_artifacts": {
+    "CONSTITUTION-CHECK.md": "8dcf6f6ca3b604890407e89e6d59ff2725f09a54345a1b692c9b46ac889e3af2",
+    "HOTFIX.md": "68e40ab0b36eb391a2170c13773406773d17f1965dcc39a62664e25f0928ec90",
+    "state.json": "a54dc73e2dbf8a44d0bcbdf4a0821fa9352f58d0c223154c9e20930f31bc4c03"
+  },
+  "schema": "grill-work-item/v2",
+  "scope": {
+    "paths": [
+      ".gitattributes",
+      ".github/workflows/ci.yml",
+      "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+      "tests/validate_agent_orchestration_contract.py",
+      "tests/validate_distribution.py",
+      "plugin/.claude-plugin/plugin.json",
+      "plugin/.codex-plugin/plugin.json",
+      ".claude-plugin/marketplace.json",
+      ".agents/plugins/marketplace.json",
+      "plugin/skills/grill-with-docs/SKILL.md",
+      "plugin/skills/grill-with-docs/references/session-protocol.md",
+      "README.md",
+      "CHANGELOG.md",
+      ".grill/triage-evidence/hotfix-6-0-1-debug-report.md",
+      ".grill/triage-evidence/hotfix-6-0-1-constitution.md",
+      ".grill/triage/tri-hotfix-6-0-1.json"
+    ]
+  }
+}
