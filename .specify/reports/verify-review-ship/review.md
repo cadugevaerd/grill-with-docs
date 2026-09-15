@@ -1,7 +1,7 @@
 ## Review Report
 
 Verdict: BLOCKED
-Source fingerprint: tree fc64dc4c0ae2e55f9fcc281137bc30a05eac51df9a011ad9b4d99ba915f76b32 / work 8ddf4bbc01243e86bae05452caf973a77a16835553367c8858ed66da7e1231f1 / plan 910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6
+Source fingerprint: tree 267c3e530a380cdaabe90f14aa29ee1862d5a22012c4be77e30088a794389cc9 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 910bd12d2dca46423c22cb0da70192f9c8819d4dd72e916b2897a755ab6a6
 
 Required prerequisite evidence is unavailable: Converge is BLOCKED and Verify is BLOCKED. Independent review confirms the Claude A1/A2 load evidence is honest but partial. Luna Reserve now supplies a real Codex turn and bootstrap-loading evidence, but no accepted Orca-authorized C1/C2 result; supervised prompt transport also remains blocked.
 
