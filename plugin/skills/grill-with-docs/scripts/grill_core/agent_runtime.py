@@ -594,7 +594,7 @@ def _native_messages(raw: bytes, runtime: str, session_id: str) -> list[dict[str
                 role, blocks = "system", [{"type": "compaction"}]
             elif kind not in {"system", "progress", "file-history-snapshot", "queue-operation", "summary",
                               "attachment", "last-prompt", "mode", "permission-mode", "atis-latch", "ai-title",
-                              "agent-setting", "file-history-delta"}:
+                              "agent-setting", "agent-name", "file-history-delta"}:
                 _fail("LEADER-TRANSCRIPT-UNPROVEN")
         if role is None:
             continue
