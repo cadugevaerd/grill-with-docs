@@ -1,0 +1,2 @@
+# Presentation fixtures are hashed byte-for-byte against LF-approved digests.
+tests/fixtures/** -text
