@@ -102,7 +102,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                         core.project_leader_presentation(adapter, **kwargs)
                     container[key] = previous
                 messages = transcript["result"]["transcript"]["messages"]
-                for mutate in (
+                for mutation_index, mutate in enumerate((
                     lambda: messages[1].update(role="assistant"),
                     lambda: messages[3].update(role="assistant"),
                     lambda: messages[3].update(id=""),
@@ -112,9 +112,10 @@ class AgentOrchestrationContract(unittest.TestCase):
                     lambda: messages[2]["blocks"][0]["input"].update(
                         {"command" if runtime == "claude" else "cmd": "echo loaded"}),
                     lambda: messages.reverse(),
-                ):
+                )):
                     mutate()
-                    self.assertFalse(core.project_leader_presentation(adapter, **kwargs)[1]["work_ready"])
+                    expected = runtime == "claude" and mutation_index == 5
+                    self.assertEqual(core.project_leader_presentation(adapter, **kwargs)[1]["work_ready"], expected)
                     messages[:] = copy.deepcopy(original_transcript["result"]["transcript"]["messages"])
                 request_payload = json.loads(messages[1]["blocks"][0]["output"])
                 for key in ("policy_sha256", "gwd_skill_sha256", "skill_ref", "body_sha256", "scope", "session_identity", "config_fingerprint"):
@@ -363,6 +364,10 @@ class AgentOrchestrationContract(unittest.TestCase):
                     messages[index + 1]["blocks"][0]["output"] = "Script completed\nWall time 0.1 seconds\nOutput:\n" + json.dumps(
                         {"exit_code": 2 if index == 0 else 0, "output": raw, "original_token_count": 100})
                 self.assertIsNotNone(core._full_read(observed, {"messages": messages}, request))
+                transport = copy.deepcopy(messages)
+                transport[1]["blocks"][0]["isError"] = True
+                transport[3]["blocks"][0]["output"] = transport[3]["blocks"][0]["output"].rstrip("\n")
+                self.assertIsNotNone(core._full_read(observed, {"messages": transport}, request))
                 envelope = copy.deepcopy(messages)
                 for index in (0, 2):
                     # Reject duplicates before json decoding discards the first value.

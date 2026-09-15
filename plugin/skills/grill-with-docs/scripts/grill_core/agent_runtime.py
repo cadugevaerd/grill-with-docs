@@ -374,8 +374,11 @@ def _tool_results(transcript: dict[str, Any]):
             continue
         block = blocks[0]
         if (message.get("role") == "tool" and block.get("type") == "tool-result" and previous and message.get("id")
-                and block.get("isError") in (None, False) and previous.get("call_id") == block.get("call_id")):
+                and previous.get("call_id") == block.get("call_id")):
             output = block.get("output")
+            if (block.get("isError") is True and isinstance(output, str)
+                    and output.startswith("Exit code 2\n")):
+                output = output[len("Exit code 2\n"):]
             if previous.get("name") == "exec":
                 # One literal exec_command, printed unchanged. Never interpret
                 # JavaScript, concatenate outputs, or strip arbitrary prose.
@@ -838,10 +841,13 @@ def _full_read(observed: dict[str, Any], transcript: dict[str, Any], request: di
         if not requested or command != [shutil.which("cat"), "--", request["skill_ref"]] or not isinstance(output, str) or not isinstance(event_id, str):
             continue
         raw = output.encode()
-        if _sha256(raw) != request["skill_sha256"]:
+        canonical = raw
+        if observed.get("provider") == "claude" and not raw.endswith(b"\n"):
+            canonical += b"\n"
+        if _sha256(canonical) != request["skill_sha256"]:
             continue
         return {"evidence_kind": "full_read", "event_ref": observed["source_ref"] + ":" + event_id,
-                "event_sha256": _sha256(raw), "load_request": request,
+                "event_sha256": _sha256(canonical), "load_request": request,
                 **{key: request[key] for key in ("session_identity", "config_fingerprint", "scope", "skill_sha256", "body_sha256")}}
     return None
 
