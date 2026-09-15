@@ -541,7 +541,9 @@ def _native_messages(raw: bytes, runtime: str, session_id: str) -> list[dict[str
         if runtime == "codex":
             payload = _mapping(record.get("payload"), "native payload")
             if kind == "session_meta":
-                if payload.get("id") != session_id and payload.get("session_id") != session_id:
+                # Forked Codex files repeat the parent metadata after their own
+                # first record; pin the file's first record and ignore the copy.
+                if number == 0 and payload.get("id") != session_id and payload.get("session_id") != session_id:
                     _fail("LEADER-TRANSCRIPT-UNPROVEN")
             elif kind == "compacted":
                 role, blocks = "system", [{"type": "compaction"}]
