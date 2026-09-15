@@ -86,6 +86,12 @@ Foi criado o dispatch `ctx_6297e262c85f` (`task_3726d7cda3b4`) reutilizando o te
 
 Este reteste confirma que o bloqueio é do transporte de prompt interativo supervisionado, não da inferência Luna Reserve já comprovada por `LUNA_TUI_PROBE` e `RESERVE_EXEC_PROBE`. Não há nova evidência C1/C2 ou T029; `functional_verified` permanece `false`.
 
+### Claude A2 — carga supervisionada aprovada — 2026-09-15
+
+O dispatch `ctx_c091ed30a3cc` (`task_22d826d4ade4`, terminal `term_38bcdf93-10c1-4927-a340-1422ee672e3d`, Claude Opus/medium) executou a retomada canônica em sessão nova. A sequência correlacionada foi `/home/carlosaraujo/.local/bin/claude plugin list --json`, primeiro preflight `STYLE-LOAD-UNCONFIRMED`, `/usr/bin/cat -- /home/carlosaraujo/.claude/plugins/cache/i-have-adhd/i-have-adhd/0.3.0/skills/i-have-adhd/SKILL.md` integral e o mesmo preflight novamente; o segundo retornou `verdict=OK`, `loading=loaded`, `evidence_kind=full_read`, `use_ready=true`, `work_ready=true`, `diagnostics=[]`, backlog `SGD BOUND` e `WORKFLOW REUSED d2c4ea08…ab5.`, com evento `orca:ctx_c091ed30a3cc:b4bcc736-1d55-42e3-bc5b-a6bde34e4d8a`.
+
+O worker enviou `worker_done` com outcome `succeeded` e foi liberado com archive capturado. A prova cobre a carga A2; `behavior=not_tested` e `functional_verified=false` permanecem até a matriz de prompts, compactação, suspensão e revisão high independente.
+
 ### Reteste direto Luna Reserve — 2026-09-15
 
 `codex exec --json --model gpt-reserve --sandbox read-only --cd <ROOT> 'Respond with exactly LUNA_FINAL_PROBE.'` concluiu com exit 0, resposta exata `LUNA_FINAL_PROBE` e `turn.completed`; thread `01a0a5be-1098-7a72-996d-34fae8176016`, transcript nativo `/home/carlosaraujo/.codex/sessions/2026/09/15/rollout-2026-09-15T12-44-51-01a0a5be-1098-7a72-996d-34fae8176016.jsonl`. Isto reforça que o Codex funciona no modelo Luna Reserve via CLI direto; não substitui a sessão Orca autorizada nem a matriz T029.
