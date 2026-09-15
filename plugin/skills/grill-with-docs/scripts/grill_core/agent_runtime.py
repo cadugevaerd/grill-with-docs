@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import base64
 import json
 import os
 import re
@@ -372,7 +373,8 @@ def _tool_results(transcript: dict[str, Any]):
             previous = None
             continue
         block = blocks[0]
-        if message.get("role") == "tool" and block.get("type") == "tool-result" and previous and message.get("id"):
+        if (message.get("role") == "tool" and block.get("type") == "tool-result" and previous and message.get("id")
+                and block.get("isError") in (None, False) and previous.get("call_id") == block.get("call_id")):
             output = block.get("output")
             if previous.get("name") == "exec":
                 # One literal exec_command, printed unchanged. Never interpret
@@ -397,13 +399,24 @@ def _tool_command(call: dict[str, Any]) -> list[str]:
     try:
         if call.get("name") == "exec":
             match = re.fullmatch(r"text\(await tools\.exec_command\((\{[\s\S]+\})\)\);?\n?", value) if isinstance(value, str) else None
+            if not match and isinstance(value, str):
+                # One native call, then its unchanged JSON result. This is a
+                # closed syntax recognizer, never a JavaScript evaluator.
+                match = re.fullmatch(
+                    r"const r = await tools\.exec_command\((\{[\s\S]+\})\); text\(JSON\.stringify\(r\)\);\n?", value)
             if not match:
                 return []
-            value = _json_loads(match[1])
+            # Quote bare object keys without changing quoted strings. JSON
+            # decoding still rejects expressions, comments and duplicate keys.
+            literal = re.sub(r'"(?:[^"\\]|\\.)*"|\b([A-Za-z_][A-Za-z_0-9]*)\s*:',
+                             lambda token: json.dumps(token[1]) + ":" if token[1] else token[0], match[1])
+            value = _json_loads(literal)
         elif call.get("name") not in ("Bash", "exec_command", "functions.exec_command"):
             return []
         value = _json_loads(value) if isinstance(value, str) else value
-        if not isinstance(value, dict) or set(value) - {"command", "cmd", "max_output_tokens", "yield_time_ms", "timeout", "description"}:
+        if not isinstance(value, dict) or set(value) - {"command", "cmd", "max_output_tokens", "yield_time_ms", "timeout", "description", "workdir"}:
+            return []
+        if "workdir" in value and (not isinstance(value["workdir"], str) or not Path(value["workdir"]).is_absolute()):
             return []
         if ("command" in value) == ("cmd" in value):
             return []
@@ -486,6 +499,185 @@ def _load_request_command(command: list[str], observed: dict[str, Any], request:
     return fields == expected
 
 
+def _orca_digest(value: Any) -> str:
+    raw = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(hashlib.sha256(raw).digest()).decode().rstrip("=")[:32]
+
+
+def _native_bytes(path: Path, limit: int = 16 * 1024 * 1024) -> tuple[bytes, os.stat_result]:
+    """Bounded regular-file snapshot; never follow links or accept a racing read."""
+    if not path.is_absolute() or any(parent.is_symlink() for parent in (path, *path.parents)):
+        _fail("LEADER-TRANSCRIPT-UNPROVEN")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_size > limit:
+            _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        with os.fdopen(os.dup(descriptor), "rb") as stream:
+            raw = stream.read(limit + 1)
+        after = os.fstat(descriptor)
+        if (_file_identity(before) != _file_identity(after) or _file_identity(after) != _file_identity(path.stat())
+                or len(raw) != before.st_size):
+            _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        return raw, before
+    finally:
+        os.close(descriptor)
+
+
+def _file_identity(value: os.stat_result) -> tuple[int, ...]:
+    return value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns
+
+
+def _native_messages(raw: bytes, runtime: str, session_id: str) -> list[dict[str, Any]]:
+    """Normalize complete native records, preserving controls and call identity."""
+    messages = []
+    for number, line in enumerate(raw.decode("utf-8").splitlines()):
+        record = _json_loads(line)
+        if not isinstance(record, dict) or not isinstance(record.get("type"), str):
+            _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        kind = record["type"]
+        role, blocks, call_id = None, [], None
+        event_id = record.get("uuid") or f"native:{number}"
+        if runtime == "codex":
+            payload = _mapping(record.get("payload"), "native payload")
+            if kind == "session_meta":
+                if payload.get("id") != session_id:
+                    _fail("LEADER-TRANSCRIPT-UNPROVEN")
+            elif kind == "compacted":
+                role, blocks = "system", [{"type": "compaction"}]
+            elif kind == "response_item":
+                event_id = payload.get("id") or event_id
+                item_type = payload.get("type")
+                if item_type == "message":
+                    role = payload.get("role")
+                    blocks = payload.get("content")
+                elif item_type in ("function_call", "custom_tool_call"):
+                    role, call_id = "assistant", _string(payload.get("call_id"), "native call_id")
+                    blocks = [{"type": "tool-call", "name": _string(payload.get("name"), "native tool"),
+                               "input": payload.get("arguments", payload.get("input")), "call_id": call_id}]
+                elif item_type in ("function_call_output", "custom_tool_call_output"):
+                    role, call_id = "tool", _string(payload.get("call_id"), "native call_id")
+                    output = payload.get("output")
+                    if isinstance(output, list):
+                        if not all(isinstance(part, dict) and part.get("type") == "input_text"
+                                   and isinstance(part.get("text"), str) for part in output):
+                            output = None
+                        else:
+                            output = "".join(part["text"] for part in output)
+                    blocks = [{"type": "tool-result", "output": output, "call_id": call_id}]
+                elif item_type == "reasoning":
+                    role = "reasoning"  # Break adjacency; never use reasoning as evidence.
+                else:
+                    _fail("LEADER-TRANSCRIPT-UNPROVEN")
+            elif kind == "event_msg":
+                # Native user events must not disappear even if their response
+                # item was omitted. Mirrored controls are harmless and ordered.
+                if payload.get("type") == "user_message":
+                    role, blocks = "user", [{"type": "text", "text": payload.get("message")}]
+            elif kind not in {"turn_context", "world_state", "token_usage_record"}:
+                _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        else:
+            if record.get("sessionId", session_id) != session_id:
+                _fail("LEADER-TRANSCRIPT-UNPROVEN")
+            if kind in {"user", "assistant"}:
+                payload = _mapping(record.get("message"), "native message")
+                role, blocks = kind, payload.get("content")
+                if isinstance(blocks, str):
+                    blocks = [{"type": "text", "text": blocks}]
+                if record.get("isMeta") or record.get("isSynthetic") or record.get("isCompactSummary"):
+                    role = "system"
+            elif kind == "system" and record.get("subtype") == "compact_boundary":
+                role, blocks = "system", [{"type": "compaction"}]
+            elif kind not in {"system", "progress", "file-history-snapshot", "queue-operation", "summary"}:
+                _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        if role is None:
+            continue
+        if role not in {"user", "assistant", "tool", "system", "developer", "reasoning"} or not isinstance(blocks, list):
+            _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        normalized = []
+        for block in blocks:
+            if not isinstance(block, dict):
+                _fail("LEADER-TRANSCRIPT-UNPROVEN")
+            block_type = block.get("type")
+            if block_type in {"text", "input_text", "output_text"}:
+                if not isinstance(block.get("text"), str):
+                    _fail("LEADER-TRANSCRIPT-UNPROVEN")
+                normalized.append({"type": "text", "text": block["text"]})
+            elif block_type == "tool_use":
+                normalized.append({"type": "tool-call", "name": block.get("name"), "input": block.get("input"),
+                                   "call_id": _string(block.get("id"), "native call_id")})
+            elif block_type == "tool_result":
+                output = block.get("content")
+                if isinstance(output, list) and all(isinstance(part, dict) and part.get("type") == "text"
+                                                   and isinstance(part.get("text"), str) for part in output):
+                    output = "".join(part["text"] for part in output)
+                normalized.append({"type": "tool-result", "output": output, "isError": block.get("is_error", False),
+                                   "call_id": _string(block.get("tool_use_id"), "native call_id")})
+            else:
+                normalized.append(block)
+        if role == "user" and normalized and all(block.get("type") == "tool-result" for block in normalized):
+            role = "tool"
+        messages.append({"id": event_id, "role": role, "blocks": normalized})
+    return messages
+
+
+def _local_transcript(observed: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
+    """Recover native bytes only when the owning Orca source digest pins them.
+
+    Orca 1.4.200 clips each event at 1200 characters; its live cursor follows
+    EOF, not the omitted history. Never assemble that tail into a full history.
+    This local adapter verifies Orca's source and boundary digests instead.
+    """
+    if observed["host"] != "local" or not re.fullmatch(r"[A-Za-z0-9_-]{32}", value["sourceIdentity"]):
+        _fail("LEADER-TRANSCRIPT-UNPROVEN")
+    cursor = value.get("cursor")
+    if not isinstance(cursor, str) or not cursor.startswith("owr1_") or len(cursor) > 2048:
+        _fail("LEADER-TRANSCRIPT-UNPROVEN")
+    pin = _json_loads(base64.urlsafe_b64decode(cursor[5:] + "=" * (-len(cursor[5:]) % 4)).decode())
+    if (not isinstance(pin, dict) or pin.get("v") != 1 or pin.get("d") != observed["owner_dispatch"]
+            or pin.get("s") != "transcript" or pin.get("i") != value["sourceIdentity"]
+            or type(pin.get("p")) is not int or not 0 < pin["p"] <= 16 * 1024 * 1024
+            or not isinstance(pin.get("c"), str)):
+        _fail("LEADER-TRANSCRIPT-UNPROVEN")
+    runtime = observed["provider"]
+    home = Path(os.environ.get("CODEX_HOME" if runtime == "codex" else "CLAUDE_CONFIG_DIR") or Path.home() / (".codex" if runtime == "codex" else ".claude"))
+    # ponytail: bounded local discovery; remote/large histories need an owner API.
+    if runtime == "codex":
+        hint = os.environ.get("CODEX_THREAD_ID", "")
+        if not re.fullmatch(r"[0-9a-f-]{36}", hint):
+            _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        candidates = (home / "sessions").glob(f"*/*/*/*-{hint}.jsonl")
+    else:
+        candidates = (home / "projects").glob("*/*.jsonl")
+    selected = []
+    for count, path in enumerate(candidates):
+        if count >= 4096:
+            _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        session_id = path.stem[-36:]
+        metadata = path.stat()
+        fingerprint = _orca_digest(["worker-transcript-file-v1", str(metadata.st_dev), str(metadata.st_ino)])
+        if _orca_digest(["transcript", observed["dispatch_incarnation"], runtime, "session_id", session_id,
+                         "local", str(path), fingerprint]) == value["sourceIdentity"]:
+            selected.append((path, session_id))
+    if len(selected) != 1:
+        _fail("LEADER-TRANSCRIPT-UNPROVEN")
+    path, session_id = selected[0]
+    raw, metadata = _native_bytes(path)
+    raw = raw[:pin["p"]]
+    boundary = base64.urlsafe_b64encode(hashlib.sha256(b"worker-transcript-boundary-v1\0" + raw[-64:]).digest()).decode().rstrip("=")[:32]
+    if len(raw) != pin["p"] or not raw.endswith(b"\n") or boundary != pin["c"]:
+        _fail("LEADER-TRANSCRIPT-UNPROVEN")
+    if _orca_digest(["transcript", observed["dispatch_incarnation"], runtime, "session_id", session_id,
+                    "local", str(path), _orca_digest(["worker-transcript-file-v1", str(metadata.st_dev), str(metadata.st_ino)])]) != value["sourceIdentity"]:
+        _fail("LEADER-TRANSCRIPT-UNPROVEN")
+    messages = _native_messages(raw, runtime, session_id)
+    reread, after = _native_bytes(path)
+    if _file_identity(metadata) != _file_identity(after) or reread[:pin["p"]] != raw:
+        _fail("LEADER-TRANSCRIPT-UNPROVEN")
+    return {"messages": messages, "limited": False, "sourceIdentity": value["sourceIdentity"],
+            "native_path": str(path), "native_sha256": _sha256(raw), "native_home": str(home)}
+
+
 @dataclass
 class LeaderBoundary:
     """Read-only Orca session adapter. Callables are the offline injection seam.
@@ -555,9 +747,18 @@ class LeaderBoundary:
         value = _object(raw, "Orca worker-read")
         if (value.get("dispatchId") != observed["owner_dispatch"] or value.get("provider") != self.runtime
                 or value.get("source") != "transcript" or value.get("sourceExact") is not True
-                or value.get("contentComplete") is not True or value.get("clipping")
                 or not isinstance(value.get("sourceIdentity"), str) or not value["sourceIdentity"]):
             _fail("LEADER-TRANSCRIPT-UNPROVEN")
+        if value.get("contentComplete") is not True or value.get("clipping"):
+            try:
+                recovered = _local_transcript(observed, value)
+                current = _object(self.read(["orchestration", "worker-read", "--dispatch", observed["owner_dispatch"],
+                                             "--source", "transcript", "--limit", "1", "--json"]), "Orca worker-read")
+                if any(current.get(key) != value.get(key) for key in ("dispatchId", "provider", "source", "sourceExact", "sourceIdentity", "cursor")):
+                    _fail("LEADER-TRANSCRIPT-UNPROVEN")
+                return recovered
+            except (OSError, ValueError, StoreError) as exc:
+                raise RuntimeError("LEADER-TRANSCRIPT-UNPROVEN") from exc
         transcript = _mapping(value.get("transcript"), "transcript")
         if not isinstance(transcript.get("messages"), list) or transcript.get("limited") is not False:
             _fail("LEADER-TRANSCRIPT-UNPROVEN")

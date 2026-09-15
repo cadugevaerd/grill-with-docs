@@ -264,6 +264,57 @@ class AgentOrchestrationContract(unittest.TestCase):
                     self.assertEqual(invoke(commands[10])[0], 2)
             self.assertEqual(store.read_snapshot(root).content_sha256, before)
 
+    def test_native_exec_result_variable_wrapper(self):
+        core = grill_workspace.grill_core_module("agent_runtime")
+        literal = '{cmd:"/usr/bin/true",workdir:"/tmp",yield_time_ms:30000,max_output_tokens:12000}'
+        wrapper = "const r = await tools.exec_command(" + literal + "); text(JSON.stringify(r));"
+        call = {"type": "tool-call", "name": "exec", "input": wrapper}
+        self.assertEqual(core._tool_command(call), ["/usr/bin/true"])
+        # No extra statement/call, output mutation, expression, ambiguous key,
+        # relative cwd, or shell interpretation earns evidence.
+        for altered in (
+            wrapper + " text('forged');", wrapper * 2,
+            wrapper.replace("stringify(r)", "stringify({...r,output:'forged'})"),
+            wrapper.replace("stringify(r)", "stringify(other)"),
+            wrapper.replace("; text", "; r.output = 'forged'; text"),
+            wrapper.replace('cmd:"/usr/bin/true"', 'cmd:process.env.COMMAND'),
+            wrapper.replace('cmd:"/usr/bin/true"', 'cmd:"/usr/bin/true", "cmd":"/usr/bin/false"'),
+            wrapper.replace('workdir:"/tmp"', 'workdir:"relative"'),
+            wrapper.replace('workdir:"/tmp"', 'workdir:null'),
+            wrapper.replace('cmd:"/usr/bin/true"', 'cmd:`/usr/bin/true`'),
+            wrapper.replace('cmd:"/usr/bin/true"', 'cmd:"/usr/bin/true", ...options'),
+            wrapper.replace('cmd:"/usr/bin/true"', 'cmd:"/usr/bin/true", env:{X:"x"}'),
+            wrapper.replace('cmd:"/usr/bin/true"', 'cmd:"/usr/bin/true ; printf forged"'),
+            wrapper.replace('cmd:"/usr/bin/true"', 'cmd:"/usr/bin/true $(true)"'),
+        ):
+            with self.subTest(input=altered):
+                self.assertEqual(core._tool_command({**call, "input": altered}), [])
+        quoted = wrapper.replace('/usr/bin/true', "/usr/bin/echo 'cmd: value'")
+        self.assertEqual(core._tool_command({**call, "input": quoted}), ["/usr/bin/echo", "cmd: value"])
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            adapter, _, source = orchestration_fixture.boundary(
+                grill_workspace, root, "codex", orchestration_fixture.SESSION, None)
+            messages = source["result"]["transcript"]["messages"]
+            request = json.loads(messages[1]["blocks"][0]["output"])["presentation"]["load_request"]
+            for index in (0, 2):
+                command = messages[index]["blocks"][0]["input"]["cmd"]
+                literal = '{cmd:' + json.dumps(command) + ',workdir:' + json.dumps(str(root)) + ',yield_time_ms:30000,max_output_tokens:12000}'
+                messages[index]["blocks"][0] = {**call, "input":
+                    "const r = await tools.exec_command(" + literal + "); text(JSON.stringify(r));"}
+                result = messages[index + 1]["blocks"][0]
+                result["output"] = "Script completed\nWall time 0.1 seconds\nOutput:\n" + json.dumps(
+                    {"exit_code": 2 if index == 0 else 0, "output": result["output"]})
+            observed = adapter.observe()
+            self.assertIsNotNone(core._full_read(observed, {"messages": messages}, request))
+            for index in (1, 3):
+                output = messages[index]["blocks"][0]["output"]
+                for altered in (output[:1200] + "\n… (truncated)", output.replace('"exit_code":', '"exit_code":1,"exit_code":'),
+                                output.replace('"output":', '"session_id":123,"output":')):
+                    messages[index]["blocks"][0]["output"] = altered
+                    self.assertIsNone(core._full_read(observed, {"messages": messages}, request))
+                messages[index]["blocks"][0]["output"] = output
+
     def test_exact_native_commands_and_envelope(self):
         core = grill_workspace.grill_core_module("agent_runtime")
         # Literal Orca capture, ctx_28bc43fcfd6c / ctco_01a0a1ab-0180-73e3-af98-5ae259c41421.
