@@ -85,3 +85,7 @@ Evidência de carga (`evidence.loading`): `evidence_kind=full_read`, `event_ref=
 Foi criado o dispatch `ctx_6297e262c85f` (`task_3726d7cda3b4`) reutilizando o terminal Codex `term_1f904333-8a16-4a51-901e-48b37926800e` já aberto com `codex -m gpt-reserve`. A interface exibiu `Continue with Luna Reserve`, porém o envio Orca para selecionar a opção retornou `agent_prompt_blocked` (request `1ffcfcac-afd9-4677-b3e1-9f9b7b5079c0` também recusado no retry); o dispatch terminou em `agent_readiness: codex-interactive-prompt`, sem turno, bootstrap ou matriz GWD, e o terminal foi fechado.
 
 Este reteste confirma que o bloqueio é do transporte de prompt interativo supervisionado, não da inferência Luna Reserve já comprovada por `LUNA_TUI_PROBE` e `RESERVE_EXEC_PROBE`. Não há nova evidência C1/C2 ou T029; `functional_verified` permanece `false`.
+
+### Reteste direto Luna Reserve — 2026-09-15
+
+`codex exec --json --model gpt-reserve --sandbox read-only --cd <ROOT> 'Respond with exactly LUNA_FINAL_PROBE.'` concluiu com exit 0, resposta exata `LUNA_FINAL_PROBE` e `turn.completed`; thread `01a0a5be-1098-7a72-996d-34fae8176016`, transcript nativo `/home/carlosaraujo/.codex/sessions/2026/09/15/rollout-2026-09-15T12-44-51-01a0a5be-1098-7a72-996d-34fae8176016.jsonl`. Isto reforça que o Codex funciona no modelo Luna Reserve via CLI direto; não substitui a sessão Orca autorizada nem a matriz T029.
