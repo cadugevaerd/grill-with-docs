@@ -4,11 +4,11 @@ Status: **BLOCKED**
 
 ## Source and evidence
 
-- Source head: `efe9f9a` (`cadugevaerd/feat-new-subagents`).
+- Source head: `eeee836` (`cadugevaerd/feat-new-subagents`).
 - Converge: `BLOCKED` — T028/T029/T030 pending; primary Codex quota and Orca prompt/authority blockers remain after Luna Reserve proof.
 - Verify: `BLOCKED` — no fresh `CONVERGED` evidence and no Codex live gate.
 - Review: `BLOCKED` — prerequisite gates unavailable; independent Claude review confirms partial evidence.
-- Fingerprint: tree `d2bc46ea86c1cfb3bef33de0acdb37286b4bc3cce9dc2c5eda31e1700ae5fb81` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6`.
+- Fingerprint: tree `fc64dc4c0ae2e55f9fcc281137bc30a05eac51df9a011ad9b4d99ba915f76b32` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `910bd12d2dca46423c22cb0da70192f9c8811819d4dd72e916b2897a755ab6a6`.
 
 ## Actions not performed
 
