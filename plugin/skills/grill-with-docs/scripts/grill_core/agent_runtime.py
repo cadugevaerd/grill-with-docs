@@ -541,7 +541,7 @@ def _native_messages(raw: bytes, runtime: str, session_id: str) -> list[dict[str
         if runtime == "codex":
             payload = _mapping(record.get("payload"), "native payload")
             if kind == "session_meta":
-                if payload.get("id") != session_id:
+                if payload.get("id") != session_id and payload.get("session_id") != session_id:
                     _fail("LEADER-TRANSCRIPT-UNPROVEN")
             elif kind == "compacted":
                 role, blocks = "system", [{"type": "compaction"}]
@@ -574,7 +574,7 @@ def _native_messages(raw: bytes, runtime: str, session_id: str) -> list[dict[str
                 # item was omitted. Mirrored controls are harmless and ordered.
                 if payload.get("type") == "user_message":
                     role, blocks = "user", [{"type": "text", "text": payload.get("message")}]
-            elif kind not in {"turn_context", "world_state", "token_usage_record"}:
+            elif kind not in {"turn_context", "world_state", "token_usage_record", "inter_agent_communication_metadata"}:
                 _fail("LEADER-TRANSCRIPT-UNPROVEN")
         else:
             if record.get("sessionId", session_id) != session_id:
@@ -588,7 +588,8 @@ def _native_messages(raw: bytes, runtime: str, session_id: str) -> list[dict[str
                     role = "system"
             elif kind == "system" and record.get("subtype") == "compact_boundary":
                 role, blocks = "system", [{"type": "compaction"}]
-            elif kind not in {"system", "progress", "file-history-snapshot", "queue-operation", "summary"}:
+            elif kind not in {"system", "progress", "file-history-snapshot", "queue-operation", "summary",
+                              "attachment", "last-prompt", "mode", "permission-mode", "atis-latch", "ai-title"}:
                 _fail("LEADER-TRANSCRIPT-UNPROVEN")
         if role is None:
             continue
