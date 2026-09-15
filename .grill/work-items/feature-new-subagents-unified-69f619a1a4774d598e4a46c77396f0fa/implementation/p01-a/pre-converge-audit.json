@@ -1,0 +1,25 @@
+{
+  "utc": "2026-09-13T21:11:59.918685+00:00",
+  "input_head": "5fd75a630b980903760e0a890c4b6e382a4d8107",
+  "output_head": "3bd8f6572d053fa5211cc6a27fbe63d53af4c5e1",
+  "own_paths": [
+    "plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json",
+    "plugin/skills/grill-with-docs/assets/task-files.v1.template.md",
+    "plugin/skills/grill-with-docs/references/agent-orchestration.md",
+    "specs/030-agent-orchestration/implement/p01-a.tasks.json"
+  ],
+  "commits": {
+    "3bd8f6572d053fa5211cc6a27fbe63d53af4c5e1": [
+      "plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json",
+      "plugin/skills/grill-with-docs/assets/task-files.v1.template.md",
+      "plugin/skills/grill-with-docs/references/agent-orchestration.md",
+      "specs/030-agent-orchestration/implement/p01-a.tasks.json"
+    ]
+  },
+  "inherited_hashes_verified": 13,
+  "sidecar_completed": [
+    "T001"
+  ],
+  "strict_json_refs_hashes": "PASS",
+  "clean_including_ignored": true
+}

@@ -1,0 +1,35 @@
+{
+  "utc": "2026-09-13T21:06:16.078818+00:00",
+  "root": "/home/carlosaraujo/orca/workspaces/grill-with-docs/feat-new-subagents",
+  "worktree": "/home/carlosaraujo/Documentos/Projetos/grill-with-docs/.git/grill/wt-run-b12537dfc4dca1621cc1f08d-p01-a",
+  "base": "6ad0dc2807c74fe37af52207700620dd02e8cbd0",
+  "input_head": "5fd75a630b980903760e0a890c4b6e382a4d8107",
+  "tree": "8ba12e50a73cb20409cbdd54d94f8c2d5fcaa306",
+  "branch": "grill/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/run-b12537dfc4dca1621cc1f08d/p01-a",
+  "prerequisites": {
+    "FEATURE_DIR": "/home/carlosaraujo/Documentos/Projetos/grill-with-docs/.git/grill/wt-run-b12537dfc4dca1621cc1f08d-p01-a/specs/030-agent-orchestration",
+    "AVAILABLE_DOCS": [
+      "research.md",
+      "data-model.md",
+      "contracts/",
+      "quickstart.md",
+      "tasks.md"
+    ]
+  },
+  "input_hashes": {
+    "specs/030-agent-orchestration/spec.md": "54d217cfb218cecc3990b9dbe29fffb9277177fe92aea447f0743955fdca44a7",
+    "specs/030-agent-orchestration/tasks.md": "946a43207a2e9e5768371dc7ab43e51e7e6427de8c375d96b5091bc50183dc3d",
+    "specs/030-agent-orchestration/data-model.md": "12041422c0f367725b03523d36bb5f450ea5cc3d21cacfafff56909c152c43ae",
+    "specs/030-agent-orchestration/execution-dag.json": "748abdc506985b6d2979ff85bba66eed72c001bb2d56d7763097cdf5e1b14c6e",
+    "specs/030-agent-orchestration/quickstart.md": "9a057c2490bc7d2ef4f85ca6367a36d7726569887ecc0a669d87d6d8e5af9817",
+    "specs/030-agent-orchestration/partition-report.json": "f0feb59443e123e3d7de4d137e4d166bdbdbed315c67f5e1d506b106a2df4a52",
+    "specs/030-agent-orchestration/plan.md": "78fe45fc8af6feeee8d46f897b6a70365cb3cae81fe4ae25613adf1bd369f66a",
+    "specs/030-agent-orchestration/research.md": "7c4fc25d44fc2273e9bd1062910caf588d46b5ad58387f6ea41a7e128dbf87ff",
+    "specs/030-agent-orchestration/contracts/task-files.md": "2ff393e08dc36225bf867c6a5baad9d44095cc8de314e598b8a684a58ac4f07b",
+    "specs/030-agent-orchestration/contracts/cli.md": "17b405c2986ead8a0799ae428ef3bf90f21ae8feaee8d400402a5112d7dd074d",
+    "specs/030-agent-orchestration/contracts/integrations.md": "f74ab43eaf74d2f55c62b8bb527281df8f8112f0162385bf81830ded564d772d",
+    "specs/030-agent-orchestration/checklists/requirements.md": "e474c4857acdbecb684ddfaa27165b818c81cb3b8a866f0a8fbd7d79c54478a3",
+    "specs/030-agent-orchestration/checklists/orchestration.md": "e10977fb3004917c5c7c427e7b831b7bbf3e0a0b414c8e32ca14ff581da53e09"
+  },
+  "payload_started": false
+}

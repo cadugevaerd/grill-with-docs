@@ -17,6 +17,8 @@ with Phases 2-6 (T009/T016, T019/T024, T025/T027).
 """
 from __future__ import annotations
 
+import orchestration_fixture
+
 import hashlib
 import importlib.util
 import json
@@ -61,7 +63,7 @@ SEQUENCE = ["specify", "plan", "checklist", "tasks", "analyze", "partition", "im
 
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
-from grill_core import gauntlet_runs, store
+from grill_core import agent_orchestration, gauntlet_runs, store
 
 
 def _load_module(path: Path, name: str):
@@ -111,9 +113,15 @@ def invoke(program: Path, *args: object) -> tuple[subprocess.CompletedProcess[st
     args = tuple(args)
     if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
         args += ("--runtime", "claude")
+    if args and args[0] == "init" and "--session-ref" not in args:
+        args += ("--session-ref", "fixture-leader")
+    if args and args[0] in {"gauntlet-run", "gauntlet-resume", "gauntlet-cleanup", "gauntlet-prepare-worker", "gauntlet-wave-declare", "gauntlet-converge", "gauntlet-run-abandon", "gauntlet-worker-declare", "gauntlet-progress-record", "gauntlet-worker-terminal", "gauntlet-remediate"} and "--session-ref" not in args:
+        args += ("--session-ref", "fixture-leader")
+    if args and args[0] == "checkpoint" and "--operation-id" not in args:
+        args += ("--session-ref", "fixture-leader", "--operation-id", "cp-" + hashlib.sha256(repr(args).encode()).hexdigest()[:12])
     """Run one public command and require exactly one JSON object on stdout."""
     process = subprocess.run(
-        [sys.executable, str(program), *(str(value) for value in args)],
+        orchestration_fixture.command(program, args),
         text=True,
         capture_output=True,
         check=False,
@@ -138,6 +146,69 @@ def git(root: Path, *args: str) -> str:
     return subprocess.run(
         ["git", "-C", str(root), *args], text=True, capture_output=True, check=True
     ).stdout.strip()
+
+
+def seed_accepted_activities(root: Path, work_id: str) -> None:
+    """Seed policy-valid fixture approvals before exercising Gauntlet paths."""
+    snapshot = store.read_snapshot(root)
+    orchestration = snapshot.document["agent_orchestration"]["work_items"][work_id]
+    context_id = orchestration["current_context_id"]
+    context = orchestration["contexts"][context_id]
+
+    def observation(activity_id: str, role: str, *, closed: bool) -> dict[str, Any]:
+        model, effort = agent_orchestration.specialist_pair(context["runtime"], role)
+        suffix = "closed" if closed else "open"
+        return {
+            "schema": "grill-agent-observation/v1", "adapter": "orca", "provider": context["runtime"],
+            "handle": f"term-{activity_id}", "incarnation": f"inc-{activity_id}",
+            "dispatch_incarnation": f"dispatch-inc-{activity_id}", "runtime_instance": f"runtime-{activity_id}",
+            "host": "fixture-host", "owner_dispatch": f"dispatch-{activity_id}",
+            "task_id": f"task-{activity_id}", "worktree_id": f"worktree-{activity_id}",
+            "source_ref": f"fixtures/{activity_id}-{suffix}.json",
+            "source_sha256": hashlib.sha256(f"{activity_id}-{suffix}".encode()).hexdigest(),
+            "requested_model": model, "requested_effort": effort, "effective_model": model,
+            "effective_effort": effort, "resolved_model_id": model,
+            "activity": "exited" if closed else "idle", "close": "closed" if closed else "not_requested",
+        }
+
+    def accepted(activity_id: str, step_id: str, role: str, authors: list[str]) -> tuple[dict[str, Any], str, dict[str, Any]]:
+        manifest = {"files": [], "required_activity_ids": list(authors), "author_activity_ids": list(authors),
+                    "task_binding": None, "human_authorization": None}
+        activity = agent_orchestration.new_activity(
+            activity_id=activity_id, context_id=context_id, step_id=step_id, activity_scope="cycle",
+            activity_type=role, attempt=1, input_manifest=manifest, policy_sha256=context["policy_sha256"],
+            write_files=[],
+        )
+        activity = agent_orchestration.prepare_activity(activity, context)
+        opened = observation(activity_id, role, closed=False)
+        activity = agent_orchestration.record_verified_activity(activity, opened)
+        resource_id, resource = agent_orchestration.session_resource(
+            activity, opened, collected_at="2026-09-14T00:00:00Z")
+        activity, _payload = agent_orchestration.dispatch_activity(activity, context)
+        result = {"ref": f"fixtures/{activity_id}-result.json", "sha256": "b" * 64}
+        activity = agent_orchestration.record_activity_result(
+            activity, result_ref=result["ref"], result_sha256=result["sha256"],
+            output_manifest={"files": [], "return_ref": result, "effect_ref": None},
+        )
+        closed = observation(activity_id, role, closed=True)
+        resource["state"] = "CLOSE_PENDING"
+        resource = agent_orchestration.close_session_resource(resource, closed, acceptance_ref=result["ref"])
+        activity = agent_orchestration.accept_activity(
+            activity, context=context, observation=closed, acceptance_ref=result["ref"])
+        return activity, resource_id, resource
+
+    def seed(document: dict[str, Any]) -> dict[str, Any]:
+        target = document["agent_orchestration"]["work_items"][work_id]
+        for step_id in ("specify", "plan", "checklist", "tasks", "analyze", "converge", "review"):
+            author_id = f"fixture-author-{step_id}"
+            author, author_resource_id, author_resource = accepted(author_id, step_id, "author", [])
+            reviewer, reviewer_resource_id, reviewer_resource = accepted(
+                f"fixture-reviewer-{step_id}", step_id, "reviewer", [author_id])
+            target["activities"].update({author_id: author, reviewer["activity_id"]: reviewer})
+            target["resources"].update({author_resource_id: author_resource, reviewer_resource_id: reviewer_resource})
+        return document
+
+    store.transact(root, seed)
 
 
 def build_rebound_v3_repository(
@@ -188,6 +259,8 @@ def build_rebound_v3_repository(
     workflow_sha256 = hashlib.sha256((root / "WORKFLOW.md").read_bytes()).hexdigest()
     if item.get("schema") != "grill-work-item/v3" or item["immutable"]["workflow"]["sha256"] != workflow_sha256:
         raise AssertionError("fixture does not have a current V3 workflow binding")
+
+    seed_accepted_activities(root, work_id)
 
 
 def dag_node(
@@ -301,8 +374,10 @@ class GauntletConvergeContractHarness(unittest.TestCase):
     # --- artefacts -----------------------------------------------------
 
     def write_dag(self, document: dict[str, Any], name: str = "execution-dag.json") -> str:
-        (self.root / name).write_text(json.dumps(document), encoding="utf-8")
-        return name
+        path = Path("specs/converge-fixture") / (name if name.startswith("execution-dag") else "execution-dag-" + name)
+        (self.root / path).parent.mkdir(parents=True, exist_ok=True)
+        (self.root / path).write_text(json.dumps(document), encoding="utf-8")
+        return path.as_posix()
 
     def write_authorization(self, bundle: dict[str, Any], name: str = "run-abandon.json") -> str:
         path = self.root / name
@@ -372,7 +447,7 @@ class GauntletConvergeContractHarness(unittest.TestCase):
         if process.returncode != 0 or payload.get("wave_id") != expected:
             raise AssertionError((process.returncode, payload, process.stderr))
 
-    def dispatch(self, wave_id: str, node_id: str, *, dag_path: str = "execution-dag.json",
+    def dispatch(self, wave_id: str, node_id: str, *, dag_path: str = "specs/converge-fixture/execution-dag.json",
                  files: list[str] | None = None) -> None:
         process, payload = self.worker_declare(wave_id, node_id, dag_path=dag_path, files=files)
         if process.returncode != 0 or payload.get("verdict") != "WORKER-PREPARED":
@@ -404,7 +479,7 @@ class GauntletConvergeContractHarness(unittest.TestCase):
         return invoke(WORKSPACE, *arguments)
 
     def worker_declare(
-        self, wave_id: str, node_id: str, *, dag_path: str = "execution-dag.json",
+        self, wave_id: str, node_id: str, *, dag_path: str = "specs/converge-fixture/execution-dag.json",
         tier: str = "medium", files: list[str] | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
         arguments = [
@@ -426,7 +501,7 @@ class GauntletConvergeContractHarness(unittest.TestCase):
             arguments.extend(("--failure-class", failure_class))
         return invoke(WORKSPACE, *arguments)
 
-    def converge(self, wave_id: str, *, dag_path: str = "execution-dag.json") -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
+    def converge(self, wave_id: str, *, dag_path: str = "specs/converge-fixture/execution-dag.json") -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
         return invoke(
             WORKSPACE, "gauntlet-converge", self.root, "--work-id", WORK_ID, "--run-id", self.run_id,
             "--dag", dag_path, "--wave-id", wave_id,
@@ -1488,6 +1563,7 @@ class ShipGateWithoutGauntletContract(unittest.TestCase):
     )
         if process.returncode != 0 or payload.get("status") != "CREATED":
             raise AssertionError((process.returncode, payload, process.stderr))
+        seed_accepted_activities(self.root, WORK_ID)
         (self.root / "evidence.md").write_text("evidence\n", encoding="utf-8")
 
     def tearDown(self) -> None:
@@ -1500,14 +1576,14 @@ class ShipGateWithoutGauntletContract(unittest.TestCase):
         return invoke(WORKSPACE, *arguments)
 
     def test_ship_completes_for_a_v2_work_item_with_no_store(self) -> None:
-        self.assertFalse(store.store_exists(self.root))
+        self.assertTrue(store.store_exists(self.root))
         for step in SEQUENCE:
             process, payload = self.checkpoint(step, "in-progress")
             self.assertEqual(process.returncode, 0, (step, payload, process.stderr))
             process, payload = self.checkpoint(step, "complete", evidence=["evidence.md"])
             self.assertEqual(process.returncode, 0, (step, payload, process.stderr))
             self.assertEqual(payload.get("verdict"), "UPDATED", (step, payload))
-        self.assertFalse(store.store_exists(self.root))
+        self.assertTrue(store.store_exists(self.root))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,18 @@
+{
+  "task_id": "task_85db696e5ef4",
+  "dispatch_id": "ctx_a13cb3fc147e",
+  "run_id": "run_d025d446e826",
+  "requested": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "effective": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "state": "ready",
+  "turn_started": true,
+  "write_grant": []
+}

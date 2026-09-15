@@ -6,6 +6,7 @@ WORKFLOW.md v2 already materialised in a consumer repository stays byte-intact
 through detection, preview and the v2 bootstrap.
 """
 from __future__ import annotations
+import orchestration_fixture
 import hashlib, importlib.util, json, os, shutil, subprocess, sys, tempfile, unittest
 from pathlib import Path
 
@@ -242,7 +243,7 @@ class Migration(Base):
   ensured=ensure(self.root); self.assertEqual(ensured.returncode,0,ensured.stdout+ensured.stderr)
   ensured_body=json.loads(ensured.stdout)
   self.assertEqual(ensured_body['status'],'REUSED'); self.assertEqual(ensured_body['version'],'v3'); self.assertEqual(ensured_body['sha256'],sha(written))
-  init=subprocess.run([sys.executable,str(GRILL_WORKSPACE),'init',str(self.root),'--runtime','claude','--type','feature','--slug','consumer-demo-v3','--skip-backlog'],
+  init=subprocess.run(orchestration_fixture.command(GRILL_WORKSPACE, ('init',str(self.root),'--runtime','claude','--type','feature','--slug','consumer-demo-v3','--skip-backlog')),
                        text=True,capture_output=True,env={**os.environ,'GRILL_SKIP_DEPENDENCIES':'1'})
   self.assertEqual(init.returncode,0,init.stdout+init.stderr); init_body=json.loads(init.stdout.splitlines()[0])
   self.assertNotEqual(init_body.get('code'),'WORKFLOW-UNAVAILABLE'); self.assertEqual(init_body.get('status'),'CREATED')

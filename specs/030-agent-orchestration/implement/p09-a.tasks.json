@@ -1,0 +1,12 @@
+{
+  "worker": "p09-a",
+  "feature": "030-agent-orchestration",
+  "completed": ["T023"],
+  "tasks": {
+    "T023": {
+      "status": "done",
+      "summary": "Added policy-backed coordinator recommendations to preflight, init, gauntlet-init, scheduler resume, and continuity resume. Responses always report active_model_changed=false without writing or filling an active model, while specialist pairs remain unchanged.",
+      "evidence": "Detached overlay from 0183ed3c69e8cea2f4d57ac18c3574a6fb54f2f7 with only this grant's source and test paths copied: PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_runtime_continuity passed (1 test); PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py passed (22 tests)."
+    }
+  }
+}

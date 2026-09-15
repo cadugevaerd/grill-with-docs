@@ -1,0 +1,27 @@
+{
+  "schema": "grill-task-result/v1",
+  "worker": "p02-a",
+  "completed": ["T002", "T003", "T004", "T005"],
+  "review_required": {"T002": ["independent-review"], "T003": ["independent-review"], "T004": ["independent-review"], "T005": ["independent-review"]},
+  "requires_fixes": [],
+  "pending": [],
+  "fixed_findings": {"T002": ["R2", "R3-A", "R3-B", "R4-A", "R5", "R9"], "T003": ["R6", "R7", "R8"]},
+  "evidence": {
+    "T002": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "expected": "closed orchestration schemas, WAL replay and Store invariants"},
+    "T003": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py", "exit_code": 0, "expected": "correlated native runtime observations and close readback"},
+    "T004": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py", "exit_code": 0, "expected": "adoption preview/apply and direct prepare authority guard"},
+    "T005": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_checkpoint_contract.py", "exit_code": 0, "expected": "checkpoint content/state WAL v2 and recovery"},
+    "finding_checks": {
+      "R2": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": null, "log_path": "/tmp/task_ee05fcb353e8_store.log", "expected": "PREPARED successor promotes by CAS; used context cannot become current"},
+      "R3-A": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": null, "log_path": "/tmp/task_ee05fcb353e8_store.log", "expected": "UNKNOWN stays fenced from repeat, then same operation confirms only with preserved observation plus result ref and digest"},
+      "R3-B": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": null, "log_path": "/tmp/task_ee05fcb353e8_store.log", "expected": "CONFIRMED operation rejects rewrites by CAS, transaction, event WAL and recovery"},
+      "R4-A": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": null, "log_path": "/tmp/task_ee05fcb353e8_store.log", "expected": "preacceptance activity advances legally; ACCEPTED execution, result and acceptance evidence cannot be replaced"},
+      "R5": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": null, "log_path": "/tmp/task_ee05fcb353e8_store.log", "expected": "checkpoint digest, references, acyclic chain and committed head are structural invariants"},
+      "R9": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_orchestrator_store_contract.py", "exit_code": 0, "session_id": null, "log_path": "/tmp/task_ee05fcb353e8_store.log", "expected": "exact operation event replay returns before WAL; inconsistent replay fails"},
+      "R6": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py", "exit_code": 0, "session_id": null, "log_path": "/tmp/task_ee05fcb353e8_agent_runtime.log", "expected": "launch dispatch/task and current incarnation must correlate to native worker-show"},
+      "R7": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py", "exit_code": 0, "session_id": null, "log_path": "/tmp/task_ee05fcb353e8_agent_runtime.log", "expected": "only authoritative live/known worker state verifies; unknown and exited refuse payload"},
+      "R8": {"command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py", "exit_code": 0, "session_id": null, "log_path": "/tmp/task_ee05fcb353e8_agent_runtime.log", "expected": "unknown close readback reconciles before another release request; rollout uses offline toolchain sentinels"}
+    },
+    "limitation": "R8 pending attempt is process-local; durable operation recovery remains T005."
+  }
+}

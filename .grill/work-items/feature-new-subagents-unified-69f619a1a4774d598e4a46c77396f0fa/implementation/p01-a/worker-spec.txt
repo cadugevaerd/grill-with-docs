@@ -1,0 +1,19 @@
+Implemente somente T001 do HOW aprovado em specs/030-agent-orchestration/tasks.md, como worker p01-a da campanha histórica 5.4.1. Invocar a skill local .agents/skills/speckit-implement/SKILL.md e seguir seu fluxo com o brief canônico abaixo como $ARGUMENTS; leia AGENTS.md, CLAUDE.md, spec, plan, research, data-model, contracts, quickstart e limites comuns das tasks. O líder já fez baseline aprovado (28 validadores exit 0) registrado no WI/cycle-baseline-validation.json e preflight 43/43 checklists, sem hooks obrigatórios de implement. Não repetir baseline global; executar o check focado stdlib de T001. Resultado: três arquivos suplementares completos, consistentes com contracts, JSON estrito, refs locais e hashes de protocolo/template corretos sem autorreferência, i-have-adhd mínimo 0.3.0 e hash aprovado; não copiar corpo upstream. Toda arquitetura/HOW já está no plano aprovado; se faltar decisão material, perguntar ao coordenador usando ask do preamble, sem inventar alteração de contrato. Não delegar.
+
+CWD obrigatório é a worktree exata fornecida; já herdou input HEAD 5fd75a630b980903760e0a890c4b6e382a4d8107. Não dar merge/rebase/reset, não acessar a árvore do líder para editar. Ao rodar prerequisites usar env -u SPECIFY_FEATURE_DIRECTORY -u SPECIFY_FEATURE SPECIFY_INIT_DIR="/home/carlosaraujo/Documentos/Projetos/grill-with-docs/.git/grill/wt-run-b12537dfc4dca1621cc1f08d-p01-a" bash .specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks. FEATURE_DIR precisa ser a 030 desta worktree; qualquer divergência perguntar. Use PYTHONDONTWRITEBYTECODE=1 nos checks para não deixar ignored. Preserve todos inputs fora do grant. Sem rede/instalação/CLIs reais nos checks. Read-only inspection de arquivos do repo permitida.
+
+Ownership fechado pelo brief: só 3 arquivos + seu sidecar. Nunca editar tasks.md, ignore files, .grill/, .specify/reports/, versões/manifests, skills canônicas ou quaisquer arquivos fora do grant, mesmo para revertê-los depois. O bump 6.0.0 nos oito pontos será T027 pelo líder após waves. Rootdocs também são deferred. Progress/terminal Gauntlet serão emitidos pelo líder a partir do seu status observado para preservar Evidence Boundary; você não chama CLI Gauntlet mutável. Reporte uma mensagem status quando terminar T001 com check e paths; siga heartbeats/preamble, leia followups em checkpoints. Sidecar usa formato nativo exato que o core 5.4.1 consome: leia parser/fixtures existentes antes de escrever, só T001 realmente concluída. Commit próprio somente paths concedidos, árvore limpa inclusive ignored. Envie worker_done succeeded com commit, checks/resultados e files-modified reais, depois idle. Não faça merge no líder, macroetapa/checkpoint/atestação nem publique.
+
+BRIEF CANÔNICO INTEGRAL:
+You are worker p01-a of feature 030-agent-orchestration.
+
+Tasks assigned to you: T001.
+Paths you may write:
+  - plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json
+  - plugin/skills/grill-with-docs/assets/task-files.v1.template.md
+  - plugin/skills/grill-with-docs/references/agent-orchestration.md
+  - specs/030-agent-orchestration/implement/p01-a.tasks.json
+
+Do not edit tasks.md. Record your result in specs/030-agent-orchestration/implement/p01-a.tasks.json and let the leader mark [X] after the merge.
+Do not write .grill/ or .specify/reports/. Do not checkpoint the step.
+Writing outside the paths above fails the merge with GRANT-SCOPE-VIOLATION.

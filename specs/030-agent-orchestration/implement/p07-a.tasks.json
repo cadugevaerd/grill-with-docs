@@ -1,0 +1,26 @@
+{
+  "schema": "grill-task-result/v1",
+  "worker": "p07-a",
+  "feature": "030-agent-orchestration",
+  "work_id": "feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa",
+  "scheduler_run_id": "run-da41897923ba2397c839aa23",
+  "node_id": "p07-a",
+  "attempt_id": "lease-run-da41897923ba2397c839aa23-p07-a",
+  "status": "completed",
+  "diagnostic_ref": null,
+  "completed": ["T014", "T015", "T016", "T017", "T018"],
+  "tasks": {
+    "T014": {"status": "done", "summary": "Added strict task-files/v1 parsing, canonical path validation, fenced-example handling, and no-follow scope checks."},
+    "T015": {"status": "done", "summary": "Added deterministic v2 DAG/report emission with semantic pins, task IDs, result mappings, phase accounting, and honest no-worker refusal."},
+    "T016": {"status": "done", "summary": "Added v2 brief/result reconciliation boundaries and exact task-result correlation before checkbox bookkeeping."},
+    "T017": {"status": "done", "summary": "Added accepted-receipt phase barriers bound to task, phase, task fingerprint, and DAG digest."},
+    "T018": {"status": "done", "summary": "Added hash-fenced task-files migration preview/apply and sealed r2 partition output handling."}
+  },
+  "checks": [
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_partition_contract.py",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_gauntlet_converge_contract.py",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_gauntlet_scheduler_contract.py",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py"
+  ],
+  "limitations": []
+}

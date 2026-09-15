@@ -1,0 +1,43 @@
+{
+  "task_id": "task_4ffdf87ea131",
+  "dispatch_id": "ctx_af8036326204",
+  "retry_of": "ctx_520db6486c00",
+  "user_confirmation": "aprovei o hook em nova interface",
+  "requested": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "effective": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "launch_state": "ready",
+  "prompt_stages": [
+    "input_accepted",
+    "turn_started"
+  ],
+  "terminal": "term_b8a88ca8-c056-4997-8861-4f7a3816ea00",
+  "review_result": "GO DOCUMENTAL",
+  "scope": "independent documentary review of requirement 8; not proof of i-have-adhd behavior",
+  "outcome": "succeeded",
+  "message_id": "msg_1360b328354e",
+  "findings": [],
+  "limitations": [
+    "Not a macrostep attestation",
+    "Not proof of automatic default or behavior in either harness",
+    "Canonical specify successor and revised plan required before implementation"
+  ],
+  "cleanup": {
+    "state": "released",
+    "processAction": "closed_agent_terminal",
+    "archive": "captured",
+    "reclaimable_workers": 0
+  },
+  "final_audit": {
+    "verdict": "GO",
+    "exit_code": 0,
+    "constitutional_clauses": 11
+  }
+}

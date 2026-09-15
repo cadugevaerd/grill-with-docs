@@ -2,6 +2,8 @@
 """Executable contract matrix for isolated grill workspaces v2."""
 from __future__ import annotations
 
+import orchestration_fixture
+
 import concurrent.futures
 import importlib.util
 import json
@@ -60,7 +62,7 @@ def invoke(*args: object) -> tuple[subprocess.CompletedProcess[str], dict]:
     if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
         args += ("--runtime", "claude")
     process = subprocess.run(
-        [sys.executable, str(SCRIPT), *(str(arg) for arg in args)],
+        orchestration_fixture.command(SCRIPT, args),
         text=True,
         capture_output=True,
         check=False,

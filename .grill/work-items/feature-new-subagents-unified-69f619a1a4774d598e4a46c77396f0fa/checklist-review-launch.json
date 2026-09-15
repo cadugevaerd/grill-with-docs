@@ -1,0 +1,19 @@
+{
+  "task_id": "task_94dd224149e7",
+  "dispatch_id": "ctx_a5cc085af588",
+  "run_id": "run_d025d446e826",
+  "requested": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "effective": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high"
+  },
+  "state": "ready",
+  "turn_started": true,
+  "artifact": "specs/030-agent-orchestration/checklists/orchestration.md",
+  "sha256": "3f13738ecddec469bfd3a5f7b2084344507ca86fb1774d4196cceb98158983ca"
+}

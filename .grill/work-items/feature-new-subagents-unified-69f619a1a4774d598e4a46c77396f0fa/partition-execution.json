@@ -1,0 +1,44 @@
+{
+  "schema": "gwd-partition-execution-observation/v1",
+  "toolchain": ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/cycle-toolchain-5.4.1.json",
+  "run_id": "run-b12537dfc4dca1621cc1f08d",
+  "dag": "specs/030-agent-orchestration/execution-dag.json",
+  "dag_sha256": "748abdc506985b6d2979ff85bba66eed72c001bb2d56d7763097cdf5e1b14c6e",
+  "report": "specs/030-agent-orchestration/partition-report.json",
+  "report_sha256": "f0feb59443e123e3d7de4d137e4d166bdbdbed315c67f5e1d506b106a2df4a52",
+  "nodes": 11,
+  "max_workers": 1,
+  "activation_max_workers": 3,
+  "effective_cap": 1,
+  "deferred": [
+    "T027",
+    "T028",
+    "T029",
+    "T030"
+  ],
+  "unmapped": [],
+  "migrations": [
+    "migrate-v4 REUSED",
+    "migrate-v3 REUSED",
+    "rebind-workflow REUSED"
+  ],
+  "activation_attempt": {
+    "max_workers": 1,
+    "exit": 2,
+    "code": "ACTIVATION-CONFLICT"
+  },
+  "recovery": {
+    "action": "reuse existing immutable activation as public remediation instructs",
+    "max_workers": 3,
+    "verdict": "REUSED",
+    "exit": 0
+  },
+  "run_verdict": "RUN-REUSED",
+  "base_commit": "6ad0dc2807c74fe37af52207700620dd02e8cbd0",
+  "validation": {
+    "verdict": "DAG-VALID",
+    "exit": 0,
+    "dag_content_sha256": "24ceaed2ee0b846ebfb96fd8a032955dd1ea649cb00fd4cb59e841189f9cea7c",
+    "run_id": "run-b12537dfc4dca1621cc1f08d"
+  }
+}

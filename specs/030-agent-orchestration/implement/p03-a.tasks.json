@@ -1,0 +1,21 @@
+{
+  "schema": "grill-task-result/v1",
+  "worker": "p03-a",
+  "completed": ["T006", "T007"],
+  "review_required": {"T006": ["independent-review"], "T007": ["independent-review"]},
+  "requires_fixes": [],
+  "pending": [],
+  "evidence": {
+    "T006": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_cleanup_lifecycle; temporary 94ebee84 integration: tests/validate_gauntlet_run_contract.py",
+      "exit_code": 0,
+      "expected": "terminal cleanup accepts only proven integrated, clean resources; it uses no-force worktree removal and OLD_OID CAS ref deletion with readback"
+    },
+    "T007": {
+      "command": "temporary 94ebee84 integration: tests/validate_gauntlet_converge_contract.py; tests/validate_gauntlet_scheduler_contract.py; tests/validate_status_contract.py",
+      "exit_code": 0,
+      "expected": "convergence drains eligible cleanup idempotently while checkpoint and status retain read-only cleanup reasons"
+    }
+  },
+  "notes": "The four p02 overlap paths were imported from 94ebee84cc492478cf3f0fd1a735f3daf35f7112 before T006/T007 edits. Full validators passed in bounded runs in the coordinator-authorized temporary integration tree based on that commit: run 23, scheduler 53, converge 53, and status 52 tests."
+}

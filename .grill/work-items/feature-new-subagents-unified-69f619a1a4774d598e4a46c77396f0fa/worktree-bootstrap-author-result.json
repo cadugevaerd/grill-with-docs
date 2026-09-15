@@ -1,0 +1,51 @@
+{
+  "id": "04f1d5e6-561f-4977-9850-262a35f05c6e",
+  "ok": true,
+  "result": {
+    "runId": "run_d025d446e826",
+    "deliveryId": "delivery_2cb3c3e809ac",
+    "messages": [
+      {
+        "id": "msg_b5669a159c94",
+        "run_id": "run_d025d446e826",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_484cfbf3-4d1d-4da0-8579-0a561b9bc73a",
+        "to_handle": "run:run_d025d446e826",
+        "subject": "HOW comprovado: contexto por FF pr\u00e9-payload",
+        "body": "Analisei o core hist\u00f3rico e comprovei em Git descart\u00e1vel duas fases de declare, FF pr\u00e9-payload, terminal e converge, entregando protocolo exato, prova reproduz\u00edvel e digests sem alterar projeto, \u00edndice, refs ou Store real. O FF preserva base e grants e fornece planejamento/depend\u00eancias, condicionado a executionHEAD observado antes do payload, prerequisites na worktree correta e auditoria por commit; replay de declare \u00e9 recusado ap\u00f3s FF, cleanup preserva e diff l\u00edquido sozinho pode ocultar altera\u00e7\u00e3o revertida. Resta revis\u00e3o high distinta e aplica\u00e7\u00e3o pelo l\u00edder conforme REPORT.md, SHA-256 f4fd65958bbd6d46bb30fcf34dcb226a0f6f8d7ea0171c3f2c11bc9dd399a89d, sem aceitar reset de identidade ou efeitos pr\u00f3prios fora do grant como heran\u00e7a.",
+        "type": "worker_done",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_5420e3c387cb\",\"dispatchId\":\"ctx_8d89266843c0\",\"outcome\":\"succeeded\",\"filesModified\":[\"/tmp/grill-how-H4WGPU/REPORT.md\",\"/tmp/grill-how-H4WGPU/proof.py\",\"/tmp/grill-how-H4WGPU/proof-result.json\",\"/tmp/grill-how-H4WGPU/observations.json\",\"/tmp/grill-how-H4WGPU/real-before.json\",\"/tmp/grill-how-H4WGPU/real-after.json\"],\"reportPath\":\"/tmp/grill-how-H4WGPU/REPORT.md\"}",
+        "created_at": "2026-09-13T20:54:47Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": true,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "91e41e82-a0dc-4899-89ae-804a5c86325e",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "d5fbd9ae-4707-4a7c-ae42-c0e165c7ad4d"
+  },
+  "preserved_artifacts": {
+    ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/worktree-bootstrap/REPORT.md": "f4fd65958bbd6d46bb30fcf34dcb226a0f6f8d7ea0171c3f2c11bc9dd399a89d",
+    ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/worktree-bootstrap/proof.py": "6c20b29b9de22d01c102ed96ceb3f048d8f506a1540e4ffba3e470b562e69a78",
+    ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/worktree-bootstrap/proof-result.json": "a1167dd823f50b01e8e6ec595df151c539b330cf9e57be7cd58ebc2f7d11936a",
+    ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/worktree-bootstrap/observations.json": "4db8066e0ce9086eea263c6173e8cb87ee92ad6f4e869b5bdd63881d79307237",
+    ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/worktree-bootstrap/real-before.json": "f623616b3432adb07e13c924397f79f025ec8f2e5adb5dfd07ee1e828fad6e0a",
+    ".grill/work-items/feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa/worktree-bootstrap/real-after.json": "f623616b3432adb07e13c924397f79f025ec8f2e5adb5dfd07ee1e828fad6e0a"
+  },
+  "cleanup": {
+    "state": "released",
+    "processAction": "closed_agent_terminal",
+    "archive": "captured"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "id": "02215d66-a176-4043-a4f9-453b6ded8eaf",
+  "ok": true,
+  "result": {
+    "runId": "run_d025d446e826",
+    "deliveryId": "delivery_9238bc78f985",
+    "messages": [
+      {
+        "id": "msg_17e194b32462",
+        "run_id": "run_d025d446e826",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_e9a5e7d1-ce3e-46f1-b3c4-c17ed0d87b96",
+        "to_handle": "run:run_d025d446e826",
+        "subject": "T001 supplements committed",
+        "body": "Implementei T001 no commit 3bd8f6572d053fa5211cc6a27fbe63d53af4c5e1, criando a política, o template e o suplemento, além do sidecar nativo. O check focado stdlib passou para JSON estrito, refs locais, hashes de protocolo/template, Result obrigatório e distinção entre contexto entregue e skill invocada. Resta ao líder integrar o commit e reconciliar T001; nenhum arquivo fora do grant foi alterado.",
+        "type": "worker_done",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_91b15fdc63e6\",\"dispatchId\":\"ctx_66a6e64f32a0\",\"outcome\":\"succeeded\",\"filesModified\":[\"plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json\",\"plugin/skills/grill-with-docs/assets/task-files.v1.template.md\",\"plugin/skills/grill-with-docs/references/agent-orchestration.md\",\"specs/030-agent-orchestration/implement/p01-a.tasks.json\"]}",
+        "created_at": "2026-09-13T21:10:34Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": true,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "bc2792c2-0d56-4385-bc83-1cf6e517ddcb",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "d5fbd9ae-4707-4a7c-ae42-c0e165c7ad4d"
+  }
+}

@@ -1,0 +1,202 @@
+{
+  "feature": "030-agent-orchestration",
+  "max_workers": 1,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json",
+        "plugin/skills/grill-with-docs/assets/task-files.v1.template.md",
+        "plugin/skills/grill-with-docs/references/agent-orchestration.md",
+        "specs/030-agent-orchestration/implement/p01-a.tasks.json"
+      ],
+      "id": "p01-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/store.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/030-agent-orchestration/implement/p02-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_checkpoint_contract.py",
+        "tests/validate_orchestrator_store_contract.py"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py",
+        "plugin/skills/grill-with-docs/scripts/grill_status.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/030-agent-orchestration/implement/p03-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_gauntlet_converge_contract.py",
+        "tests/validate_gauntlet_run_contract.py",
+        "tests/validate_gauntlet_scheduler_contract.py",
+        "tests/validate_status_contract.py"
+      ],
+      "id": "p03-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py",
+        "plugin/skills/grill-with-docs/scripts/grill_status.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/030-agent-orchestration/implement/p04-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_attestation_emitter_contract.py",
+        "tests/validate_checkpoint_contract.py"
+      ],
+      "id": "p04-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p04-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json",
+        "plugin/skills/grill-with-docs/references/agent-orchestration.md",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/030-agent-orchestration/implement/p05-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p05-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p05-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/030-agent-orchestration/implement/p06-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p06-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p06-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/partition.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/030-agent-orchestration/implement/p07-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_gauntlet_converge_contract.py",
+        "tests/validate_gauntlet_scheduler_contract.py",
+        "tests/validate_partition_contract.py"
+      ],
+      "id": "p07-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p07-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json",
+        "plugin/skills/grill-with-docs/assets/dependencies.json",
+        "plugin/skills/grill-with-docs/references/agent-orchestration.md",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "plugin/skills/grill-with-docs/scripts/ensure_dependencies.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "plugin/skills/grill-with-docs/scripts/grill_status.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/030-agent-orchestration/implement/p08-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_dependencies_contract.py",
+        "tests/validate_status_contract.py"
+      ],
+      "id": "p08-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p08-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/030-agent-orchestration/implement/p09-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p09-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p09-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/030-agent-orchestration/implement/p10-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_checkpoint_contract.py"
+      ],
+      "id": "p10-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p10-a"
+      ],
+      "files": [
+        "specs/030-agent-orchestration/implement/p11-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_attestation_emitter_contract.py",
+        "tests/validate_checkpoint_contract.py",
+        "tests/validate_partition_contract.py"
+      ],
+      "id": "p11-a",
+      "parallel": true,
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v1"
+}

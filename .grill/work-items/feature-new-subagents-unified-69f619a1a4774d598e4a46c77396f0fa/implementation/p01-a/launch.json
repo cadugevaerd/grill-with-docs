@@ -1,0 +1,86 @@
+{
+  "id": "68d83f01-0204-4307-b4b8-e219a7ca69f3",
+  "ok": true,
+  "result": {
+    "runId": "run_d025d446e826",
+    "taskId": "task_91b15fdc63e6",
+    "dispatchId": "ctx_66a6e64f32a0",
+    "state": "ready",
+    "stage": "input_accepted",
+    "turnStart": "observed",
+    "setup": {
+      "requested": "not_applicable",
+      "effective": "not_applicable",
+      "source": "existing_worktree",
+      "hookFound": false,
+      "startupPolicy": "start-immediately",
+      "state": "not_applicable"
+    },
+    "launch": {
+      "requested": {
+        "agent": "codex",
+        "model": "gpt-5.6-terra",
+        "effort": "medium"
+      },
+      "effective": {
+        "agent": "codex",
+        "model": "gpt-5.6-terra",
+        "effort": "medium"
+      }
+    },
+    "mode": {
+      "mode": "terminal",
+      "preferred": "terminal",
+      "reason": "user_default",
+      "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+    },
+    "timeoutMs": 60000,
+    "effects": [
+      {
+        "kind": "worktree",
+        "action": "reused",
+        "id": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/Documentos/Projetos/grill-with-docs/.git/grill/wt-run-b12537dfc4dca1621cc1f08d-p01-a"
+      },
+      {
+        "kind": "setup",
+        "action": "not_applicable",
+        "state": "not_applicable"
+      },
+      {
+        "kind": "terminal",
+        "role": "agent",
+        "action": "created",
+        "id": "term_e9a5e7d1-ce3e-46f1-b3c4-c17ed0d87b96",
+        "surface": "visible"
+      },
+      {
+        "kind": "dispatch_input",
+        "role": "agent",
+        "id": "term_e9a5e7d1-ce3e-46f1-b3c4-c17ed0d87b96",
+        "state": "accepted"
+      }
+    ],
+    "prompt": {
+      "requestId": "e05e9488-523e-42fa-b92d-eacdb76b7fac",
+      "stages": [
+        "input_accepted",
+        "turn_started"
+      ],
+      "provider": "codex",
+      "observation": "supported",
+      "processIncarnation": "a50da5b3-4224-4c4b-9387-b89619d893b3",
+      "generation": 51,
+      "baselineWorkingSequence": 1,
+      "baselineExplicitWorkingStartedAt": null,
+      "baselinePermissionSequence": 0
+    },
+    "residualResources": [],
+    "mutation": {
+      "requestId": "e05e9488-523e-42fa-b92d-eacdb76b7fac",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "d5fbd9ae-4707-4a7c-ae42-c0e165c7ad4d"
+  }
+}

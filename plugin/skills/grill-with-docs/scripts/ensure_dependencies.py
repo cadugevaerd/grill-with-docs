@@ -271,6 +271,8 @@ def plugin_registry_state(entry: dict[str, Any], tools: Toolchain, runtime: str)
         if (not isinstance(records, list) or not records or not isinstance(records[0], dict)
                 or not isinstance(records[0].get("version"), str)):
             return "undetermined", None, None, f"registro de plugins ilegivel: {registry_path}"
+        if entry["id"] == "i-have-adhd" and len(records) != 1:
+            return "undetermined", None, None, "instalacao efetiva requer observacao do runtime"
         version, source = records[0]["version"], str(registry_path)
     else:
         config_root = tools.environ.get("CODEX_HOME")
@@ -281,6 +283,7 @@ def plugin_registry_state(entry: dict[str, Any], tools: Toolchain, runtime: str)
         best: tuple[int, ...] | None = None
         version = source = None
         unreadable: str | None = None
+        candidates: list[tuple[tuple[int, ...], str, str]] = []
         for candidate in sorted(item for item in cache.iterdir() if item.is_dir()):
             plugin_json = candidate / ".codex-plugin/plugin.json"
             if not plugin_json.is_file():
@@ -294,12 +297,15 @@ def plugin_registry_state(entry: dict[str, Any], tools: Toolchain, runtime: str)
             parsed = parse_version(text)
             if parsed is None:
                 continue
+            candidates.append((parsed, text, str(plugin_json)))
             if best is None or parsed > best:
                 best, version, source = parsed, text, str(plugin_json)
         if best is None:
             if unreadable is not None:
                 return "undetermined", None, None, f"registro de plugins ilegivel: {unreadable}"
             return "missing", None, None, None
+        if entry["id"] == "i-have-adhd" and len(candidates) != 1:
+            return "undetermined", None, None, "instalacao efetiva requer observacao do runtime"
     if meets(parse_version(version), entry.get("min")):
         return "present", version, source, None
     return "outdated", version, source, f"versao {version} abaixo do minimo {entry.get('min')}"

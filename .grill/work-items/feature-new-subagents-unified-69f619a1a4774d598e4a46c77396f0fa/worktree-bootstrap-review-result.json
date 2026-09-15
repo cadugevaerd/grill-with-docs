@@ -1,0 +1,43 @@
+{
+  "id": "98ed50fc-9cd1-4106-bdd3-d71f1dfbde1a",
+  "ok": true,
+  "result": {
+    "runId": "run_d025d446e826",
+    "deliveryId": "delivery_771fccf98554",
+    "messages": [
+      {
+        "id": "msg_f0c251f01609",
+        "run_id": "run_d025d446e826",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_60b71cc9-6336-46b4-958a-f8b66c9c6797",
+        "to_handle": "run:run_d025d446e826",
+        "subject": "GO HOW hist\u00f3rico com corre\u00e7\u00e3o de storage",
+        "body": "GO para o HOW operacional com a corre\u00e7\u00e3o de armazenamento abaixo: revisei os seis artefatos e o c\u00f3digo hist\u00f3rico em leitura, sem baseline, execu\u00e7\u00e3o da proof, rede ou muta\u00e7\u00f5es de arquivos; conferem os 58 hashes do bundle, os 13 digests de inputs, proof.py=6c20b29b9de22d01c102ed96ceb3f048d8f506a1540e4ffba3e470b562e69a78 e proof-result.json=a1167dd823f50b01e8e6ec595df151c539b330cf9e57be7cd58ebc2f7d11936a, 14 observa\u00e7\u00f5es coerentes com o c\u00f3digo, snapshots antes/depois iguais de 961 arquivos, HEAD/refs/\u00edndice/worktrees atuais iguais aos snapshots e Store intacto com run ADMITTED, zero workers e pin DAG ainda ausente; CYCLE-EXECUTION.md mudou desde o snapshot hist\u00f3rico, sem diverg\u00eancia nos inputs selados. Finding concreto de armazenamento: .grill/global/worktree-bootstrap n\u00e3o est\u00e1 ignorado por Git e .grill/global \u00e9 proje\u00e7\u00e3o substitu\u00edda integralmente por grill_workspace.py:1989, portanto recomendo $COMMON/grill/worktree-bootstrap/<WI>/<node>/, resolvendo COMMON pelo Git real, atualmente /home/carlosaraujo/Documentos/Projetos/grill-with-docs/.git, como evid\u00eancia exclusiva do l\u00edder separada de orchestrator/events/receipts can\u00f4nicos; store.py:547 confirma esse common-dir, gauntlet_runs.py:2245-2293 aceita untracked sem colis\u00e3o mas isso n\u00e3o torna .grill/global armazenamento dur\u00e1vel seguro, e copiar os registros ao WI e commit\u00e1-los somente ap\u00f3s converge e antes de capturar o pr\u00f3ximo E evita tracked dirt, movimenta\u00e7\u00e3o de E durante payload e commit autorreferente. Permanecem obrigat\u00f3rias observa\u00e7\u00f5es reais do l\u00edder: planejamento aprovado commitado sem mudar bytes selados, declare can\u00f4nico/PREPARED em B original, FF e igualdade HEAD=E antes do payload, prerequisites em W com overrides sanitizados, E congelado at\u00e9 converge com \u00e1rvore rastreada limpa, worker parado e WH fixado para checar diff l\u00edquido E\u2192WH e cada commit sem merges pr\u00f3prios, read-back de campanha/pins/lease e reuso p\u00f3s-FF somente com prova externa de aus\u00eancia de payload, nunca replay/reset; essas condi\u00e7\u00f5es preservam identidade por ra\u00edzes Git e autoria estrutural sem modificar core/skills/tasks/DAG, mas n\u00e3o provam aus\u00eancia de escrita transit\u00f3ria maliciosa, a fixture n\u00e3o substitui ativa\u00e7\u00e3o/evid\u00eancia real, a reten\u00e7\u00e3o hist\u00f3rica por cleanup 5.4.1 n\u00e3o dispensa cleanup do produto 6.0.0, este GO n\u00e3o autoriza remo\u00e7\u00e3o destrutiva e as sess\u00f5es Orca devem ser released ap\u00f3s settlement/evid\u00eancia.",
+        "type": "worker_done",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_85db696e5ef4\",\"dispatchId\":\"ctx_a13cb3fc147e\",\"outcome\":\"succeeded\"}",
+        "created_at": "2026-09-13T20:58:54Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": true,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "b94cbab0-02e8-4a65-9ade-093da811fc76",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "d5fbd9ae-4707-4a7c-ae42-c0e165c7ad4d"
+  },
+  "cleanup": {
+    "state": "released",
+    "processAction": "closed_agent_terminal",
+    "archive": "captured"
+  }
+}

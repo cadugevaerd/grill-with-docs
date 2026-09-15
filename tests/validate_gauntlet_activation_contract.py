@@ -8,6 +8,8 @@ module or test-only fixture is imported by production code.
 """
 from __future__ import annotations
 
+import orchestration_fixture
+
 import contextlib
 import hashlib
 import importlib.util
@@ -117,7 +119,7 @@ def invoke(program: Path, *args: object) -> tuple[subprocess.CompletedProcess[st
     if args and args[0] in {"init", "preflight", "gauntlet-init"} and "--runtime" not in args:
         args += ("--runtime", "claude")
     process = subprocess.run(
-        [sys.executable, str(program), *(str(value) for value in args)],
+        orchestration_fixture.command(program, args),
         text=True,
         capture_output=True,
         check=False,
@@ -160,7 +162,9 @@ def invoke_module_in_process(module, *args: object) -> tuple[int, dict, str]:
         args += ("--runtime", "claude")
     output = io.StringIO()
     errors = io.StringIO()
-    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+    if args and args[0] == "init" and "--session-ref" not in args:
+        args += ("--session-ref", orchestration_fixture.SESSION)
+    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors), orchestration_fixture.offline_leader(module):
         returncode = module.main([str(value) for value in args])
     lines = output.getvalue().splitlines()
     if len(lines) != 1:
@@ -324,22 +328,10 @@ def file_snapshot(root: Path) -> dict[str, tuple[bytes, int]]:
 
 
 class GauntletInitContract(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.template = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        cls.template_root = Path(cls.template.name) / "ready"
-        build_rebound_v3_repository(cls.template_root)
-        cls.v2_item_template_root = Path(cls.template.name) / "v2-item"
-        build_v2_item_v3_workflow_repository(cls.v2_item_template_root)
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.template.cleanup()
-
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.root = Path(self.temporary.name) / "repo"
-        shutil.copytree(self.template_root, self.root)
+        build_rebound_v3_repository(self.root)
         self.config = self.root / CONFIG_RELATIVE
 
     def tearDown(self) -> None:
@@ -347,7 +339,7 @@ class GauntletInitContract(unittest.TestCase):
 
     def fresh_copy(self, parent: Path, suffix: str) -> Path:
         root = parent / suffix
-        shutil.copytree(self.template_root, root)
+        build_rebound_v3_repository(root)
         return root
 
     def activate(
@@ -405,6 +397,8 @@ class GauntletInitContract(unittest.TestCase):
                 "max_workers": workers,
                 "stall_minutes": 15,
                 "runtime": "claude",
+                "coordinator_recommendation": "Opus",
+                "active_model_changed": False,
             },
         )
 
@@ -985,7 +979,7 @@ class GauntletInitContract(unittest.TestCase):
 
     def test_v2_item_under_v3_workflow_requires_explicit_item_migration(self) -> None:
         shutil.rmtree(self.root)
-        shutil.copytree(self.v2_item_template_root, self.root)
+        build_v2_item_v3_workflow_repository(self.root)
         before = file_snapshot(self.root)
         process, payload = self.activate(3)
         self.assert_blocked_unchanged(self.root, before, process, payload, "WORK-ITEM-V3-REQUIRED")
@@ -1498,7 +1492,7 @@ class GauntletInitContract(unittest.TestCase):
         after = file_snapshot(self.root)
         self.assertEqual(
             {path: value for path, value in after.items() if not path.startswith(".git/grill/")},
-            before,
+            {path: value for path, value in before.items() if not path.startswith(".git/grill/")},
         )
         self.assertFalse((self.root / ".grill" / "workers").exists())
         self.assertFalse((self.root / ".grill" / "runs").exists())

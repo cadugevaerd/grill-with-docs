@@ -1,0 +1,20 @@
+[
+  {
+    "runtime": "codex",
+    "version": "0.3.0",
+    "skill_sha256": "3170b16ace00aecb0dd7feb54c0b5aa642e7502acda06ecd24fd89a11c7127e9",
+    "hook_without_flag": "PASS empty",
+    "hook_with_isolated_flag": "PASS full rules",
+    "behavioral_fresh_session": "PENDING implementation and fresh-session verification in both harnesses",
+    "default_scope": "GWD project/workflow, via updated GWD skill; R-0010"
+  },
+  {
+    "runtime": "claude",
+    "version": "0.3.0",
+    "skill_sha256": "3170b16ace00aecb0dd7feb54c0b5aa642e7502acda06ecd24fd89a11c7127e9",
+    "hook_without_flag": "PASS empty",
+    "hook_with_isolated_flag": "PASS full rules",
+    "behavioral_fresh_session": "PENDING implementation and fresh-session verification in both harnesses",
+    "default_scope": "GWD project/workflow, via updated GWD skill; R-0010"
+  }
+]

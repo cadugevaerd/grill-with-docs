@@ -1,0 +1,8 @@
+{
+  "command": "python3 tests/run_validators.py",
+  "exit_code": 0,
+  "validators": 28,
+  "skip": "host has no /var -> /private/var alias",
+  "scope": "repository baseline before code changes; does not prove new requirements implemented",
+  "head": "6ad0dc2807c74fe37af52207700620dd02e8cbd0"
+}

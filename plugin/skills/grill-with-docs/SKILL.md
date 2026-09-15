@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v5.4.1
+# Grill with Docs v6.0.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -23,7 +23,36 @@ worktree C ──> .grill/work-items/<work-id-C>/ ─┘
 6. Hooks são read-only e nunca criam work items automaticamente.
 7. Hotfix-fast é uma exceção operacional fechada: exige escopo, reprodução/evidência, teste de correção, rollback e evidência constitucional; não depende de ROADMAP, BL, DQ ou reconciliação para ser seguro.
 8. Feature e fix permanecem plan-only; hotfix só entrega HOTFIX-GO para ship externo e reconciliação/auditoria documental completa são pós-ship.
-7. A sessão termina em `PLAN_ONLY_STOP`; não implementa código, não executa `specify|plan` e não faz commit/merge.
+9. A sessão termina em `PLAN_ONLY_STOP`; não implementa código, não executa `specify|plan` e não faz commit/merge.
+
+## Bootstrap de apresentação obrigatório
+
+Em toda entrada GWD (`iniciar`, `retomar`, reentrada após compactação e sessão de especialista), aplique `i-have-adhd@i-have-adhd` como referência de apresentação **local deste fluxo** antes da primeira resposta de trabalho. Resolva a instalação efetiva do runtime, confirme habilitação e confiança por observações separadas, leia integralmente o `SKILL.md` aprovado indicado pelo `load_request` e registre o evento correlacionado à mesma sessão, configuração e escopo GWD. Não peça ao usuário para invocar a skill upstream, não execute seu hook e não crie flag/configuração global.
+
+Instalado, enabled, saída zero, catálogo, hash impresso ou autorrelato não comprovam `loaded` nem comportamento. Só `work_ready` permite entrada ou despacho: normalmente exige `use_ready`; `stop adhd mode` documentado na mesma sessão/incarnation/escopo mantém apenas `work_ready` após compactação, com `use_ready=false`, sem reinjetar o corpo. Nova sessão, troca de runtime/incarnation e reativação explícita voltam ao padrão ativo e exigem nova leitura. Preserve Ponytail, instruções superiores, conteúdo solicitado, exceções upstream, arquivos/grants e o escopo local; saída do fluxo GWD é `out_of_scope`.
+
+## Orquestração 6.0.0 e papéis
+
+Carregue o [suplemento de orquestração](references/agent-orchestration.md), a policy `assets/agent-orchestration.v1.json` e o template `assets/task-files.v1.template.md` com seus hashes. Eles são argumentos da entrada canônica resolvida; não são aliases, macroetapas ou substitutos de invocação. Consulte o [protocolo de sessão](references/session-protocol.md) para verbos, recusas, cleanup e continuidade. O contrato cobre cleanup, Files explícitos, troca de CLI, recomendação do líder, autoria técnica, revisão independente, prévia frontend e apresentação local.
+
+| Runtime | Recomendação da sessão principal | Autor de COMO | Revisor de julgamento |
+|---|---|---|---|
+| Codex | Sol | `gpt-6-astra`, `xhigh` | `gpt-6-astra`, `high` |
+| Claude Code | Opus | `fable`, `xhigh` | `fable`, `high` |
+
+A recomendação é apresentada em todo início/retomada, sem trocar modelo. Autoria inclui entrevista, plan, tasks, design e novas decisões de implementação; revisão inclui requisitos, planos, tarefas, visual, código e segurança. O revisor usa outra sessão/incarnation, distinta de todos os autores dos bytes revisados. Novo nome de atividade na mesma sessão não cria independência; checks determinísticos não são revisão. Workers de implementação mantêm o binding não-frontier por tier.
+
+O líder invoca cada skill canônica na sessão ativa, coordena e persiste os retornos/receipts; especialistas não escrevem `.grill/` ou `.specify/reports/`, não atestam nem fecham macroetapa. Antes do payload técnico, verificar capacidade de bootstrap neutro separado, identidade e modelo/esforço efetivos e fechamento confirmado. Se faltar prova, bloquear com diagnóstico nominal; não substituir o modelo nem o julgamento pelo líder. Após resultado/diagnóstico durável, revalidar a mesma identidade/configuração e encerrar com read-back. Solicitado não é efetivo; receipt/hash é evidência estrutural auditável, sem prova criptográfica de execução.
+
+Antes de cada entrada posterior, `gauntlet-step-enter` admite o contexto; o líder então invoca a mesma skill canônica com suplemento/template/apresentação. Conservar `specify → plan → checklist → tasks → analyze → partition → implement-parallel → converge → verify → review → ship`, as onze skills, seus registries/catálogos v3/v4 e a Constituição. Entrevista pré-ciclo usa `--scope interview`, sem macroetapa adicional, e continua encerrando em `PLAN_ONLY_STOP`.
+
+Em frontend, plan inclui Impeccable observado, HTML autocontido, capturas PNG e manifest de bytes, autor xhigh e revisão high independente. Apresentar a prévia concreta ao humano e vincular sua aprovação ao digest atual antes de tasks; alteração exige nova aprovação. Rechecar em entrada, checkpoint, attest e partition. Sem superfície frontend e com fontes coerentes, `NOT_APPLICABLE`; classificação conflitante bloqueia.
+
+Tasks novas seguem `<!-- grill-task-files:v1 -->`: `Files:` array JSON imediatamente após cada tarefa; `Result:` explícito por tarefa despachável também declarado em Files. Raiz, arquivo novo e prefixo `./` são válidos; texto com barras não concede escrita. Sem grant parcial, glob, traversal, symlink, escopo fora da entrega ou sidecar implícito. `Files: []` é read-only; reserva de evidência torna a tarefa inteira deferred ao líder. Em cada fase, convergir workers e aceitar read-only/deferred na ordem declarada antes da próxima; aceites positivos vinculam task/fase/fingerprint/DAG. Última fase pendente bloqueia fechamento. `PARTITION-NO-WORKERS` exige parar antes de admissão, DAG-VALID e checkpoint, sem worker fictício.
+
+Novos trabalhos exigem o contrato integral como obrigação normativa; isso não descreve a garantia atual de init/adopt. Legado precisa adoção/migração explícita antes de executar no novo binário; não reescrever DAG selado nem reinterpretar tasks históricas. O ciclo que produz 6.0.0 conserva bundle/CLI absoluto e pins históricos até ship; ensaios usam projeto isolado. Só depois adotar explicitamente o work item COMPLETE, importando referências e inventário sem repetir etapas. Publicação continua pelo ciclo/gates canônicos, nunca por esta entrada plan-only.
+
+Na fonte `5bc9500e6fff10fce5353f758fdc334e490a3523`, `init` e `gauntlet-orchestration-adopt` podem criar contexto `ACTIVE` sem observação de sessão correlacionada nem `presentation`; o guard de autoridade aceita a igualdade de `session_ref` com contexto/época/estado correspondentes e o guard de apresentação ausente retorna `{"legacy": true, "work_ready": true}`. Sucesso desses verbos, ACTIVE ou fallback legacy não comprovam sessão nem apresentação obrigatória e não liberam trabalho pelo contrato novo. Exigir remediação delimitada do core e revalidação antes dos aceites funcionais posteriores; a instrução de bloquear não torna esses handlers fail-closed.
 
 ## Triagem: da causa raiz para a rota
 
@@ -63,20 +92,24 @@ Crie o namespace isolado:
 ```text
 python3 "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/grill-with-docs/scripts/grill_workspace.py" \
   init ROOT --runtime claude|codex --type feature|fix|hotfix --slug SLUG [--work-id WORK_ID] [--base-ref REF] \
-  [--allow-install] [--require-dependencies] [--skip-backlog]
+  --session-ref REF [--allow-install] [--require-dependencies] [--skip-backlog]
 ```
 
 Sem `--work-id`, o core gera uma identidade collision-resistant. `--work-id` explícito serve para retomada/idempotência e deve corresponder à mesma identidade. A criação usa lock, staging e rename atômico; colisão ou integridade divergente bloqueiam.
 
 ## Dependências e backlog
 
-O preflight é declarado em `assets/dependencies.json` e executado por `scripts/ensure_dependencies.py`: Python >=3.10, `git`, Spec Kit (CLI >=0.11.2, scaffold `.specify/` e as extensões `git`, `agent-assign`, `bugfix`, `verify-review-ship`) e `backlogctl`. O core nunca baixa bytes: cada instalação é delegada a quem é dono do artefato — `uv`, `specify` e o instalador verificado do plugin `backlog` — e a verificação é por versão resolvida, nunca por hash de tarball.
+O preflight é declarado em `assets/dependencies.json` e executado por `scripts/ensure_dependencies.py`: Python >=3.10, `git`, Spec Kit (CLI >=0.11.2, scaffold `.specify/` e as extensões `git`, `bugfix`, `verify-review-ship`) e `backlogctl`. O core nunca baixa bytes: cada instalação é delegada a quem é dono do artefato — `uv`, `specify` e o instalador verificado do plugin `backlog` — e a verificação é por versão resolvida, nunca por hash de tarball.
 
 O plugin `ponytail` (`DietrichGebert/ponytail`, mínimo 4.9.0) integra a stack oficial como `harness-plugin`, com `required: true` e a mesma semântica de obrigatoriedade do Spec Kit — é o modo de trabalho oficial do projeto. A detecção lê somente o registro de plugins em disco do runtime ativo, sem subprocesso: no Claude Code, `installed_plugins.json`; no Codex, o cache de plugins; o resultado é `present`, `outdated`, `missing` ou `undetermined`. Com `--allow-install` a instalação é delegada à CLI do harness — `claude plugin marketplace add DietrichGebert/ponytail` seguido de `claude plugin install ponytail@ponytail`, ou os equivalentes `codex plugin marketplace add`/`codex plugin add` —, nunca pelo core, e a confiança nesse marketplace de terceiros é declarada no manifesto. No Codex, "instalado" não prova "habilitado": a ativação depende de configuração própria do runtime que a detecção não cobre. Os hooks do ponytail exigem `node` no PATH para ativação automática; sem ele as skills continuam funcionando.
 
+`i-have-adhd@i-have-adhd` (`ayghri/i-have-adhd`, mínimo 0.3.0) também é `harness-plugin` obrigatório no fluxo novo, independentemente de `--require-dependencies`; SKIPPED não libera trabalho. A policy admite inicialmente 0.3.0 e o hash aprovado do SKILL.md instalado; versão maior não implica conteúdo compatível. Instalação delegada sob `--allow-install` segue o manifesto do runtime; instalação presente não comprova habilitação, confiança, leitura ou comportamento. Disabled não autoriza reinstalação para contornar a escolha. Respeite autorização de confiança já válida e preserve configurações alheias.
+
+Com aplicação ativa, `STYLE-LOAD-UNCONFIRMED` acompanhado de `presentation.load_request` é bootstrap pendente: leia o arquivo aprovado por inteiro pela ferramenta da própria sessão, preserve as dez regras/exceções e registre o evento real para revalidar. Sem continuação disponível no binário/adapter, diagnostique a lacuna e não libere o trabalho. Carga atual pode produzir `work_ready=true`, `use_ready=true`, `behavior=not_tested`, `functional_verified=false`; somente amostra live completa e revisão independente comprovam comportamento. Corpo truncado exige nova leitura integral; catálogo, path e declaração do agente não bastam. A evidência funcional da entrega exige os dois runtimes, compactação e controle externo, não se presume deste texto.
+
 Duas das extensões exigidas (`bugfix`, `verify-review-ship`) vivem no catálogo `community` do Spec Kit, que é discovery-only. Instalar por `--from <archive-url>` exige confirmação interativa de fonte não confiável, que um instalador automatizado não deve responder no lugar do humano. Por isso `--allow-install` registra o catálogo community como confiável em `.specify/extension-catalogs.yml` (`install_allowed: true`) e instala pelo nome. Essa é uma decisão de confiança explícita, versionada no repositório e revisável: a partir dela, `specify extension add` passa a instalar extensões de terceiros desse catálogo sem novo aviso.
 
-O backlog operacional é **exigido** desde a 3.0.0: `init` recusa com `BACKLOG-REQUIRED` sem backlog resolvido e vinculado — e vincula apenas a backlog **existente**, nunca provisionando um novo, porque criar o que se deveria verificar não é verificar, e o bind deixou de depender de `--allow-install`. `--skip-backlog` é a única saída, fica **carimbada** no `state.json` do work item e aparece em toda auditoria como `backlog_skipped` — um bundle criado por ela não pode parecer conforme com um pré-requisito que contornou. `backlog-adopt` limpa o carimbo depois que o repositório é vinculado, para que a saída não vire cela. As demais dependências continuam apenas detectadas e reportadas; `--allow-install` segue autorizando a instalação delegada. `--require-dependencies` transforma a falta em `MISSING-DEPENDENCY` fail-closed. `GRILL_SKIP_DEPENDENCIES=1` desliga a detecção em ambiente air-gapped e nunca é reportado como `OK`.
+O backlog operacional é **exigido** desde a 3.0.0: `init` recusa com `BACKLOG-REQUIRED` sem backlog resolvido e vinculado — e vincula apenas a backlog **existente**, nunca provisionando um novo, porque criar o que se deveria verificar não é verificar, e o bind deixou de depender de `--allow-install`. `--skip-backlog` é a única saída, fica **carimbada** no `state.json` do work item e aparece em toda auditoria como `backlog_skipped` — um bundle criado por ela não pode parecer conforme com um pré-requisito que contornou. `backlog-adopt` limpa o carimbo depois que o repositório é vinculado, para que a saída não vire cela. Exceto pelo requisito obrigatório de apresentação acima, as demais dependências continuam apenas detectadas e reportadas; `--allow-install` segue autorizando a instalação delegada. `--require-dependencies` transforma a falta em `MISSING-DEPENDENCY` fail-closed. `GRILL_SKIP_DEPENDENCIES=1` desliga a detecção em ambiente air-gapped e nunca é reportado como `OK`.
 
 ```text
 python3 .../grill_workspace.py preflight ROOT --runtime claude|codex [--allow-install] [--skip-backlog]
@@ -217,8 +250,11 @@ alterado: o sucessor **nomeia o que substitui** e avança a ronda.
 attest ROOT --work-id ID --step STEP --artifact PATH --out NOVO \
   --supersedes ANTERIOR
 checkpoint ROOT --work-id ID --step STEP --state complete --evidence PATH \
-  --attestation NOVO --supersedes-attestation ANTERIOR --reason "por quê"
+  --attestation NOVO --supersedes-attestation ANTERIOR --reason "por quê" \
+  --session-ref REF --operation-id OP_SUCESSAO
 ```
+
+Em item adotado, o checkpoint acima exige `--session-ref` da sessão vinculada e `--operation-id` estável; sem a identidade da operação, a persistência recusa `OPERATION-ID-REQUIRED`. `OP_SUCESSAO` representa uma operação nova de aceitação do receipt sucessor, distinta da aceitação anterior. Reutilize esse mesmo ID e os mesmos inputs em todo retry/recovery dessa sucessão; não gere outro ID após timeout ou outcome desconhecido. Retry não é outra sucessão: preserve os bytes e referências de NOVO/ANTERIOR e reconcilie a operação pendente antes de qualquer efeito novo. O parser de `attest` não aceita essas duas flags; elas pertencem ao comando `checkpoint`.
 
 O estado da etapa não se move — `complete` era verdade e continua sendo. Muda
 apenas qual receipt é o corrente e o que ele declara substituir. O bundle

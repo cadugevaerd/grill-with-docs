@@ -1305,7 +1305,7 @@ class Hygiene(Base):
         self.assertTrue(all(e["native_invocation"] for e in cat["entries"]))
 
     def test_public_cli_exposes_only_the_approved_gauntlet_bindings(self):
-        """Only the closed FASE-001/002 Gauntlet controls may bind its resolver."""
+        """Only the closed Gauntlet controls may bind the step-skill resolver."""
         text = (SCRIPTS / "grill_workspace.py").read_text(encoding="utf-8")
         tree = ast.parse(text)
         functions = {
@@ -1318,6 +1318,8 @@ class Hygiene(Base):
             "gauntlet-status": "gauntlet_status_command",
             "gauntlet-run": "gauntlet_run_command",
             "gauntlet-resume": "gauntlet_resume_command",
+            "gauntlet-prepare-switch": "gauntlet_prepare_switch_command",
+            "gauntlet-step-enter": "gauntlet_step_enter_command",
             "gauntlet-prepare-worker": "gauntlet_prepare_worker_command",
             "gauntlet-cleanup": "gauntlet_cleanup_command",
             # FASE-003 (T014): DAG validation and wave/worker declaration are
@@ -1401,10 +1403,8 @@ class Hygiene(Base):
             expected_handlers,
         )
 
-        # FASE-002 repeats the FASE-001 proof at the mutable admission
-        # boundary; it is the sole additional approved loader.  Keep this
-        # narrow so legacy handlers cannot reach Gauntlet/step-skill state
-        # through a newly introduced helper.
+        # Keep the loader set closed, including the existing continuity
+        # activation proof and canonical step-entry resolution.
         # ``attest_command`` mints the attestation chain, and resolving the
         # registered skill is the whole reason it exists -- it cannot be a
         # legacy handler reaching sensitive state through a new helper, which
@@ -1415,6 +1415,9 @@ class Hygiene(Base):
             "gauntlet_activation_projection",
             "gauntlet_run_admission",
             "attest_command",
+            "gauntlet_prepare_switch_command",
+            "_continuity_effective_activation",
+            "gauntlet_step_enter_command",
         }
         sensitive_modules = {"gauntlet", "step_skills"}
         observed_loaders = set()

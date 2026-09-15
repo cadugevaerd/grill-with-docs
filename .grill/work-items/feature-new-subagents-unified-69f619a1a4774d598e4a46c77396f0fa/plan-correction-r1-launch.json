@@ -1,0 +1,18 @@
+{
+  "task_id": "task_8fe60419ab83",
+  "dispatch_id": "ctx_89e934a0ad5f",
+  "run_id": "run_d025d446e826",
+  "requested": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "xhigh"
+  },
+  "effective": {
+    "agent": "codex",
+    "model": "gpt-6-astra",
+    "effort": "xhigh"
+  },
+  "state": "ready",
+  "turn_started": true,
+  "scope": "Correct only PLAN-REVIEW-R1 P1 and P2 across seven granted plan documents; no code or macrostep attestation"
+}

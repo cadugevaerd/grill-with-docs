@@ -1,0 +1,48 @@
+{
+  "id": "a600dc8f-7a07-4fe3-8ed0-cb9840930cff",
+  "ok": true,
+  "result": {
+    "runId": "run_d025d446e826",
+    "deliveryId": "delivery_1cecd9ea6578",
+    "messages": [
+      {
+        "id": "msg_da94388a38f9",
+        "run_id": "run_d025d446e826",
+        "delivery_contract": "current_delivery",
+        "from_handle": "term_717f569a-ee3e-4776-93a6-4dec621853a1",
+        "to_handle": "run:run_d025d446e826",
+        "subject": "HOW pronto: 30 tasks, bootstrap 5.4.1 reconciliado",
+        "body": "Produzi somente specs/030-agent-orchestration/tasks.md com 30 tasks em 11 fases, Files/Result revis\u00e1veis, limites/checks concretos, mapas completos FR-001\u2013024 e SC-001\u2013008; contagens por hist\u00f3ria: US1=2, US2=5, US3=2, US4=1, US5=2, US6=2, US7=2, US8=4, al\u00e9m de Setup=1, Foundation=4 e transversal=5. Confirmei em mem\u00f3ria o bootstrap hist\u00f3rico: 26 tasks de workers, quatro deferred finais, 11 nodes ordenados com largura 1/PARTITION-DEGRADED, zero unmapped/omiss\u00f5es/grants esp\u00farios, somente sidecar nativo por node, 34 arquivos de plan cobertos, CLI 5.4.1 com hash esperado e corpus paralelo 20/22 preservado; rootdocs/oito pontos 6.0.0 e CHANGELOG explicitamente delimitado ficam com materializa\u00e7\u00e3o final do l\u00edder, sem usar parser candidato sobre a campanha atual. Restam revis\u00e3o high distinta e execu\u00e7\u00e3o posterior: depend\u00eancias Setup\u2192Foundation\u2192US1\u2192US3\u2192US5\u2192US6\u2192US2\u2192US8\u2192US4\u2192US7\u2192transversal, checks focados dos workers separados de gates/revis\u00f5es/live do l\u00edder, matriz ADHD completa nos dois CLIs e ado\u00e7\u00e3o apenas p\u00f3s-ship; n\u00e3o executei implementa\u00e7\u00e3o, instala\u00e7\u00e3o, rede, baseline repetido, DAG/run/checkpoint, commit ou atesta\u00e7\u00e3o.",
+        "type": "worker_done",
+        "priority": "normal",
+        "thread_id": null,
+        "payload": "{\"taskId\":\"task_8e718b22a171\",\"dispatchId\":\"ctx_f103f46b70e0\",\"outcome\":\"succeeded\",\"filesModified\":[\"specs/030-agent-orchestration/tasks.md\"]}",
+        "created_at": "2026-09-13T20:28:34Z",
+        "delivered_at": null
+      }
+    ],
+    "count": 1,
+    "replayed": true,
+    "acknowledged": null,
+    "timedOut": false,
+    "cancelled": false,
+    "connectionLost": false,
+    "mutation": {
+      "requestId": "59219f49-8f83-4bff-88d7-bab402adaae8",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "d5fbd9ae-4707-4a7c-ae42-c0e165c7ad4d"
+  },
+  "artifact": {
+    "path": "specs/030-agent-orchestration/tasks.md",
+    "sha256": "946a43207a2e9e5768371dc7ab43e51e7e6427de8c375d96b5091bc50183dc3d",
+    "bytes": 65572
+  },
+  "cleanup": {
+    "state": "released",
+    "processAction": "closed_agent_terminal",
+    "archive": "captured"
+  }
+}

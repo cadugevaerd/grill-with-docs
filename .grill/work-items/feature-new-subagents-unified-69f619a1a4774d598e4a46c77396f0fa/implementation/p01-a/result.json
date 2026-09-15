@@ -1,0 +1,15 @@
+{
+  "node": "p01-a",
+  "tasks": [
+    "T001"
+  ],
+  "worker_head": "3bd8f6572d053fa5211cc6a27fbe63d53af4c5e1",
+  "merge_head": "ef2c2e4fcb8a319fa15239dcd552b43810ac6721",
+  "wave": "wave-0001",
+  "outcome": "WAVE-CONVERGED",
+  "session_cleanup": "released/closed_agent_terminal/captured",
+  "worktree_cleanup": "preserved",
+  "reason": "Historical 5.4.1 cleanup requires exact original base; advanced integrated worker identity is preserved without reset. Product 6.0.0 cleanup remains required.",
+  "checks": "strict JSON, refs and hashes PASS; net diff and every own commit within exact grant; inherited inputs unchanged; worktree clean including ignored",
+  "transcript_limits": "Orca transcript source contains redacted capability and clipping markers; original command outputs and structural checks separately preserved."
+}

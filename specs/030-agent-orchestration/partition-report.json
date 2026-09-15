@@ -1,0 +1,256 @@
+{
+  "deferred_to_leader": [
+    "T027",
+    "T028",
+    "T029",
+    "T030"
+  ],
+  "dispatchable_tasks": 26,
+  "feature": "030-agent-orchestration",
+  "max_workers": 1,
+  "nodes": [
+    {
+      "id": "p01-a",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T001"
+      ]
+    },
+    {
+      "id": "p02-a",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T002",
+        "T003",
+        "T004",
+        "T005"
+      ]
+    },
+    {
+      "id": "p03-a",
+      "parallel": true,
+      "phase": 3,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T006",
+        "T007"
+      ]
+    },
+    {
+      "id": "p04-a",
+      "parallel": true,
+      "phase": 4,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T008",
+        "T009"
+      ]
+    },
+    {
+      "id": "p05-a",
+      "parallel": true,
+      "phase": 5,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T010",
+        "T011"
+      ]
+    },
+    {
+      "id": "p06-a",
+      "parallel": true,
+      "phase": 6,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T012",
+        "T013"
+      ]
+    },
+    {
+      "id": "p07-a",
+      "parallel": true,
+      "phase": 7,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T014",
+        "T015",
+        "T016",
+        "T017",
+        "T018"
+      ]
+    },
+    {
+      "id": "p08-a",
+      "parallel": true,
+      "phase": 8,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T019",
+        "T020",
+        "T021",
+        "T022"
+      ]
+    },
+    {
+      "id": "p09-a",
+      "parallel": true,
+      "phase": 9,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T023"
+      ]
+    },
+    {
+      "id": "p10-a",
+      "parallel": true,
+      "phase": 10,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T024",
+        "T025"
+      ]
+    },
+    {
+      "id": "p11-a",
+      "parallel": true,
+      "phase": 11,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T026"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "achieved_groups": 1,
+      "phase": 1,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 1,
+      "title": "Setup — política e entradas suplementares",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 2,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 4,
+      "title": "Foundation — persistência, autoridade e observações",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 3,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "US1 — Encerrar agentes sem perder trabalho (P1, marco MVP)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 4,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "US3 — Retomar o mesmo trabalho em outro CLI (P1)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 5,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "US5 — Planejar com especialistas verificados (P1)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 6,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "US6 — Revisar com independência em todo o fluxo (P1)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 7,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 5,
+      "title": "US2 — Escrita somente nos arquivos declarados (P1)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 8,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 4,
+      "title": "US8 — Estilo padrão local do GWD nos dois ambientes (P1)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 9,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 1,
+      "title": "US4 — Orientar o modelo do chat principal (P2)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 10,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "US7 — Aprovar prévia visual antes das tasks frontend (P2)",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 11,
+      "reasons": [
+        "EVIDENCE_BOUNDARY_TASKS",
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 1,
+      "title": "Transversal — integração completa, rootdocs e evidência de entrega",
+      "unmapped_tasks": 0
+    }
+  ],
+  "requested_groups": 3,
+  "schema": "grill-partition-report/v1",
+  "tasks": 30,
+  "unmapped_task_ids": [],
+  "verdict": "PARTITION-DEGRADED"
+}
