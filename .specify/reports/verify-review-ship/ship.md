@@ -4,7 +4,7 @@ Status: **BLOCKED**
 
 ## Source and evidence
 
-- Source head: `406dc65` (`cadugevaerd/feat-new-subagents`).
+- Source head: `efe9f9a` (`cadugevaerd/feat-new-subagents`).
 - Converge: `BLOCKED` — T028/T029/T030 pending; primary Codex quota and Orca prompt/authority blockers remain after Luna Reserve proof.
 - Verify: `BLOCKED` — no fresh `CONVERGED` evidence and no Codex live gate.
 - Review: `BLOCKED` — prerequisite gates unavailable; independent Claude review confirms partial evidence.
