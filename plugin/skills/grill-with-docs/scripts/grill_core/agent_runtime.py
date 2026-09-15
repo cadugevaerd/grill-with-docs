@@ -567,6 +567,8 @@ def _native_messages(raw: bytes, runtime: str, session_id: str) -> list[dict[str
                     blocks = [{"type": "tool-result", "output": output, "call_id": call_id}]
                 elif item_type == "reasoning":
                     role = "reasoning"  # Break adjacency; never use reasoning as evidence.
+                elif item_type == "agent_message":
+                    role = "system"  # Encrypted inter-agent payload; never use as evidence.
                 else:
                     _fail("LEADER-TRANSCRIPT-UNPROVEN")
             elif kind == "event_msg":
