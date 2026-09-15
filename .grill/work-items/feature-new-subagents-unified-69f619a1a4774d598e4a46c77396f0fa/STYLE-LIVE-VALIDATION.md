@@ -99,3 +99,23 @@ O worker enviou `worker_done` com outcome `succeeded` e foi liberado com archive
 ### Reteste direto do transporte Orca — 2026-09-15
 
 Uma aba descartável no worktree `gwd-live-evidence` foi aberta com `codex -m gpt-reserve -s read-only -C <ROOT>`. A UI confirmou `model: Luna Reserve medium`, mas `orca terminal send --terminal term_c99514c6-8758-462c-855a-b6f265a3b2fd --text '2' --enter --wait-submit 5` falhou com `agent_prompt_blocked` (request `0b2b4ae4-8d4e-4980-aee5-b5d8c4b68043`); o retry exigido pelo mesmo ID falhou novamente com o mesmo código. A aba foi fechada com `ptyKilled=true`. Isso isola o bloqueio no transporte de entrada Orca, antes de qualquer turno, e não no modelo Luna Reserve.
+
+### Reteste direto Orca com entrada canônica GWD — 2026-09-15
+
+O terminal `term_c052473b-5d6e-412f-8c24-df0a8b9fffd8` foi iniciado oficialmente com `codex -m gpt-reserve -s read-only -C <ROOT> --no-alt-screen`. O terminal mostrou `model: Luna Reserve medium`, respondeu exatamente `ORCA_RESERVE_INITIAL_PROBE` e `ORCA_RESERVE_SECOND_PROBE`, e `orca terminal send` observou `input_accepted` + `turn_started` para o segundo prompt (`requestId=d4e283a0-5c90-41bd-a68e-ffeb6ef1703e`).
+
+Na mesma sessão, `orca terminal send` aceitou a entrada canônica `$grill-with-docs:grill-with-docs iniciar <ROOT>` (`requestId=bb083101-c589-442e-87f9-7122819d3fa5`). A sessão leu `SKILL.md`, `session-protocol.md` e `agent-orchestration.md`, executou o preflight e encerrou sem criar work item: `LEADER-AUTHORITY-UNPROVEN`, seguido de `LEADER-ADAPTER-UNAVAILABLE`, porque a sessão manual não tinha Dispatch/worker Orca observável nem `session_ref=orca:ctx-*` válido.
+
+Tentativa de anexar esse terminal ao fluxo supervisionado (`ctx_a7061ff9904b`, `worker-start --terminal ... --worktree current`) falhou em `agent_readiness: codex-interactive-prompt`; o registro marcou `exactWorker=false`. A prova confirma inferência Luna Reserve e entrada canônica GWD pelo transporte de terminal, além do gate de autoridade, mas não satisfaz C1/C2, T028 ou T029: continua faltando worker Orca gerenciado com `orca:ctx-*`, matriz de prompts, compactação, suspensão, controles externos e revisão high.
+
+Observação: a sessão exibiu `Hook failed: hook returned invalid session start JSON output` para o hook upstream de `i-have-adhd`; o fluxo GWD continuou pelo carregamento referencial aprovado e não executou o hook upstream como parte do protocolo.
+
+### Rota estruturada Orca com Luna Reserve — 2026-09-15
+
+As preferências persistentes do Orca foram atualizadas pela API de settings para `experimentalNativeChat=true`, `openAgentTabsInChatByDefault=true` e `experimentalStructuredNativeChat=true`; a leitura posterior do perfil confirmou os três valores persistidos. Com essa rota, `worker-start` gerenciado aceitou um worker Codex com `requested/effective=codex/gpt-reserve/low`, `stage=input_accepted`, `turnStart=observed`, `mode=structured` e `exactWorker=true` (`ctx_8d4ae24700ee`), que respondeu exatamente `ORCA_STRUCTURED_RESERVE_PROBE`.
+
+O dispatch canônico `ctx_b7ad00251c64` (`task_b8e73b6f01c6`) executou `$grill-with-docs:grill-with-docs iniciar <ROOT>` no mesmo modo estruturado e com `requested/effective=codex/gpt-reserve/low`. O Codex leu os artefatos GWD, executou o preflight e retornou `LEADER-AUTHORITY-UNPROVEN`; a tentativa obrigatória de `worker_done` falhou dentro do worker com `runtime_unavailable` porque o subprocesso não encontrou o runtime Orca. A rota estruturada e o turno Luna Reserve estão comprovados, mas a autoridade Orca exigida por C1/C2/T029, a matriz de quatro combinações, compactação, suspensão e controle externo continuam pendentes.
+
+Reteste final do transporte após habilitar a rota estruturada: um terminal criado pelo próprio Orca (`term_dfea2ac7-6613-40a5-8b2f-3a96456846e7`) iniciou `codex -m gpt-reserve`, exibiu o selector `Continue with Luna Reserve` e confirmou `Luna Reserve medium`; o envio da opção `2` falhou com `agent_prompt_blocked` e o retry pelo mesmo request repetiu o código. O anexo desse terminal ao dispatch (`ctx_44cfed4f4286`) encerrou em `agent_readiness: codex-interactive-prompt`, e a aba foi fechada com `ptyKilled=true`.
+
+Sondagem adicional no worker estruturado (`ctx_89a0841d05d4`) carregou o endpoint de hook persistido antes de executar `orca status --json`; o resultado nativo continuou `app.running=false`, `runtime.state=stale_bootstrap`, `reachable=false`, `connectionState=disconnected` e `runtimeId=none`. O worker foi parado e liberado, sem arquivo alterado; isso confirma que o subprocesso não alcança o runtime local mesmo com o endpoint de hook disponível.
