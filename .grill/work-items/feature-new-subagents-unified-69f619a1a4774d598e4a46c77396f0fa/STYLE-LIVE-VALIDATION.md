@@ -66,3 +66,4 @@ Evidência de carga (`evidence.loading`): `evidence_kind=full_read`, `event_ref=
 - `SKILL.md` SHA-256: `3170b16ace00aecb0dd7feb54c0b5aa642e7502acda06ecd24fd89a11c7127e9`, igual ao Claude.
 - Preflight local sem sessão retorna `LEADER-AUTHORITY-UNPROVEN` por desenho; não é prova live de enablement/configuração.
 - Ensaio live Codex não concluído: `codex exec --json` recusado pela quota do runtime até `2026-09-19 08:01` (`You've hit your usage limit`). Não declarar PASS live Codex sem nova sessão autorizada pelo runtime.
+- Reteste em 2026-09-15: `codex exec --json --sandbox read-only --cd <worktree> 'Respond with exactly QUOTA_PROBE.'` abriu thread `01a0a58e-6b56-7eb0-a93e-7db018299664`, mas falhou antes do primeiro turno com o mesmo `usage_limit_exceeded`; a causa permanece externa e reproduzível.
