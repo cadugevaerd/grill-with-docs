@@ -30,7 +30,7 @@
       "plan": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60",
       "specify": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0",
       "tasks": "se-6e51e7ff34ae2ece6bc1d985f1c3ac41b5e05e855f90c11878ba6a3d31aec4a9",
-      "verify": "se-b42b8ede3033e511f10853855172e4ff999a3578f8947c4c648169b264171164"
+      "verify": "se-b9bc0d705024b3d5c1056b9d5073b2632968d57b5e66f4d086ebf5a1098402c5"
     },
     "attested_outputs": {
       "analyze": {
@@ -82,9 +82,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:a02f8ce6c39b3fd22a31eed26fe5018a7bf43b7c431a8349f243d3ca2921a6a2",
+        "output_sha256": "sha256:9c8dd6e368776dd3c6b9e69a11b8b17ad9577261640235c05b410ab2c73bf8e1",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
         "step_id": "verify"
       }
     },
@@ -377,11 +377,23 @@
         "state": "complete",
         "step": "converge",
         "supersedes": ".grill/attestations/031-converge-r2.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/verify.md",
+            "sha256": "9c8dd6e368776dd3c6b9e69a11b8b17ad9577261640235c05b410ab2c73bf8e1"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "verify r2 PASS sobre o fingerprint d29da301: suíte, smoke, bump e diff check em exit 0",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/031-verify.json"
       }
     ],
-    "chain_stale": [
-      "verify"
-    ],
+    "chain_stale": [],
     "current_step": "review",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
@@ -505,6 +517,20 @@
           "step_execution_id": "se-19f420d052cee1aa7069329f6750291a4056c72dd49c2cc577e173b634168bc1",
           "step_id": "specify",
           "superseded_by_step_execution_id": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0"
+        }
+      ],
+      "verify": [
+        {
+          "attempt_id": "verify-1",
+          "attestation": ".grill/attestations/031-verify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:a02f8ce6c39b3fd22a31eed26fe5018a7bf43b7c431a8349f243d3ca2921a6a2",
+          "provenance": "current-generation",
+          "reason": "verify r2 PASS sobre o fingerprint d29da301: suíte, smoke, bump e diff check em exit 0",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+          "step_execution_id": "se-b42b8ede3033e511f10853855172e4ff999a3578f8947c4c648169b264171164",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-b9bc0d705024b3d5c1056b9d5073b2632968d57b5e66f4d086ebf5a1098402c5"
         }
       ]
     },
