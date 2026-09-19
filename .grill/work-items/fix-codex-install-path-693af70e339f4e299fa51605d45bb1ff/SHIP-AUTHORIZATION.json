@@ -1,0 +1,8 @@
+{
+  "authorized_by": "carlos.araujo@civilmaster.com.br",
+  "content_sha256": "sha256:2053e2a5e4d3a062574c6556d40119f000fa7c72ab49be10821d54fd30501b95",
+  "decision": "APPROVED",
+  "receipt_ref": "instrucao literal do usuario nesta sessao em 2026-09-19: \"sim, porem acho que a release 6.0.2 ja existe\", em resposta ao pedido de autorizacao que descreveu merge --no-ff em main, push direto sem PR e release v6.0.2; sobre review.md R3 APPROVE em fac0a58. Verificado apos a autorizacao: v6.0.2 nao existe (tags v6.0.0 e v6.0.1; origin/main em 6.0.1), logo a release sera criada pelo pipeline.",
+  "schema": "human-authorization/v1",
+  "scope": "ship"
+}
