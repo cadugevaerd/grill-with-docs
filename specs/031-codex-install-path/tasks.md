@@ -95,4 +95,4 @@ MVP = Phase 1 + T003: o Codex passa a ser observado e o comportamento fica trava
 
 ## Phase 5: Convergence
 
-- [ ] T011 Em `tests/validate_agent_orchestration_contract.py`, no caso do segmento literal `D:` dentro de `test_codex_install_path_composed_from_cache_when_installpath_absent`, semear o diretório de cache apenas quando o sistema aceita esse nome literal (`os.name != "nt"`), mantendo a asserção de recusa incondicional nos três campos de identificação, porque no Windows `D:` é âncora de drive e o caminho semeado escaparia do diretório temporário per FR-007, review R2 N1 (partial)
+- [X] T011 Em `tests/validate_agent_orchestration_contract.py`, no caso do segmento literal `D:` dentro de `test_codex_install_path_composed_from_cache_when_installpath_absent`, semear o diretório de cache apenas quando o sistema aceita esse nome literal (`os.name != "nt"`), mantendo a asserção de recusa incondicional nos três campos de identificação, porque no Windows `D:` é âncora de drive e o caminho semeado escaparia do diretório temporário per FR-007, review R2 N1 (partial)
