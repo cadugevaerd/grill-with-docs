@@ -27,7 +27,7 @@ Quem conduz uma sessão Codex e invoca a entrada do fluxo GWD (iniciar ou retoma
 
 ### User Story 2 - Continuar recusando quando a evidência não sustenta a instalação (Priority: P1)
 
-Quem conduz uma sessão Codex continua sendo recusado, com o mesmo código de instalação indeterminada, sempre que a listagem nativa ou o estado em disco não sustentam que a cópia aprovada está instalada.
+Quem conduz uma sessão Codex continua sendo recusado sempre que a listagem nativa ou o estado em disco não sustentam que a cópia aprovada está instalada: por instalação indeterminada quando a cópia não pode ser localizada, e por conteúdo incompatível quando a cópia existe mas difere do aprovado, exatamente como já acontece no Claude.
 
 **Why this priority**: o fluxo é fail-closed; ampliar a evidência aceita não pode abrir aceite de instalação falsa.
 
@@ -37,7 +37,7 @@ Quem conduz uma sessão Codex continua sendo recusado, com o mesmo código de in
 
 1. **Given** a listagem nativa declara o componente como não instalado, **When** a entrada GWD avalia a apresentação, **Then** a instalação não é reconhecida e a entrada é recusada.
 2. **Given** a listagem nativa declara o componente instalado mas não existe cópia no local correspondente, **When** a entrada GWD avalia, **Then** a instalação não é reconhecida e a entrada é recusada.
-3. **Given** a cópia existe mas o conteúdo da referência de apresentação difere do aprovado, **When** a entrada GWD avalia, **Then** a instalação não é reconhecida e a entrada é recusada.
+3. **Given** a cópia existe mas o conteúdo da referência de apresentação difere do aprovado, **When** a entrada GWD avalia, **Then** a entrada é recusada por conteúdo incompatível, pela mesma verificação de conteúdo já aplicada ao Claude.
 4. **Given** a entrada da listagem nativa não traz algum dos dados que identificam a cópia (origem, nome ou versão), **When** a entrada GWD avalia, **Then** a instalação não é reconhecida e a entrada é recusada.
 
 ---
@@ -68,7 +68,7 @@ Quem conduz uma sessão Claude obtém exatamente o mesmo resultado de antes, por
 ### Functional Requirements
 
 - **FR-001**: No runtime Codex, o sistema DEVE reconhecer a instalação do componente de apresentação quando a listagem nativa declara o componente instalado e identifica origem, nome e versão, e a cópia correspondente existe no local de cache do Codex com a referência de apresentação no conteúdo aprovado.
-- **FR-002**: O sistema DEVE manter a instalação não reconhecida, com o mesmo código de recusa atual, quando qualquer condição de FR-001 falhar.
+- **FR-002**: O sistema DEVE manter a instalação não reconhecida (instalação indeterminada) quando o componente não estiver declarado instalado, faltar dado de identificação ou a cópia não existir no local correspondente; e DEVE recusar por conteúdo incompatível, pela verificação de conteúdo já existente e comum aos dois runtimes, quando a cópia existir com conteúdo diferente do aprovado.
 - **FR-003**: O sistema DEVE usar a mesma regra de localização do cache do Codex já usada pela verificação prévia de dependências, inclusive o diretório de configuração declarado pelo ambiente.
 - **FR-004**: Quando a listagem nativa informar o caminho da instalação, o sistema DEVE continuar usando esse caminho, com o comportamento atual.
 - **FR-005**: O comportamento no runtime Claude NÃO DEVE mudar.
@@ -87,7 +87,7 @@ Quem conduz uma sessão Claude obtém exatamente o mesmo resultado de antes, por
 ### Measurable Outcomes
 
 - **SC-001**: Com a cópia aprovada instalada, 100% das entradas GWD numa sessão Codex chegam ao pedido de leitura da referência, contra 0% hoje.
-- **SC-002**: 100% das variações de evidência incompleta ou divergente (histórias 2.1 a 2.4) continuam recusadas com o mesmo código de hoje.
+- **SC-002**: 100% das variações de evidência incompleta ou divergente (histórias 2.1 a 2.4) são recusadas: 2.1, 2.2 e 2.4 por instalação indeterminada, 2.3 por conteúdo incompatível.
 - **SC-003**: Zero diferenças de resultado nos casos de apresentação Claude existentes.
 - **SC-004**: A suíte completa de validadores do projeto passa sem nenhum validador desativado ou afrouxado.
 - **SC-005**: A reexecução do caso C1 da matriz de estilo numa sessão Codex supervisionada chega ao pedido de leitura; essa evidência é registrada no work item de origem e não é critério de aceite desta entrega.

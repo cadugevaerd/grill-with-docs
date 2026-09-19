@@ -22,13 +22,20 @@
       "runtime": "claude"
     },
     "attested_executions": {
-      "specify": "se-61727044d58ac1ddd4e21f55b94fa7d6044e3fe1d487dbf0cbec1f17cebe6e9b"
+      "plan": "se-ff0cb99d5209e43b7d8912d5ef62925ade1736f627bc9bd742163b995f174875",
+      "specify": "se-19f420d052cee1aa7069329f6750291a4056c72dd49c2cc577e173b634168bc1"
     },
     "attested_outputs": {
-      "specify": {
-        "output_sha256": "sha256:28bd7b52efcde8fd7e25fcd06332b23914e9d10d9efdbeb075ef9c6ec81d4095",
+      "plan": {
+        "output_sha256": "sha256:ddfc145d16c3bf66665be13e92af4e8106b718b45bb25ae3fc159d061d116ea2",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
+      "specify": {
+        "output_sha256": "sha256:aa619dc745f114cb4819b8a3b8069375e422fb4979ff2a739062322bca5e5af6",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
         "step_id": "specify"
       }
     },
@@ -51,9 +58,43 @@
         "reason": "speckit-specify: spec 031 from FASE-001 handoff; quality checklist 16/16",
         "state": "complete",
         "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-plan for spec 031",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/spec.md",
+            "sha256": "aa619dc745f114cb4819b8a3b8069375e422fb4979ff2a739062322bca5e5af6"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "hash divergente cai na verificação de conteúdo comum (STYLE-CONTENT-INCOMPATIBLE), não em instalação indeterminada; spec 2.3/FR-002/SC-002 corrigidos",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/031-specify.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/plan.md",
+            "sha256": "ddfc145d16c3bf66665be13e92af4e8106b718b45bb25ae3fc159d061d116ea2"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-plan: plan, research, data-model, contract, quickstart",
+        "state": "complete",
+        "step": "plan"
       }
     ],
-    "current_step": "plan",
+    "chain_stale": [],
+    "current_step": "checklist",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -76,12 +117,28 @@
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
-      "plan": "pending",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
       "tasks": "pending",
       "verify": "pending"
+    },
+    "superseded_outputs": {
+      "specify": [
+        {
+          "attempt_id": "specify-1",
+          "attestation": ".grill/attestations/031-specify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:28bd7b52efcde8fd7e25fcd06332b23914e9d10d9efdbeb075ef9c6ec81d4095",
+          "provenance": "current-generation",
+          "reason": "hash divergente cai na verificação de conteúdo comum (STYLE-CONTENT-INCOMPATIBLE), não em instalação indeterminada; spec 2.3/FR-002/SC-002 corrigidos",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+          "step_execution_id": "se-61727044d58ac1ddd4e21f55b94fa7d6044e3fe1d487dbf0cbec1f17cebe6e9b",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-19f420d052cee1aa7069329f6750291a4056c72dd49c2cc577e173b634168bc1"
+        }
+      ]
     },
     "workflow_version": "v4"
   },

@@ -1,0 +1,15 @@
+# Contrato de entrada: `codex plugin list --json` (codex-cli 0.154.0)
+
+Forma observada (entrada do componente; demais entradas omitidas):
+
+```json
+{"installed": [{"pluginId": "i-have-adhd@i-have-adhd", "name": "i-have-adhd",
+  "marketplaceName": "i-have-adhd", "version": "0.3.0", "installed": true, "enabled": true,
+  "source": {"source": "git", "url": "https://github.com/ayghri/i-have-adhd.git", "ref": "main"},
+  "marketplaceSource": {"sourceType": "git", "source": "https://github.com/ayghri/i-have-adhd.git"},
+  "installPolicy": "AVAILABLE", "authPolicy": "ON_INSTALL"}], "available": []}
+```
+
+- Não contém `installPath`.
+- O comando exigido continua literal: `<which codex> plugin list --json`.
+- `enabled` desta listagem não é promovido a autoridade de sessão (comportamento atual preservado).
