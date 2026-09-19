@@ -66,6 +66,21 @@
       "id": "p02-c",
       "parallel": true,
       "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a",
+        "p02-b",
+        "p02-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "specs/031-codex-install-path/implement/p04-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p04-a",
+      "parallel": true,
+      "tier": "medium"
     }
   ],
   "schema": "grill-gauntlet-execution-dag/v1"
