@@ -1,0 +1,12 @@
+{
+  "worker": "p01-b",
+  "feature": "031-codex-install-path",
+  "completed": ["T002"],
+  "tasks": {
+    "T002": {
+      "status": "done",
+      "summary": "Ramo Codex do observer: mantido comportamento atual quando installPath absoluto+version string (present, sem fallback quando invalido/relativo, FR-004); adicionado ramo elif so quando a chave installPath esta ausente, provider e codex e installed is True, exigindo marketplaceName/name/version como strings nao vazias sem separador de diretorio e diferentes de '.' e '..' (FR-009); raiz composta como <CODEX_HOME ou ~/.codex>/plugins/cache/<marketplaceName>/<name>/<version> (mesma expressao de home das linhas ~440/~700), exigindo root.is_dir() e skill_ref (root/skills/i-have-adhd/SKILL.md).is_file(); preenche installation com as mesmas chaves do ramo atual; sem verificacao de hash aqui (delegada a approved_presentation_reference); comentario atualizado citando a excecao do ADR-0001; provider claude sem installPath continua {}.",
+      "evidence": "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py: _orca_presentation_axes, ramo elif apos 'Do not choose a cache version...' (linhas ~511-523). Verificacao: python3 tests/validate_agent_orchestration_contract.py -> OK (32 tests). Check ad hoc (nao commitado) monkeypatchando _tool_results/_tool_command/_runtime_config_axes com CODEX_HOME temporario contendo plugins/cache/i-have-adhd/i-have-adhd/0.3.0/skills/i-have-adhd/SKILL.md: 8 cenarios PASS (present no caso bom; {} com installed False, diretorio ausente, version '..', name com barra invertida, installPath relativo; comportamento inalterado para installPath absoluto e para provider claude sem installPath)."
+    }
+  }
+}
