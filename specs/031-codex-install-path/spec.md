@@ -70,11 +70,12 @@ Quem conduz uma sessão Claude obtém exatamente o mesmo resultado de antes, por
 - **FR-001**: No runtime Codex, o sistema DEVE reconhecer a instalação do componente de apresentação quando a listagem nativa declara o componente instalado e identifica origem, nome e versão, e a cópia correspondente existe no local de cache do Codex com a referência de apresentação no conteúdo aprovado.
 - **FR-002**: O sistema DEVE manter a instalação não reconhecida (instalação indeterminada) quando o componente não estiver declarado instalado, faltar dado de identificação ou a cópia não existir no local correspondente; e DEVE recusar por conteúdo incompatível, pela verificação de conteúdo já existente e comum aos dois runtimes, quando a cópia existir com conteúdo diferente do aprovado.
 - **FR-003**: O sistema DEVE usar a mesma regra de localização do cache do Codex já usada pela verificação prévia de dependências, inclusive o diretório de configuração declarado pelo ambiente.
-- **FR-004**: Quando a listagem nativa informar o caminho da instalação, o sistema DEVE continuar usando esse caminho, com o comportamento atual.
+- **FR-004**: Quando a listagem nativa informar o caminho da instalação, o sistema DEVE continuar usando esse caminho, com o comportamento atual; um caminho informado porém inválido (não absoluto) mantém a instalação não reconhecida e NÃO DEVE ser substituído pelo caminho composto de FR-001.
 - **FR-005**: O comportamento no runtime Claude NÃO DEVE mudar.
 - **FR-006**: O sistema NÃO DEVE executar processo adicional nem acessar a rede para essa decisão; o comando nativo exigido permanece o mesmo.
 - **FR-007**: A validação automatizada DEVE cobrir os cenários das histórias 1 a 3 usando como entrada a saída real da listagem nativa do Codex 0.154.0, capturada da ferramenta, sem depender de Codex, Claude, node ou rede reais.
 - **FR-008**: A entrega DEVE incrementar a versão do plugin de 6.0.1 para 6.0.2 em todos os pontos de versão do contrato de distribuição e publicar a release correspondente.
+- **FR-009**: Os dados de identificação usados para localizar a cópia (origem, nome e versão) DEVEM ser aceitos somente como nomes simples: vazio, separador de diretório, `.` ou `..` mantêm a instalação não reconhecida, para que a localização nunca aponte fora do cache do Codex.
 
 ### Key Entities
 

@@ -22,20 +22,27 @@
       "runtime": "claude"
     },
     "attested_executions": {
-      "plan": "se-ff0cb99d5209e43b7d8912d5ef62925ade1736f627bc9bd742163b995f174875",
-      "specify": "se-19f420d052cee1aa7069329f6750291a4056c72dd49c2cc577e173b634168bc1"
+      "checklist": "se-30ed59abef0522a1d073a75d7d27d68a8c8fc21020537a6985f7006d91147c49",
+      "plan": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60",
+      "specify": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0"
     },
     "attested_outputs": {
-      "plan": {
-        "output_sha256": "sha256:ddfc145d16c3bf66665be13e92af4e8106b718b45bb25ae3fc159d061d116ea2",
+      "checklist": {
+        "output_sha256": "sha256:3ee288e47df21dc1bd760250bd4f2ac2968e4d2f323cc66536369cfd8529a94f",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
+      "plan": {
+        "output_sha256": "sha256:de99266622e5103a801035b78d65d479723df39afde6611ba4492221bb7613c3",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
         "step_id": "plan"
       },
       "specify": {
-        "output_sha256": "sha256:aa619dc745f114cb4819b8a3b8069375e422fb4979ff2a739062322bca5e5af6",
+        "output_sha256": "sha256:c35063be606a8c280a0a3553104f5fbe499e873d2b4d851e177fd26b5c4994fe",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-3.terminal.json",
         "step_id": "specify"
       }
     },
@@ -91,10 +98,59 @@
         "reason": "speckit-plan: plan, research, data-model, contract, quickstart",
         "state": "complete",
         "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-checklist",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "chain_stale": [
+          "plan"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/spec.md",
+            "sha256": "c35063be606a8c280a0a3553104f5fbe499e873d2b4d851e177fd26b5c4994fe"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "checklist CHK005/CHK008: FR-009 (nomes simples no caminho) e FR-004 (installPath inválido não é substituído)",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/031-specify-r2.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/plan.md",
+            "sha256": "de99266622e5103a801035b78d65d479723df39afde6611ba4492221bb7613c3"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "re-attest after specify r3; traceability FR-001..FR-009",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/031-plan.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/checklists/observation.md",
+            "sha256": "3ee288e47df21dc1bd760250bd4f2ac2968e4d2f323cc66536369cfd8529a94f"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-checklist: 22 itens, 2 gaps corrigidos na spec r3",
+        "state": "complete",
+        "step": "checklist"
       }
     ],
     "chain_stale": [],
-    "current_step": "checklist",
+    "current_step": "tasks",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -113,7 +169,7 @@
     ],
     "steps": {
       "analyze": "pending",
-      "checklist": "pending",
+      "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
@@ -125,6 +181,20 @@
       "verify": "pending"
     },
     "superseded_outputs": {
+      "plan": [
+        {
+          "attempt_id": "plan-1",
+          "attestation": ".grill/attestations/031-plan.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:ddfc145d16c3bf66665be13e92af4e8106b718b45bb25ae3fc159d061d116ea2",
+          "provenance": "current-generation",
+          "reason": "re-attest after specify r3; traceability FR-001..FR-009",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+          "step_execution_id": "se-ff0cb99d5209e43b7d8912d5ef62925ade1736f627bc9bd742163b995f174875",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60"
+        }
+      ],
       "specify": [
         {
           "attempt_id": "specify-1",
@@ -137,6 +207,18 @@
           "step_execution_id": "se-61727044d58ac1ddd4e21f55b94fa7d6044e3fe1d487dbf0cbec1f17cebe6e9b",
           "step_id": "specify",
           "superseded_by_step_execution_id": "se-19f420d052cee1aa7069329f6750291a4056c72dd49c2cc577e173b634168bc1"
+        },
+        {
+          "attempt_id": "specify-2",
+          "attestation": ".grill/attestations/031-specify-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:aa619dc745f114cb4819b8a3b8069375e422fb4979ff2a739062322bca5e5af6",
+          "provenance": "current-generation",
+          "reason": "checklist CHK005/CHK008: FR-009 (nomes simples no caminho) e FR-004 (installPath inválido não é substituído)",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
+          "step_execution_id": "se-19f420d052cee1aa7069329f6750291a4056c72dd49c2cc577e173b634168bc1",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0"
         }
       ]
     },

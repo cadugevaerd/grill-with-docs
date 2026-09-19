@@ -39,8 +39,8 @@ No runtime Codex, o observer de instalação (`_orca_presentation_axes`, `plugin
 | Feature/fix plan-only | PASS | a mudança de produto só ocorre em `implement-parallel` pelo worker |
 | Sequência obrigatória | PASS | specify atestado e aceito; plan em andamento |
 | Verify/review antes de ship | PASS | etapas pending, precedem ship |
-| Fail-closed sem waiver | PASS | toda condição ausente mantém `undetermined`; conteúdo divergente cai em `STYLE-CONTENT-INCOMPATIBLE` pela verificação existente |
-| Rastreabilidade | PASS | FR-001..FR-008 → tarefas; ADR-0001; triagem selada |
+| Fail-closed sem waiver | PASS | toda condição ausente ou segmento inseguro (FR-009) mantém `undetermined`; caminho informado inválido não é substituído (FR-004); conteúdo divergente cai em `STYLE-CONTENT-INCOMPATIBLE` pela verificação existente |
+| Rastreabilidade | PASS | FR-001..FR-009 → tarefas; ADR-0001; triagem selada |
 | Tier de modelo do worker Orca | PASS | tier derivado do nó pelo binding; nenhum modelo de fronteira como worker |
 | Bump obrigatório | PASS | FR-008: 6.0.1 → 6.0.2 nos 8 pontos |
 | Release por versão | PASS | publicada pelo pipeline no push para main |
