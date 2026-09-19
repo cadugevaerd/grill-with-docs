@@ -22,3 +22,9 @@
 - Oito pontos de distribuição em 6.0.2: `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`, `VERSION` em `tests/validate_distribution.py`, headings de `SKILL.md`, `session-protocol.md` e `README.md`. `CHANGELOG.md` com a entrada `## 6.0.2`.
 - `python3 tests/run_validators.py`: exit 0, 30 validadores (marcador `==>`), 1477 testes, 1 skip legítimo (`accepts_macos_var_root_alias`: host sem alias `/var -> /private/var`). `git diff --check`: limpo.
 - Prova de que o teste novo detecta o defeito: com `agent_runtime.py` do commit `1c79562` (sem T002) numa cópia isolada, `test_codex_install_path_composed_from_cache_when_installpath_absent` falha (`errors=1`); com T002, passa.
+
+## Review R1 e rodada de correção (T009, T010) — 2026-09-19
+
+- Review R1 (`specs/031-codex-install-path/review.md`, revisor `Code Reviewer`/`fable`, independente dos autores): REQUEST CHANGES. I1: exceções (`RuntimeError`, `PermissionError`) escapavam do ramo Codex, violando o fail-closed. I2: segmento com drive do Windows (`"D:"`) compunha caminho fora do cache, violando FR-009. Minors: frase do CHANGELOG, lacunas de teste, home triplicado (este último opcional, não adotado).
+- Converge R2 anexou a Phase 4 (T009 com worker, T010 com o leader); partition r2 e run `run-f356eea840fae193efdaad68` (DAG-VALID). Os nós das fases 1 e 2 foram re-despachados como workers reais de confirmação, sem diff, porque o nó `p04-a` depende deles.
+- T010: CHANGELOG corrigido (teste novo acrescentado, não substituído; drive recusado; exceção vira indeterminada).
