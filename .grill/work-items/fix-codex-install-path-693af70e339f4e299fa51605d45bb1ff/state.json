@@ -29,7 +29,8 @@
       "partition": "se-566780eb103446af729a80206b5304395d6e6727269219109686dd83fd0a9a3d",
       "plan": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60",
       "specify": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0",
-      "tasks": "se-6e51e7ff34ae2ece6bc1d985f1c3ac41b5e05e855f90c11878ba6a3d31aec4a9"
+      "tasks": "se-6e51e7ff34ae2ece6bc1d985f1c3ac41b5e05e855f90c11878ba6a3d31aec4a9",
+      "verify": "se-b42b8ede3033e511f10853855172e4ff999a3578f8947c4c648169b264171164"
     },
     "attested_outputs": {
       "analyze": {
@@ -79,6 +80,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
         "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:a02f8ce6c39b3fd22a31eed26fe5018a7bf43b7c431a8349f243d3ca2921a6a2",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "step_id": "verify"
       }
     },
     "audit": [
@@ -277,10 +284,29 @@
         "reason": "speckit-converge: zero findings; tasks.md inalterado",
         "state": "complete",
         "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-verify-review-ship-verify",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/verify.md",
+            "sha256": "a02f8ce6c39b3fd22a31eed26fe5018a7bf43b7c431a8349f243d3ca2921a6a2"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "verify PASS: suíte 30/1477 exit 0, smoke portabilidade, bump gate 6.0.1->6.0.2, diff check",
+        "state": "complete",
+        "step": "verify"
       }
     ],
     "chain_stale": [],
-    "current_step": "verify",
+    "current_step": "review",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -308,7 +334,7 @@
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
-      "verify": "pending"
+      "verify": "complete"
     },
     "superseded_outputs": {
       "plan": [
