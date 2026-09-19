@@ -1,0 +1,17 @@
+{
+  "worker": "p02-b",
+  "feature": "031-codex-install-path",
+  "completed": ["T004", "T007"],
+  "tasks": {
+    "T004": {
+      "status": "done",
+      "summary": "VERSION alterada de 6.0.1 para 6.0.2 em tests/validate_distribution.py",
+      "evidence": "tests/validate_distribution.py:8 VERSION = \"6.0.2\""
+    },
+    "T007": {
+      "status": "done",
+      "summary": "Heading alterado de v6.0.1 para v6.0.2 em session-protocol.md",
+      "evidence": "plugin/skills/grill-with-docs/references/session-protocol.md:1 # Protocolo de sessão v6.0.2"
+    }
+  }
+}
