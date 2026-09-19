@@ -11,7 +11,7 @@ import shutil
 import stat
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Callable
 
 try:
@@ -517,14 +517,17 @@ def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]
             evidence["installation"] = {"status": "present", "version": version,
                 "install_root": path, "skill_ref": str(Path(path) / "skills/i-have-adhd/SKILL.md")}
         elif ("installPath" not in entry and observed["provider"] == "codex" and entry.get("installed") is True
-              and all(isinstance(v, str) and v not in ("", ".", "..") and "/" not in v and "\\" not in v
+              and all(isinstance(v, str) and v not in ("", ".", "..") and PureWindowsPath(v).name == v
                       for v in (entry.get("marketplaceName"), entry.get("name"), version))):
-            home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
-            root = home / "plugins" / "cache" / entry["marketplaceName"] / entry["name"] / version
-            skill_ref = root / "skills/i-have-adhd/SKILL.md"
-            if root.is_dir() and skill_ref.is_file():
-                evidence["installation"] = {"status": "present", "version": version,
-                    "install_root": str(root), "skill_ref": str(skill_ref)}
+            try:
+                home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+                root = home / "plugins" / "cache" / entry["marketplaceName"] / entry["name"] / version
+                skill_ref = root / "skills/i-have-adhd/SKILL.md"
+                if root.is_dir() and skill_ref.is_file():
+                    evidence["installation"] = {"status": "present", "version": version,
+                        "install_root": str(root), "skill_ref": str(skill_ref)}
+            except (OSError, ValueError, RuntimeError):
+                pass
     return evidence
 
 

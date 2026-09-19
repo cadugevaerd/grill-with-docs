@@ -1,0 +1,12 @@
+{
+  "worker": "p04-a",
+  "feature": "031-codex-install-path",
+  "completed": ["T009"],
+  "tasks": {
+    "T009": {
+      "status": "done",
+      "summary": "agent_runtime.py: filtro de segmento de _orca_presentation_axes agora recusa drive Windows via PureWindowsPath(v).name == v (I2/FR-009), e a resolucao do home Codex + composicao da raiz + is_dir/is_file estao envolvidas em try/except (OSError, ValueError, RuntimeError) que mantem installation vazio em falha (I1, mesmo trio de _runtime_config_axes). tests/validate_agent_orchestration_contract.py: acrescentados casos D:/C: no loop de campos, version=1 com marketplaceName=None, installPath=None presente, chave installed ausente, Path.home levantando RuntimeError sem CODEX_HOME, Path.is_dir levantando PermissionError, e um caso que semeia um diretorio literal 'D:' no cache para provar que o filtro (nao a ausencia do diretorio) rejeita o drive.",
+      "evidence": "python3 tests/validate_agent_orchestration_contract.py -> Ran 33 tests in ~5.8s, OK. Mutacao: revertendo o filtro PureWindowsPath para o check antigo de barra/contrabarra falha o caso 'D:' semeado (AssertionError instalacao presente != {}); revertendo o try/except falha o caso Path.home RuntimeError (grill_core.agent_runtime.RuntimeError propaga sem catch). Ambas revertidas de volta ao fix antes do commit."
+    }
+  }
+}
