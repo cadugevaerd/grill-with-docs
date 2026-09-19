@@ -1,0 +1,84 @@
+{
+  "deferred_to_leader": [
+    "T008"
+  ],
+  "dispatchable_tasks": 7,
+  "feature": "031-codex-install-path",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "id": "p01-a",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T001"
+      ]
+    },
+    {
+      "id": "p01-b",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T002"
+      ]
+    },
+    {
+      "id": "p02-a",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T003",
+        "T006"
+      ]
+    },
+    {
+      "id": "p02-b",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T004",
+        "T007"
+      ]
+    },
+    {
+      "id": "p02-c",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T005"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "achieved_groups": 2,
+      "phase": 1,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "Observer e fixture real",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 3,
+      "phase": 2,
+      "reasons": [],
+      "requested_groups": 3,
+      "tasks": 5,
+      "title": "Cobertura e distribuição",
+      "unmapped_tasks": 0
+    }
+  ],
+  "requested_groups": 3,
+  "schema": "grill-partition-report/v1",
+  "tasks": 8,
+  "unmapped_task_ids": [],
+  "verdict": "PARTITION-DEGRADED"
+}

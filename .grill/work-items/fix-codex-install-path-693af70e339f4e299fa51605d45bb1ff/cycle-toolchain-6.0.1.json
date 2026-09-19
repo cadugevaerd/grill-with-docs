@@ -1,0 +1,27 @@
+{
+ "schema": "gwd-cycle-toolchain-observation/v1",
+ "work_id": "fix-codex-install-path-693af70e339f4e299fa51605d45bb1ff",
+ "switched_at_step": "partition",
+ "date": "2026-09-19",
+ "previous": {
+  "version": "5.4.1",
+  "source": "git archive v5.4.1 (58/58 arquivos iguais a cycle-toolchain-5.4.1.json do work item feature-new-subagents-unified)",
+  "cli_sha256": "f71350d84b0ac517f462d6829cdd818425b5248e3675a746cce9c52e42523d2f",
+  "steps": [
+   "specify",
+   "plan",
+   "checklist",
+   "tasks",
+   "analyze"
+  ]
+ },
+ "current": {
+  "version": "6.0.1",
+  "source": "plugin/ desta branch, git diff --quiet v6.0.1 HEAD -- plugin/",
+  "cli": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+  "cli_sha256": "93debe44c8cbd732c7d52ee7b224fc6249f53027356bda0393eb2d2d2a36c62d"
+ },
+ "reason": "gauntlet-run do 5.4.1 recusa ORCHESTRATOR-INVALID (unknown top-level key agent_orchestration): o store compartilhado .git/grill/orchestrator.json recebeu essa chave do CLI 6.0.x a partir da worktree de ensaio gwd-claude-matrix, que usa o mesmo .git. O 6.0.1 emite DAG identico ao gravado (comparacao byte a objeto) e admitiu a run.",
+ "decision": "operador: trocar para 6.0.1 do partition em diante (2026-09-19)",
+ "run_id": "run-f3074e2a4d7796e1ae0cb52d"
+}

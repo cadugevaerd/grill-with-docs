@@ -24,6 +24,7 @@
     "attested_executions": {
       "analyze": "se-2ceac2a7fb88370540ed3b09b767cb3f9a6447f7579ace46fd3381d9cc694acb",
       "checklist": "se-30ed59abef0522a1d073a75d7d27d68a8c8fc21020537a6985f7006d91147c49",
+      "partition": "se-566780eb103446af729a80206b5304395d6e6727269219109686dd83fd0a9a3d",
       "plan": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60",
       "specify": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0",
       "tasks": "se-6e51e7ff34ae2ece6bc1d985f1c3ac41b5e05e855f90c11878ba6a3d31aec4a9"
@@ -40,6 +41,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
+      },
+      "partition": {
+        "output_sha256": "sha256:0da0729197a8aa16595020db4c473acb72dfbb05b11cf475a6227d5ef226844a",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "step_id": "partition"
       },
       "plan": {
         "output_sha256": "sha256:de99266622e5103a801035b78d65d479723df39afde6611ba4492221bb7613c3",
@@ -199,10 +206,29 @@
         "reason": "speckit-analyze: 0 CRITICAL/HIGH, 1 MEDIUM (U1 separadores), 4 LOW; cobertura FR 100%",
         "state": "complete",
         "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke grill-with-docs:grill-partition",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/execution-dag.json",
+            "sha256": "0da0729197a8aa16595020db4c473acb72dfbb05b11cf475a6227d5ef226844a"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "grill-partition: 5 nós em 2 fases, T008 no leader; run run-f3074e2a4d7796e1ae0cb52d admitida; DAG-VALID; toolchain 6.0.1 (cycle-toolchain-6.0.1.json)",
+        "state": "complete",
+        "step": "partition"
       }
     ],
     "chain_stale": [],
-    "current_step": "partition",
+    "current_step": "implement-parallel",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -224,7 +250,7 @@
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
-      "partition": "pending",
+      "partition": "complete",
       "plan": "complete",
       "review": "pending",
       "ship": "pending",
