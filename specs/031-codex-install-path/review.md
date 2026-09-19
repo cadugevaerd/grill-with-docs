@@ -42,3 +42,27 @@ Fail-closed sem waiver: I1 viola (falha por exceção em vez de recusa nomeada).
 
 ### Final Recommendation
 - REQUEST CHANGES: corrigir I1, I2, M1 e M2 (M3 opcional), rodar `/speckit-converge`, depois verify e review de novo.
+
+---
+
+## Review Report — rodada R2
+
+Verdict: REQUEST CHANGES
+Source fingerprint: tree d29da301a5cdabaabed7bd6e7b072066c24cb0c3633a1d62496be0993bf5c965 / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 2e89ce66817ba0c51eeb8f56a7dab64ed26fd123be075d4eb2626a5fa2ab2c81
+                    (igual a Converge r3 `1723d02` e Verify r2 `2df8987`)
+
+Revisor: segundo subagente `Code Reviewer`/`fable`, independente do líder, dos workers e do revisor da R1.
+
+### Achados da R1
+- I1 (fail-closed) resolvido: `agent_runtime.py:521-529` com o mesmo trio de exceções de `:451`; testes em `tests/validate_agent_orchestration_contract.py:520-532`.
+- I2 (drive do Windows) resolvido: `agent_runtime.py:519` com `PureWindowsPath(v).name == v`; testes `:479-500`.
+- M1 (CHANGELOG) e M2 (lacunas de teste) resolvidos.
+- M3 (resolução de home triplicada): não adotado, aceito pelo revisor como Minor sem risco funcional.
+
+### Problemas novos
+- **Important N1** — `tests/validate_agent_orchestration_contract.py:496`: o caso que semeia um diretório literal `"D:"` no cache usa `Path(home) / ... / "D:"`, e no Windows `"D:"` é âncora de drive: o join reancora para `D:i-have-adhd\0.3.0\...`, relativo ao cwd do drive D. No runner Windows do GitHub (checkout em `D:\a\...`) isso cria diretórios dentro do repositório, fora do `TemporaryDirectory`; se o cwd não estiver no drive D, vira `OSError` e o teste quebra. A asserção passa nos dois casos, então é fragilidade de CI, não falha de produto. Fix: semear apenas quando o nome literal é possível (`os.name != "nt"`), mantendo a asserção incondicional.
+- Minor N2 (`except` abrangente) e Minor N3 (`PureWindowsPath(v).name == v` não recusa nome legítimo): verificados e aceitos.
+- Ramo `installPath`, runtime Claude, segurança e performance: sem regressão.
+
+### Decisão do líder
+Corrigir N1 antes do ship (decisão do operador em 2026-09-19). Vai como tarefa de convergência T011.
