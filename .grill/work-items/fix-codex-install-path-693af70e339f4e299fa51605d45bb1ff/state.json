@@ -225,6 +225,13 @@
         "reason": "grill-partition: 5 nós em 2 fases, T008 no leader; run run-f3074e2a4d7796e1ae0cb52d admitida; DAG-VALID; toolchain 6.0.1 (cycle-toolchain-6.0.1.json)",
         "state": "complete",
         "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke grill-with-docs:grill-implement-parallel on run-f3074e2a4d7796e1ae0cb52d",
+        "state": "in-progress",
+        "step": "implement-parallel"
       }
     ],
     "chain_stale": [],
@@ -249,7 +256,7 @@
       "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
-      "implement-parallel": "pending",
+      "implement-parallel": "in-progress",
       "partition": "complete",
       "plan": "complete",
       "review": "pending",
