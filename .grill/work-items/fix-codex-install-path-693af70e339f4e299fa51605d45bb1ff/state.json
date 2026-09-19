@@ -28,6 +28,7 @@
       "implement-parallel": "se-f5adcbbcefc0df401bf25f34cab7253618fec1f9f94d74991dfda4049e88083d",
       "partition": "se-69c73203101ead12a8f6ef1e4ce6b2b622ea4d73c59307a93953c67d43037c3a",
       "plan": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60",
+      "review": "se-88802f320208a692d5970aa8d008bc75a572803a2d6275a0f0e340e7bb955a44",
       "specify": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0",
       "tasks": "se-6e51e7ff34ae2ece6bc1d985f1c3ac41b5e05e855f90c11878ba6a3d31aec4a9",
       "verify": "se-9dc67531c005c6c04e10935d48886cdb565b26d72316ef27305ed0e3be04a5f7"
@@ -68,6 +69,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
         "step_id": "plan"
+      },
+      "review": {
+        "output_sha256": "sha256:98356e0529d2c7d7032b8d4c6bed27a10e846ca0bd9167e208648a558b436b00",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "step_id": "review"
       },
       "specify": {
         "output_sha256": "sha256:c35063be606a8c280a0a3553104f5fbe499e873d2b4d851e177fd26b5c4994fe",
@@ -472,10 +479,22 @@
         "state": "complete",
         "step": "verify",
         "supersedes": ".grill/attestations/031-verify-r2.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/review.md",
+            "sha256": "98356e0529d2c7d7032b8d4c6bed27a10e846ca0bd9167e208648a558b436b00"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "review R3 APPROVE por revisor independente; R1 e R2 registrados com suas correções",
+        "state": "complete",
+        "step": "review"
       }
     ],
     "chain_stale": [],
-    "current_step": "review",
+    "current_step": "ship",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -499,7 +518,7 @@
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
-      "review": "in-progress",
+      "review": "complete",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",

@@ -66,3 +66,31 @@ Revisor: segundo subagente `Code Reviewer`/`fable`, independente do líder, dos 
 
 ### Decisão do líder
 Corrigir N1 antes do ship (decisão do operador em 2026-09-19). Vai como tarefa de convergência T011.
+
+---
+
+## Review Report — rodada R3
+
+Verdict: APPROVE
+Source fingerprint: tree f79daecfaea68fec68f402183a87d5204669f02308d06f0a1ad999d221f9825a / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 15e0cee81a10cb63b7cb3e8b1c8d43580db5b77c59726b1c616329944fb2449f
+                    (igual a Converge r5 e Verify r3 `db62bd2`)
+
+Revisor: terceiro subagente `Code Reviewer`/`fable`, independente do líder, dos workers e dos revisores das rodadas R1 e R2.
+
+### N1 resolvido
+- Guarda em `tests/validate_agent_orchestration_contract.py:496-497` (`os.name != "nt"`); a semeadura não reancora fora do diretório temporário no Windows.
+- Asserção de recusa incondicional em `:498-500`.
+- Cobertura de I2 preservada nos três SOs: a recusa por filtro dos valores `D:` e `C:` nos três campos roda sem semeadura em `:476-481`, e o runtime usa `PureWindowsPath` em qualquer plataforma (`agent_runtime.py:519`). O caso semeado só acrescenta o cenário que é fisicamente possível apenas em POSIX.
+
+### Passada final
+- Testes: matriz cobre presente, idêntico, não instalado, campo ausente, valor inseguro, tipo errado, `installPath` nulo, `installed` ausente, `installPath` relativo, home ausente, `PermissionError`, cache vazio, bytes divergentes e Claude inalterado; sem `codex`, `claude` ou rede.
+- Runtime: fail-closed mantido, inclusive byte nulo, que cai no bloco de exceções.
+- Arquitetura, segurança e performance: sem regressão; o caminho composto não escapa do cache e o conteúdo continua julgado por `approved_presentation_reference`.
+- Distribuição: os oito pontos em 6.0.2, sem resíduo de 6.0.1; entrada de CHANGELOG factual.
+
+### Achados
+- Critical: nenhum. Important: nenhum.
+- Minor M3 (mantido das rodadas anteriores): predicado denso em `agent_runtime.py:516-519`; extração opcional para um helper. Não bloqueia o ship.
+
+### Final Recommendation
+- APPROVE: seguir para `ship`, que exige autorização humana.
