@@ -10,7 +10,7 @@ Fazer o core registrar e respeitar a suspensão (`stop adhd mode`) e a compacta�
 ## Evidência observada
 
 - A1 (transcript `bb37d5f5-8145-4530-a8de-404a03c62954`): `stop adhd mode` às 16:41, `/compact` às 16:42:04Z, retomada GWD. O preflight devolveu `application=active`, `use_ready=true` e `suspension=null`, com base na leitura anterior à compactação. Quem cumpriu o contrato foi a sessão: ela não releu e tratou `use_ready` como `false`. O core não impôs.
-- O mesmo core também aceitou a carga pré-compactação como atual depois da **primeira** compactação ativa. A sessão releu por iniciativa própria (16:40:10Z), mas o core não teria exigido.
+- O mesmo core (6.0.0 instalado no ensaio) também aceitou a carga pré-compactação como atual depois da **primeira** compactação ativa; a sessão releu por iniciativa própria (16:40:10Z). **Essa metade já foi corrigida na 6.0.1** (`6ed8c90`, `agent_runtime.py`: só leituras posteriores ao último bloco `compaction` contam). Resta confirmar que o transcript nativo Claude usado pelo fallback local (`compact_boundary`) é traduzido para esse bloco; se não for, a correção da 6.0.1 não se aplica ao caminho observado no T029.
 - Revisor: "registro de suspensão não comprovado, `grill_workspace.py` não passa `suspension`".
 
 ## Restrições conhecidas

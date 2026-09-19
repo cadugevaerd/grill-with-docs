@@ -405,3 +405,7 @@ Notas sem perda:
 | **Metade Claude** | **FAIL** — primeiro desvio: A2-P3 (F1); segundo: registro de suspensão em A1 (F2) |
 
 </details>
+
+### Correção de versão da matriz — 2026-09-19
+
+A matriz acima rodou com o plugin **6.0.0** instalado nos caches Claude e Codex, mas a versão publicada no dia já era a **6.0.1** (`v6.0.1`, commit `6ed8c90`, 2026-09-15), que esta branch ainda não tinha integrado. A frase "a candidata instalada é a fonte" valia só para esta branch, não para a main. A 6.0.1 já descarta leituras integrais anteriores ao último bloco `compaction` (metade da lacuna 4). A lacuna do Codex (`installPath`) e a suspensão não são tocadas por ela. A branch recebeu a `origin/main` no merge `ef3299e`. A reexecução da matriz exige a versão com o fix `fix-codex-install-path` (6.0.2) instalada nos dois runtimes.

@@ -96,7 +96,7 @@
       ],
       "heading": "Bump obrigatório do plugin",
       "id": "bump-obrigat-rio-do-plugin",
-      "justification": "Nenhum byte de plugin/** foi alterado por este work item plan-only. O plano altera plugin/**: o handoff registra que o bump da 6.0.0 em voo cobre a correcao se ela entrar antes do ship, e que depois disso o ciclo executor faz bump patch 6.0.1.",
+      "justification": "Nenhum byte de plugin/** foi alterado por este work item plan-only. O plano altera plugin/**: o handoff registra a obrigacao de bump patch 6.0.1 -> 6.0.2 nos oito pontos de versao e a release correspondente como pre-requisito do ship do ciclo executor.",
       "status": "NOT-APPLICABLE"
     },
     {

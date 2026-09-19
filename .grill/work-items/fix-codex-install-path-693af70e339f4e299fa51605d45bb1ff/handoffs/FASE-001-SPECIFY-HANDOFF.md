@@ -37,7 +37,7 @@
 
 **Evidência.** Triagem `tri-codex-install-path` (bugfix, high), com laudo `code-debug` de causa raiz comprovada em `.grill/triage-evidence/codex-install-path-debug.md`: a listagem nativa do Codex 0.154.0 não informa caminho, o Codex não tem outro comando que o exponha, e a instalação real existe íntegra.
 
-**Restrições.** Continuar fail-closed: qualquer evidência incompleta ou divergente mantém a instalação não reconhecida. Somente biblioteca padrão; o core nunca baixa bytes; sem subprocesso novo. A candidata 6.0.0 ainda não foi publicada: se esta correção entrar antes do ship da 6.0.0, o bump da 6.0.0 a cobre; se entrar depois, o ciclo executor faz bump patch (6.0.1) e a release correspondente.
+**Restrições.** Continuar fail-closed: qualquer evidência incompleta ou divergente mantém a instalação não reconhecida. Somente biblioteca padrão; o core nunca baixa bytes; sem subprocesso novo. A versão publicada corrente é 6.0.1 (`v6.0.1`, commit `6ed8c90`); esta correção exige bump patch para 6.0.2 nos oito pontos de versão e a release correspondente.
 
 > Não inclua headings/campos de stack, banco, framework, classes, componentes, implementação ou API interna. Este handoff cobre somente uma fase.
 
