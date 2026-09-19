@@ -12,8 +12,49 @@
     "state": "present"
   },
   "development": {
-    "audit": [],
-    "current_step": "specify",
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-9044a9ed899313425601a03d87cf0f2ea77c1ae31069fce779ff2ed86c91d96d",
+      "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+      "run_id": "leader-fix-codex-install-path-693af70e339f4e299fa51605d45bb1ff",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "specify": "se-61727044d58ac1ddd4e21f55b94fa7d6044e3fe1d487dbf0cbec1f17cebe6e9b"
+    },
+    "attested_outputs": {
+      "specify": {
+        "output_sha256": "sha256:28bd7b52efcde8fd7e25fcd06332b23914e9d10d9efdbeb075ef9c6ec81d4095",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "step_id": "specify"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "cycle start: /speckit-specify from handoffs/FASE-001-SPECIFY-HANDOFF.md",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/spec.md",
+            "sha256": "28bd7b52efcde8fd7e25fcd06332b23914e9d10d9efdbeb075ef9c6ec81d4095"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-specify: spec 031 from FASE-001 handoff; quality checklist 16/16",
+        "state": "complete",
+        "step": "specify"
+      }
+    ],
+    "current_step": "plan",
+    "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
     "sequence": [
@@ -38,7 +79,7 @@
       "plan": "pending",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
+      "specify": "complete",
       "tasks": "pending",
       "verify": "pending"
     },
