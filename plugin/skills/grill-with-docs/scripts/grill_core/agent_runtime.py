@@ -508,11 +508,23 @@ def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]
         # without promoting its enabled flag to current session authority.
         evidence["plugin_listing"] = {"source_ref": observed["source_ref"] + ":" + event_id,
                                      "source_sha256": _sha256(output.encode())}
-        # Do not choose a cache version or guess a path absent from native output.
+        # Do not choose a cache version or guess a path absent from native output,
+        # except the Codex exception of FR-001: the path is composed from native
+        # identification fields under the plugin cache and confirmed on disk
+        # (ADR-0001, work item fix-codex-install-path); a cache version is never chosen.
         path, version = entry.get("installPath"), entry.get("version")
         if isinstance(path, str) and Path(path).is_absolute() and isinstance(version, str):
             evidence["installation"] = {"status": "present", "version": version,
                 "install_root": path, "skill_ref": str(Path(path) / "skills/i-have-adhd/SKILL.md")}
+        elif ("installPath" not in entry and observed["provider"] == "codex" and entry.get("installed") is True
+              and all(isinstance(v, str) and v not in ("", ".", "..") and "/" not in v and "\\" not in v
+                      for v in (entry.get("marketplaceName"), entry.get("name"), version))):
+            home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+            root = home / "plugins" / "cache" / entry["marketplaceName"] / entry["name"] / version
+            skill_ref = root / "skills/i-have-adhd/SKILL.md"
+            if root.is_dir() and skill_ref.is_file():
+                evidence["installation"] = {"status": "present", "version": version,
+                    "install_root": str(root), "skill_ref": str(skill_ref)}
     return evidence
 
 
