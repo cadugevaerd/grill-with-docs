@@ -494,8 +494,14 @@ class AgentOrchestrationContract(unittest.TestCase):
                 # even when a directory literally named "D:" exists on disk (POSIX
                 # allows that literal name; the join alone would not fail there,
                 # so the filter itself -- not a failed lookup -- must reject it).
+                # The seed itself only runs off-Windows: "D:" is a drive anchor
+                # there, so Path(home) / "plugins" / "cache" / "D:" reanchors to
+                # a drive-relative path outside the temp dir instead of nesting.
+                # The rejection assertion still runs on every OS unconditionally,
+                # since the filter must reject the value before touching disk.
                 with tempfile.TemporaryDirectory() as drive_home:
-                    seed_cache(drive_home, "D:", "i-have-adhd", "0.3.0", approved_raw)
+                    if os.name != "nt":
+                        seed_cache(drive_home, "D:", "i-have-adhd", "0.3.0", approved_raw)
                     drive_payload = copy.deepcopy(listing_payload)
                     drive_payload["installed"][0]["marketplaceName"] = "D:"
                     self.assertEqual(axes_for(drive_home, drive_payload)["installation"], {})
