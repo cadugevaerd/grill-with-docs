@@ -4,8 +4,10 @@ import orchestration_fixture
 import concurrent.futures
 import contextlib
 import copy
+import hashlib
 import io
 import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -421,6 +423,146 @@ class AgentOrchestrationContract(unittest.TestCase):
                     self.assertEqual(axes["configuration"]["state"], "observed")
                     self.assertEqual(axes["enablement"]["state"], "enabled")
                     self.assertEqual(axes["trust"]["state"], "ready")
+
+    def test_codex_install_path_composed_from_cache_when_installpath_absent(self):
+        # Fixture is the real 0.154.0 `codex plugin list --json` shape: no
+        # installPath, only marketplaceName/name/version (work item
+        # fix-codex-install-path, FR-001..FR-009).
+        core = grill_workspace.grill_core_module("agent_runtime")
+        listing = (Path(__file__).parent / "fixtures/orchestration/codex-plugin-list-0.154.0.json").read_text()
+        approved_raw = orchestration_fixture.REFERENCE.read_bytes()
+        divergent_raw = b"---\nname: offline-presentation-fixture\n---\n# Divergent\n\nNot the approved bytes.\n"
+        policy = {"presentation": {"schema": core.PRESENTATION_SCHEMA, "component": core.PRESENTATION_COMPONENT,
+            "loader": core.PRESENTATION_LOADER,
+            "approved": [{"version": "0.3.0", "skill_sha256": "sha256:" + hashlib.sha256(approved_raw).hexdigest()}]}}
+        scope = {"kind": "gwd", "root": "fixture", "work_id": "work-x"}
+        observed = {"provider": "codex", "source_ref": "orca:ctx-fixture"}
+
+        def seed_cache(home, marketplace_name, name, version, raw):
+            skill_dir = Path(home) / "plugins" / "cache" / marketplace_name / name / version / "skills" / "i-have-adhd"
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            (skill_dir / "SKILL.md").write_bytes(raw)
+            return skill_dir.parent.parent
+
+        def axes_for(home, payload):
+            transcript = {"messages": orchestration_fixture.tool_pair(
+                "codex", "/native/codex plugin list --json", json.dumps(payload), "listing")}
+            with mock.patch.dict(os.environ, {"CODEX_HOME": home}):
+                return core._orca_presentation_axes(observed, transcript)
+
+        with mock.patch.object(shutil, "which", return_value="/native/codex"):
+            listing_payload = json.loads(listing)
+            with tempfile.TemporaryDirectory() as home:
+                install_root = seed_cache(home, "i-have-adhd", "i-have-adhd", "0.3.0", approved_raw)
+
+                # US1-S1: real listing + cache copy present -> installation present,
+                # skill_ref rooted under the temporary CODEX_HOME.
+                first = axes_for(home, listing_payload)
+                self.assertEqual(first["installation"]["status"], "present")
+                self.assertEqual(first["installation"]["version"], "0.3.0")
+                self.assertEqual(first["installation"]["install_root"], str(install_root))
+                self.assertEqual(first["installation"]["skill_ref"], str(install_root / "skills/i-have-adhd/SKILL.md"))
+                self.assertTrue(first["installation"]["skill_ref"].startswith(home))
+
+                # US1-S2: repeating the same observation yields an identical result.
+                second = axes_for(home, listing_payload)
+                self.assertEqual(first, second)
+
+                # US2-S1: installed false -> empty installation.
+                not_installed = copy.deepcopy(listing_payload)
+                not_installed["installed"][0]["installed"] = False
+                self.assertEqual(axes_for(home, not_installed)["installation"], {})
+
+                # US2-S4 / FR-009: each identification field, absent or unsafe -> empty.
+                for field in ("marketplaceName", "name", "version"):
+                    absent = copy.deepcopy(listing_payload)
+                    del absent["installed"][0][field]
+                    self.assertEqual(axes_for(home, absent)["installation"], {}, (field, "absent"))
+                    for value in ("", ".", "..", "seg/ment", "seg\\ment", "D:", "C:"):
+                        mutated = copy.deepcopy(listing_payload)
+                        mutated["installed"][0][field] = value
+                        self.assertEqual(axes_for(home, mutated)["installation"], {}, (field, value))
+
+                # FR-002/FR-009: a non-string identification field (int) and a null
+                # field both fail closed to empty, never a TypeError from PureWindowsPath.
+                wrong_types = copy.deepcopy(listing_payload)
+                wrong_types["installed"][0]["version"] = 1
+                wrong_types["installed"][0]["marketplaceName"] = None
+                self.assertEqual(axes_for(home, wrong_types)["installation"], {})
+
+                # I2/FR-009: a literal "D:" segment must be rejected as a value,
+                # even when a directory literally named "D:" exists on disk (POSIX
+                # allows that literal name; the join alone would not fail there,
+                # so the filter itself -- not a failed lookup -- must reject it).
+                # The seed itself only runs off-Windows: "D:" is a drive anchor
+                # there, so Path(home) / "plugins" / "cache" / "D:" reanchors to
+                # a drive-relative path outside the temp dir instead of nesting.
+                # The rejection assertion still runs on every OS unconditionally,
+                # since the filter must reject the value before touching disk.
+                with tempfile.TemporaryDirectory() as drive_home:
+                    if os.name != "nt":
+                        seed_cache(drive_home, "D:", "i-have-adhd", "0.3.0", approved_raw)
+                    drive_payload = copy.deepcopy(listing_payload)
+                    drive_payload["installed"][0]["marketplaceName"] = "D:"
+                    self.assertEqual(axes_for(drive_home, drive_payload)["installation"], {})
+
+                # FR-004: installPath present but null never triggers composition either.
+                null_install_path = copy.deepcopy(listing_payload)
+                null_install_path["installed"][0]["installPath"] = None
+                self.assertEqual(axes_for(home, null_install_path)["installation"], {})
+
+                # US2-S1 variant: the "installed" flag key itself missing -> empty.
+                no_installed_key = copy.deepcopy(listing_payload)
+                del no_installed_key["installed"][0]["installed"]
+                self.assertEqual(axes_for(home, no_installed_key)["installation"], {})
+
+                # FR-004: a relative installPath never falls back to the composed cache path.
+                relative = copy.deepcopy(listing_payload)
+                relative["installed"][0]["installPath"] = "relative/adhd"
+                self.assertEqual(axes_for(home, relative)["installation"], {})
+
+            # I1: Path.home() raising RuntimeError (no CODEX_HOME, no resolvable
+            # home) fails closed to empty installation, never an uncaught exception.
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("CODEX_HOME", None)
+                with mock.patch.object(Path, "home", side_effect=RuntimeError("no home")):
+                    transcript = {"messages": orchestration_fixture.tool_pair(
+                        "codex", "/native/codex plugin list --json", listing, "listing")}
+                    self.assertEqual(core._orca_presentation_axes(observed, transcript)["installation"], {})
+
+            # I1: a PermissionError from Path.is_dir on an otherwise valid, seeded
+            # cache also fails closed to empty, never an uncaught exception.
+            with tempfile.TemporaryDirectory() as perm_home:
+                seed_cache(perm_home, "i-have-adhd", "i-have-adhd", "0.3.0", approved_raw)
+                with mock.patch.object(Path, "is_dir", side_effect=PermissionError("denied")):
+                    self.assertEqual(axes_for(perm_home, listing_payload)["installation"], {})
+
+            # US2-S2: cache root absent (fresh CODEX_HOME) -> empty installation.
+            with tempfile.TemporaryDirectory() as empty_home:
+                self.assertEqual(axes_for(empty_home, listing_payload)["installation"], {})
+
+            # US2-S3 (U2): cache copy diverges from the approved SKILL.md bytes ->
+            # full presentation evaluation reports STYLE-CONTENT-INCOMPATIBLE.
+            with tempfile.TemporaryDirectory() as divergent_home:
+                seed_cache(divergent_home, "i-have-adhd", "i-have-adhd", "0.3.0", divergent_raw)
+                axes = axes_for(divergent_home, listing_payload)
+                self.assertEqual(axes["installation"]["status"], "present")
+                state = presentation_state(policy=policy, policy_sha256="a" * 64, gwd_skill_sha256="b" * 64,
+                    runtime="codex", session_identity="session-1", config_fingerprint="config-1", scope=scope,
+                    installation=axes["installation"], enablement={}, trust={})
+                self.assertEqual(state["compatibility"], "incompatible")
+                self.assertIn("STYLE-CONTENT-INCOMPATIBLE", [entry["code"] for entry in state["diagnostics"]])
+
+        # US3: a Claude listing with an absolute installPath keeps the current
+        # behavior (present, install_root == installPath), no Codex cache lookup.
+        with mock.patch.object(shutil, "which", return_value="/native/claude"):
+            claude_listing = json.dumps({"installed": [{"pluginId": core.PRESENTATION_COMPONENT,
+                "version": "0.3.0", "installPath": "/abs/claude/adhd"}]})
+            transcript = {"messages": orchestration_fixture.tool_pair(
+                "claude", "/native/claude plugin list --json", claude_listing, "listing")}
+            axes = core._orca_presentation_axes({"provider": "claude", "source_ref": "orca:ctx-fixture"}, transcript)
+        self.assertEqual(axes["installation"], {"status": "present", "version": "0.3.0",
+            "install_root": "/abs/claude/adhd", "skill_ref": "/abs/claude/adhd/skills/i-have-adhd/SKILL.md"})
 
     def ready_presentation(self, runtime="codex", scope=None):
         return {

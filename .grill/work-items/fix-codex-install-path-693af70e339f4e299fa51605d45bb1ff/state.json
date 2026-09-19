@@ -1,0 +1,786 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "GO",
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+    "state": "present"
+  },
+  "development": {
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-9044a9ed899313425601a03d87cf0f2ea77c1ae31069fce779ff2ed86c91d96d",
+      "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+      "run_id": "leader-fix-codex-install-path-693af70e339f4e299fa51605d45bb1ff",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "analyze": "se-2ceac2a7fb88370540ed3b09b767cb3f9a6447f7579ace46fd3381d9cc694acb",
+      "checklist": "se-30ed59abef0522a1d073a75d7d27d68a8c8fc21020537a6985f7006d91147c49",
+      "converge": "se-f6f7e9163fc7e9420ab81f7f97734258b94dc7c300e99341f0f790b0ee47cec9",
+      "implement-parallel": "se-f5adcbbcefc0df401bf25f34cab7253618fec1f9f94d74991dfda4049e88083d",
+      "partition": "se-69c73203101ead12a8f6ef1e4ce6b2b622ea4d73c59307a93953c67d43037c3a",
+      "plan": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60",
+      "review": "se-490a3ca9fdc0883224008472f853f0d257687c97c162b5d8f29d1cb5389161fb",
+      "specify": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0",
+      "tasks": "se-6e51e7ff34ae2ece6bc1d985f1c3ac41b5e05e855f90c11878ba6a3d31aec4a9",
+      "verify": "se-034e87d890d0607d842f90fa49493b1e658b80996eeae7870d5ff16c381b478e"
+    },
+    "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:6e19c7603b788155667c033abfc5b780b2826d3feb7d09192b2ec64c8b0a8424",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "step_id": "analyze"
+      },
+      "checklist": {
+        "output_sha256": "sha256:3ee288e47df21dc1bd760250bd4f2ac2968e4d2f323cc66536369cfd8529a94f",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
+      "converge": {
+        "output_sha256": "sha256:15e0cee81a10cb63b7cb3e8b1c8d43580db5b77c59726b1c616329944fb2449f",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-5.terminal.json",
+        "step_id": "converge"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:15e0cee81a10cb63b7cb3e8b1c8d43580db5b77c59726b1c616329944fb2449f",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-3.terminal.json",
+        "step_id": "implement-parallel"
+      },
+      "partition": {
+        "output_sha256": "sha256:697bd40d61be86e679b9d01d1a015e042dbfdaaf277b2f55a79839e5e57d1fa5",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-3.terminal.json",
+        "step_id": "partition"
+      },
+      "plan": {
+        "output_sha256": "sha256:de99266622e5103a801035b78d65d479723df39afde6611ba4492221bb7613c3",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
+        "step_id": "plan"
+      },
+      "review": {
+        "output_sha256": "sha256:68dd1b95d136ef8a9aa4ee7407954cdb9f99696bd6601aaed3de367676f64717",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
+        "step_id": "review"
+      },
+      "specify": {
+        "output_sha256": "sha256:c35063be606a8c280a0a3553104f5fbe499e873d2b4d851e177fd26b5c4994fe",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-3.terminal.json",
+        "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:23d4a9a705c0b0f2c458c713edd8ed8285f97a0df1cd610729d18cf9256aa91e",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "step_id": "tasks"
+      },
+      "verify": {
+        "output_sha256": "sha256:e2756efdaf1971591edb2c1745db6b3d166480c22efe97cc1b1e12fb6b78905d",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-4.terminal.json",
+        "step_id": "verify"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "cycle start: /speckit-specify from handoffs/FASE-001-SPECIFY-HANDOFF.md",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/spec.md",
+            "sha256": "28bd7b52efcde8fd7e25fcd06332b23914e9d10d9efdbeb075ef9c6ec81d4095"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-specify: spec 031 from FASE-001 handoff; quality checklist 16/16",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-plan for spec 031",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/spec.md",
+            "sha256": "aa619dc745f114cb4819b8a3b8069375e422fb4979ff2a739062322bca5e5af6"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "hash divergente cai na verificação de conteúdo comum (STYLE-CONTENT-INCOMPATIBLE), não em instalação indeterminada; spec 2.3/FR-002/SC-002 corrigidos",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/031-specify.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/plan.md",
+            "sha256": "ddfc145d16c3bf66665be13e92af4e8106b718b45bb25ae3fc159d061d116ea2"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-plan: plan, research, data-model, contract, quickstart",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-checklist",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "chain_stale": [
+          "plan"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/spec.md",
+            "sha256": "c35063be606a8c280a0a3553104f5fbe499e873d2b4d851e177fd26b5c4994fe"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "checklist CHK005/CHK008: FR-009 (nomes simples no caminho) e FR-004 (installPath inválido não é substituído)",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/031-specify-r2.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/plan.md",
+            "sha256": "de99266622e5103a801035b78d65d479723df39afde6611ba4492221bb7613c3"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "re-attest after specify r3; traceability FR-001..FR-009",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/031-plan.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/checklists/observation.md",
+            "sha256": "3ee288e47df21dc1bd760250bd4f2ac2968e4d2f323cc66536369cfd8529a94f"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-checklist: 22 itens, 2 gaps corrigidos na spec r3",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-tasks",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "23d4a9a705c0b0f2c458c713edd8ed8285f97a0df1cd610729d18cf9256aa91e"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-tasks: 8 tarefas em 3 fases; preview do partition: 5 nós, grants limpos, T008 no leader",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-analyze",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/analysis.md",
+            "sha256": "6e19c7603b788155667c033abfc5b780b2826d3feb7d09192b2ec64c8b0a8424"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-analyze: 0 CRITICAL/HIGH, 1 MEDIUM (U1 separadores), 4 LOW; cobertura FR 100%",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke grill-with-docs:grill-partition",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/execution-dag.json",
+            "sha256": "0da0729197a8aa16595020db4c473acb72dfbb05b11cf475a6227d5ef226844a"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "grill-partition: 5 nós em 2 fases, T008 no leader; run run-f3074e2a4d7796e1ae0cb52d admitida; DAG-VALID; toolchain 6.0.1 (cycle-toolchain-6.0.1.json)",
+        "state": "complete",
+        "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke grill-with-docs:grill-implement-parallel on run-f3074e2a4d7796e1ae0cb52d",
+        "state": "in-progress",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "f3a3415b8368a0e84237dffd47af325ebef8913f4c110bf5625d4d93e7663856"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "grill-implement-parallel: 2 waves convergidas (run COMPLETE), tasks reconciliadas, T008 do leader; suíte 30 validadores exit 0",
+        "state": "complete",
+        "step": "implement-parallel"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-converge",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "f3a3415b8368a0e84237dffd47af325ebef8913f4c110bf5625d4d93e7663856"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-converge: zero findings; tasks.md inalterado",
+        "state": "complete",
+        "step": "converge"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-verify-review-ship-verify",
+        "state": "in-progress",
+        "step": "verify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/verify.md",
+            "sha256": "a02f8ce6c39b3fd22a31eed26fe5018a7bf43b7c431a8349f243d3ca2921a6a2"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "verify PASS: suíte 30/1477 exit 0, smoke portabilidade, bump gate 6.0.1->6.0.2, diff check",
+        "state": "complete",
+        "step": "verify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-verify-review-ship-review",
+        "state": "in-progress",
+        "step": "review"
+      },
+      {
+        "chain_stale": [
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "a81349995293717ba942c1c25b50220f02e55377a4cab370a8e55812a1a57ea6"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "review R1 REQUEST CHANGES: converge anexou Phase 4 (T009 CRITICAL fail-closed e FR-009, T010 CHANGELOG)",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/031-converge.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/execution-dag.json",
+            "sha256": "127ec39bc14b0e83146505ea40011b69be4c37a9d94abfdf4ffe3ff6931bf0f6"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "DAG r2 com p04-a (T009) e T010 no leader; run run-f356eea840fae193efdaad68 DAG-VALID",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/031-partition.json"
+      },
+      {
+        "chain_stale": [
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "2e89ce66817ba0c51eeb8f56a7dab64ed26fd123be075d4eb2626a5fa2ab2c81"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "run r2 COMPLETE: p04-a (T009) com fix I1/I2 e testes; T010 do leader; fases 1-2 reconfirmadas sem diff",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/031-implement-parallel.json"
+      },
+      {
+        "chain_stale": [
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "2e89ce66817ba0c51eeb8f56a7dab64ed26fd123be075d4eb2626a5fa2ab2c81"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "converge r3: zero findings após run r2; tasks.md inalterado",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/031-converge-r2.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/verify.md",
+            "sha256": "9c8dd6e368776dd3c6b9e69a11b8b17ad9577261640235c05b410ab2c73bf8e1"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "verify r2 PASS sobre o fingerprint d29da301: suíte, smoke, bump e diff check em exit 0",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/031-verify.json"
+      },
+      {
+        "chain_stale": [
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "507b1504b086b945e374c9940effa4da88c432533b168ad046154e7231022986"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "review R2 N1: converge anexou Phase 5 (T011)",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/031-converge-r3.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel",
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/execution-dag.json",
+            "sha256": "697bd40d61be86e679b9d01d1a015e042dbfdaaf277b2f55a79839e5e57d1fa5"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "DAG r3 com p05-a (T011); run run-9e81f3579dd932ceae5a0a9a DAG-VALID",
+        "state": "complete",
+        "step": "partition",
+        "supersedes": ".grill/attestations/031-partition-r2.json"
+      },
+      {
+        "chain_stale": [
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "15e0cee81a10cb63b7cb3e8b1c8d43580db5b77c59726b1c616329944fb2449f"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "run r3 COMPLETE: p05-a (T011, guarda do Windows); nós anteriores reconfirmados sem diff",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/031-implement-parallel-r2.json"
+      },
+      {
+        "chain_stale": [
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "15e0cee81a10cb63b7cb3e8b1c8d43580db5b77c59726b1c616329944fb2449f"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "converge r5: zero findings após T011",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/031-converge-r4.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/verify.md",
+            "sha256": "e3f324d5254edaca029bb64101bae8e0daec5ec6e751019f0558e4350e55d0a2"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "verify r3 PASS sobre fingerprint f79daecf: suíte, smoke, bump e diff check em exit 0",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/031-verify-r2.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/review.md",
+            "sha256": "98356e0529d2c7d7032b8d4c6bed27a10e846ca0bd9167e208648a558b436b00"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "review R3 APPROVE por revisor independente; R1 e R2 registrados com suas correções",
+        "state": "complete",
+        "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-verify-review-ship-ship com autorização humana registrada",
+        "state": "in-progress",
+        "step": "ship"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/verify.md",
+            "sha256": "e2756efdaf1971591edb2c1745db6b3d166480c22efe97cc1b1e12fb6b78905d"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "verify r4 PASS na árvore final dc5dec79, após o gate de aprendizados",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/031-verify-r3.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/review.md",
+            "sha256": "68dd1b95d136ef8a9aa4ee7407954cdb9f99696bd6601aaed3de367676f64717"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "review APPROVE mantido na árvore final, com adendo do commit de aprendizados revisado",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/attestations/031-review.json"
+      }
+    ],
+    "chain_stale": [],
+    "current_step": "ship",
+    "execution_branch": "cadugevaerd/feat-new-subagents",
+    "renamed_from": {},
+    "schema": "grill-development/v2",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "partition",
+      "implement-parallel",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "complete",
+      "implement-parallel": "complete",
+      "partition": "complete",
+      "plan": "complete",
+      "review": "complete",
+      "ship": "in-progress",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "complete"
+    },
+    "superseded_outputs": {
+      "converge": [
+        {
+          "attempt_id": "converge-1",
+          "attestation": ".grill/attestations/031-converge.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:f3a3415b8368a0e84237dffd47af325ebef8913f4c110bf5625d4d93e7663856",
+          "provenance": "current-generation",
+          "reason": "review R1 REQUEST CHANGES: converge anexou Phase 4 (T009 CRITICAL fail-closed e FR-009, T010 CHANGELOG)",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+          "step_execution_id": "se-7e0f61cd90f94ff09ea2a67b65370afd7daf3478194c1e93f245d0cee08506c5",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-1fb2d8a6c43ba3f3dfaf3f10e555d4e012477b18ca61ca11e25c2ef5cd0dd7a4"
+        },
+        {
+          "attempt_id": "converge-2",
+          "attestation": ".grill/attestations/031-converge-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:a81349995293717ba942c1c25b50220f02e55377a4cab370a8e55812a1a57ea6",
+          "provenance": "current-generation",
+          "reason": "converge r3: zero findings após run r2; tasks.md inalterado",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-2.terminal.json",
+          "step_execution_id": "se-1fb2d8a6c43ba3f3dfaf3f10e555d4e012477b18ca61ca11e25c2ef5cd0dd7a4",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-9952525b1b41d3b9c2e920f5c5f0e664d03fcf8c4cb9381066195590e85172d6"
+        },
+        {
+          "attempt_id": "converge-3",
+          "attestation": ".grill/attestations/031-converge-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:2e89ce66817ba0c51eeb8f56a7dab64ed26fd123be075d4eb2626a5fa2ab2c81",
+          "provenance": "current-generation",
+          "reason": "review R2 N1: converge anexou Phase 5 (T011)",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-3.terminal.json",
+          "step_execution_id": "se-9952525b1b41d3b9c2e920f5c5f0e664d03fcf8c4cb9381066195590e85172d6",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-b24a39a7e2eee16feb1d34787d0e4493d83bb95206fc8ac0f9769de5ce4c60b2"
+        },
+        {
+          "attempt_id": "converge-4",
+          "attestation": ".grill/attestations/031-converge-r4.json",
+          "execution_round": 4,
+          "output_sha256": "sha256:507b1504b086b945e374c9940effa4da88c432533b168ad046154e7231022986",
+          "provenance": "current-generation",
+          "reason": "converge r5: zero findings após T011",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-4.terminal.json",
+          "step_execution_id": "se-b24a39a7e2eee16feb1d34787d0e4493d83bb95206fc8ac0f9769de5ce4c60b2",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-f6f7e9163fc7e9420ab81f7f97734258b94dc7c300e99341f0f790b0ee47cec9"
+        }
+      ],
+      "implement-parallel": [
+        {
+          "attempt_id": "implement-parallel-1",
+          "attestation": ".grill/attestations/031-implement-parallel.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:f3a3415b8368a0e84237dffd47af325ebef8913f4c110bf5625d4d93e7663856",
+          "provenance": "current-generation",
+          "reason": "run r2 COMPLETE: p04-a (T009) com fix I1/I2 e testes; T010 do leader; fases 1-2 reconfirmadas sem diff",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+          "step_execution_id": "se-72e02a0f7e7a43daa537419576db10aa08af62b98e85385695d7d4739278557d",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-9145bc712935d1b79af61d63bee23bc638eab69544783d9d1eed1a65fba0e9b0"
+        },
+        {
+          "attempt_id": "implement-parallel-2",
+          "attestation": ".grill/attestations/031-implement-parallel-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:2e89ce66817ba0c51eeb8f56a7dab64ed26fd123be075d4eb2626a5fa2ab2c81",
+          "provenance": "current-generation",
+          "reason": "run r3 COMPLETE: p05-a (T011, guarda do Windows); nós anteriores reconfirmados sem diff",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-2.terminal.json",
+          "step_execution_id": "se-9145bc712935d1b79af61d63bee23bc638eab69544783d9d1eed1a65fba0e9b0",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-f5adcbbcefc0df401bf25f34cab7253618fec1f9f94d74991dfda4049e88083d"
+        }
+      ],
+      "partition": [
+        {
+          "attempt_id": "partition-1",
+          "attestation": ".grill/attestations/031-partition.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:0da0729197a8aa16595020db4c473acb72dfbb05b11cf475a6227d5ef226844a",
+          "provenance": "current-generation",
+          "reason": "DAG r2 com p04-a (T009) e T010 no leader; run run-f356eea840fae193efdaad68 DAG-VALID",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+          "step_execution_id": "se-566780eb103446af729a80206b5304395d6e6727269219109686dd83fd0a9a3d",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-2b292f1023464713e5d60f8b079b6798939485c8c0bef547cf66f8d44cfc2f1e"
+        },
+        {
+          "attempt_id": "partition-2",
+          "attestation": ".grill/attestations/031-partition-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:127ec39bc14b0e83146505ea40011b69be4c37a9d94abfdf4ffe3ff6931bf0f6",
+          "provenance": "current-generation",
+          "reason": "DAG r3 com p05-a (T011); run run-9e81f3579dd932ceae5a0a9a DAG-VALID",
+          "receipt_ref": "receipts/skill-invocation/partition-partition-2.terminal.json",
+          "step_execution_id": "se-2b292f1023464713e5d60f8b079b6798939485c8c0bef547cf66f8d44cfc2f1e",
+          "step_id": "partition",
+          "superseded_by_step_execution_id": "se-69c73203101ead12a8f6ef1e4ce6b2b622ea4d73c59307a93953c67d43037c3a"
+        }
+      ],
+      "plan": [
+        {
+          "attempt_id": "plan-1",
+          "attestation": ".grill/attestations/031-plan.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:ddfc145d16c3bf66665be13e92af4e8106b718b45bb25ae3fc159d061d116ea2",
+          "provenance": "current-generation",
+          "reason": "re-attest after specify r3; traceability FR-001..FR-009",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+          "step_execution_id": "se-ff0cb99d5209e43b7d8912d5ef62925ade1736f627bc9bd742163b995f174875",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60"
+        }
+      ],
+      "review": [
+        {
+          "attempt_id": "review-1",
+          "attestation": ".grill/attestations/031-review.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:98356e0529d2c7d7032b8d4c6bed27a10e846ca0bd9167e208648a558b436b00",
+          "provenance": "current-generation",
+          "reason": "review APPROVE mantido na árvore final, com adendo do commit de aprendizados revisado",
+          "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+          "step_execution_id": "se-88802f320208a692d5970aa8d008bc75a572803a2d6275a0f0e340e7bb955a44",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-490a3ca9fdc0883224008472f853f0d257687c97c162b5d8f29d1cb5389161fb"
+        }
+      ],
+      "specify": [
+        {
+          "attempt_id": "specify-1",
+          "attestation": ".grill/attestations/031-specify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:28bd7b52efcde8fd7e25fcd06332b23914e9d10d9efdbeb075ef9c6ec81d4095",
+          "provenance": "current-generation",
+          "reason": "hash divergente cai na verificação de conteúdo comum (STYLE-CONTENT-INCOMPATIBLE), não em instalação indeterminada; spec 2.3/FR-002/SC-002 corrigidos",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+          "step_execution_id": "se-61727044d58ac1ddd4e21f55b94fa7d6044e3fe1d487dbf0cbec1f17cebe6e9b",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-19f420d052cee1aa7069329f6750291a4056c72dd49c2cc577e173b634168bc1"
+        },
+        {
+          "attempt_id": "specify-2",
+          "attestation": ".grill/attestations/031-specify-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:aa619dc745f114cb4819b8a3b8069375e422fb4979ff2a739062322bca5e5af6",
+          "provenance": "current-generation",
+          "reason": "checklist CHK005/CHK008: FR-009 (nomes simples no caminho) e FR-004 (installPath inválido não é substituído)",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
+          "step_execution_id": "se-19f420d052cee1aa7069329f6750291a4056c72dd49c2cc577e173b634168bc1",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0"
+        }
+      ],
+      "verify": [
+        {
+          "attempt_id": "verify-1",
+          "attestation": ".grill/attestations/031-verify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:a02f8ce6c39b3fd22a31eed26fe5018a7bf43b7c431a8349f243d3ca2921a6a2",
+          "provenance": "current-generation",
+          "reason": "verify r2 PASS sobre o fingerprint d29da301: suíte, smoke, bump e diff check em exit 0",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+          "step_execution_id": "se-b42b8ede3033e511f10853855172e4ff999a3578f8947c4c648169b264171164",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-b9bc0d705024b3d5c1056b9d5073b2632968d57b5e66f4d086ebf5a1098402c5"
+        },
+        {
+          "attempt_id": "verify-2",
+          "attestation": ".grill/attestations/031-verify-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:9c8dd6e368776dd3c6b9e69a11b8b17ad9577261640235c05b410ab2c73bf8e1",
+          "provenance": "current-generation",
+          "reason": "verify r3 PASS sobre fingerprint f79daecf: suíte, smoke, bump e diff check em exit 0",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
+          "step_execution_id": "se-b9bc0d705024b3d5c1056b9d5073b2632968d57b5e66f4d086ebf5a1098402c5",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-9dc67531c005c6c04e10935d48886cdb565b26d72316ef27305ed0e3be04a5f7"
+        },
+        {
+          "attempt_id": "verify-3",
+          "attestation": ".grill/attestations/031-verify-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:e3f324d5254edaca029bb64101bae8e0daec5ec6e751019f0558e4350e55d0a2",
+          "provenance": "current-generation",
+          "reason": "verify r4 PASS na árvore final dc5dec79, após o gate de aprendizados",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-3.terminal.json",
+          "step_execution_id": "se-9dc67531c005c6c04e10935d48886cdb565b26d72316ef27305ed0e3be04a5f7",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-034e87d890d0607d842f90fa49493b1e658b80996eeae7870d5ff16c381b478e"
+        }
+      ]
+    },
+    "workflow_version": "v4"
+  },
+  "goal": {
+    "path": "goal.md",
+    "sha256": "af97e2899ddd6668c5fc80eef153cd94b7d88ea92235650370572770e5b291d1",
+    "status": "REUSED"
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "in-progress",
+  "version": "1.2.0",
+  "work_id": "fix-codex-install-path-693af70e339f4e299fa51605d45bb1ff",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "schema": "v2",
+    "sha256": "d2c4ea0806ea5e8235678582154aedaeb0ba686641bd836934bffe133db60ab5"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "worker": "p02-a",
+  "feature": "031-codex-install-path",
+  "completed": ["T003", "T006"],
+  "tasks": {
+    "T003": {
+      "status": "done",
+      "summary": "Novo metodo test_codex_install_path_composed_from_cache_when_installpath_absent na classe AgentOrchestrationContract (tests/validate_agent_orchestration_contract.py), apos test_exact_native_commands_and_envelope. Carrega a fixture real tests/fixtures/orchestration/codex-plugin-list-0.154.0.json (sem installPath) e monta CODEX_HOME temporario com a copia em plugins/cache/i-have-adhd/i-have-adhd/0.3.0/skills/i-have-adhd/SKILL.md, usando os bytes de orchestration_fixture.REFERENCE (tests/fixtures/orchestration/SKILL.md) como conteudo aprovado (hash real, nao inventado). Casos cobertos via core._orca_presentation_axes com shutil.which mockado (sem chamar codex/claude/node/rede): US1-S1 (listagem real + copia presente -> installation present, skill_ref e install_root dentro do CODEX_HOME temporario, dependente do ramo Codex porque a fixture nao tem installPath) e US1-S2 (repeticao identica); US2-S1 (installed=false -> vazio); US2-S4/FR-009 (marketplaceName, name, version cada um ausente, '', '.', '..', com '/' e com '\\\\' -> vazio, para os tres campos); FR-004 (installPath relativo com copia presente no cache -> vazio, sem fallback); US2-S2 (CODEX_HOME vazio, raiz ausente -> vazio); US2-S3/U2 (copia com SKILL.md divergente -> presentation_state real com policy.approved apontando para o hash da fixture de referencia retorna compatibility=incompatible e diagnostics contendo STYLE-CONTENT-INCOMPATIBLE); US3 (listagem Claude com installPath absoluto -> present, install_root=installPath, comportamento atual inalterado).",
+      "evidence": "tests/validate_agent_orchestration_contract.py: novo metodo apos test_exact_native_commands_and_envelope (antes de ready_presentation). Verificacao: python3 tests/validate_agent_orchestration_contract.py -> OK (33 tests, era 32 antes desta task). Isolado: python3 -m unittest validate_agent_orchestration_contract.AgentOrchestrationContract.test_codex_install_path_composed_from_cache_when_installpath_absent -> OK."
+    },
+    "T006": {
+      "status": "done",
+      "summary": "Heading atualizado de '# Grill with Docs v6.0.1' para '# Grill with Docs v6.0.2' em plugin/skills/grill-with-docs/SKILL.md (unica linha alterada, FR-008).",
+      "evidence": "plugin/skills/grill-with-docs/SKILL.md linha 6."
+    }
+  }
+}

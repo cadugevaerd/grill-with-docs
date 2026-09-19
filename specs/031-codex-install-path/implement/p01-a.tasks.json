@@ -1,0 +1,12 @@
+{
+  "worker": "p01-a",
+  "feature": "031-codex-install-path",
+  "completed": ["T001"],
+  "tasks": {
+    "T001": {
+      "status": "done",
+      "summary": "Criado fixture com objeto {installed:[entrada], available:[]} contendo a entrada real de `codex plugin list --json` (codex-cli 0.154.0) sem installPath.",
+      "evidence": "tests/fixtures/orchestration/codex-plugin-list-0.154.0.json: JSON válido, 1 entrada em installed (pluginId i-have-adhd@i-have-adhd), available vazio, indentação 2 espaços, newline final."
+    }
+  }
+}

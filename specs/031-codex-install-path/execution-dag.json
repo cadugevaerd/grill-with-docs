@@ -1,0 +1,99 @@
+{
+  "feature": "031-codex-install-path",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        "specs/031-codex-install-path/implement/p01-a.tasks.json",
+        "tests/fixtures/orchestration/codex-plugin-list-0.154.0.json"
+      ],
+      "id": "p01-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "specs/031-codex-install-path/implement/p01-b.tasks.json"
+      ],
+      "id": "p01-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a",
+        "p01-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "specs/031-codex-install-path/implement/p02-a.tasks.json",
+        "tests/fixtures/orchestration/codex-plugin-list-0.154.0.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a",
+        "p01-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "specs/031-codex-install-path/implement/p02-b.tasks.json",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p02-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a",
+        "p01-b"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "specs/031-codex-install-path/implement/p02-c.tasks.json"
+      ],
+      "id": "p02-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a",
+        "p02-b",
+        "p02-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "specs/031-codex-install-path/implement/p04-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p04-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p04-a"
+      ],
+      "files": [
+        "specs/031-codex-install-path/implement/p05-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p05-a",
+      "parallel": true,
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v1"
+}

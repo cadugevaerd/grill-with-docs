@@ -1,0 +1,12 @@
+{
+  "worker": "p05-a",
+  "feature": "031-codex-install-path",
+  "completed": ["T011"],
+  "tasks": {
+    "T011": {
+      "status": "done",
+      "summary": "Guarded seed_cache(drive_home, \"D:\", ...) in test_codex_install_path_composed_from_cache_when_installpath_absent (tests/validate_agent_orchestration_contract.py) behind os.name != \"nt\", since \"D:\" is a Windows drive anchor and Path(home)/\"plugins\"/\"cache\"/\"D:\"/... reanchors to a drive-relative path outside the temp dir on Windows. The unconditional rejection assertion (axes_for(...)[\"installation\"] == {}) is kept unguarded on every OS, since the filter must reject the value before touching disk.",
+      "evidence": "python3 tests/validate_agent_orchestration_contract.py -> Ran 33 tests in 6.012s, OK. python3 -c \"from pathlib import PureWindowsPath; print(PureWindowsPath('C:/h/plugins/cache') / 'D:' / 'x')\" -> D:x (confirms reanchoring away from the cache dir, the reason for the guard)."
+    }
+  }
+}
