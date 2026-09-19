@@ -24,7 +24,8 @@
     "attested_executions": {
       "checklist": "se-30ed59abef0522a1d073a75d7d27d68a8c8fc21020537a6985f7006d91147c49",
       "plan": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60",
-      "specify": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0"
+      "specify": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0",
+      "tasks": "se-6e51e7ff34ae2ece6bc1d985f1c3ac41b5e05e855f90c11878ba6a3d31aec4a9"
     },
     "attested_outputs": {
       "checklist": {
@@ -44,6 +45,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/specify-specify-3.terminal.json",
         "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:23d4a9a705c0b0f2c458c713edd8ed8285f97a0df1cd610729d18cf9256aa91e",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "step_id": "tasks"
       }
     },
     "audit": [
@@ -147,10 +154,29 @@
         "reason": "speckit-checklist: 22 itens, 2 gaps corrigidos na spec r3",
         "state": "complete",
         "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-tasks",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "23d4a9a705c0b0f2c458c713edd8ed8285f97a0df1cd610729d18cf9256aa91e"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-tasks: 8 tarefas em 3 fases; preview do partition: 5 nós, grants limpos, T008 no leader",
+        "state": "complete",
+        "step": "tasks"
       }
     ],
     "chain_stale": [],
-    "current_step": "tasks",
+    "current_step": "analyze",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -177,7 +203,7 @@
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
-      "tasks": "pending",
+      "tasks": "complete",
       "verify": "pending"
     },
     "superseded_outputs": {
