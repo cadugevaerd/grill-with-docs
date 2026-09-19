@@ -1,13 +1,13 @@
-## Verify Report — rodada r3 (após correção do review R2, achado N1)
+## Verify Report — rodada r4 (árvore final do ship, com os aprendizados aplicados)
 
 Verdict: PASS
-Source fingerprint: tree f79daecfaea68fec68f402183a87d5204669f02308d06f0a1ad999d221f9825a / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 15e0cee81a10cb63b7cb3e8b1c8d43580db5b77c59726b1c616329944fb2449f   (gate reports excluded)
-Converge: CONVERGED (converge r5 nesta sessão, depois do implement-parallel r3; zero findings)
+Source fingerprint: tree dc5dec79246a11c46c22e0440cf6d53ae88c700b42afbbb4e09f68e5aa88aafc / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 15e0cee81a10cb63b7cb3e8b1c8d43580db5b77c59726b1c616329944fb2449f   (gate reports excluded)
+Converge: CONVERGED (converge r5, depois do implement-parallel r3; zero findings). Depois dele o gate de aprendizados do ship aplicou mudanças só de documentação (`CLAUDE.md`) e de backlog/memória fora do repositório, e os gates foram reexecutados nesta árvore.
 
 ### Operational Gates
 | Gate | Command | Result | Evidence | Validator |
 |---|---|---|---|---|
-| Suíte canônica (CI `full`) | `PYTHONDONTWRITEBYTECODE=1 python3 tests/run_validators.py` | PASS | exit 0; 30 validadores (marcador `==>`), 1477 testes; 1 skip legítimo (`accepts_macos_var_root_alias`: host sem alias `/var -> /private/var`). Reexecutado na rodada r3 sobre o fingerprint corrente | leader, execução sequencial |
+| Suíte canônica (CI `full`) | `PYTHONDONTWRITEBYTECODE=1 python3 tests/run_validators.py` | PASS | exit 0; 30 validadores (marcador `==>`), 1477 testes; 1 skip legítimo (`accepts_macos_var_root_alias`: host sem alias `/var -> /private/var`). Reexecutado na rodada r4 sobre o fingerprint final `dc5dec79` | leader, execução sequencial |
 | Smoke de portabilidade (CI `portability`) | `python3 tests/validate_distribution.py` + os 8 testes nomeados de `WorkspaceV2Contract` do `ci.yml` | PASS | exit 0; `Ran 8 tests ... OK` | leader |
 | Bump gate (`bump-gate.yml`) | `python3 tests/check_version_bump.py --base-ref origin/main` | PASS | `PASS BUMPED: plugin/ mudou e a versão aumentou de 6.0.1 para 6.0.2.` | leader |
 | Diff check | `git diff --check` | PASS | sem saída | leader |

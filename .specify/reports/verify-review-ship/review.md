@@ -94,3 +94,16 @@ Revisor: terceiro subagente `Code Reviewer`/`fable`, independente do líder, dos
 
 ### Final Recommendation
 - APPROVE: seguir para `ship`, que exige autorização humana.
+
+---
+
+## Review — adendo da árvore final do ship
+
+Verdict: APPROVE
+Source fingerprint: tree dc5dec79246a11c46c22e0440cf6d53ae88c700b42afbbb4e09f68e5aa88aafc / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 15e0cee81a10cb63b7cb3e8b1c8d43580db5b77c59726b1c616329944fb2449f
+
+O gate de aprendizados do `ship` aplicou LRN-001 e LRN-002 no backlog `SGD` (itens `SGD-34` e `SGD-35`), LRN-003 na memória do projeto e LRN-004 no `CLAUDE.md`. Só o último toca o repositório.
+
+Revisor independente (`Code Reviewer`/`fable`, quarta sessão distinta) avaliou o commit `91904e1` quanto a exatidão factual, seção correta e formatação: APPROVE, com dois Minors de prosa — a frase do `installPath` simplificava o comportamento, que é agnóstico de runtime, e a regra de segmento não citava a recusa de vazio, `.` e `..`. Os dois foram corrigidos em `fff13a3`.
+
+Gates reexecutados nesta árvore final: suíte 30 validadores e 1477 testes (`exit 0`, 1 skip de macOS), smoke de portabilidade, bump `6.0.1 -> 6.0.2` e `git diff --check`, todos `exit 0`. Nenhum achado Critical ou Important permanece.

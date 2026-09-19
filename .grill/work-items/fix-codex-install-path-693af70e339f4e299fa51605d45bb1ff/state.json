@@ -28,10 +28,10 @@
       "implement-parallel": "se-f5adcbbcefc0df401bf25f34cab7253618fec1f9f94d74991dfda4049e88083d",
       "partition": "se-69c73203101ead12a8f6ef1e4ce6b2b622ea4d73c59307a93953c67d43037c3a",
       "plan": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60",
-      "review": "se-88802f320208a692d5970aa8d008bc75a572803a2d6275a0f0e340e7bb955a44",
+      "review": "se-490a3ca9fdc0883224008472f853f0d257687c97c162b5d8f29d1cb5389161fb",
       "specify": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0",
       "tasks": "se-6e51e7ff34ae2ece6bc1d985f1c3ac41b5e05e855f90c11878ba6a3d31aec4a9",
-      "verify": "se-9dc67531c005c6c04e10935d48886cdb565b26d72316ef27305ed0e3be04a5f7"
+      "verify": "se-034e87d890d0607d842f90fa49493b1e658b80996eeae7870d5ff16c381b478e"
     },
     "attested_outputs": {
       "analyze": {
@@ -71,9 +71,9 @@
         "step_id": "plan"
       },
       "review": {
-        "output_sha256": "sha256:98356e0529d2c7d7032b8d4c6bed27a10e846ca0bd9167e208648a558b436b00",
+        "output_sha256": "sha256:68dd1b95d136ef8a9aa4ee7407954cdb9f99696bd6601aaed3de367676f64717",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
         "step_id": "review"
       },
       "specify": {
@@ -89,9 +89,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:e3f324d5254edaca029bb64101bae8e0daec5ec6e751019f0558e4350e55d0a2",
+        "output_sha256": "sha256:e2756efdaf1971591edb2c1745db6b3d166480c22efe97cc1b1e12fb6b78905d",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-3.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-4.terminal.json",
         "step_id": "verify"
       }
     },
@@ -498,6 +498,36 @@
         "reason": "invoke /speckit-verify-review-ship-ship com autorização humana registrada",
         "state": "in-progress",
         "step": "ship"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/verify.md",
+            "sha256": "e2756efdaf1971591edb2c1745db6b3d166480c22efe97cc1b1e12fb6b78905d"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "verify r4 PASS na árvore final dc5dec79, após o gate de aprendizados",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/031-verify-r3.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/review.md",
+            "sha256": "68dd1b95d136ef8a9aa4ee7407954cdb9f99696bd6601aaed3de367676f64717"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "review APPROVE mantido na árvore final, com adendo do commit de aprendizados revisado",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/attestations/031-review.json"
       }
     ],
     "chain_stale": [],
@@ -648,6 +678,20 @@
           "superseded_by_step_execution_id": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60"
         }
       ],
+      "review": [
+        {
+          "attempt_id": "review-1",
+          "attestation": ".grill/attestations/031-review.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:98356e0529d2c7d7032b8d4c6bed27a10e846ca0bd9167e208648a558b436b00",
+          "provenance": "current-generation",
+          "reason": "review APPROVE mantido na árvore final, com adendo do commit de aprendizados revisado",
+          "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+          "step_execution_id": "se-88802f320208a692d5970aa8d008bc75a572803a2d6275a0f0e340e7bb955a44",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-490a3ca9fdc0883224008472f853f0d257687c97c162b5d8f29d1cb5389161fb"
+        }
+      ],
       "specify": [
         {
           "attempt_id": "specify-1",
@@ -698,6 +742,18 @@
           "step_execution_id": "se-b9bc0d705024b3d5c1056b9d5073b2632968d57b5e66f4d086ebf5a1098402c5",
           "step_id": "verify",
           "superseded_by_step_execution_id": "se-9dc67531c005c6c04e10935d48886cdb565b26d72316ef27305ed0e3be04a5f7"
+        },
+        {
+          "attempt_id": "verify-3",
+          "attestation": ".grill/attestations/031-verify-r3.json",
+          "execution_round": 3,
+          "output_sha256": "sha256:e3f324d5254edaca029bb64101bae8e0daec5ec6e751019f0558e4350e55d0a2",
+          "provenance": "current-generation",
+          "reason": "verify r4 PASS na árvore final dc5dec79, após o gate de aprendizados",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-3.terminal.json",
+          "step_execution_id": "se-9dc67531c005c6c04e10935d48886cdb565b26d72316ef27305ed0e3be04a5f7",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-034e87d890d0607d842f90fa49493b1e658b80996eeae7870d5ff16c381b478e"
         }
       ]
     },
