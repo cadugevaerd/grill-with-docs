@@ -24,6 +24,7 @@
     "attested_executions": {
       "analyze": "se-2ceac2a7fb88370540ed3b09b767cb3f9a6447f7579ace46fd3381d9cc694acb",
       "checklist": "se-30ed59abef0522a1d073a75d7d27d68a8c8fc21020537a6985f7006d91147c49",
+      "implement-parallel": "se-72e02a0f7e7a43daa537419576db10aa08af62b98e85385695d7d4739278557d",
       "partition": "se-566780eb103446af729a80206b5304395d6e6727269219109686dd83fd0a9a3d",
       "plan": "se-ba24fff7eb24b8f3ce42c1e8dda2486a81fb935e038c2d4e3bf25a2c22506e60",
       "specify": "se-5cde2f21c61e0e8e9b29f4697bb854015cfc73d8430ac9d2721a791a9269fdf0",
@@ -41,6 +42,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
+      },
+      "implement-parallel": {
+        "output_sha256": "sha256:f3a3415b8368a0e84237dffd47af325ebef8913f4c110bf5625d4d93e7663856",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "step_id": "implement-parallel"
       },
       "partition": {
         "output_sha256": "sha256:0da0729197a8aa16595020db4c473acb72dfbb05b11cf475a6227d5ef226844a",
@@ -232,10 +239,22 @@
         "reason": "invoke grill-with-docs:grill-implement-parallel on run-f3074e2a4d7796e1ae0cb52d",
         "state": "in-progress",
         "step": "implement-parallel"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/031-codex-install-path/tasks.md",
+            "sha256": "f3a3415b8368a0e84237dffd47af325ebef8913f4c110bf5625d4d93e7663856"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "grill-implement-parallel: 2 waves convergidas (run COMPLETE), tasks reconciliadas, T008 do leader; suíte 30 validadores exit 0",
+        "state": "complete",
+        "step": "implement-parallel"
       }
     ],
     "chain_stale": [],
-    "current_step": "implement-parallel",
+    "current_step": "converge",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -256,7 +275,7 @@
       "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
-      "implement-parallel": "in-progress",
+      "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
       "review": "pending",

@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.2
+
+- Fix: a observação da instalação do `i-have-adhd` no Codex deixa de exigir `installPath`, campo que o `codex plugin list --json` (codex-cli 0.154.0) não emite, o que levava toda entrada GWD no Codex a `STYLE-DEPENDENCY-UNDETERMINED`. Sem `installPath`, a raiz é composta de `marketplaceName`, `name` e `version` da própria entrada nativa sob `CODEX_HOME` (ou `~/.codex`) `/plugins/cache/`, aceita somente com `installed=true`, nomes simples (sem barra, contrabarra, `.` ou `..`) e o `SKILL.md` presente em disco; conteúdo divergente segue recusado por `STYLE-CONTENT-INCOMPATIBLE` pela verificação comum aos dois runtimes. `installPath` informado continua tendo precedência, e um valor inválido não é substituído pelo caminho composto. O Claude não muda. O teste passa a usar a entrada real capturada do Codex 0.154.0 em vez de uma listagem com `installPath` derivada do código.
+
 ## 6.0.1
 
 - Fix: `_full_read` passa a considerar somente eventos posteriores ao último bloco de compactação. Em 6.0.0 uma leitura integral anterior a `/compact` continuava satisfazendo o `load_request`, e o preflight devolvia `loading=loaded`/`use_ready=true` sem recarregar a referência de apresentação, contrariando a revalidação obrigatória após compactação.
