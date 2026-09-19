@@ -3,7 +3,7 @@
     "T008",
     "T010"
   ],
-  "dispatchable_tasks": 8,
+  "dispatchable_tasks": 9,
   "feature": "031-codex-install-path",
   "max_workers": 3,
   "nodes": [
@@ -62,6 +62,15 @@
       "task_ids": [
         "T009"
       ]
+    },
+    {
+      "id": "p05-a",
+      "parallel": true,
+      "phase": 5,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T011"
+      ]
     }
   ],
   "phases": [
@@ -96,11 +105,22 @@
       "tasks": 1,
       "title": "Convergence",
       "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 5,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 1,
+      "title": "Convergence",
+      "unmapped_tasks": 0
     }
   ],
   "requested_groups": 3,
   "schema": "grill-partition-report/v1",
-  "tasks": 10,
+  "tasks": 11,
   "unmapped_task_ids": [],
   "verdict": "PARTITION-DEGRADED"
 }

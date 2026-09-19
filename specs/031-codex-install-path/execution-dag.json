@@ -81,6 +81,18 @@
       "id": "p04-a",
       "parallel": true,
       "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p04-a"
+      ],
+      "files": [
+        "specs/031-codex-install-path/implement/p05-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p05-a",
+      "parallel": true,
+      "tier": "medium"
     }
   ],
   "schema": "grill-gauntlet-execution-dag/v1"
