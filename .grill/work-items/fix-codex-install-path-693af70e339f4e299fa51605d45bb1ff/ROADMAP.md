@@ -2,13 +2,13 @@
 
 - execution-order: FASE-001
 
-## FASE-001 — <!-- nome estável da fase -->
+## FASE-001 — Observar a instalação Codex do i-have-adhd
 - state: planned
-- objetivo: <!-- resultado observável -->
-- scope-in: <!-- incluído -->
-- scope-out: <!-- excluído -->
-- context-refs: <!-- termos canônicos de CONTEXT.md -->
-- ADRs: none
+- objetivo: a entrada GWD no Codex chega a `installation=present` a partir da listagem nativa quando a cópia aprovada está instalada, e continua `undetermined` em qualquer evidência incompleta ou divergente
+- scope-in: observer de instalação do runtime Codex; teste offline pelo seam injetável
+- scope-out: runtime Claude; demais lacunas do T029 (líder morto, preview do adopt, troca antes do checkpoint, suspensão, campos do checkpoint)
+- context-refs: observer de instalação, listagem nativa, layout do cache Codex
+- ADRs: ADR-0001
 - BLs: none
 - depends-on: none
 - specify-handoff: handoffs/FASE-001-SPECIFY-HANDOFF.md
