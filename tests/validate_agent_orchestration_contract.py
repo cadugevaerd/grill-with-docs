@@ -342,6 +342,9 @@ class AgentOrchestrationContract(unittest.TestCase):
                 original = copy.deepcopy(messages)
                 request = json.loads(messages[1]["blocks"][0]["output"])["presentation"]["load_request"]
                 self.assertIsNotNone(core._full_read(observed, {"messages": messages}, request))
+                compaction = [{"id": "compact", "role": "system", "blocks": [{"type": "compaction"}]}]
+                self.assertIsNone(core._full_read(observed, {"messages": messages + compaction}, request))
+                self.assertIsNotNone(core._full_read(observed, {"messages": messages + compaction + messages}, request))
                 key = "command" if runtime == "claude" else "cmd"
                 for index in (0, 2):
                     command = original[index]["blocks"][0]["input"][key]
@@ -601,7 +604,7 @@ class AgentOrchestrationContract(unittest.TestCase):
         return code, json.loads(output.getvalue())
 
     def fixture(self):
-        temp = tempfile.TemporaryDirectory(); root = Path(temp.name)
+        temp = tempfile.TemporaryDirectory(); root = Path(temp.name).resolve()
         for args in (("init",), ("config", "user.email", "test@example.invalid"), ("config", "user.name", "Test")):
             subprocess.run(["git", "-C", str(root), *args], check=True, stdout=subprocess.DEVNULL)
         (root / "README.md").write_text("fixture\n", encoding="utf-8")

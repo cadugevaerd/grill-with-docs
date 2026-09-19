@@ -1,5 +1,10 @@
 # Changelog
 
+## 6.0.1
+
+- Fix: `_full_read` passa a considerar somente eventos posteriores ao último bloco de compactação. Em 6.0.0 uma leitura integral anterior a `/compact` continuava satisfazendo o `load_request`, e o preflight devolvia `loading=loaded`/`use_ready=true` sem recarregar a referência de apresentação, contrariando a revalidação obrigatória após compactação.
+- Fix de portabilidade da suíte: o fixture de `validate_agent_orchestration_contract` resolve o root temporário, como `project_root`, eliminando a divergência do alias `/var`→`/private/var` no macOS; `.gitattributes` mantém `tests/fixtures/**` sem conversão de fim de linha, para que o fixture de referência não mude de hash em checkouts Windows com autocrlf.
+
 ## 6.0.0
 
 - Breaking: contrato suplementar `grill-agent-orchestration/v1` obrigatório em trabalhos novos; legado exige adoção explícita antes de executar no binário novo. Preservar campanhas, receipts e DAGs selados; migração de tasks usa proposta revisada, preview/hashes e sucessão explícita para trabalho restante.
