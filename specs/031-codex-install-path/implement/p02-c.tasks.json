@@ -1,0 +1,22 @@
+{
+  "worker": "p02-c",
+  "feature": "031-codex-install-path",
+  "completed": ["T005"],
+  "tasks": {
+    "T005": {
+      "status": "done",
+      "summary": "Bump plugin grill-with-docs de 6.0.1 para 6.0.2 nos quatro manifests (edição string, sem reserializar JSON).",
+      "evidence": {
+        "files": [
+          ".agents/plugins/marketplace.json",
+          ".claude-plugin/marketplace.json",
+          "plugin/.claude-plugin/plugin.json",
+          "plugin/.codex-plugin/plugin.json"
+        ],
+        "grep_6.0.2_count": 1,
+        "grep_6.0.1_remaining": 0,
+        "json_tool_validate": "OK (todos os 4 arquivos)"
+      }
+    }
+  }
+}
