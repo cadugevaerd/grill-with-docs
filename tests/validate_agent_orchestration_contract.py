@@ -478,15 +478,58 @@ class AgentOrchestrationContract(unittest.TestCase):
                     absent = copy.deepcopy(listing_payload)
                     del absent["installed"][0][field]
                     self.assertEqual(axes_for(home, absent)["installation"], {}, (field, "absent"))
-                    for value in ("", ".", "..", "seg/ment", "seg\\ment"):
+                    for value in ("", ".", "..", "seg/ment", "seg\\ment", "D:", "C:"):
                         mutated = copy.deepcopy(listing_payload)
                         mutated["installed"][0][field] = value
                         self.assertEqual(axes_for(home, mutated)["installation"], {}, (field, value))
+
+                # FR-002/FR-009: a non-string identification field (int) and a null
+                # field both fail closed to empty, never a TypeError from PureWindowsPath.
+                wrong_types = copy.deepcopy(listing_payload)
+                wrong_types["installed"][0]["version"] = 1
+                wrong_types["installed"][0]["marketplaceName"] = None
+                self.assertEqual(axes_for(home, wrong_types)["installation"], {})
+
+                # I2/FR-009: a literal "D:" segment must be rejected as a value,
+                # even when a directory literally named "D:" exists on disk (POSIX
+                # allows that literal name; the join alone would not fail there,
+                # so the filter itself -- not a failed lookup -- must reject it).
+                with tempfile.TemporaryDirectory() as drive_home:
+                    seed_cache(drive_home, "D:", "i-have-adhd", "0.3.0", approved_raw)
+                    drive_payload = copy.deepcopy(listing_payload)
+                    drive_payload["installed"][0]["marketplaceName"] = "D:"
+                    self.assertEqual(axes_for(drive_home, drive_payload)["installation"], {})
+
+                # FR-004: installPath present but null never triggers composition either.
+                null_install_path = copy.deepcopy(listing_payload)
+                null_install_path["installed"][0]["installPath"] = None
+                self.assertEqual(axes_for(home, null_install_path)["installation"], {})
+
+                # US2-S1 variant: the "installed" flag key itself missing -> empty.
+                no_installed_key = copy.deepcopy(listing_payload)
+                del no_installed_key["installed"][0]["installed"]
+                self.assertEqual(axes_for(home, no_installed_key)["installation"], {})
 
                 # FR-004: a relative installPath never falls back to the composed cache path.
                 relative = copy.deepcopy(listing_payload)
                 relative["installed"][0]["installPath"] = "relative/adhd"
                 self.assertEqual(axes_for(home, relative)["installation"], {})
+
+            # I1: Path.home() raising RuntimeError (no CODEX_HOME, no resolvable
+            # home) fails closed to empty installation, never an uncaught exception.
+            with mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("CODEX_HOME", None)
+                with mock.patch.object(Path, "home", side_effect=RuntimeError("no home")):
+                    transcript = {"messages": orchestration_fixture.tool_pair(
+                        "codex", "/native/codex plugin list --json", listing, "listing")}
+                    self.assertEqual(core._orca_presentation_axes(observed, transcript)["installation"], {})
+
+            # I1: a PermissionError from Path.is_dir on an otherwise valid, seeded
+            # cache also fails closed to empty, never an uncaught exception.
+            with tempfile.TemporaryDirectory() as perm_home:
+                seed_cache(perm_home, "i-have-adhd", "i-have-adhd", "0.3.0", approved_raw)
+                with mock.patch.object(Path, "is_dir", side_effect=PermissionError("denied")):
+                    self.assertEqual(axes_for(perm_home, listing_payload)["installation"], {})
 
             # US2-S2: cache root absent (fresh CODEX_HOME) -> empty installation.
             with tempfile.TemporaryDirectory() as empty_home:
