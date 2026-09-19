@@ -1,7 +1,7 @@
 # Pedido e escopo único
 
 Owner: Carlos Araújo. Sessão condutora: Claude Code (Opus). Branch: cadugevaerd/feat-new-subagents.
-Origem: T029 do work item `feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa`, caso C1 (2026-09-19). Triagem: ainda não executada.
+Origem: T029 do work item `feature-new-subagents-unified-69f619a1a4774d598e4a46c77396f0fa`, caso C1 (2026-09-19). Triagem: tri-codex-install-path (bugfix, high, `triage_sha256` e5136f39…e291; laudo `.grill/triage-evidence/codex-install-path-debug.md`).
 
 ## Requisito solicitado
 
