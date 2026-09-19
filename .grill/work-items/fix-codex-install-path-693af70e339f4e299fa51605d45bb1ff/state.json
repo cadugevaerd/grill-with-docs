@@ -491,6 +491,13 @@
         "reason": "review R3 APPROVE por revisor independente; R1 e R2 registrados com suas correções",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-verify-review-ship-ship com autorização humana registrada",
+        "state": "in-progress",
+        "step": "ship"
       }
     ],
     "chain_stale": [],
@@ -519,7 +526,7 @@
       "partition": "complete",
       "plan": "complete",
       "review": "complete",
-      "ship": "pending",
+      "ship": "in-progress",
       "specify": "complete",
       "tasks": "complete",
       "verify": "complete"
