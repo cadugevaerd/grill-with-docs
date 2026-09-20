@@ -264,6 +264,22 @@
       "id": "p10-c",
       "parallel": true,
       "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p10-a",
+        "p10-b",
+        "p10-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p11-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p11-a",
+      "parallel": true,
+      "tier": "medium"
     }
   ],
   "schema": "grill-gauntlet-execution-dag/v1"
