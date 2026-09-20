@@ -805,3 +805,149 @@ Recomendado junto, por ser da mesma família e custar pouco: **o1**, escolhendo 
 Registráveis como débito: o2, o3, o4, mais o já listado em R1 a R4.
 
 Próximo passo: corrigir, rodar `/speckit.converge`, depois `verify` e `review` de novo.
+
+---
+
+## Review Report — R6
+
+**Verdict: REQUEST CHANGES**
+
+Source fingerprint: tree `1391107f8d541fd5cd34bf4ba2fcb0d2e1275288579330e5c4308cefb997279e` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `7c34aec1d07bb1754c7cd033d53b3a9d21b5871ada727b220680295df46173db`
+
+Casa com `converge.md` (rodada 12) e `verify.md` (R6). Converge `CONVERGED`, Verify `PASS`.
+
+**Um Critical, dois Important, cinco Minor.** O Critical foi encontrado **independentemente pelos dois revisores**, por caminhos diferentes — um pela análise do critério, outro reproduzindo a sequência completa em cópia de scratchpad. E foi reverificado pelo coordenador.
+
+### O defeito, e de quem é a culpa
+
+**O critério errado foi instrução minha.** A tarefa T040 dizia, com essas palavras: *"recusar o preenchimento retroativo quando o contexto corrente tiver predecessor"*. O worker implementou exatamente isso. É a segunda vez nesta entrega que uma instrução imprecisa do coordenador produz o defeito — a primeira foi *"contar candidatos antes dos filtros"*, no T031, que gerou o bloqueio permanente do R4-3.
+
+O padrão comum às duas não é técnico, é de método: **critério baseado em estado que só cresce**, aplicado a uma decisão que precisa ser reavaliável. "Tem predecessor" nunca deixa de ser verdade; "antes dos filtros" inclui o filtro que deveria discriminar.
+
+---
+
+### Critical Issues
+
+#### R6-1 — A recusa do preenchimento retroativo é permanente, e o `phase-turn` a transforma em beco sem saída
+
+`grill_workspace.py:5917` (guarda), `:3311` (predicado), `:6088` (`phase-turn`)
+
+Três fatos, todos verificados no código:
+
+1. **`predecessor_context_id` nunca é limpo.** Toda sucessão o grava no contexto novo, e `validate_transition:1513` **exige** que ele aponte para o contexto anterior. Logo `_continuity_resumed_context` é monotônico: uma vez verdadeiro, verdadeiro para sempre;
+2. **`phase-turn` zera `development["execution_branch"]` de propósito**, com comentário explicando que é para a fase seguinte vincular a própria branch;
+3. **só dois pontos escrevem o campo**: o preenchimento retroativo (`:5992`) e o `phase-turn` que o anula. Não existe verbo de re-vínculo.
+
+Sequência, reproduzida por execução:
+
+```
+init 0
+cp1 0 master
+cp-again (contexto retomado, branch já vinculada) 0
+cp-after-phase-turn (contexto retomado) 2 EXECUTION-BRANCH-UNSET
+```
+
+Depois de **qualquer** tomada ou retomada, o primeiro `phase-turn` bloqueia o work item permanentemente. E há um segundo caminho para o mesmo fim: tomada antes do primeiro passo confirmado — cenário que o próprio código declara suportado — deixa o campo sem existir nunca, e o primeiro checkpoint já nasce bloqueado.
+
+**Assimetria agravante**: `phase_turn_command` tem o ramo de preenchimento **idêntico e sem a guarda**, então ele mesmo pode cunhar a vinculação a partir de um contexto retomado — e em seguida a zera.
+
+**Correção**: trocar "tem predecessor" por **evidência**. Recusar somente quando houver carimbo contraditório:
+
+```
+carimbo = identidade de worktree do contexto corrente → branch
+se carimbo existe e difere da branch viva → recusar
+```
+
+A tomada e a retomada derivam esse carimbo ao vivo e validam a identidade estrutural no ato, então ele é prova de qual branch a árvore tinha na sucessão. Carimbo ausente significa nenhuma reivindicação anterior a contradizer, e portanto carimbar pela primeira vez é correto. É a mesma doutrina que T023 e T035 já adotaram duas vezes neste arquivo, e que eu não apliquei ao redigir T040.
+
+---
+
+### Important Issues
+
+#### R6-2 — A guarda só existe na retomada; a preparação de troca solta o líder antes de qualquer checagem de branch
+
+`grill_workspace.py:3585`, contra `:3669` e `:3767`
+
+A tomada está coberta a jusante: com carimbo selado e branch viva divergente, ela passa — a tupla estrutural ignora `branch` de propósito — mas o checkpoint seguinte recusa por divergência. Nenhuma escrita de fluxo escapa.
+
+A **preparação de troca**, não: ela passa, cria a operação e o ponto de retomada, e **libera o líder**. A divergência só aparece na retomada, com o contexto já solto. É recuperável, mas o operador descobre tarde e no comando errado.
+
+**Correção**: extrair a comparação para um helper e chamá-lo também na preparação de troca e na tomada, logo depois de derivar a identidade. Duas linhas em cada, e a falha passa a ser nomeada antes de mutar.
+
+#### R6-3 — A metade que recusa não demonstra o defeito que a própria docstring afirma
+
+`tests/validate_agent_orchestration_contract.py:1370` e `:1424-1429`
+
+A docstring afirma que remover a comparação faz a metade divergente retornar prévia com saída zero. **Falso, medido**: removendo a guarda, o resultado é `GAUNTLET-NOT-ACTIVATED` com saída 2, porque o subcaso segue adiante **antes** de instalar os mocks de fronteira que só a outra metade instala.
+
+Ou seja: o caso discrimina apenas pela **string do código**. A asserção de saída e a barreira de escrita passam idênticas com e sem a guarda. Ele nunca prova que, sem ela, uma retomada divergente **prossegue**.
+
+Não é teste falso — reprova de verdade na reversão. É mais fraco do que anuncia.
+
+**Correção, provada pelo revisor**: instalar os mesmos mocks de fronteira nas duas metades. Com eles, a reversão degrada para prévia com saída zero, que é literalmente o que a docstring promete. A guarda passa a separar "recusa" de "retoma numa branch alheia", em vez de decidir qual nome de código aparece primeiro.
+
+---
+
+### Minor Issues
+
+| # | Local | Achado |
+|---|---|---|
+| p1 | `grill_workspace.py:3581` | `(state.get("development") or {})` só cobre valor falsy; a leitura de estado valida o topo, não o campo. Um `development` não-dicionário e não vazio produz traceback em vez de código nomeado. O comando de checkpoint protege isso; a retomada não |
+| p2 | `grill_workspace.py:3311` | O predicado novo lê o store; store presente e **inválido** levanta erro de store, não recusa nomeada, e não é capturado ali. Envolver e tratar como indeterminado |
+| p3 | `tests/...:1254-1259` e `:1712-1717` | A rede de limpeza de encerramento é decorativa: os blocos não estão em subcaso, então qualquer falha aborta o método e o diretório temporário é descartado. Inofensivo, mas o comentário promete proteção que quem entrega é a restauração explícita |
+| p4 | mesmos blocos | A restauração duplicada caberia num gerenciador de contexto único, com restauração tolerante no caminho de exceção e estrita no de sucesso. Forma, não defeito |
+| p5 | `tests/...` | O predicado de contexto retomado não tem caso para store **ausente**; o teste cobre item ausente. Uma linha, risco baixo |
+
+---
+
+### Test Quality
+
+**Sólida no essencial**, e verificada por execução, não por leitura:
+
+- as **quatro reversões foram reproduzidas uma a uma** em cópia de scratchpad, cada uma reprovando o caso correspondente;
+- a reversão da indentação é a mais valiosa: indentada produz **dois** fracassos, desindentada produz **um** e o subcaso de aplicação não roda. Prova direta de que a correção mudou o alcance do teste;
+- a guarda de branch está coberta **nos quatro cantos**, incluindo um lado que ninguém pediu — carimbo ausente continuar permissivo —, coberto por testes **já existentes**. Provado por mutação: apertar a guarda para tratar ausência como divergência reprova três casos existentes. A guarda não pode ser apertada demais sem que a suíte reclame;
+- o invariante novo tem os dois lados, e o lado limpo é **real, não vazio**: a fixture exercita de fato o caminho "mesmo contexto", sem escapar pelo atalho de atividade nula;
+- **nada foi afrouxado**. As 54 remoções são reindentação; as únicas linhas genuinamente removidas são o andaime do bloco protegido e as duas restaurações tolerantes que migraram para a rede.
+
+### Sobre o desvio do worker, que eu pedi para ser avaliado
+
+**A solução dele está correta, e a minha instrução estava errada.** Verificado nos dois sentidos:
+
+- aplicando a instrução ao pé da letra — só limpeza de encerramento —, **dois casos reprovam**, porque os casos seguintes de cada método precisam da branch de volta na hora, não no teardown. O relato dele confere exatamente;
+- a verificação estrita **não** reintroduz o mascaramento que o R5 apontou. Mascaramento exige restauração rodando com exceção em voo, que é o caminho do bloco protegido. Aqui a linha fica **depois de todas as asserções**: se alguma falha, ela nunca é alcançada. O caminho de exceção segue atendido pela rede, essa sim tolerante.
+
+E há ganho, não neutralidade: o bloco original restaurava de forma tolerante, então um checkout que falhasse falhava **em silêncio** — exatamente o defeito do R5-2. A verificação estrita no caminho feliz é o que fecha isso.
+
+### Runtime Correctness
+
+Fora dos achados, duas frentes **explicitamente limpas**, com fundamentação que vai além de "não encontrei":
+
+- **o invariante novo não pode recusar documento histórico**, porque a forma proibida era **inconstruível**: o único produtor que grava atividade em recurso fixa a origem na mesma expressão, nada reescreve esses campos depois, e a sucessão copia os recursos verbatim. Migração desnecessária porque nunca houve o que migrar;
+- **o invariante já incide na escrita também** — o `transact` chama a validação sobre o candidato, então leitura e escrita compartilham a fronteira. Nada a acrescentar.
+
+Fail-closed íntegro: as guardas recusam apenas divergência positiva, e ausência não autoriza nada, com a ressalva de p1. O caminho de sucesso estreitou demais em exatamente um ponto, que é o R6-1.
+
+---
+
+### Constitution References
+
+Nenhum conflito constitucional descoberto. O R6-1 é defeito de disponibilidade: o caminho falho **recusa**, nunca autoriza indevidamente.
+
+---
+
+### Final Recommendation
+
+**REQUEST CHANGES.**
+
+Obrigatório antes do ship:
+
+1. **R6-1** — trocar o critério de "tem predecessor" por evidência de carimbo contraditório, e alinhar o ramo de preenchimento do `phase-turn`, que hoje não tem guarda alguma;
+2. **R6-2** — chamar a comparação de branch também na preparação de troca e na tomada, para a falha ser nomeada antes de o líder ser solto;
+3. **R6-3** — instalar os mocks de fronteira nas duas metades, para o caso provar o que a docstring afirma.
+
+Recomendado junto, por custarem uma linha cada: **p1** e **p2**.
+
+Registráveis como débito: p3, p4, p5, mais o já listado em R1 a R5.
+
+Próximo passo: corrigir, rodar `/speckit.converge`, depois `verify` e `review` de novo.
