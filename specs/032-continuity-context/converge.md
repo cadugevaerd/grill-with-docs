@@ -249,3 +249,58 @@ A 6.0.3 continua sem publicar — `main` em 6.0.2. Sem novo bump.
 ## Próxima ação
 
 Sete tarefas em `## Phase 8: Convergence`. Executar `implement-parallel` e reconvergir.
+
+---
+
+# Rodada 6 — 2026-09-20, após a Phase 8
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T029), constituição · **Desfecho**: `converged`
+
+Phase 8 entregue pelos nós `p08-a`, `p08-b` e `p08-c` da run `run-7b4f4d82ed49a5ead7c15c3e`, integrada até `9c43b96`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 5
+
+Cada um verificado no código integrado. Desta vez a verificação foi feita contra o **comportamento**, não contra a presença do diff — que foi o erro da rodada 4.
+
+| Achado | Situação | Prova |
+|---|---|---|
+| H1 — identidade herdada sem verificar (CRITICAL) | **fechado** | `_continuity_identity` derivado em `grill_workspace.py:3716`; recusa `TAKEOVER-IDENTITY-DIVERGENT` quando diverge do carimbo do predecessor; a identidade derivada, e não a cópia, é gravada no sucessor. O caso sem carimbo prévio não recusa — carimba pela primeira vez, porque recusar tornaria a tomada impossível para sempre, já que não existe verbo de re-carimbo |
+| H2 — `snapshot.revision` no digest | **fechado** | zero ocorrências dentro do comando de tomada; a guarda sob o lock permanece e é a proteção real |
+| H3 — sucesso falso na limpeza | **fechado** | `if selected and candidates and not results` (`:3914`), com os candidatos contados **antes** dos filtros. Zero candidatos segue sendo no-op legítimo; candidatos sem resultado é falha de seleção |
+| H4 e H5 — projeções e recusa de CAS sem teste | **fechado** | casos novos em `validate_agent_orchestration_contract.py`, com quatro reversões verificadas — inclusive a que remove os filtros das compreensões, provando que o filtro é testado e não só a presença da chave |
+| H6 — comentário falso | **fechado** | passou a dizer que a projeção existe só para auditoria e que a reconciliação **não** está implementada |
+| H7 — divergência de tipo na fixture | **fechado** | a fixture passou a emitir o mapa que o produto emite, eliminando a divergência em vez de documentá-la |
+| H8 — import do CLI no contrato do store | **fechado** | o import foi removido; resta apenas a menção no comentário que explica a remoção |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Duas intervenções do coordenador, registradas
+
+**T025 voltou ao worker por ter pegado largo demais.** A primeira versão da guarda usava `selected and not results`, e `selected` é verdadeiro com qualquer `--context-id` — o que passou a recusar o caso legítimo de não haver nada a limpar. Um caso existente quebrou, e isso foi tratado como evidência do erro, não como dano colateral aceitável. Depois do estreitamento por contador de candidatos, aquele caso voltou a passar **sozinho**, sem que ninguém tocasse no arquivo de teste. Essa é a prova de que a guarda ficou no lugar certo.
+
+**T029 não foi executada como escrita, por decisão do worker que eu endosso.** Mover o emissor do ponto de retomada para o núcleo exige editar `grill_workspace.py`, fora do grant daquele nó; obedecer ao pé da letra deixaria duas implementações do mesmo emissor no repositório. O worker optou por remover a dependência do helper privado dentro do que podia tocar, trocou asserções de shape por uma recusa real de cadeia para o caso não virar tautologia, e registrou a pendência. Verifiquei que nenhuma cobertura se perdeu: a fidelidade do emissor day-zero é exercida no nível do CLI, em `validate_agent_orchestration_contract.py`, onde o caso lê o checkpoint que o `prepare-switch` real gravou e confere schema, ausência de predecessor e os dois digests contra suas fontes.
+
+## Débito acumulado desta entrega
+
+Registrado, sem virar tarefa por não violar requisito:
+
+- `observe_predecessor_termination` devolver `dispatch_status` e `liveness`, eliminando o reparse, o canal lateral e o acoplamento ao helper privado `_object`;
+- extrair a leitura de transporte comum e remover o parâmetro `runtime` morto de `_takeover_observation`;
+- mover o emissor do ponto de retomada inicial para o núcleo, recebendo as obrigações já lidas pela fronteira — exige um nó com `grill_workspace.py` e `agent_orchestration.py` no mesmo grant;
+- extrair a projeção de recursos, que é lógica pura e duplicada entre a tomada e a retomada;
+- reconciliação de recursos presos em contexto encerrado, que a spec nunca declarou e que precisa de especificação própria;
+- o tamanho do comando de tomada, hoje acima do limiar prático e abaixo do teto.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, 1488 testes, 0 falhas, 2 skips condicionados a macOS.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais verificadas: 11 — sem violação; 6.0.3 segue sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R3.
