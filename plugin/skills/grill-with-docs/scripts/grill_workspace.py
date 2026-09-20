@@ -3852,7 +3852,10 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
         if activity_id is not None and (activity_id not in item["activities"]
                 or item["activities"][activity_id]["context_id"] != context_id):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", "activity is not owned by the selected context")
-    results = []
+    # T025: candidates counted *before* the filters below, so the guard at the
+    # end can tell "there was nothing to do" from "there was something and the
+    # selection never reached it". Zero candidates is a legitimate no-op.
+    results, candidates = [], 0
     if activity_id is None:
         if args.run_id is not None:
             run_ids = [args.run_id]
@@ -3868,6 +3871,7 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, exc.message) from exc
             for run_id, run in targets.items():
                 worker_ids = [args.worker_id] if args.worker_id else sorted(run["workers"])
+                candidates += len(worker_ids)
                 for worker_id in worker_ids:
                     try:
                         result = runs.cleanup_worker(root, args.work_id, run_id, worker_id, admission)
@@ -3881,6 +3885,7 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
                         results.append({"run_id": run_id, "worker_id": worker_id, "verdict": "PRESERVED", "code": code})
     if item is not None and args.run_id is None:
         for resource_id, resource in item["resources"].items():
+            candidates += 1
             if (resource["origin_context_id"] != context_id or resource["activity_id"] is None
                     or activity_id is not None and resource["activity_id"] != activity_id):
                 continue
@@ -3892,20 +3897,23 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
                             "code": None if closed else "SESSION-CLOSE-UNPROVEN"})
         if activity_id is not None and not results:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", "activity has no registered resource")
-    # T025: a selector that matched nothing is a selection failure, not a
-    # clean sweep. With results == [] both any() below are false and the
-    # verdict fell through to CLEANED/exit 0, telling the caller that
-    # resources still open in the store had been closed -- visible after a
-    # takeover, where the successor's cleanup matches no resource of the
-    # predecessor because the filter above compares origin_context_id with
-    # the *current* context. The activity branch already refused this way;
-    # the context and run branches get the same code and state. The
-    # unselected single-worker path is untouched: it returns inside the loop
-    # above with cleanup_worker's own verdict, so a legitimate cleanup that
-    # finds nothing left to do never reaches here.
-    if selected and not results:
+    # T025: candidates existed and the selection reached none of them. With
+    # results == [] both any() below are false and the verdict fell through
+    # to CLEANED/exit 0, telling the caller that resources still open in the
+    # store had been closed -- visible after a takeover, where the filter
+    # above compares origin_context_id with the *current* context, so every
+    # resource pinned by the superseded predecessor is skipped. The activity
+    # branch already refused this way; the context and run branches get the
+    # same code and state.
+    #
+    # `candidates` is what keeps this narrow. Cleaning a context that owns no
+    # resource and no run is a legitimate no-op, not a selection failure, so
+    # zero candidates still reaches the verdict below. The unselected
+    # single-worker path never gets here at all: it returns inside the loop
+    # above with cleanup_worker's own verdict.
+    if selected and candidates and not results:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT",
-                         "cleanup selector matched no run, worker or resource")
+                         "cleanup selection reached none of the registered runs or resources")
     verdict = ("UNKNOWN" if any(result["verdict"] == "UNKNOWN" for result in results) else
                "PRESERVED" if any(result["verdict"] not in {"CLEANED", "REUSED"} for result in results) else "CLEANED")
     return {"verdict": verdict, "work_id": args.work_id, "context_id": context_id,
