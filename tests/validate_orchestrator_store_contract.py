@@ -42,11 +42,24 @@ def ORCHESTRATION_CHECKPOINT(checkpoint_id='checkpoint-1', previous=None, revisi
  return checkpoint
 # T008: v2 checkpoint -- same shape as v1, only workflow_sha256/constitution_sha256
 # renamed to context_inputs_sha256/origin_metadata_sha256 (continuity-checkpoint-v2.md).
+# T020: development_sequence is a LIST here, as every v2 emitter produces
+# (grill_workspace._initial_continuity_checkpoint / checkpoint_command).
 def ORCHESTRATION_CHECKPOINT_V2(checkpoint_id='checkpoint-1', previous=None, revision=0):
- checkpoint={'schema':'grill-continuity-checkpoint/v2','checkpoint_id':checkpoint_id,'context_id':'ctx-1','previous_checkpoint_id':previous,'worktree_identity':{},'created_at':CLOCK(),'store_revision':revision,'journal_anchor':{},'state_sha256':'7'*64,'inputs_manifest':{},'context_inputs_sha256':'8'*64,'origin_metadata_sha256':'9'*64,'policy_sha256':'a'*64,'activation':None,'campaign':None,'development_sequence':{},'current_step':None,'step_states':{},'accepted_outputs':{},'accepted_executions':{},'pending_attempts':{},'scheduler_runs':{},'operations':{},'cleanup_obligations':{},'preserved_resources':{},'blocking_activity':None,'visual_state':{},'presentation':None,'checkpoint_sha256':''}
+ checkpoint={'schema':'grill-continuity-checkpoint/v2','checkpoint_id':checkpoint_id,'context_id':'ctx-1','previous_checkpoint_id':previous,'worktree_identity':{},'created_at':CLOCK(),'store_revision':revision,'journal_anchor':{},'state_sha256':'7'*64,'inputs_manifest':{},'context_inputs_sha256':'8'*64,'origin_metadata_sha256':'9'*64,'policy_sha256':'a'*64,'activation':None,'campaign':None,'development_sequence':[],'current_step':None,'step_states':{},'accepted_outputs':{},'accepted_executions':{},'pending_attempts':{},'scheduler_runs':{},'operations':{},'cleanup_obligations':{},'preserved_resources':{},'blocking_activity':None,'visual_state':{},'presentation':None,'checkpoint_sha256':''}
  checkpoint['checkpoint_sha256']=store.jcs_sha256({key:value for key,value in checkpoint.items() if key!='checkpoint_sha256'})
  return checkpoint
-# T008: mirrors gauntlet_context_takeover_command's mutate() (grill_workspace.py) --
+# T008/T020: a HAND-BUILT approximation of gauntlet_context_takeover_command's
+# mutate() (grill_workspace.py). It is NOT the product and is NOT kept in sync
+# with it: the real mutate() also copies worktree_identity to the successor,
+# always puts checkpoint_id in expected_before, puts to_runtime in
+# intended_after, applies four preflight guards the fixture has none of, and
+# since f628c20 also runs a review guard, observes the incoming session on the
+# successor's leader and returns preserved_resources/operations_to_reconcile.
+# Every case below that calls it therefore proves only one thing: that
+# agent_orchestration.validate_block ACCEPTS this document shape. None of them
+# would fail if mutate() were reverted. The CLI's own behaviour is covered in
+# tests/validate_agent_orchestration_contract.py (T007).
+# Shape being approximated:
 # the previous context is SUPERSEDED, its leader advances one step toward RELEASED,
 # and a successor is born at the next epoch carrying a deep copy of activation/
 # campaign/scheduler_runs. The succession facts (reason/evidence/taken_at) live in
@@ -490,11 +503,13 @@ class StoreContract(unittest.TestCase):
   digest=ORCHESTRATION_CHECKPOINT('checkpoint-3','checkpoint-2'); digest['checkpoint_sha256']='0'*64
   with self.assertRaises(store.StoreError): store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['checkpoints'].update({'checkpoint-3':digest}),document)[1],now=CLOCK)
 
- # T008: state cases for a context takeover (spec 032, US1/US3/US5). CONTEXT_TAKEOVER
- # mirrors gauntlet_context_takeover_command's mutate(); these tests exercise the
- # store's own acceptance of that document shape, not the CLI's dispatch-observation
- # gate (that lives in tests/validate_agent_orchestration_contract.py, T007).
- def test_context_takeover_ends_predecessor_and_opens_next_epoch_preserving_item_state(self):
+ # T008/T020: format-acceptance cases for a context takeover (spec 032,
+ # US1/US3/US5). They feed the store the HAND-BUILT CONTEXT_TAKEOVER document
+ # (see its header) and assert validate_block accepts it. They are named for
+ # what they prove -- store acceptance -- and not for takeover behaviour, which
+ # none of them would catch a regression in: the product's mutate() never runs
+ # here. CLI behaviour lives in tests/validate_agent_orchestration_contract.py.
+ def test_store_accepts_hand_built_takeover_document_and_leaves_item_state_untouched(self):
   self.register(); campaign={'project_id':'sha256:'+'1'*64,'run_id':'first','runtime':'codex','adapter':'orca','registry_sha256':'sha256:'+'2'*64,'recovery_generation_id':'rg-'+'3'*64,'plan_revision':1}
   context=ORCHESTRATION_CONTEXT(); context['campaign']=campaign
   store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':context})},now=CLOCK)
@@ -518,7 +533,7 @@ class StoreContract(unittest.TestCase):
   for key in ('scope_files','scope_revision','scope_history','checkpoints','checkpoint_head','policy_ref','policy_sha256','origin','activities','resources','visual_decisions'):
    self.assertEqual(item[key],before[key])
 
- def test_context_takeover_operation_records_origin_reason_evidence_and_instant(self):
+ def test_store_accepts_hand_built_continuity_switch_operation_record(self):
   self.register()
   store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
   applied=store.transact(self.r,lambda document: CONTEXT_TAKEOVER(document,taken_at='2026-03-04T05:06:07Z'),now=CLOCK)
@@ -530,41 +545,56 @@ class StoreContract(unittest.TestCase):
   self.assertEqual(after['evidence'],{'observation_ref':'receipts/dispatch-observation','observation_sha256':'c'*64,'dispatch_status':'completed','liveness':'exited'})
   self.assertEqual(operation['state'],'CONFIRMED'); self.assertIsInstance(operation['observation_ref'],str); self.assertIsInstance(operation['result_sha256'],str)
 
- def test_concurrent_context_takeovers_on_the_same_revision_have_one_winner(self):
+ # T020: was named "concurrent takeovers on the same revision have one winner"
+ # and ran two threads behind a Barrier. It never tested concurrency:
+ # store.transact serialises every mutate() under orchestrator_lock, so the
+ # second thread only entered the lock after the first had already committed,
+ # and the STATE_DIVERGENCE it got came from CONTEXT_TAKEOVER's own guard --
+ # not from the store's CAS and not from the product. The real race is the
+ # CLI's TAKEOVER-CAS-CONFLICT, which needs a CLI harness this file does not
+ # have. Renamed and run sequentially: refusing a second takeover over a source
+ # already superseded is exactly, and only, what the case proves.
+ def test_takeover_over_an_already_superseded_source_is_refused(self):
   self.register()
   store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
-  barrier=threading.Barrier(2)
-  def contend(to_context,to_session_ref,operation_id):
-   def mutate(document): return CONTEXT_TAKEOVER(document,to_context=to_context,to_session_ref=to_session_ref,operation_id=operation_id)
-   barrier.wait(timeout=2)
-   try: return store.transact(self.r,mutate,now=CLOCK)
-   except store.StoreError as exc: return exc
-  with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-   results=[future.result(timeout=5) for future in (pool.submit(contend,'ctx-2','session-2','takeover-a'),pool.submit(contend,'ctx-3','session-3','takeover-b'))]
-  winners=[result for result in results if isinstance(result,store.Snapshot)]
-  losers=[result for result in results if isinstance(result,store.StoreError)]
-  self.assertEqual(len(winners),1); self.assertEqual(len(losers),1); self.assertEqual(losers[0].code,store.STATE_DIVERGENCE)
+  store.transact(self.r,lambda document: CONTEXT_TAKEOVER(document,to_context='ctx-2',to_session_ref='session-2',operation_id='takeover-a'),now=CLOCK)
+  with self.assertRaises(store.StoreError) as caught:
+   store.transact(self.r,lambda document: CONTEXT_TAKEOVER(document,to_context='ctx-3',to_session_ref='session-3',operation_id='takeover-b'),now=CLOCK)
+  self.assertEqual(caught.exception.code,store.STATE_DIVERGENCE)
   item=store.read_snapshot(self.r).document['agent_orchestration']['work_items']['orchestration-work']
   self.assertEqual(item['contexts']['ctx-1']['state'],'SUPERSEDED')
-  winner_context=item['current_context_id']
-  self.assertIn(winner_context,('ctx-2','ctx-3'))
-  self.assertNotIn('ctx-3' if winner_context=='ctx-2' else 'ctx-2',item['contexts'])
+  self.assertEqual(item['current_context_id'],'ctx-2')
+  self.assertNotIn('ctx-3',item['contexts'])
 
  def test_checkpoint_synthesized_right_after_creation_is_a_resumable_point(self):
   self.register()
   store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
-  # Nothing confirmed yet: development_sequence/current_step/step_states/accepted_*
-  # are all empty, exactly the state gauntlet-prepare-switch sees right after
-  # gauntlet-init, before synthesising the very first checkpoint (T005).
-  initial=ORCHESTRATION_CHECKPOINT('cp-init',None,revision=1)
-  self.assertEqual((initial['development_sequence'],initial['current_step'],initial['accepted_outputs'],initial['accepted_executions']),({},None,{},{}))
+  # T020: the day-zero checkpoint now comes from the PRODUCT. The previous
+  # version hand-built a v1 checkpoint (with development_sequence as a dict)
+  # that no emitter has produced since T015, then asserted back the literals it
+  # had just written -- a tautology that passed with the product reverted.
+  # grill_workspace._initial_continuity_checkpoint is what gauntlet-prepare-switch
+  # calls right after gauntlet-init (T005); it is imported here, in the only case
+  # that needs it, and needs nothing beyond the store this test already set up.
+  import grill_workspace
+  from grill_core import agent_orchestration
+  snapshot=store.read_snapshot(self.r)
+  work_item=snapshot.document['agent_orchestration']['work_items']['orchestration-work']
+  initial=grill_workspace._initial_continuity_checkpoint(
+   self.r,'orchestration-work',work_item,work_item['contexts']['ctx-1'],'ctx-1','cp-init',
+   {},{},b'{}',snapshot.revision,{})
+  # Nothing confirmed yet, so the emitter projects an empty development state --
+  # and it emits v2, with a *list* sequence.
+  self.assertEqual(initial['schema'],agent_orchestration.CHECKPOINT_SCHEMA_V2)
+  self.assertEqual((initial['development_sequence'],initial['current_step'],initial['accepted_outputs'],initial['accepted_executions']),([],None,{},{}))
+  self.assertIsNone(initial['previous_checkpoint_id'])
   def prepare(document):
    item=document['agent_orchestration']['work_items']['orchestration-work']; item['checkpoints']['cp-init']=initial; item['checkpoint_head']='cp-init'; return document
   prepared=store.transact(self.r,prepare,now=CLOCK)
   self.assertEqual(prepared.document['agent_orchestration']['work_items']['orchestration-work']['checkpoint_head'],'cp-init')
   # Resume from it: a later checkpoint chains onto cp-init and the store accepts
   # advancing the head, proving the day-zero point is a real resumable anchor.
-  resumed_checkpoint=ORCHESTRATION_CHECKPOINT('cp-resumed','cp-init',revision=prepared.revision)
+  resumed_checkpoint=ORCHESTRATION_CHECKPOINT_V2('cp-resumed','cp-init',revision=prepared.revision)
   def resume(document):
    item=document['agent_orchestration']['work_items']['orchestration-work']; item['checkpoints']['cp-resumed']=resumed_checkpoint; item['checkpoint_head']='cp-resumed'; return document
   resumed=store.transact(self.r,resume,now=CLOCK)

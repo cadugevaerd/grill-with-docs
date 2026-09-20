@@ -25,10 +25,12 @@ except ImportError:
 SCHEMA = "grill-agent-orchestration/v1"
 EVENT_SCHEMA = "grill-orchestration-event/v1"
 CHECKPOINT_SCHEMA = "grill-continuity-checkpoint/v1"
-# v2 renames two v1 fields; emission still uses CHECKPOINT_SCHEMA (v1) because
-# validate_checkpoint_contract.py fixes that constant literally against v1
-# field names. Validation below accepts both, keyed off the document's own
-# "schema" value. See specs/032-continuity-context/contracts/continuity-checkpoint-v2.md.
+# v2 renames two v1 fields (workflow_sha256 -> context_inputs_sha256,
+# constitution_sha256 -> origin_metadata_sha256). Since T015 every emitter uses
+# CHECKPOINT_SCHEMA_V2; CHECKPOINT_SCHEMA (v1) is kept for READING checkpoints
+# already materialised on disk and is never emitted. Validation below accepts
+# both, keyed off the document's own "schema" value.
+# See specs/032-continuity-context/contracts/continuity-checkpoint-v2.md.
 CHECKPOINT_SCHEMA_V2 = "grill-continuity-checkpoint/v2"
 CHECKPOINT_REQUEST_SCHEMA = "grill-checkpoint-request/v1"
 CHECKPOINT_CONTENT_SCHEMA = "grill-checkpoint-content/v1"
