@@ -514,3 +514,173 @@ Obrigatório antes do ship:
 Registráveis como débito: m1 a m5, mais os itens já listados em R1 e R2.
 
 Próximo passo: corrigir, rodar `/speckit.converge`, depois `verify` e `review` de novo.
+
+---
+
+## Review Report — R4
+
+**Verdict: REQUEST CHANGES**
+
+Source fingerprint: tree `0273d47dec3e312f96965eb4c0c68c30db4c1321bc9dc02aa8d05671fce4d7bc` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `429ec68db32c0072f5cba1b12d36067ee102b4dcbb84d66b5fc046df60564c37`
+
+Casa com `converge.md` (rodada 8) e `verify.md` (R4). Converge `CONVERGED`, Verify `PASS`.
+
+Duas dimensões revisadas, correção de runtime e qualidade de cobertura, ambas com mandato de caçar defeito **novo**. Os dois Critical foram reverificados pelo coordenador. O revisor de cobertura rodou todos os experimentos em cópia de scratchpad, sem tocar o repositório.
+
+### O padrão, agora inequívoco
+
+Quatro rodadas, quatro `REQUEST CHANGES`, e a mesma forma em todas: **a correção fecha o caso que examinou e abre o vizinho**.
+
+| Rodada | O que a correção anterior fez |
+|---|---|
+| R1 | O verbo entregava contexto inutilizável |
+| R2 | A correção fez a tomada *parecer* com o resume sem herdar as garantias dele |
+| R3 | As guardas novas fechavam demais, criando bloqueio permanente |
+| R4 | A reabertura fechou o ramo por contexto e deixou o ramo por atividade quebrado |
+
+A raiz é comum aos dois Critical desta rodada: **`gauntlet_context_takeover_command` e `gauntlet_cleanup_command` vêm sendo corrigidos isoladamente, sem tratar os irmãos que compartilham a mesma lógica**. O predicado mudou na tomada mas não no `prepare-switch` nem no `continuity-resume`; o filtro mudou no ramo de contexto mas não no de atividade.
+
+---
+
+### Critical Issues
+
+#### R4-1 — O filtro de contexto rebaixa também o ramo por atividade
+
+`grill_workspace.py:3903-3918`, com o filtro de seletor em `:3920`
+
+O `retained.append` acontece **antes** de qualquer discriminação por seletor. O filtro de `activity_id` só aparece duas linhas depois. Verificado no código.
+
+Cenário: depois da tomada, o sucessor aceita um especialista e chama `gauntlet-cleanup --context-id <sucessor> --epoch N --activity-id A`. Todos os recursos de `A` fecham corretamente. Existe um recurso `session` aberto do predecessor. Hoje: `retained` não-vazio rebaixa o veredito para `PRESERVED`, exit 2. Antes da Phase 9: exit 0.
+
+E é **permanente**, porque T026 declara que reconciliar recurso do predecessor não é implementado. O ramo por atividade vira bloqueio eterno depois de qualquer tomada.
+
+Nenhum teste cobre a combinação: o caso novo exercita só o ramo por contexto, e o caso pré-existente exercita `--activity-id` sem recurso alheio.
+
+**Correção**: escopar a coleta de `retained` ao seletor — só coletar quando não houver atividade selecionada, ou exigir que o recurso pertença à atividade pedida.
+
+#### R4-2 — A guarda de identidade da tomada não tem cobertura de nenhum lado
+
+`grill_workspace.py:3730-3732`
+
+`grep -rn "TAKEOVER-IDENTITY-DIVERGENT" tests/` devolve **zero ocorrências**; confirmado pelo coordenador. O revisor apagou o `raise` inteiro numa cópia — guarda deletada, não relaxada — e a suíte fechou 37/37 verde.
+
+A distinção que importa: o caso `work-restamp` cobre o lado da **aceitação**. As quatro reversões relatadas provam que a guarda não pode ser **alargada de volta**; não provam que ela **existe**. Com o `raise` removido, uma tomada com `project_id`, `real_path` ou `git_common_dir` divergentes é aceita e carimba o sucessor com identidade de outra árvore, sem nada reprovar.
+
+É o mesmo padrão que a própria Phase 9 nomeia no docstring do caso de limpeza — "os dois lados importam" — aplicado ali e esquecido aqui, justamente na guarda que T030 editou.
+
+**Correção**: um caso irmão do `work-restamp`, no mesmo método, movendo um campo **estrutural** em vez de fase e branch. O mais barato é reescrever `real_path` no carimbo do contexto selado, direto no store, e exigir a recusa mais a verificação de que nada foi escrito.
+
+---
+
+### Important Issues
+
+#### R4-3 — Correção assimétrica: `phase` e `branch` saem do predicado da tomada mas continuam sendo gravados e comparados pelos irmãos
+
+`grill_workspace.py:3730` e `:3821`, contra `:3400` e `:3545`
+
+A gravação está íntegra — a derivada é gravada incondicionalmente, inclusive quando não há carimbo prévio, e o único caminho sem regravação é a repetição idêntica, que é correto.
+
+O que sobra: o sucessor sai da tomada carimbado com a fase daquele instante. Na **primeira virada de etapa** — vida normal do work item — `prepare-switch` compara a identidade inteira e recusa para sempre, porque o `setdefault` só carimba quando ausente e nunca recarimba. O defeito é pré-existente nos irmãos, mas a Phase 9 o tornou o caminho dominante: antes, a tomada recusava antes de chegar lá.
+
+**Correção**: aplicar a mesma tupla estrutural nos dois irmãos, ou tirar fase e branch de `_continuity_identity` e mantê-los como campos informativos fora da identidade comparada.
+
+#### R4-4 — Cinco campos estruturais não distinguem árvore recriada no mesmo caminho
+
+`grill_workspace.py:3730`
+
+`git_common_dir` é **compartilhado** entre worktrees do mesmo repositório, e `project_id` é hash dos root commits, idêntico em clone e em qualquer worktree. Sobra `real_path` como único discriminador, e nenhum dos cinco ancora conteúdo.
+
+Cenário: a sessão morre; alguém faz `git worktree remove` e `git worktree add` no mesmo caminho, a partir de outro commit. Os cinco batem, a tomada aceita, e o sucessor herda campanha, resultados aceitos e ponto de retomada de uma árvore cujo conteúdo não existe mais. Antes, `branch` pegava o caso comum. Clone puro segue coberto, porque `real_path` difere.
+
+**Correção**: acrescentar uma âncora de árvore que não se mova em operação normal — o diretório git **por worktree**, que é distinto por worktree ao contrário do comum. Commit base não serve, porque avança em commit normal.
+
+#### R4-5 — `project_id` ainda vira com stash, e o bloqueio cai onde a tomada existe para curar
+
+`grill_core/store.py:568` com `grill_workspace.py:3730`
+
+`project_identity` deriva os root commits de `git rev-list --max-parents=0 --all`, e `--all` inclui `refs/stash`; `git stash push -u` cria commit sem pai, o `project_id` muda, e a tomada recusa permanentemente.
+
+A ironia é o ponto: **guardar a árvore suja antes de assumir a sessão é o gesto natural do fluxo de recuperação**. Este defeito já está registrado como aprendizado do projeto, em outro contexto; agora ele alcança a tomada.
+
+**Correção**: trocar `--all` por `--branches --tags --remotes`. É mudança de alcance global e re-deriva `project_id` de campanha já selada, então é decisão consciente, não ajuste local.
+
+#### R4-6 — A asserção de estado projetado cobre só um dos dois emissores
+
+`tests/validate_agent_orchestration_contract.py:306-311`, contra `grill_workspace.py:1879`
+
+A asserção nova lê o checkpoint **inicial**. O comando de checkpoint tem um emissor paralelo com a mesma linha, e nenhum teste o observa. Verificado por execução: regredindo **só** esse emissor ao formato de mapa, os três validadores fecham verdes, porque a validação aceita mapa ou lista.
+
+É o mesmo buraco do R3-5, num emissor que a Phase 9 não olhou.
+
+**Correção**: replicar as quatro asserções sobre o checkpoint emitido pelo verbo de checkpoint, contra o estado vivo.
+
+#### R4-7 — `work-restamp` move a árvore fora do `try`
+
+`tests/validate_agent_orchestration_contract.py:1358-1362`
+
+O `git checkout -b` e a reescrita do `state.json` acontecem **antes** do `try`, então o `finally` não os protege. Se a escrita levantar depois do checkout, a branch criada fica ativa no root da fixture pelo resto do método, e os casos seguintes derivam identidade de uma árvore que nenhum deles declarou — falha em cascata com causa não óbvia, ou aprovação por acidente.
+
+**Correção**: abrir o `try` logo depois de capturar a branch original, com o checkout e a escrita dentro dele. Deslocamento de uma linha.
+
+---
+
+### Minor Issues
+
+| # | Local | Achado |
+|---|---|---|
+| n1 | `grill_workspace.py:3947` | `UNKNOWN` é achatado quando vem de `retained`: a precedência só varre `results`, então recurso alheio em estado indeterminado sai rotulado `PRESERVED`. Exit é 2 nos dois casos, sem falso sucesso, mas o topo afirma "preservado" sobre estado que o protocolo trata como diferente |
+| n2 | `references/session-protocol.md:103` | `RESOURCE-RETAINED-ELSEWHERE` e o campo `retained` **não existem no protocolo**. O leader recebe código sem regra, e como o protocolo manda não converter preservação em aprovação, a leitura padrão vira bloqueio. Vocabulário novo precisa entrar na tabela dizendo que não bloqueia a ação do contexto corrente |
+| n3 | `grill_workspace.py:3694` | O bridge da campanha ainda carimba a identidade **selada** do predecessor, que T030 acabou de julgar obsoleta, enquanto o sucessor recebe a derivada. Depois de T030 as duas divergem por construção. Inerte hoje, mas o ledger registra identidade sabidamente falsa; o irmão `prepare-switch` passa a derivada |
+| n4 | `tests/validate_agent_orchestration_contract.py:1387` | O `finally` restaura com `check=True`: se o corpo falhar e a restauração também, o erro do `finally` substitui a asserção que de fato quebrou |
+| n5 | mesmo bloco | O `state.json` não é restaurado. Inócuo hoje; vira vazamento quando alguém acrescentar ao método um caso que itere os work items da fixture |
+| n6 | `grill_workspace.py:3889` | O ramo de run da guarda de candidatos nunca é exercitado: os quatro cenários usam campanha vazia. As reversões reprovaram porque o `raise` é compartilhado, não porque o ramo esteja coberto |
+| n7 | `grill_workspace.py:3913` | Só `CLOSED` é testado; tirar `REMOVED` do conjunto de estados fechados não reprova nada |
+
+---
+
+### Test Quality
+
+**O que ficou bom, e é substancial:**
+
+- a guarda de limpeza tem os **dois lados**, e cada um dos três mutantes testados é pego por um cenário específico. É o oposto do que as três rodadas anteriores acharam;
+- `retained` é comparado por **igualdade exata de lista**, com verificação explícita de que o payload não carrega código de recusa — separando "relatado" de "recusado" sem frouxidão;
+- `work-restamp` **move a árvore viva** em vez de mockar a derivação. É o que faz a reversão do predicado reprovar de verdade; um mock teria dado a mesma cor com muito menos prova;
+- a asserção de estado projetado **lê o estado vivo de volta**, em vez de repetir o literal que o emissor escreveu — a correção certa para o defeito das rodadas anteriores;
+- nenhum caso existente foi afrouxado: o diff é `+128/−0`, sem uma linha removida.
+
+**O que falta** é R4-2, R4-6, R4-7 e os Minor n4 a n7.
+
+### Runtime Correctness
+
+Fora dos achados, verificado e limpo:
+
+- **fail-closed íntegro**: a comparação recusa com campo ausente ou nulo, o schema garante as sete chaves, e a derivação recusa em HEAD destacado antes de qualquer comparação. No comando de limpeza, deixar de recusar sobre recurso alheio é decisão deliberada, e o caminho de sucesso ficou **mais estreito**, não mais largo — saída zero só sai com `CLEANED`;
+- **precedência correta** entre os três vereditos para o que vem de `results`, e `CLEANED` exige `retained` vazio **e** resultados só de sucesso, então não há falso sucesso. A única imprecisão é n1;
+- **nada mudou fora do ramo de contexto** além do Critical: o ramo por run passa incólume e o caminho de worker único não selecionado retorna antes de tocar a contagem;
+- **não há chamador programático** do comando de limpeza no repositório; a CLI é dirigida por skill, e o protocolo manda ler saída 2 com payload como recusa. O dano do Critical é produzir 2 onde antes havia 0.
+
+---
+
+### Constitution References
+
+Nenhum conflito constitucional descoberto. Os dois Critical são defeitos de disponibilidade e de cobertura; o fail-closed constitucional está preservado.
+
+---
+
+### Final Recommendation
+
+**REQUEST CHANGES.**
+
+Obrigatório antes do ship:
+
+1. **R4-1** — escopar `retained` ao seletor, para o ramo por atividade parar de ser rebaixado por recurso alheio;
+2. **R4-2** — cobrir o lado da recusa da guarda de identidade, que hoje não existe em teste algum;
+3. **R4-3** — resolver a assimetria entre a tomada e os irmãos, para o bloqueio não ressurgir na primeira virada de etapa;
+4. **R4-6** — cobrir o segundo emissor do estado projetado;
+5. **R4-7** — mover o `checkout` para dentro do `try`, para o caso não vazar branch na fixture.
+
+**Decisão do humano** recomendada para **R4-4** e **R4-5**: ambos são pré-existentes e de alcance maior que esta entrega — um pede âncora de árvore nova no predicado, o outro muda a derivação global de `project_id`, que re-deriva identidade de campanha já selada. Podem ser registrados como trabalho próprio em vez de entrarem aqui.
+
+Registráveis como débito: n1 a n7, mais o já listado em R1, R2 e R3. **n2 merece atenção**: inventamos vocabulário de protocolo sem ensiná-lo a quem o consome.
+
+Próximo passo: corrigir, rodar `/speckit.converge`, depois `verify` e `review` de novo.
