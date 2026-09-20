@@ -3286,18 +3286,32 @@ def _continuity_identity(root: Path, work_id: str, state: dict[str, Any]) -> dic
     branch = git_optional(root, "branch", "--show-current")
     if not branch:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "detached HEAD")
-    phase = state.get("active_phase") or state.get("development", {}).get("current_step") or "unassigned"
+    # T055: validate `development`'s shape here, unconditionally -- not only
+    # when `active_phase` is falsy. `_continuity_refuse_branch_contradiction`
+    # carries the same DEVELOPMENT-SCHEMA guard, but it runs *after* this
+    # function in all three continuity verbs; leaving it as the only guard
+    # means a present-but-wrong-type `development` only misses `.get()`
+    # (AttributeError, not the named refusal) when `active_phase` happens to
+    # be falsy -- exactly the terminal-milestone shape audit_decisions.py
+    # requires (`active_phase` null).
+    development = state.get("development")
+    if development is not None and not isinstance(development, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", work_id)
+    phase = state.get("active_phase") or (development or {}).get("current_step") or "unassigned"
     return {"project_id": project["project_id"], "work_id": work_id, "phase": str(phase),
             "du": "work-item", "git_common_dir": project["git_common_dir"],
             "real_path": str(root.resolve()), "branch": branch}
 
 
 # T035: the structural tuple, in one place. `phase` and `branch` are stamped
-# for the record but never compared: both move in normal life -- a step turn
+# for the record but stay OUT of it: both move in normal life -- a step turn
 # advances the phase, a branch is switched -- and no verb ever re-stamps, so
-# comparing them means "nothing moved since the stamp was first written",
-# which is not what quiescence proves. Quiescence proves nothing is running
-# *now*; it says nothing about how old the stamp is.
+# comparing the stamped value would mean "nothing moved since the stamp was
+# first written", which is not what quiescence proves. Quiescence proves
+# nothing is running *now*; it says nothing about how old the stamp is.
+# The live branch *is* compared, just not against this stamp: see
+# `_continuity_refuse_branch_contradiction`, which checks it against
+# `development["execution_branch"]`, the work item's own sealed SSOT.
 _CONTINUITY_STRUCTURAL = ("project_id", "work_id", "du", "git_common_dir", "real_path")
 
 
@@ -5949,12 +5963,16 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             # binding on purpose, expecting the next phase's first confirmation
             # to mint a fresh one. Comparing an unrenewed stamp against the
             # live branch is monotonic and refuses forever, permanently, for
-            # every work item that was ever taken over or resumed. The
-            # protection it appeared to give is already produced upstream:
-            # takeover and continuity-resume derive the identity live and
-            # refuse structural divergence before mutating, so by the time
-            # this runs the live branch already is the tree that context ran
-            # on -- the backfill just records it.
+            # every work item that was ever taken over or resumed. The real
+            # guard against a stale binding is `_continuity_refuse_branch_
+            # contradiction`, and it only fires once `execution_branch` is
+            # set -- exactly the case `existing_branch is _MISSING or None`
+            # excludes. There is no upstream proof that the live branch is
+            # the one the context ran on: `branch` was pulled out of the
+            # structural tuple in T035, and two branches inside the same
+            # worktree look identical on project/path/git_common_dir alone.
+            # This just records the current branch as the first binding; it
+            # does not verify one.
             pass
         elif not isinstance(existing_branch, str) or not existing_branch:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
