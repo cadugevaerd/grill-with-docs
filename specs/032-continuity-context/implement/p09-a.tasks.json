@@ -1,0 +1,35 @@
+{
+  "worker": "p09-a",
+  "feature": "032-continuity-context",
+  "completed": ["T030", "T031"],
+  "tasks": {
+    "T030": {
+      "status": "done",
+      "summary": "R3-1/R3-2 (CRITICAL): a guarda de identidade da tomada comparava a identidade INTEIRA (sealed != identity) em gauntlet_context_takeover_command. Dois dos sete campos de _continuity_identity mudam na vida normal de um contexto: `phase`, derivado de state['active_phase'] ou do fallback development.current_step -- ambos avancam a cada passo do ciclo e a cada fase de roadmap fechada --, e `branch`, cuja troca depois da morte da sessao e exatamente o cenario que o comentario de T023 promete curar. Como so uma tomada bem-sucedida reescreve o carimbo e o core nao tem verbo de re-selagem, a divergencia recusava PARA SEMPRE: o deadlock tinha apenas migrado do prepare-switch para a tomada. Correcao: a comparacao passou a cobrir somente os campos estruturais -- project_id, work_id, du, git_common_dir, real_path -- via tupla local `structural` na propria funcao, sem constante publica nova. `phase` e `branch` saem do predicado e passam a ser RE-CARIMBADOS, porque a identidade derivada ja era a gravada no contexto sucessor (new_context['worktree_identity'] = identity, :3808). A mensagem da recusa deixou de citar 'branch'. O comentario de T023 foi estendido com um paragrafo T030 que descreve o que o codigo faz agora e por que resume e prepare-switch continuam comparando a identidade inteira (janela quiescente por construcao).",
+      "not_touched": ["continuity_resume_command", "gauntlet_prepare_switch_command", "_continuity_identity"],
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]
+    },
+    "T031": {
+      "status": "done",
+      "summary": "R3-3: em gauntlet_cleanup_command, `candidates += 1` estava ANTES de todos os filtros, inclusive o de origin_context_id, entao recursos de OUTROS contextos entravam na contagem. Cenario real do commit anterior: apos a tomada, o predecessor fica SUPERSEDED com recurso aberto, T026 declara que reconcilia-lo nao e implementado, e o sucessor -- que nao possui recurso algum -- contava 1 candidato, produzia zero resultados e caia na guarda T025 (RESOURCE-IDENTITY-DIVERGENT), para sempre. O buraco original era de RELATO, nao de autorizacao: o defeito era o veredito sair CLEANED/exit 0 com recurso ainda preso no store. Correcao em duas partes: (1) o filtro de contexto foi separado e passou a vir ANTES de `candidates += 1`, de modo que so e candidato o que a selecao deveria alcancar; (2) recurso de outro contexto cujo state nao esta em {CLOSED, REMOVED} e RELATADO na lista nova `retained` (resource_id, kind, state, origin_context_id, code='RESOURCE-RETAINED-ELSEWHERE'), exposta no campo `retained` da resposta, e `retained` nao-vazio derruba o veredito de CLEANED para PRESERVED (logo EXIT_BLOCKED). UNKNOWN continua tendo precedencia. Assim o chamador nunca le sucesso sobre recurso preso, sem perder a limpeza do proprio contexto. Os comentarios T025 (posicao do contador e motivacao da guarda) foram atualizados para nao mentirem sobre o novo fluxo.",
+      "fields_chosen": {
+        "retained": "lista de recursos retidos em outro contexto; vazia no caso normal",
+        "code": "RESOURCE-RETAINED-ELSEWHERE",
+        "verdict": "PRESERVED (mesmo vocabulario ja usado para worker/recurso nao limpo), EXIT_BLOCKED"
+      },
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]
+    }
+  },
+  "verification": {
+    "commands": [
+      {"command": "python3 tests/validate_agent_orchestration_contract.py", "result": "Ran 36 tests -- OK"},
+      {"command": "python3 tests/validate_orchestrator_store_contract.py", "result": "Ran 136 tests -- OK"}
+    ],
+    "broken_cases": [],
+    "notes": "Nenhum caso existente quebrou; nenhum teste foi afrouxado (arquivos de teste estao fora do grant). Cobertura NOVA -- tomada com phase/branch divergentes aceita e re-carimbada; cleanup de sucessor com recurso retido no predecessor devolvendo PRESERVED com `retained` preenchido -- NAO existe: fica para T032/T033. Nao rodei tests/run_validators.py, conforme o brief."
+  },
+  "files_touched": [
+    "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+    "specs/032-continuity-context/implement/p09-a.tasks.json"
+  ]
+}

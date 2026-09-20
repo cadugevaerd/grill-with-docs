@@ -3707,6 +3707,18 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     # the derived value below. Computed before `expected` so preview and
     # apply reach the same verdict.
     #
+    # T030: the divergence guard compares only the *structural* fields. The
+    # other two move during the normal life of a context: `phase` advances
+    # with every cycle step (and with the `development.current_step` fallback
+    # that most work items land on), and `branch` is exactly what the
+    # paragraph above says a dead session's tree is free to change. Comparing
+    # them made the takeover refuse the very scenario it exists to cure, and
+    # refuse it forever, since only a successful takeover rewrites the stamp
+    # and the core has no re-stamp verb. Both are re-stamped from the derived
+    # identity below instead of being asserted here. The resume sibling and
+    # `prepare-switch` still compare the whole identity, which is correct for
+    # them: their window is quiescent by construction, so nothing may move.
+    #
     # When the source carries no stamp at all -- the field is optional in the
     # context schema -- there is no prior claim to contradict, so the derived
     # identity is stamped for the first time instead of refusing a takeover
@@ -3715,9 +3727,10 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1]
     identity = _continuity_identity(root, args.work_id, state)
     sealed = context.get("worktree_identity")
-    if sealed is not None and sealed != identity:
+    structural = ("project_id", "work_id", "du", "git_common_dir", "real_path")
+    if sealed is not None and any(sealed.get(field) != identity[field] for field in structural):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-IDENTITY-DIVERGENT",
-                         "project/worktree/branch changed since the predecessor stamped its identity")
+                         "project or worktree changed since the predecessor stamped its identity")
     # T018: digest the decision, not the coordinator's raw answer.
     # observation["digest"] hashes the live worker-show bytes, and preview and
     # apply are separate CLI invocations: any volatile field there made apply
@@ -3852,10 +3865,12 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
         if activity_id is not None and (activity_id not in item["activities"]
                 or item["activities"][activity_id]["context_id"] != context_id):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", "activity is not owned by the selected context")
-    # T025: candidates counted *before* the filters below, so the guard at the
-    # end can tell "there was nothing to do" from "there was something and the
-    # selection never reached it". Zero candidates is a legitimate no-op.
-    results, candidates = [], 0
+    # T025: candidates counted before the *activity* filters below, so the
+    # guard at the end can tell "there was nothing to do" from "there was
+    # something and the selection never reached it". Zero candidates is a
+    # legitimate no-op. T031: resources owned by another context are not
+    # counted here at all -- see the filter below.
+    results, retained, candidates = [], [], 0
     if activity_id is None:
         if args.run_id is not None:
             run_ids = [args.run_id]
@@ -3885,8 +3900,24 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
                         results.append({"run_id": run_id, "worker_id": worker_id, "verdict": "PRESERVED", "code": code})
     if item is not None and args.run_id is None:
         for resource_id, resource in item["resources"].items():
+            if resource["origin_context_id"] != context_id:
+                # T031: a resource pinned by another context is not something
+                # this selection was ever meant to reach, so counting it as a
+                # candidate made the guard below refuse a successor that owns
+                # nothing -- forever, since T026 leaves no verb to reconcile a
+                # predecessor's resource. The hole the guard exists to close
+                # is one of *reporting*, not of authorization: the caller must
+                # not read success over a resource still open in the store.
+                # So report it and let the verdict stop being CLEANED, instead
+                # of refusing the cleanup of what this context does own.
+                if resource["state"] not in {"CLOSED", "REMOVED"}:
+                    retained.append({"resource_id": resource_id, "kind": resource["kind"],
+                                     "state": resource["state"],
+                                     "origin_context_id": resource["origin_context_id"],
+                                     "code": "RESOURCE-RETAINED-ELSEWHERE"})
+                continue
             candidates += 1
-            if (resource["origin_context_id"] != context_id or resource["activity_id"] is None
+            if (resource["activity_id"] is None
                     or activity_id is not None and resource["activity_id"] != activity_id):
                 continue
             # No session-close transport is wired here. Preserve the resource until
@@ -3900,11 +3931,10 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
     # T025: candidates existed and the selection reached none of them. With
     # results == [] both any() below are false and the verdict fell through
     # to CLEANED/exit 0, telling the caller that resources still open in the
-    # store had been closed -- visible after a takeover, where the filter
-    # above compares origin_context_id with the *current* context, so every
-    # resource pinned by the superseded predecessor is skipped. The activity
-    # branch already refused this way; the context and run branches get the
-    # same code and state.
+    # store had been closed. The activity branch already refused this way;
+    # the context and run branches get the same code and state. The takeover
+    # case that motivated it is now handled by `retained` above, which keeps
+    # the verdict honest without refusing.
     #
     # `candidates` is what keeps this narrow. Cleaning a context that owns no
     # resource and no run is a legitimate no-op, not a selection failure, so
@@ -3915,9 +3945,10 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT",
                          "cleanup selection reached none of the registered runs or resources")
     verdict = ("UNKNOWN" if any(result["verdict"] == "UNKNOWN" for result in results) else
-               "PRESERVED" if any(result["verdict"] not in {"CLEANED", "REUSED"} for result in results) else "CLEANED")
+               "PRESERVED" if retained or any(result["verdict"] not in {"CLEANED", "REUSED"} for result in results)
+               else "CLEANED")
     return {"verdict": verdict, "work_id": args.work_id, "context_id": context_id,
-            "epoch": epoch, "resources": results}, EXIT_OK if verdict == "CLEANED" else EXIT_BLOCKED
+            "epoch": epoch, "resources": results, "retained": retained}, EXIT_OK if verdict == "CLEANED" else EXIT_BLOCKED
 
 
 @_gauntlet_authorized
