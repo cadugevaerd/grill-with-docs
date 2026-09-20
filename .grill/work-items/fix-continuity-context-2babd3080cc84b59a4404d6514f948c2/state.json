@@ -24,7 +24,7 @@
     "attested_executions": {
       "analyze": "se-196ab078abaa5484aeeb128524e505bd43e5b22da469bfc4fa6d08756db84fd7",
       "checklist": "se-200f8523aef027ad424fea76587c40b04bc22570883470a24a574eb1a25c6818",
-      "implement-parallel": "se-f2e1121b8ba6ba986052ef38e3af434a9f38a3f76c9c9583fd51030fa9c5bc2d",
+      "implement-parallel": "se-b39fd980d756eacbcdfcf73e32b553d2ae48b2ce3b5794b54595f13d95e3d1aa",
       "partition": "se-6005632e27542d7864d0dd5ae212d4900bd22195216a9f60d7848c4c59c04392",
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
       "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a",
@@ -44,9 +44,9 @@
         "step_id": "checklist"
       },
       "implement-parallel": {
-        "output_sha256": "sha256:bdbefcb07603d3e951424185cfec7ddc63fd1a79715a2784b82c2846cda1a9fb",
+        "output_sha256": "sha256:a8b9e5b66683ed8128b790e954d4dce3b241eceeba5dd30aff16a1b5cc142dfa",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-2.terminal.json",
         "step_id": "implement-parallel"
       },
       "partition": {
@@ -253,11 +253,23 @@
         "state": "complete",
         "step": "partition",
         "supersedes": ".grill/attestations/032-partition.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/tasks.md",
+            "sha256": "a8b9e5b66683ed8128b790e954d4dce3b241eceeba5dd30aff16a1b5cc142dfa"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Phase 6 (T014, T015) entregue pelo no p06-a na run-635a5d0f4a44bb793a1482fa; tasks.md reconciliado com T001-T015",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/032-implement-parallel.json"
       }
     ],
-    "chain_stale": [
-      "implement-parallel"
-    ],
+    "chain_stale": [],
     "current_step": "converge",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
@@ -289,6 +301,20 @@
       "verify": "pending"
     },
     "superseded_outputs": {
+      "implement-parallel": [
+        {
+          "attempt_id": "implement-parallel-1",
+          "attestation": ".grill/attestations/032-implement-parallel.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:bdbefcb07603d3e951424185cfec7ddc63fd1a79715a2784b82c2846cda1a9fb",
+          "provenance": "current-generation",
+          "reason": "Phase 6 (T014, T015) entregue pelo no p06-a na run-635a5d0f4a44bb793a1482fa; tasks.md reconciliado com T001-T015",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-1.terminal.json",
+          "step_execution_id": "se-f2e1121b8ba6ba986052ef38e3af434a9f38a3f76c9c9583fd51030fa9c5bc2d",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-b39fd980d756eacbcdfcf73e32b553d2ae48b2ce3b5794b54595f13d95e3d1aa"
+        }
+      ],
       "partition": [
         {
           "attempt_id": "partition-1",
