@@ -657,3 +657,50 @@ p3, p4 e p5 do R6 seguem como débito, junto com o já registrado em R1 a R5.
 ## Próxima ação
 
 Quatro tarefas em `## Phase 12: Convergence`. Executar `implement-parallel` e reconvergir.
+
+---
+
+# Rodada 14 — 2026-09-20, após a Phase 12
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T047), constituição · **Desfecho**: `converged`
+
+Phase 12 entregue pelos nós `p12-a` e `p12-b` da run `run-d62baee8b153c3d191f1d5db`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 13
+
+| Achado | Situação | Prova |
+|---|---|---|
+| M1 — critério monotônico produzindo bloqueio permanente (CRITICAL) | **fechado** | O predicado de descendência foi **removido** do arquivo: zero ocorrências. No lugar, o critério por evidência, com 3 usos, e a guarda aplicada nos **dois** pontos de cunhagem — inclusive o da virada de fase, que não tinha nenhuma |
+| M2 — comparação só na retomada | **fechado** | Ponto único com 4 usos, chamado também na preparação de troca e na tomada, antes de mutar |
+| M3 — caso que não demonstrava o que afirmava | **fechado** | Substitutos de fronteira instalados nas duas metades; o código de recusa novo aparece 3 vezes nos testes |
+| M4 — dois caminhos morrendo sem código | **fechado** | Recusa nomeada nos dois |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Um caso que codificava o próprio defeito
+
+A quebra que a Phase 12 produziu merece registro, porque é uma categoria que esta entrega ainda não tinha visto. O caso `test_checkpoint_never_backfills_the_execution_branch_from_a_resumed_context` **não testava a proteção — testava o defeito**: fazia substituição do predicado monotônico e exigia o código de recusa, ou seja, afirmava por contrato exatamente o critério que o R6 mandou remover.
+
+Cobertura assim é pior que cobertura ausente, porque transforma a correção em "quebra de teste" e cria pressão para reverter o conserto. Foi reescrita sobre o critério novo, cobrindo os três lados — carimbo ausente vinculando, divergente recusando, coincidente vinculando — mais a sequência que produzia o beco sem saída: sucessão, virada de fase, confirmação.
+
+## Uma divergência de worker que endosso
+
+O brief não nomeava o código de recusa. O worker escolheu o código de contradição em vez do de ausência de vínculo, com o argumento de que a recusa agora é por **contradição observada**, e dizer "sem vínculo" seria falso quando o carimbo existe.
+
+Está certo, e a razão é a mesma que motivou vários achados desta entrega: **o nome do código descrevia o critério antigo**. Trocar a condição sem trocar o nome deixaria uma afirmação falsa no payload — o mesmo gênero de defeito que o R6 encontrou nos comentários.
+
+É o quinto worker desta entrega a divergir do literal do brief com justificativa, e, como nos anteriores, a divergência melhorou o resultado.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1495** testes, 0 falhas, 2 skips condicionados a macOS. O validador de orquestração fechou em 43, vindo de 42 com um erro.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R7.

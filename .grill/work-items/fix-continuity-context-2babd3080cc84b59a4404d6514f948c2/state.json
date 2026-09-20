@@ -25,7 +25,7 @@
       "analyze": "se-196ab078abaa5484aeeb128524e505bd43e5b22da469bfc4fa6d08756db84fd7",
       "checklist": "se-200f8523aef027ad424fea76587c40b04bc22570883470a24a574eb1a25c6818",
       "converge": "se-68100cb044acbc6904e0624573a47409fd572d5eba5e7d99a0e4e3aea8fc60c5",
-      "implement-parallel": "se-df071da06585a2d471faca1cf5adfa0d2ce7c31105b7937be82f153c8f227a8b",
+      "implement-parallel": "se-ac1606a6f6c4c4b7ec533cbdaa74c410121370adfb746b81a79e8f2c1911c2e1",
       "partition": "se-d4b411725d4cc29c3c4c2c2a069b51b56e9dae340ff7d32b5d6507264158ea5e",
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
       "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a",
@@ -52,9 +52,9 @@
         "step_id": "converge"
       },
       "implement-parallel": {
-        "output_sha256": "sha256:7c34aec1d07bb1754c7cd033d53b3a9d21b5871ada727b220680295df46173db",
+        "output_sha256": "sha256:fb2993563b5e77a0737d9b3bb8885b5f9c560c78d15022191df10b2de626207f",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-7.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-8.terminal.json",
         "step_id": "implement-parallel"
       },
       "partition": {
@@ -672,10 +672,26 @@
         "state": "complete",
         "step": "partition",
         "supersedes": ".grill/attestations/032-partition-r7.json"
+      },
+      {
+        "chain_stale": [
+          "converge",
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/tasks.md",
+            "sha256": "fb2993563b5e77a0737d9b3bb8885b5f9c560c78d15022191df10b2de626207f"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "Phase 12 (T044-T047) entregue na run-d62baee8b153c3d191f1d5db",
+        "state": "complete",
+        "step": "implement-parallel",
+        "supersedes": ".grill/attestations/032-implement-parallel-r7.json"
       }
     ],
     "chain_stale": [
-      "implement-parallel",
       "converge",
       "verify"
     ],
@@ -844,6 +860,18 @@
           "step_execution_id": "se-7338434003d473889293b343c135d5d98757835e45d7f8e322698f89273457a5",
           "step_id": "implement-parallel",
           "superseded_by_step_execution_id": "se-df071da06585a2d471faca1cf5adfa0d2ce7c31105b7937be82f153c8f227a8b"
+        },
+        {
+          "attempt_id": "implement-parallel-7",
+          "attestation": ".grill/attestations/032-implement-parallel-r7.json",
+          "execution_round": 7,
+          "output_sha256": "sha256:7c34aec1d07bb1754c7cd033d53b3a9d21b5871ada727b220680295df46173db",
+          "provenance": "current-generation",
+          "reason": "Phase 12 (T044-T047) entregue na run-d62baee8b153c3d191f1d5db",
+          "receipt_ref": "receipts/skill-invocation/implement-parallel-implement-parallel-7.terminal.json",
+          "step_execution_id": "se-df071da06585a2d471faca1cf5adfa0d2ce7c31105b7937be82f153c8f227a8b",
+          "step_id": "implement-parallel",
+          "superseded_by_step_execution_id": "se-ac1606a6f6c4c4b7ec533cbdaa74c410121370adfb746b81a79e8f2c1911c2e1"
         }
       ],
       "partition": [
