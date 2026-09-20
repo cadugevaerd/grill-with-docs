@@ -1554,16 +1554,19 @@ def _takeover_observation(root: Path, runtime: str, session_ref: str) -> tuple[d
     dispatch_id = session_ref.removeprefix("orca:") if isinstance(session_ref, str) else None
     if raw is not None:
         try:
-            show = json.loads(raw.decode("utf-8"))
-            dispatch = show.get("dispatch") if isinstance(show, dict) else None
+            # Same envelope the adapter already unwraps ({"ok": true, "result": {...}});
+            # reuse it instead of reading show.get(...) off the raw top level.
+            show = agent_runtime._object(raw, "Orca worker-show")
+        except Exception:
+            show = None
+        if isinstance(show, dict):
+            dispatch = show.get("dispatch")
             if isinstance(dispatch, dict) and dispatch.get("id") == dispatch_id and isinstance(dispatch.get("status"), str):
                 status = dispatch["status"]
-            projection = show.get("projection") if isinstance(show, dict) else None
+            projection = show.get("projection")
             candidate = projection.get("liveness") if isinstance(projection, dict) else None
             if isinstance(candidate, dict) and isinstance(candidate.get("verdict"), str):
                 liveness = {"verdict": candidate["verdict"], "source": candidate.get("source")}
-        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
-            status, liveness = None, None
     return observation, status, liveness
 
 
@@ -1866,12 +1869,12 @@ def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: 
     elif accepted_campaign is not None and isinstance(development_campaign, dict) and accepted_campaign != development_campaign:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CAMPAIGN-DIVERGENT", args.work_id)
     checkpoint = {
-        "schema": contract.CHECKPOINT_SCHEMA, "checkpoint_id": checkpoint_id, "context_id": context_id,
+        "schema": contract.CHECKPOINT_SCHEMA_V2, "checkpoint_id": checkpoint_id, "context_id": context_id,
         "previous_checkpoint_id": item.get("checkpoint_head"), "worktree_identity": context.get("worktree_identity", {}),
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "store_revision": snapshot.revision + 1,
         "journal_anchor": snapshot.document["journal_head"], "state_sha256": hash_bytes(state_after),
-        "inputs_manifest": {"evidence": evidence}, "workflow_sha256": context["inputs_sha256"],
-        "constitution_sha256": item["origin"]["metadata_sha256"], "policy_sha256": item["policy_sha256"],
+        "inputs_manifest": {"evidence": evidence}, "context_inputs_sha256": context["inputs_sha256"],
+        "origin_metadata_sha256": item["origin"]["metadata_sha256"], "policy_sha256": item["policy_sha256"],
         "activation": context["activation"], "campaign": accepted_campaign,
         "development_sequence": state.get("development", {}).get("sequence", []),
         "current_step": state.get("development", {}).get("current_step"), "step_states": state.get("development", {}).get("steps", {}),
@@ -3351,12 +3354,12 @@ def _initial_continuity_checkpoint(root: Path, work_id: str, item: dict[str, Any
     cleanup_obligations, preserved_resources = _cleanup_checkpoint_projection(root, work_id)
     development = state.get("development", {})
     checkpoint = {
-        "schema": contract.CHECKPOINT_SCHEMA, "checkpoint_id": checkpoint_id, "context_id": context_id,
+        "schema": contract.CHECKPOINT_SCHEMA_V2, "checkpoint_id": checkpoint_id, "context_id": context_id,
         "previous_checkpoint_id": None, "worktree_identity": copy.deepcopy(identity),
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "store_revision": store_revision,
         "journal_anchor": copy.deepcopy(journal_anchor), "state_sha256": hash_bytes(state_bytes),
-        "inputs_manifest": {"evidence": []}, "workflow_sha256": context["inputs_sha256"],
-        "constitution_sha256": item["origin"]["metadata_sha256"], "policy_sha256": item["policy_sha256"],
+        "inputs_manifest": {"evidence": []}, "context_inputs_sha256": context["inputs_sha256"],
+        "origin_metadata_sha256": item["origin"]["metadata_sha256"], "policy_sha256": item["policy_sha256"],
         "activation": context["activation"], "campaign": context["campaign"],
         "development_sequence": development.get("sequence", []),
         "current_step": development.get("current_step"), "step_states": development.get("steps", {}),
