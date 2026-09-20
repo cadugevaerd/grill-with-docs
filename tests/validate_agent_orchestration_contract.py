@@ -1446,6 +1446,73 @@ class AgentOrchestrationContract(unittest.TestCase):
                     self.assertEqual((code, payload.get("verdict")), (0, "PREVIEW"), payload)
                 self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
 
+    def test_continuity_resume_refuses_a_malformed_development_block(self):
+        """T053: `_continuity_refuse_branch_contradiction` guards `development`'s
+        own schema before reading `execution_branch` (T047) -- DEVELOPMENT-SCHEMA
+        when the block is present but not a mapping. The step-confirmation and
+        phase-turn commands raise the same named code for the identical shape,
+        but only on their own local `state.json` read; the schema guard inside
+        this shared comparison is reachable through `continuity-resume` too,
+        and had no case proving it there. Swapping that branch for a silent
+        `development = {}` would pass every other test in this file.
+
+        Verified by reversion: replacing the `raise` with `development = {}`
+        makes this case return PREVIEW/exit 0 instead of refusing.
+        """
+        import validate_orchestrator_store_contract as seed
+        store_module = grill_workspace.grill_core_module("store")
+        runtime, session = "claude", "orca:ctx-destination"
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            with mock.patch.object(grill_workspace, "_initialize_orchestration", return_value={}):
+                code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                    "--work-id", "work-x", "--runtime", "codex",
+                    "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, payload)
+            state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
+            state = grill_workspace.read_development_state(root,
+                grill_workspace.resolve_development_item(root, "work-x"), "work-x")[1]
+            sealed = grill_workspace._continuity_identity(root, "work-x", state)
+            context = seed.ORCHESTRATION_CONTEXT(state="RELEASED", leader_state="RELEASED")
+            context.update(runtime="codex", adapter="codex", worktree_identity=sealed)
+            checkpoint = seed.ORCHESTRATION_CHECKPOINT()
+            checkpoint.update(worktree_identity=sealed, accepted_outputs={"specify": {"output_sha256": "a" * 64}})
+            checkpoint["checkpoint_sha256"] = store_module.jcs_sha256(
+                {k: v for k, v in checkpoint.items() if k != "checkpoint_sha256"})
+            operation = seed.ORCHESTRATION_OPERATION()
+            operation.update(kind="continuity-switch", state="APPLIED",
+                             expected_before={"checkpoint_id": "checkpoint-1"},
+                             intended_after={"to_runtime": runtime, "campaign_bridge": None})
+            item = seed.ORCHESTRATION_ITEM({"ctx-1": context}, {"op-1": operation})
+            item["policy_ref"] = "assets/agent-orchestration.v1.json"
+            item["policy_sha256"] = context["policy_sha256"] = grill_workspace.hash_bytes(
+                (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes())
+            item.update(checkpoints={"checkpoint-1": checkpoint}, checkpoint_head="checkpoint-1")
+            store_module.bootstrap(root)
+            store_module.transact(root, lambda doc: {**doc, "agent_orchestration": {
+                "schema": "grill-agent-orchestration/v1", "work_items": {"work-x": item}}})
+            # A truthy top-level `active_phase` short-circuits `_continuity_identity`
+            # before it ever touches `development` -- without it, a malformed
+            # `development` crashes identity derivation itself, before the
+            # guard under test ever runs.
+            stored = json.loads(state_path.read_text(encoding="utf-8"))
+            stored["active_phase"] = "specify"
+            stored["development"] = "not-a-mapping"
+            state_path.write_text(json.dumps(stored), encoding="utf-8")
+            argv = ("gauntlet-resume", str(root), "--work-id", "work-x", "--checkpoint", "checkpoint-1",
+                    "--runtime", runtime, "--session-ref", session)
+            before = store_module.read_snapshot(root).content_sha256
+            adapter, _show, transcript = orchestration_fixture.boundary(
+                grill_workspace, root, runtime, session, "work-x")
+            transcript["result"]["transcript"]["messages"][0]["blocks"][0]["input"] = {
+                "command": shlex.join([sys.executable, "-B", str(SCRIPTS / "grill_workspace.py"), *argv])}
+            with mock.patch.object(grill_workspace, "_continuity_effective_activation",
+                    return_value={"runtime": {"id": runtime, "adapter": runtime}}), \
+                 mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                code, blocked = self.run_cli(*argv)
+            self.assertEqual((code, blocked.get("code")), (2, "DEVELOPMENT-SCHEMA"), blocked)
+            self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
+
     def _graft_succession(self, root, work_id, branch):
         """Leave behind the shape a takeover/resume produces: a successor
         context, descending from the current one, whose worktree identity is
@@ -1493,33 +1560,43 @@ class AgentOrchestrationContract(unittest.TestCase):
             development["execution_branch"] = None
         state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
-    def test_execution_branch_minting_refuses_only_a_contradicting_identity_stamp(self):
-        """R6-1/T044. This case used to assert EXECUTION-BRANCH-UNSET whenever
-        `_continuity_resumed_context` was true -- that is, it encoded the defect
-        rather than the protection. Descending from another context is
-        monotonic: every succession writes `predecessor_context_id` and
-        `validate_transition` requires it, so no verb ever clears it. Refusing
-        the mint on that property blocked every work item that was ever taken
-        over or resumed, permanently, because `phase-turn` clears the binding on
-        purpose and nothing re-stamps it.
+    def test_execution_branch_minting_ignores_the_identity_stamp(self):
+        """R6-1/T044, T048/T049. This case used to assert EXECUTION-BRANCH-MISMATCH
+        whenever the identity stamp contradicted the live branch -- itself a
+        narrower descendant of the very defect T048 removed. `_continuity_stamped_branch`
+        read a value written once, at context creation, that no verb ever
+        re-stamps, while `phase-turn` clears the binding on purpose so the next
+        phase's first confirmation can mint a fresh one. Comparing an unrenewed
+        stamp against the live branch refused every work item that was ever
+        taken over or resumed, on its first confirmation after the very next
+        phase turn -- permanently, with no verb to undo it.
 
-        The criterion is now evidence, not history: `_continuity_stamped_branch`
-        returns the branch the current context's identity stamp claims, and the
-        refusal (EXECUTION-BRANCH-MISMATCH) fires only when that stamp exists
-        AND contradicts the live branch. Three sides, on both minting sites --
-        the step confirmation and the phase turn, which had no guard at all:
+        T048 removed the comparison entirely, at both minting sites -- the step
+        confirmation and the phase turn, which had no guard of its own before
+        R6 added one. The criterion is now just: no bound branch yet, mint the
+        live one. What the identity stamp claims -- absent, agreeing, or
+        contradicting -- no longer matters, because the upstream guards
+        (takeover and continuity-resume) already refuse structural divergence
+        before mutating, so by the time minting runs the live branch is
+        trustworthy on its own.
 
-        - no stamp: no prior claim to contradict, so the binding is minted. This
-          is exactly the side the old criterion blocked forever;
-        - stamp agreeing with the live branch: minted;
-        - stamp contradicting it: refused, with nothing written.
+        Covers the sequence that motivated the removal end to end: succession,
+        then the step confirmation, then the phase turn -- the dead end R6
+        found, now open on both minting sites regardless of what the stamp
+        says.
 
-        Verified by reversion: restoring the "has a predecessor" criterion makes
-        the two stamped-agreeing halves refuse EXECUTION-BRANCH-UNSET.
+        T050: the "stamp agrees" subcase used to be observationally identical
+        to "no stamp" -- the assertion only checked that the mint used the
+        live branch, which it does either way, so a `_graft_succession` that
+        silently failed to write the stamp would still pass. Reading the
+        sealed value back from the store closes that hole.
+
+        Verified by reversion: restoring either stamp comparison makes the
+        "stamp contradicts" subcase refuse EXECUTION-BRANCH-MISMATCH again, at
+        whichever site it was restored on.
         """
-        for label, stamp, refuses in (("no stamp", None, False),
-                                      ("stamp agrees", "live", False),
-                                      ("stamp contradicts", "a-branch-nobody-was-on", True)):
+        for label, stamp in (("no stamp", None), ("stamp agrees", "live"),
+                              ("stamp contradicts", "a-branch-nobody-was-on")):
             temporary, root = self.fixture()
             with temporary, self.subTest(case=label), orchestration_fixture.offline_leader(grill_workspace):
                 code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
@@ -1532,38 +1609,39 @@ class AgentOrchestrationContract(unittest.TestCase):
                 live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
                                              check=True, capture_output=True, text=True).stdout.strip()
                 if stamp is not None:
-                    self._graft_succession(root, "work-x", live_branch if stamp == "live" else stamp)
-                    self.assertNotEqual(stamp, live_branch)
+                    sealed_value = live_branch if stamp == "live" else stamp
+                    self._graft_succession(root, "work-x", sealed_value)
+                    # T050: assert the value the graft actually sealed -- not a
+                    # value standing in for the subcase's own label -- so a
+                    # regression that stops the graft from writing the stamp
+                    # is caught here, not just at the mint, where "agrees" and
+                    # "no stamp" produce the exact same outcome anyway.
+                    document = store.read_snapshot(root).document
+                    item = document["agent_orchestration"]["work_items"]["work-x"]
+                    context = item["contexts"][item["current_context_id"]]
+                    self.assertEqual(context["worktree_identity"]["branch"], sealed_value)
+                    if label == "stamp agrees":
+                        self.assertEqual(sealed_value, live_branch)
+                    else:
+                        self.assertNotEqual(sealed_value, live_branch)
 
                 # The step confirmation, which is where the backfill lives.
-                before = state_path.read_bytes()
                 code, payload = self.run_cli("checkpoint", str(root), "--work-id", "work-x",
                     "--step", "specify", "--state", "in-progress", "--operation-id", "op-specify",
                     "--session-ref", orchestration_fixture.SESSION)
-                if refuses:
-                    self.assertEqual((code, payload.get("code")), (2, "EXECUTION-BRANCH-MISMATCH"), payload)
-                    self.assertIn(stamp, payload.get("error", ""))
-                    self.assertEqual(state_path.read_bytes(), before)
-                else:
-                    self.assertEqual(code, 0, payload)
-                    self.assertEqual(json.loads(state_path.read_text(encoding="utf-8"))[
-                        "development"]["execution_branch"], live_branch)
+                self.assertEqual(code, 0, payload)
+                self.assertEqual(json.loads(state_path.read_text(encoding="utf-8"))[
+                    "development"]["execution_branch"], live_branch)
 
                 # The phase turn mints the binding through its own branch, the
                 # one R6 found without any guard at all.
                 self._finish_phase(state_path, unbind=True)
-                before = state_path.read_bytes()
                 code, payload = self.run_cli("phase-turn", str(root), "--work-id", "work-x",
                     "--reason", "abrindo a fase seguinte", "--session-ref", orchestration_fixture.SESSION)
-                if refuses:
-                    self.assertEqual((code, payload.get("code")), (2, "EXECUTION-BRANCH-MISMATCH"), payload)
-                    self.assertIn(stamp, payload.get("error", ""))
-                    self.assertEqual(state_path.read_bytes(), before)
-                else:
-                    self.assertEqual((code, payload.get("verdict")), (0, "TURNED"), payload)
-                    turned = json.loads(state_path.read_text(encoding="utf-8"))["development"]
-                    self.assertIsNone(turned["execution_branch"])
-                    self.assertEqual(turned["audit"][-1]["previous_execution_branch"], live_branch)
+                self.assertEqual((code, payload.get("verdict")), (0, "TURNED"), payload)
+                turned = json.loads(state_path.read_text(encoding="utf-8"))["development"]
+                self.assertIsNone(turned["execution_branch"])
+                self.assertEqual(turned["audit"][-1]["previous_execution_branch"], live_branch)
 
     def test_a_succeeded_work_item_still_binds_a_branch_after_the_phase_turn(self):
         """R6-1/T044, the dead end itself, as one uninterrupted sequence:
