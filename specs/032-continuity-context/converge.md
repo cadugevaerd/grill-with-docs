@@ -403,3 +403,53 @@ Quatro reversões, todas reprovando:
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R4.
+
+---
+
+# Rodada 9 — 2026-09-20, consumindo o review R4
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T033), review.md (R4), constituição · **Desfecho**: `tasks_appended` (Phase 10, T034–T039)
+
+## O padrão, nomeado
+
+Quatro rodadas de review, quatro `REQUEST CHANGES`, e a mesma forma em todas: **a correção fecha o caso que examinou e abre o vizinho**. A raiz comum é que `gauntlet_context_takeover_command` e `gauntlet_cleanup_command` vêm sendo corrigidos isoladamente, sem tratar os irmãos que compartilham a mesma lógica — o predicado mudou na tomada e não nos dois comandos de continuidade; o filtro mudou no ramo de contexto e não no de atividade.
+
+T035 existe justamente para quebrar esse ciclo: em vez de corrigir mais um ponto, alinha os irmãos.
+
+| Achado | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|---|---|---|---|---|---|
+| K1 | contradicts | **CRITICAL** | FR-010 | `grill_workspace.py:3903-3918` coleta o retido antes da discriminação por seletor, que só ocorre em `:3920`. O ramo por atividade sai rebaixado por recurso alheio, permanentemente | T034 |
+| K2 | partial | **CRITICAL** | FR-011 | `TAKEOVER-IDENTITY-DIVERGENT` não aparece em teste algum; apagar o `raise` inteiro deixa a suíte em 37/37 | T036 |
+| K3 | contradicts | HIGH | FR-001, FR-005 | A tomada ignora fase e branch; `prepare-switch` e `continuity-resume` comparam tudo e nunca recarimbam. A primeira virada de etapa recusa para sempre | T035 |
+| K4 | partial | HIGH | FR-011 | O emissor paralelo do comando de checkpoint não é observado; regredindo só ele, os três validadores passam | T037 |
+| K5 | partial | MEDIUM | FR-011 | O caso de recarimbo move a árvore fora do bloco protegido; falha entre checkout e escrita vaza branch para os casos seguintes | T038 |
+| K6 | partial | MEDIUM | FR-010 | O código de recurso retido e o campo que o carrega não existem no protocolo. O leader recebe vocabulário sem regra e, como o protocolo manda não converter preservação em aprovação, a leitura padrão vira bloqueio — anulando o desenho não-bloqueante que a própria correção introduziu | T039 |
+
+## Sobre K6, que quase não virou tarefa
+
+A pergunta era se documentação de protocolo é lacuna de requisito ou débito. É lacuna. A correção de K1 desenha o campo para **relatar sem bloquear**, mas essa semântica só existe se quem consome souber lê-la. Sem o texto, a entrega publica um comportamento que o consumidor interpreta ao contrário do pretendido — o que é, na prática, o comportamento não entregue.
+
+## Fora de escopo, por decisão registrada
+
+**R4-4** (os cinco campos estruturais não distinguem worktree recriada no mesmo caminho) e **R4-5** (`project_id` vira com `git stash push -u`, porque a derivação usa `--all`, que inclui as referências de stash) são defeitos **pré-existentes** e de alcance maior que esta entrega. A spec não declara âncora de árvore nem derivação de identidade de projeto; corrigi-los aqui seria escopo novo entrando sem passar pela spec, e o segundo re-deriva identidade de campanha já selada.
+
+Ficam registrados como trabalho próprio, a ser especificado. O detalhe de R4-5 merece registro à parte: **guardar a árvore suja antes de assumir a sessão é o gesto natural do fluxo de recuperação**, e é exatamente o que dispara o bloqueio — o defeito cai onde a tomada existe para curar.
+
+## Os Minor
+
+n1, n3, n4, n5, n6 e n7 seguem como débito, sem virar tarefa. n2 virou K6.
+
+## Versão
+
+6.0.3 sem publicar, `main` em 6.0.2. Sem novo bump.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação
+- Achados: missing 0 · partial 4 · contradicts 2 · unrequested 0
+- Severidade: CRITICAL 2 · HIGH 2 · MEDIUM 2
+
+## Próxima ação
+
+Seis tarefas em `## Phase 10: Convergence`. Executar `implement-parallel` e reconvergir.
