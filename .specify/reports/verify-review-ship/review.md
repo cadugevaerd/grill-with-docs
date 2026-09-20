@@ -376,3 +376,141 @@ Obrigatório antes do ship:
 Registráveis como débito: m1 a m7 e os quatro itens de arquitetura já listados.
 
 Próximo passo: corrigir, rodar `/speckit.converge`, depois `verify` e `review` de novo.
+
+---
+
+## Review Report — R3
+
+**Verdict: REQUEST CHANGES**
+
+Source fingerprint: tree `3c9790ce7164e66488bdf2fa0badcb47d24579d4520c4cf2a39b6a8d3dc70106` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `4cbd57c9960a4a70dff68e939125c308eafab6216cff10f013a567d1e58514ad`
+
+Casa com `converge.md` (rodada 6) e `verify.md` (R3). Converge `CONVERGED`, Verify `PASS`.
+
+**Escopo desta rodada**: duas dimensões, correção de runtime e qualidade de cobertura. Arquitetura, segurança e performance **não** foram reexaminadas de forma independente, porque o diff da Phase 8 não move fronteira de módulo nem superfície de autorização — as mudanças são duas guardas, uma remoção de campo de digest, um comentário e casos de teste. Os achados dessas dimensões no R2 foram endereçados ou registrados como débito. É decisão de escopo, e fica declarada.
+
+### A frase que resume a rodada
+
+Do revisor de correção: *"O problema da Phase 8 é o sentido oposto: fecha demais, não de menos."*
+
+As duas guardas que a Phase 8 acrescentou para impedir estados ruins passaram a impedir também estados legítimos — e ambas de forma **permanente**, porque o core não tem verbo de re-carimbo nem de reconciliação. O remédio virou veneno nos dois casos.
+
+---
+
+### Critical Issues
+
+#### R3-1 — `phase` dentro da identidade comparada torna a tomada impossível no caso normal
+
+`grill_workspace.py:3716-3721`, com `:3289`
+
+`_continuity_identity` inclui `phase`, derivada de `state["active_phase"]` ou, na falta dela, de `development.current_step`. **Ambas avançam durante a vida de um contexto**: `current_step` a cada etapa do WORKFLOW, `active_phase` a cada fase do roadmap fechada.
+
+Cenário: o contexto é criado por `continuity-resume` em `implement-parallel` e a identidade carimbada fixa `phase="implement-parallel"`. O ciclo progride para `converge`. A sessão morre. A tomada deriva `phase="converge"`, compara com o carimbo, diverge, e recusa com `TAKEOVER-IDENTITY-DIVERGENT`. **Permanentemente**: o campo só é reescrito por uma tomada bem-sucedida, e não há verbo de re-selagem.
+
+O contraste com o resume é o ponto: o resume aplica a mesma comparação, mas a janela entre o carimbo do `prepare-switch` e o resume é quiescente por construção — o contexto está `QUIESCING` e ninguém avança etapa. Na tomada, a janela é a vida inteira da sessão. **O mesmo predicado é aperto num caso e veneno no outro.**
+
+Medição no repositório: metade dos work items presentes não tem `active_phase` e cai no fallback para `current_step`, que muda a cada etapa.
+
+**Correção**: comparar apenas o subconjunto invariante — `project_id`, `work_id`, `du`, `git_common_dir`, `real_path` e, se permanecer, `branch`. `phase` continua gravada na identidade derivada, porque o schema exige as sete chaves, mas deixa de ser predicado de recusa.
+
+---
+
+### Important Issues
+
+#### R3-2 — A guarda não cura o defeito que o próprio comentário dela promete curar
+
+`grill_workspace.py:3700-3721`
+
+O comentário de T023 motiva a guarda com o cenário: a sessão morre, alguém troca de branch, o sucessor herda identidade que mente, e *toda retomada posterior é recusada para sempre*. Mas `branch` está **dentro** do conjunto comparado. Nesse exato cenário a tomada agora recusa.
+
+Antes o deadlock acontecia no `prepare-switch`; agora acontece na tomada. **Mudou de lugar, não desapareceu.** O re-carimbo só ocorre no ramo `sealed is None`, que não é o cenário descrito.
+
+**Correção**: decidir explicitamente. Ou `branch` é re-carimbável na tomada — e então sai do predicado junto com `phase`, que é a leitura coerente com a tomada ser o caminho de recuperação —, ou o comentário para de prometer uma cura que o código não entrega e o core ganha um verbo de re-selagem. A terceira via, manter os dois, deixa o único remédio sendo editar o store à mão.
+
+#### R3-3 — `candidates` conta não-candidatos e bloqueia a limpeza legítima do sucessor
+
+`grill_workspace.py:3886-3916`
+
+O `candidates += 1` está antes de **todos** os filtros, inclusive o que compara `origin_context_id`. Conta, portanto, recursos de **outros** contextos e recursos sem `activity_id`.
+
+Cenário, que é exatamente o do commit que introduziu a guarda: a tomada acontece; o contexto anterior fica `SUPERSEDED` com um recurso aberto; o mesmo commit declara, em T026, que reconciliar esse recurso **não é implementado**. O sucessor não possui recurso algum. `gauntlet-cleanup --context-id <sucessor>` conta 1 candidato — o recurso do predecessor —, produz zero resultados, e recusa. **Para sempre**, porque aquele recurso nunca pode ser fechado. O sucessor perde a limpeza do próprio contexto por causa de um recurso que não pode tocar.
+
+**Esta falha é de instrução minha, não do worker.** Eu devolvi a primeira versão da guarda por estar larga demais e pedi que contasse "candidatos antes dos filtros". O worker seguiu ao pé da letra. A instrução é que estava errada: "antes dos filtros" inclui o filtro de contexto, que é justamente o que deveria filtrar. A guarda que pedi para eliminar um sucesso falso criou um bloqueio permanente na direção oposta.
+
+**Correção**: o buraco original é de **relato**, não de autorização. Contar apenas o que a seleção deveria ter alcançado e, para o resto, relatar em vez de recusar — devolver os recursos retidos noutro contexto no payload e deixar o veredito sair de `CLEANED` quando existirem. O chamador deixa de ler sucesso sobre recurso ainda preso, sem travar a limpeza do contexto corrente.
+
+#### R3-4 — A guarda de `candidates` não tem teste nenhum
+
+`grill_workspace.py:3914`
+
+Verificado por execução: substituindo a guarda por `pass` numa cópia do repositório, a suíte inteira passa. A correção de T025 entrou **exatamente no padrão que as duas rodadas anteriores pegaram** — correção sem asserção que a sustente.
+
+O único `RESOURCE-IDENTITY-DIVERGENT` testado hoje usa o seletor `--activity-id` e é recusado bem antes, pelo check de posse da atividade; nunca alcança o contador.
+
+**Correção**: dois casos curtos, no arquivo que já tem a fixture pronta — candidatos sem alcance recusando, e zero candidatos seguindo como sucesso. Sem o segundo, a guarda poderia ser alargada de volta para `selected and not results` sem reprovar nada.
+
+#### R3-5 — Um comentário promete cobertura que não existe
+
+`tests/validate_orchestrator_store_contract.py:596`
+
+O caso renomeado removeu a asserção sobre `development_sequence`, `current_step`, `accepted_outputs` e `accepted_executions`, e o comentário afirma que isso é exercido via `gauntlet-prepare-switch` no contrato de orquestração. **Não é**: o caso do CLI assere schema, identificadores, ausência de predecessor e os dois digests — nada sobre o estado projetado.
+
+E o campo é permissivo: `validate_block` aceita `dict` **ou** `list` em `development_sequence`, então um emissor que regredisse ao formato antigo sob schema novo passaria na suíte inteira.
+
+**Correção**: uma linha no caso do CLI, sobre o checkpoint lido de volta do snapshot.
+
+---
+
+### Minor Issues
+
+| # | Local | Achado |
+|---|---|---|
+| m1 | `grill_workspace.py:3715-3716` | A tomada passou a depender de git vivo e de disco justamente no caminho de recuperação: HEAD destacado, stash com untracked (que muda `project_id`, defeito já registrado na memória do projeto) e bundle ausente viram recusas novas. Mitiga junto com R3-1 e R3-2, tirando `phase` e `branch` do predicado |
+| m2 | `grill_workspace.py:3717-3721` | `sealed is None` aceita árvore que o predecessor nunca usou: o contexto inicial nasce sem carimbo, e o único pino é `LeaderBoundary` exigir que a worktree seja a raiz — o que prova onde a **nova** sessão roda, não onde o predecessor rodava. Estreito e sem remédio barato; registrar como limitação |
+| m3 | `grill_workspace.py:3694` vs `:3808` | O `campaign_bridge` ainda usa a cópia do predecessor enquanto o contexto sucessor grava a derivada. Quando `sealed is None`, o mesmo registro de operação carrega duas afirmações diferentes sobre a mesma sucessão. Inerte — nada compara as duas —, mas é inconsistência de auditoria. Correção de uma linha: derivar antes do bloco do bridge |
+| m4 | `tests/validate_orchestrator_store_contract.py:611` | `assertRaises(store.StoreError)` sem asserir o código. Verificado que hoje a recusa é a certa, mas qualquer divergência futura manteria o caso verde pelo motivo errado |
+| m5 | `tests/validate_orchestrator_store_contract.py:86` | `liveness: None`, que o produto devolve quando a resposta não traz liveness, não tem caso. É a outra metade do tipo real |
+
+---
+
+### Test Quality
+
+A cobertura de T027 é **boa, e é o modelo do que faltava** nas rodadas anteriores:
+
+- `work-projection` semeia o que deve entrar e o que **não** deve, e assere por igualdade exata dos dicionários, de modo que a ausência é verificada e não só a presença. A reversão que remove os filtros foi executada e reprova;
+- `work-cas` acerta o seam: o patch incide no ponto de leitura fora do lock, a prévia é computada antes, e há asserção de que o store não se moveu. Verificado por execução que, sem a guarda, a tomada **aplica** — logo a recusa vem do caminho verdadeiro e não de um acidente;
+- a troca de `liveness` para mapa eliminou a divergência de tipo em vez de documentá-la, e a asserção literal correspondente foi atualizada. Ganho líquido.
+
+As falhas são R3-4 e R3-5: a guarda de T025 sem teste, e uma asserção perdida cuja substituta foi prometida em comentário mas não existe.
+
+### Runtime Correctness
+
+Fora dos achados, verificado e limpo:
+
+- **gravar a identidade derivada no sucessor é seguro**: nenhum leitor a jusante compara a identidade do sucessor com a do checkpoint selado; resume e `prepare-switch` re-derivam ao vivo;
+- **a remoção de `snapshot.revision` do digest não reabre janela**: todo fato do apply é re-derivado na própria invocação, sob a guarda de revisão. Ressalva de texto, não de código: o comentário diz que a guarda é "estritamente mais forte" que o campo removido, mas ela cobre **intervalo diferente** — leitura até commit do apply, não prévia até apply. A conclusão se sustenta porque tudo é re-derivado, não porque uma guarda subsuma a outra;
+- **fail-closed íntegro**: todo caminho novo sai por recusa com código próprio, e arquivo ausente vira recusa e não traceback.
+
+---
+
+### Constitution References
+
+Nenhum conflito constitucional descoberto. R3-1 e R3-3 são defeitos funcionais de disponibilidade, não de segurança: os caminhos falhos **recusam**, nunca autorizam indevidamente.
+
+---
+
+### Final Recommendation
+
+**REQUEST CHANGES.**
+
+Obrigatório antes do ship:
+
+1. **R3-1** — tirar `phase` do predicado de comparação;
+2. **R3-2** — decidir sobre `branch`: sai do predicado, ou o comentário para de prometer a cura e o core ganha re-selagem. Não manter as duas coisas;
+3. **R3-3** — contar como candidato só o que a seleção deveria alcançar, e relatar o resto em vez de recusar;
+4. **R3-4** — cobrir a guarda nos dois lados: candidatos sem alcance recusando, zero candidatos seguindo como sucesso;
+5. **R3-5** — a asserção de uma linha sobre o estado projetado.
+
+Registráveis como débito: m1 a m5, mais os itens já listados em R1 e R2.
+
+Próximo passo: corrigir, rodar `/speckit.converge`, depois `verify` e `review` de novo.
