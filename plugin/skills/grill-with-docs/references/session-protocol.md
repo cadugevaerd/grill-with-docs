@@ -1,4 +1,4 @@
-# Protocolo de sessão v6.0.2
+# Protocolo de sessão v6.0.8
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -81,6 +81,8 @@ Separar sessão, worktree e branch. Worktree/branch só são removíveis com ide
 `STEP-ACCEPTED-CLEANUP-PENDING` pode vir com `step_state=complete`, cleanup UNKNOWN e exit 2: a etapa já está aceita. Retry drena a mesma obrigação sem repetir a etapa. Preservação conhecida bloqueia somente a ação cuja pré-condição viola; sessão UNKNOWN impede afirmar quiescência e abrir execução concorrente.
 
 `gauntlet-prepare-switch ROOT --work-id ID --context-id CTX --epoch N --session-ref REF --to-runtime codex|claude` cerca despachos, reconcilia cleanup e persiste checkpoint. Worker/turno ativo mantém QUIESCING com `CONTINUITY-ACTIVE-WORK`; não matar ou transferir agente para liberar a troca. O destino confirma inatividade da origem pela mesma identidade; lease vencido não é prova.
+
+Se o líder de origem já foi encerrado e liberado pelo Orca antes da preparação, repetir o comando com `--released-source`. A recuperação exige duas chamadas, preservando a transição `ACTIVE → QUIESCING → RELEASED`, e só aceita o arquivo de release do dispatch exato com terminal, worktree, incarnation, settlement, revogação, recurso liberado e transcript capturado correlacionados; silêncio, expiry ou archive incompleto recusam `LEADER-RELEASE-UNPROVEN`. Atividade `RESULT_RECORDED` permanece pendente e não é aceita nem reexecutada, mas deixa de impedir a troca quando a sessão especialista exata também possui release arquivado; o recurso `CLOSE_PENDING` é então fechado com receipt correlacionado e levado no checkpoint.
 
 `gauntlet-resume ROOT --work-id ID --runtime codex|claude --checkpoint CHECKPOINT_ID --session-ref TARGET_REF` apresenta preview. Apply exige `--apply --expected-sha256 HASH`, releitura das fontes e CAS de época. Preservar projeto/work_id/worktree/branch, outputs e efeitos aceitos; criar contexto/campanha sucessores ligados aos anteriores, sem mudar admissions/DAG/pins históricos ou zerar remediation. A sessão destino comprova sua própria carga; não herda loaded ou suspensão. Só tentativa interrompida não aceita pode repetir; outcome desconhecido exige reconciliação da mesma operação. Recovery legado por `--run-id` não troca runtime nem substitui essa ponte.
 

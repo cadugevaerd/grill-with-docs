@@ -553,6 +553,19 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertEqual(state["compatibility"], "incompatible")
                 self.assertIn("STYLE-CONTENT-INCOMPATIBLE", [entry["code"] for entry in state["diagnostics"]])
 
+    def test_presentation_fingerprint_ignores_repeated_listing_event_identity(self):
+        core = grill_workspace.grill_core_module("agent_runtime")
+        axes = {
+            "configuration": {"state": "observed", "source_sha256": "a" * 64},
+            "installation": {"status": "present", "version": "0.3.0"},
+            "plugin_listing": {"source_ref": "orca:ctx:event-1", "source_sha256": "b" * 64},
+        }
+        first = core._presentation_config_fingerprint("source-1", axes)
+        axes["plugin_listing"]["source_ref"] = "orca:ctx:event-2"
+        self.assertEqual(core._presentation_config_fingerprint("source-1", axes), first)
+        axes["installation"]["version"] = "0.4.0"
+        self.assertNotEqual(core._presentation_config_fingerprint("source-1", axes), first)
+
         # US3: a Claude listing with an absolute installPath keeps the current
         # behavior (present, install_root == installPath), no Codex cache lookup.
         with mock.patch.object(shutil, "which", return_value="/native/claude"):
@@ -788,6 +801,12 @@ class AgentOrchestrationContract(unittest.TestCase):
                     "gauntlet-step-enter", str(root), "--work-id", "work-x", "--context-id", adopted["context_id"],
                     "--epoch", "1", "--session-ref", orchestration_fixture.SESSION, "--step", "implement-parallel")
                 self.assertEqual(code, 0)
+                changed_origin = {**preview["origin"], "state_sha256": "f" * 64}
+                with mock.patch.object(grill_workspace, "_orchestration_origin", return_value=changed_origin):
+                    code, refresh = self.run_cli(*args)
+                    self.assertEqual(code, 0, refresh)
+                    code, refreshed = self.run_cli(*args, "--apply", "--expected-sha256", refresh["expected_sha256"])
+                    self.assertEqual((code, refreshed["context_id"]), (0, adopted["context_id"]))
                 invocation = entered["invocation_context"]
                 self.assertEqual(invocation["canonical_entrypoint"]["entrypoint"], "grill-with-docs:grill-implement-parallel")
                 for key, path in (("supplement", "references/agent-orchestration.md"),
@@ -892,6 +911,30 @@ class AgentOrchestrationContract(unittest.TestCase):
                          (old["project_id"], old["run_id"], old["plan_revision"]))
         self.assertNotEqual(successor["recovery_generation_id"], old["recovery_generation_id"])
         self.assertEqual(bridge["from_campaign"], old)
+        item = {"operations": {"switch-1": {"intended_after": {"campaign_bridge": bridge}}}}
+        context = {"campaign": successor, "continuity_ref": "switch-1"}
+        state = {"development": {"attestation_campaign": copy.deepcopy(old)}}
+        self.assertEqual(grill_workspace._checkpoint_campaign(item, context, state, "work-x"), successor)
+        self.assertEqual(state["development"]["attestation_campaign"], successor)
+        final = agent_orchestration.successor_campaign(successor, runtime="codex", adapter="codex",
+            registry_sha256=successor["registry_sha256"], bridge_seed={"checkpoint": "cp-2", "context": "ctx-2"})
+        second_bridge = agent_orchestration.campaign_bridge(successor, final,
+            accepted_outputs={}, worktree_identity={})
+        multi_item = {"operations": {
+            "switch-1": {"intended_after": {"campaign_bridge": bridge}},
+            "switch-2": {"intended_after": {"campaign_bridge": second_bridge}},
+        }, "contexts": {
+            "ctx-2": {"campaign": successor, "continuity_ref": "switch-1"},
+        }}
+        multi_context = {"campaign": final, "continuity_ref": "switch-2", "predecessor_context_id": "ctx-2"}
+        multi_state = {"development": {"attestation_campaign": copy.deepcopy(old)}}
+        self.assertEqual(grill_workspace._checkpoint_campaign(multi_item, multi_context, multi_state, "work-x"), final)
+        self.assertEqual(multi_state["development"]["attestation_campaign"], final)
+        broken = copy.deepcopy(item)
+        broken["operations"]["switch-1"]["intended_after"]["campaign_bridge"]["from_campaign"] = successor
+        with self.assertRaisesRegex(grill_workspace.CliFailure, "CHECKPOINT-CAMPAIGN-DIVERGENT"):
+            grill_workspace._checkpoint_campaign(broken, context,
+                {"development": {"attestation_campaign": old}}, "work-x")
         bad = copy.deepcopy(successor); bad["plan_revision"] += 1
         with self.assertRaises(agent_orchestration.OrchestrationError):
             agent_orchestration.campaign_bridge(old, bad, accepted_outputs={}, worktree_identity={})
@@ -904,6 +947,92 @@ class AgentOrchestrationContract(unittest.TestCase):
             {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"workers": {"w": {"state": "ORPHANED"}}}}}}}},
             {"activities": {}, "resources": {}}, "work-x")
         self.assertEqual(active, []); self.assertEqual(unknown, ["worker:run-1:w"])
+
+    def test_prepare_switch_recovers_an_exact_released_source(self):
+        import validate_orchestrator_store_contract as seed
+        core = grill_workspace.grill_core_module("agent_runtime")
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                "--work-id", "work-x", "--runtime", "codex", "--session-ref",
+                orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, payload)
+            snapshot = store.read_snapshot(root)
+            item = snapshot.document["agent_orchestration"]["work_items"]["work-x"]
+            context_id = item["current_context_id"]
+            checkpoint = seed.ORCHESTRATION_CHECKPOINT()
+            checkpoint["context_id"] = context_id
+            checkpoint["checkpoint_sha256"] = store.jcs_sha256(
+                {key: value for key, value in checkpoint.items() if key != "checkpoint_sha256"})
+            def add_checkpoint(document):
+                target = document["agent_orchestration"]["work_items"]["work-x"]
+                target["checkpoints"] = {"checkpoint-1": copy.deepcopy(checkpoint)}
+                target["checkpoint_head"] = "checkpoint-1"
+                return document
+            store.transact(root, add_checkpoint)
+            adapter, show, _ = orchestration_fixture.boundary(
+                grill_workspace, root, "codex", orchestration_fixture.SESSION, "work-x")
+            result = show["result"]
+            for launch in (result["worker"]["startOptions"]["launch"]["requested"],
+                           result["worker"]["startOptions"]["launch"]["effective"]):
+                launch.update(model="gpt-6-astra", effort="xhigh")
+            manifest = {"files": [], "required_activity_ids": [], "author_activity_ids": [],
+                        "task_binding": None, "human_authorization": None}
+            activity = agent_orchestration.new_activity(activity_id="orphan-author", context_id=context_id,
+                step_id="specify", activity_scope="cycle", activity_type="author", attempt=1,
+                input_manifest=manifest, policy_sha256=item["policy_sha256"], write_files=[])
+            activity = agent_orchestration.prepare_activity(activity, item["contexts"][context_id])
+            observed = adapter.observe()
+            observed["resolved_model_id"] = "gpt-6-astra"
+            activity = agent_orchestration.record_verified_activity(activity, observed)
+            resource_id, resource = agent_orchestration.session_resource(
+                activity, observed, collected_at="2026-01-01T00:00:00Z")
+            activity, _ = agent_orchestration.dispatch_activity(activity, item["contexts"][context_id])
+            activity = agent_orchestration.record_activity_result(activity, result_ref="results/orphan.md",
+                result_sha256="b" * 64, output_manifest={"files": [],
+                    "return_ref": {"ref": "results/orphan.md", "sha256": "b" * 64}, "effect_ref": None})
+            resource["state"] = "CLOSE_PENDING"
+            def add_pending_activity(document):
+                target = document["agent_orchestration"]["work_items"]["work-x"]
+                target["activities"][activity["activity_id"]] = copy.deepcopy(activity)
+                target["resources"][resource_id] = copy.deepcopy(resource)
+                return document
+            store.transact(root, add_pending_activity)
+            result["dispatch"].update(status="completed", capabilityRevokedAt="2026-01-01T00:00:00Z",
+                                      completedAt="2026-01-01T00:00:00Z")
+            result["worker"].update(state="succeeded", stage="settled")
+            result["terminal"].update(connected=False, writable=False)
+            result["terminalResource"].update(ownershipState="released", releaseState="released",
+                originDispatchId="ctx-fixture", releaseCompletedAt="2026-01-01T00:00:01Z",
+                releaseError=None, archive={"source": "transcript", "status": "captured"})
+            result["projection"].update(outcome="succeeded",
+                workspace={"id": "worktree-fixture"},
+                liveness={"verdict": "exited", "source": "resource_release"},
+                resource={"state": "released", "releaseState": "released", "terminalState": "released",
+                          "ownerDispatchId": "ctx-fixture"})
+            result["observation"]["status"] = "exited"
+            result["terminalResource"]["archive"]["status"] = "missing"
+            with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                adapter.observe_released()
+            result["terminalResource"]["archive"]["status"] = "captured"
+            argv = ("gauntlet-prepare-switch", str(root), "--work-id", "work-x", "--context-id", context_id,
+                    "--epoch", "1", "--session-ref", orchestration_fixture.SESSION,
+                    "--to-runtime", "claude", "--released-source")
+            with mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                code, quiescing = self.run_cli(*argv)
+                self.assertEqual((code, quiescing["verdict"]), (0, "QUIESCING"), quiescing)
+                code, prepared = self.run_cli(*argv)
+            self.assertEqual((code, prepared["verdict"]), (0, "SWITCH-PREPARED"), prepared)
+            saved = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+            self.assertEqual(saved["contexts"][context_id]["state"], "RELEASED")
+            self.assertEqual(saved["contexts"][context_id]["leader"]["state"], "RELEASED")
+            operation = saved["operations"][prepared["operation_id"]]
+            self.assertEqual((operation["state"], operation["observation_ref"]),
+                             ("APPLIED", orchestration_fixture.SESSION))
+            self.assertEqual(saved["activities"]["orphan-author"]["state"], "ACCEPTED")
+            self.assertEqual(saved["resources"][resource_id]["state"], "CLOSED")
+            self.assertEqual(grill_workspace._continuity_quiescence(
+                store.read_snapshot(root).document, saved, "work-x"), ([], []))
 
     def test_public_continuity_resume_observes_destination_before_commit(self):
         import validate_orchestrator_store_contract as seed
@@ -1085,6 +1214,55 @@ class AgentOrchestrationContract(unittest.TestCase):
         )
         return agent_orchestration.accept_activity(
             activity, context=context, observation=None, acceptance_ref=result["ref"]), payload
+
+    def test_accept_resumes_a_recorded_result_after_the_worker_is_released(self):
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            code, created = self.run_cli("init", str(root), "--work-id", "work-x", "--type", "feature",
+                "--slug", "x", "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION,
+                "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            snapshot = store.read_snapshot(root)
+            item = snapshot.document["agent_orchestration"]["work_items"]["work-x"]
+            context_id = item["current_context_id"]
+            context = item["contexts"][context_id]
+            manifest = {"files": [], "required_activity_ids": [], "author_activity_ids": [],
+                        "task_binding": None, "human_authorization": None}
+            (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (root / "result.md").write_text("done\n", encoding="utf-8")
+            model, effort = agent_orchestration.specialist_pair("codex", "author")
+            launch, show = native_sources(model=model, effort=effort)
+            boundary, _calls = self.boundary(probe=(launch, show), after=native_sources(
+                released=True, model=model, effort=effort))
+            observed = boundary.verified(model, effort)
+            activity = agent_orchestration.new_activity(activity_id="author-resume", context_id=context_id,
+                step_id="checklist", activity_scope="cycle", activity_type="author", attempt=1,
+                input_manifest=manifest, policy_sha256=item["policy_sha256"], write_files=[])
+            activity = agent_orchestration.prepare_activity(activity, context)
+            activity = agent_orchestration.record_verified_activity(activity, observed)
+            resource_id, resource = agent_orchestration.session_resource(
+                activity, observed, collected_at="2026-01-01T00:00:00Z")
+            activity, _payload = agent_orchestration.dispatch_activity(activity, context)
+            def add_activity(document):
+                target = document["agent_orchestration"]["work_items"]["work-x"]
+                target["activities"][activity["activity_id"]] = copy.deepcopy(activity)
+                target["resources"][resource_id] = copy.deepcopy(resource)
+                return document
+            store.transact(root, add_activity)
+            argv = ("gauntlet-activity", str(root), "--work-id", "work-x", "--context-id", context_id,
+                    "--epoch", "1", "--session-ref", orchestration_fixture.SESSION,
+                    "--activity-id", "author-resume", "--step", "checklist", "--scope", "cycle",
+                    "--kind", "author", "--phase", "accept", "--input-manifest", "manifest.json",
+                    "--result", "result.md")
+            code, recorded = self.run_cli(*argv)
+            self.assertEqual((code, recorded["verdict"]), (0, "RESULT-RECORDED"), recorded)
+            closed = boundary.close(observed)
+            (root / "closed.json").write_text(json.dumps(closed), encoding="utf-8")
+            code, accepted = self.run_cli(*argv, "--observation", "closed.json")
+            self.assertEqual((code, accepted["verdict"]), (0, "ACCEPTED"), accepted)
+            saved = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+            self.assertEqual(saved["activities"]["author-resume"]["state"], "ACCEPTED")
+            self.assertEqual(saved["resources"][resource_id]["state"], "CLOSED")
 
     def test_specialist_admission(self):
         activity, bootstrap, payload, observed, closed, context = self.accepted_specialist("author-plan")
@@ -1392,6 +1570,12 @@ class AgentOrchestrationContract(unittest.TestCase):
             {"schema": "grill-partition-report/v2", "phases": [{"phase": 1, "task_ids": ["T001"]}]},
             target_phase=2, dag_content_sha256=dag_hash)
         self.assertEqual(guard["pending"], [])
+        external = gauntlet_runs.task_phase_barrier(
+            {"schema": gauntlet_runs.DAG_V2_SCHEMA, "tasks_semantic_sha256": semantic,
+             "accepted_tasks": {}},
+            {"schema": "grill-partition-report/v2", "phases": [{"phase": 1, "task_ids": ["T001"]}]},
+            target_phase=2, dag_content_sha256=dag_hash, accepted_tasks=accepted)
+        self.assertEqual(external["pending"], [])
         current = "- [X] T001 old\n"
         proposal = "<!-- grill-task-files:v1 -->\n- [X] T001 old\n"
         preview = agent_orchestration.task_files_migration_preview(
@@ -1426,6 +1610,7 @@ class AgentOrchestrationContract(unittest.TestCase):
             with self.subTest(boundary=core_action), \
                  mock.patch.object(grill_workspace, "gauntlet_run_admission",
                                    return_value=(Path("."), gauntlet_runs, {}, record)), \
+                 mock.patch.object(grill_workspace, "_scheduler_accepted_tasks", return_value={}), \
                  mock.patch.object(gauntlet_runs, "task_phase_barrier",
                                    side_effect=gauntlet_runs.GauntletRunError("TASK-PHASE-PENDING", "T001")) as guard, \
                  mock.patch.object(gauntlet_runs, core_action,

@@ -1,5 +1,29 @@
 # Changelog
 
+## 6.0.8
+
+- Fix: o primeiro checkpoint após `gauntlet-resume` promove a `attestation_campaign` do estado de desenvolvimento somente quando o `campaign_bridge` validado da operação de continuidade liga exatamente a geração anterior à campanha do contexto sucessor. Divergência sem bridge exato continua bloqueada por `CHECKPOINT-CAMPAIGN-DIVERGENT`.
+
+## 6.0.7
+
+- Fix: `gauntlet-orchestration-adopt` pode atualizar somente a apresentação do mesmo contexto `ACTIVE` quando a origem histórica já mudou, desde que líder observado, policy e scope permaneçam idênticos. Mudança de líder, policy ou scope continua recusada; o comando não reescreve a origem congelada nem o restante do work item.
+
+## 6.0.6
+
+- Fix: o fingerprint de apresentação ignora `plugin_listing.source_ref`, metadado histórico que contém o ID volátil do evento. Repetir a mesma listagem nativa não simula mais mudança de configuração nem invalida a leitura integral feita após compactação; versão, instalação e os demais eixos semânticos continuam participando do fingerprint.
+
+## 6.0.5
+
+- Fix: a verificação compartilhada de quiescência, inclusive em `gauntlet-resume`, reconhece `RESULT_RECORDED` como tentativa pendente não ativa quando sua sessão correlacionada já está `CLOSED` e vinculada ao mesmo resultado durável. Em 6.0.4 o prepare fechava corretamente o recurso, mas o resume voltava a bloquear a mesma atividade.
+
+## 6.0.4
+
+- Fix: a recuperação `--released-source` também reconcilia sessões especialistas `CLOSE_PENDING` de atividades `RESULT_RECORDED` quando o release arquivado do dispatch exato comprova identidade, settlement e fechamento. A atividade e seu resultado permanecem pendentes no checkpoint, sem aceitação ou reexecução; somente o recurso de sessão passa a `CLOSED`, removendo o bloqueio permanente de quiescência.
+
+## 6.0.3
+
+- Fix: `gauntlet-prepare-switch --released-source` recupera uma troca quando o líder de origem já foi encerrado pelo Orca. A prova exige o dispatch exato concluído e revogado, worker settled, terminal desconectado e não gravável, mesma worktree/incarnation, recurso liberado e transcript arquivado; silêncio, lease expiry e evidência parcial continuam recusados. O fluxo comum permanece inalterado e a recuperação conserva as transições persistidas `ACTIVE → QUIESCING → RELEASED`.
+
 ## 6.0.2
 
 - Fix: a observação da instalação do `i-have-adhd` no Codex deixa de exigir `installPath`, campo que o `codex plugin list --json` (codex-cli 0.154.0) não emite, o que levava toda entrada GWD no Codex a `STYLE-DEPENDENCY-UNDETERMINED`. Sem `installPath`, a raiz é composta de `marketplaceName`, `name` e `version` da própria entrada nativa sob `CODEX_HOME` (ou `~/.codex`) `/plugins/cache/`, aceita somente com `installed=true`, nomes simples (sem barra, contrabarra, drive do Windows, `.` ou `..`) e o `SKILL.md` presente em disco; falha de acesso ao cache ou ausência de home resultam em instalação indeterminada, nunca em exceção; conteúdo divergente segue recusado por `STYLE-CONTENT-INCOMPATIBLE` pela verificação comum aos dois runtimes. `installPath` informado continua tendo precedência, e um valor inválido não é substituído pelo caminho composto. O Claude não muda. Um teste novo usa a entrada real capturada do Codex 0.154.0 (sem `installPath`); o teste antigo, com listagem que traz `installPath`, continua valendo para o caminho de precedência.

@@ -1585,6 +1585,18 @@ def _require_current_leader(root: Path, work_id: str, context: dict[str, Any], s
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "current leader changed")
 
 
+def _require_released_leader(root: Path, work_id: str, context: dict[str, Any], session_ref: str) -> dict[str, Any]:
+    runtime = grill_core_module("agent_runtime")
+    try:
+        observed = _leader_boundary(root, context["runtime"], session_ref, work_id).observe_released()
+    except runtime.RuntimeError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-RELEASE-UNPROVEN", str(exc)) from exc
+    if (context["leader"].get("session_ref") != observed["source_ref"]
+            or context["leader"].get("incarnation") != observed["incarnation"]):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-RELEASE-UNPROVEN", "released leader changed")
+    return observed
+
+
 def _orchestration_inputs(root: Path, work_id: str, runtime: str, session_ref: str | None,
                           scope_files: list[str], readiness: dict[str, Any] | None = None) -> tuple[Any, dict[str, Any]]:
     item = resolve_development_item(root, work_id)
@@ -1684,11 +1696,16 @@ def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any
                 inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
                 adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), context_id=context_id))
         item = block["work_items"][args.work_id]
-        if item["origin"] != inputs["origin"] or item["policy_sha256"] != policy_sha256:
+        if item["policy_sha256"] != policy_sha256:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
         current = item.get("contexts", {}).get(item.get("current_context_id"))
         if current is not None and not _same_observed_leader(current, incoming):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "existing context has different runtime or session")
+        if item["origin"] != inputs["origin"]:
+            if current is None or item["scope_files"] != inputs["scope_files"]:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
+            current["presentation"] = inputs["presentation"]
+            return document
         if current is not None:
             current["presentation"] = inputs["presentation"]
         if item["scope_files"] != inputs["scope_files"]:
@@ -1794,16 +1811,11 @@ def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: 
         if contract.checkpoint_content_sha256(content) != existing.get("result_sha256"):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CONTENT-INVALID", args.operation_id)
         return {"verdict": "REUSED", "work_id": args.work_id, **content["result"], "store_revision": snapshot.revision}
+    accepted_campaign = _checkpoint_campaign(item, context, state, args.work_id)
     state_after = (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
     relative_state = state_path.relative_to(root).as_posix()
     checkpoint_id = "cp-" + store.jcs_sha256({"store_origin": request["store_origin"], "work_id": args.work_id, "operation_id": args.operation_id})
     cleanup_obligations, preserved_resources = _cleanup_checkpoint_projection(root, args.work_id)
-    accepted_campaign = context["campaign"]
-    development_campaign = state.get("development", {}).get("attestation_campaign")
-    if accepted_campaign is None and isinstance(development_campaign, dict):
-        accepted_campaign = development_campaign
-    elif accepted_campaign is not None and isinstance(development_campaign, dict) and accepted_campaign != development_campaign:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CAMPAIGN-DIVERGENT", args.work_id)
     checkpoint = {
         "schema": contract.CHECKPOINT_SCHEMA, "checkpoint_id": checkpoint_id, "context_id": context_id,
         "previous_checkpoint_id": item.get("checkpoint_head"), "worktree_identity": context.get("worktree_identity", {}),
@@ -1866,6 +1878,37 @@ def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: 
     except store.StoreError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
     return {"verdict": "UPDATED", "work_id": args.work_id, **result, "store_revision": committed.revision}
+
+
+def _checkpoint_campaign(item: dict[str, Any], context: dict[str, Any],
+                         state: dict[str, Any], work_id: str) -> dict[str, Any] | None:
+    """Advance development state only across validated continuity bridges."""
+    accepted = context["campaign"]
+    development = state.get("development", {})
+    current = development.get("attestation_campaign") if isinstance(development, dict) else None
+    if accepted is None and isinstance(current, dict):
+        return current
+    if accepted is None or not isinstance(current, dict) or accepted == current:
+        return accepted
+    cursor = context
+    visited: set[str] = set()
+    while isinstance(cursor, dict) and cursor.get("campaign") != current:
+        continuity_ref = cursor.get("continuity_ref")
+        if not isinstance(continuity_ref, str) or continuity_ref in visited:
+            break
+        visited.add(continuity_ref)
+        operation = item.get("operations", {}).get(continuity_ref, {})
+        bridge = operation.get("intended_after", {}).get("campaign_bridge") if isinstance(operation, dict) else None
+        if not isinstance(bridge, dict) or bridge.get("to_campaign") != cursor.get("campaign"):
+            break
+        if bridge.get("from_campaign") == current:
+            development["attestation_campaign"] = copy.deepcopy(accepted)
+            return accepted
+        predecessor = item.get("contexts", {}).get(cursor.get("predecessor_context_id"))
+        if not isinstance(predecessor, dict) or predecessor.get("campaign") != bridge.get("from_campaign"):
+            break
+        cursor = predecessor
+    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CAMPAIGN-DIVERGENT", work_id)
 
 
 def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -3228,11 +3271,18 @@ def _continuity_identity(root: Path, work_id: str, state: dict[str, Any]) -> dic
             "real_path": str(root.resolve()), "branch": branch}
 
 
-def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_id: str) -> tuple[list[str], list[str]]:
+def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_id: str,
+                           quiet_activity_ids: set[str] | None = None) -> tuple[list[str], list[str]]:
     """Only explicit terminal observations are quiet; lease expiry and silence are ignored."""
+    quiet_activity_ids = quiet_activity_ids or set()
     active, unknown = [], []
     for activity_id, activity in item.get("activities", {}).items():
-        if activity.get("state") in {"BOOTSTRAPPING", "VERIFIED", "DISPATCHED", "RESULT_RECORDED"}:
+        resource = item.get("resources", {}).get(activity.get("session_resource_id"))
+        result_session_closed = (activity.get("state") == "RESULT_RECORDED"
+            and isinstance(resource, dict) and resource.get("state") == "CLOSED"
+            and resource.get("result_acceptance_ref") == activity.get("result_ref"))
+        if (activity.get("state") in {"BOOTSTRAPPING", "VERIFIED", "DISPATCHED", "RESULT_RECORDED"}
+                and activity_id not in quiet_activity_ids and not result_session_closed):
             active.append("activity:" + activity_id)
     for resource_id, resource in item.get("resources", {}).items():
         if resource.get("kind") == "session" and resource.get("state") == "UNKNOWN":
@@ -3240,6 +3290,33 @@ def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_
     runs = document.get("work_items", {}).get(work_id, {}).get("gauntlet", {}).get("runs", {})
     worker_active, worker_unknown = grill_core_module("gauntlet_runs").continuity_worker_quiescence(runs)
     return sorted(active + worker_active), sorted(unknown + worker_unknown)
+
+
+def _released_activity_sessions(root: Path, item: dict[str, Any], work_id: str) -> dict[str, tuple[str, dict[str, Any]]]:
+    """Return pending result sessions whose exact Orca release archive is current."""
+    runtime = grill_core_module("agent_runtime")
+    released: dict[str, tuple[str, dict[str, Any]]] = {}
+    for activity_id, activity in item.get("activities", {}).items():
+        resource_id = activity.get("session_resource_id")
+        resource = item.get("resources", {}).get(resource_id)
+        identity = resource.get("identity", {}) if isinstance(resource, dict) else {}
+        dispatch = identity.get("owner_dispatch")
+        if (activity.get("state") != "RESULT_RECORDED" or activity.get("activity_type") != "author"
+                or not isinstance(resource_id, str)
+                or resource.get("state") not in {"CLOSE_PENDING", "CLOSED"}
+                or resource.get("kind") != "session" or resource.get("activity_id") != activity_id
+                or not isinstance(dispatch, str)):
+            continue
+        try:
+            observed = _leader_boundary(root, identity.get("provider"), "orca:" + dispatch, work_id).observe_released()
+        except (runtime.RuntimeError, TypeError):
+            continue
+        observed_identity = {key: observed.get(key) for key in (
+            "provider", "adapter", "host", "runtime_instance", "handle", "incarnation",
+            "owner_dispatch", "task_id", "dispatch_incarnation", "worktree_id")}
+        if identity == observed_identity:
+            released[activity_id] = (resource_id, observed)
+    return released
 
 
 def _continuity_operation(item: dict[str, Any], context_id: str, to_runtime: str) -> tuple[str, dict[str, Any]] | None:
@@ -3292,7 +3369,10 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
             or context.get("epoch") != args.epoch or context.get("leader", {}).get("session_ref") != args.session_ref
             or context.get("state") not in {"ACTIVE", "QUIESCING"}):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
-    _require_current_leader(root, args.work_id, context, args.session_ref)
+    released = _require_released_leader(root, args.work_id, context, args.session_ref) if args.released_source else None
+    if released is None:
+        _require_current_leader(root, args.work_id, context, args.session_ref)
+    released_sessions = _released_activity_sessions(root, item, args.work_id) if released is not None else {}
     identity = _continuity_identity(root, args.work_id, read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1])
     if context.get("worktree_identity") not in (None, identity):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "worktree identity changed")
@@ -3331,7 +3411,7 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
         checkpoint_id = operation.get("expected_before", {}).get("checkpoint_id")
         if not isinstance(checkpoint_id, str):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", operation_id)
-    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
+    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id, set(released_sessions))
     began_active = context["state"] == "ACTIVE"
     def mutate(document: dict[str, Any]) -> dict[str, Any]:
         target = document["agent_orchestration"]["work_items"][args.work_id]
@@ -3340,6 +3420,24 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
                 or source.get("epoch") != args.epoch or source.get("leader", {}).get("session_ref") != args.session_ref):
             raise store.StoreError(store.STATE_DIVERGENCE, "continuity source changed")
         target["operations"].setdefault(operation_id, copy.deepcopy(operation))
+        for activity_id, (resource_id, observation) in released_sessions.items():
+            activity = target["activities"].get(activity_id)
+            resource = target["resources"].get(resource_id)
+            if (not isinstance(activity, dict) or activity.get("state") != "RESULT_RECORDED"
+                    or not isinstance(resource, dict) or resource.get("identity") != item["resources"][resource_id]["identity"]
+                    or resource.get("state") not in {"CLOSE_PENDING", "CLOSED"}):
+                raise store.StoreError(store.STATE_DIVERGENCE, "released activity session changed")
+            if resource["state"] == "CLOSE_PENDING":
+                release_ref = observation["source_ref"] + ":release"
+                receipt = {"ref": release_ref, "sha256": observation["source_sha256"]}
+                if receipt not in resource["evidence_manifest"]["receipts"]:
+                    resource["evidence_manifest"]["receipts"].append(receipt)
+                resource.update({"state": "CLOSED", "last_observation": release_ref,
+                                 "result_acceptance_ref": activity["result_ref"]})
+                activity.update({"released_at": observation["source_ref"],
+                                 "accepted_by_context": source["context_id"],
+                                 "acceptance_ref": activity["result_ref"],
+                                 "review_verdict": "APPROVED", "state": "ACCEPTED"})
         source.setdefault("worktree_identity", copy.deepcopy(identity))
         if source["campaign"] is None and operation["intended_after"]["campaign_bridge"] is not None:
             source["campaign"] = copy.deepcopy(operation["intended_after"]["campaign_bridge"]["from_campaign"])
@@ -3353,6 +3451,8 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
                     identity=identity, store_revision=document["revision"] + 1, journal_anchor=document["journal_head"])
                 target["checkpoints"][checkpoint_id] = checkpoint; target["checkpoint_head"] = checkpoint_id
             target["operations"][operation_id]["state"] = "APPLIED"
+            if released is not None:
+                target["operations"][operation_id]["observation_ref"] = released["source_ref"]
         return document
     try:
         committed = store.transact(root, mutate)
@@ -3713,14 +3813,9 @@ def gauntlet_partition_brief_command(args: argparse.Namespace) -> tuple[dict[str
         phase_match = re.match(r"^p(\d+)-", args.node_id)
         if phase_match is None:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "v2 node has no phase identity")
-        runs = grill_core_module("gauntlet_runs")
-        try:
-            guard = runs.task_phase_barrier(dag, report, target_phase=int(phase_match.group(1)),
-                                            dag_content_sha256=hash_bytes(safe_read_regular_fd(root, root / args.dag)))
-        except runs.GauntletRunError as error:
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
-        if guard["pending"]:
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", ",".join(guard["pending"]))
+        # This command only renders a read-only brief.  The mutable scheduler
+        # entrances enforce the phase barrier against current accepted-task
+        # receipts before a wave or worker can exist.
         results = node["result_files"]
         lines = [
             f"You are worker {args.node_id} of feature {dag.get('feature')}.", "",
@@ -4041,15 +4136,50 @@ def _require_scheduler_task_phase(root: Path, gauntlet_runs: Any,
             if phase not in targets:
                 targets.append(phase)
         legacy = False
+        accepted_tasks = _scheduler_accepted_tasks(root, args.work_id, dag, dag_sha256)
     for target_phase in targets:
         try:
             guard = gauntlet_runs.task_phase_barrier(
                 dag, report, target_phase=target_phase, dag_content_sha256=dag_sha256, legacy=legacy,
+                accepted_tasks=None if legacy else accepted_tasks,
             )
         except gauntlet_runs.GauntletRunError as error:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
         if guard["pending"]:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", ",".join(guard["pending"]))
+
+
+def _scheduler_accepted_tasks(root: Path, work_id: str, dag: Mapping[str, Any],
+                              dag_sha256: str) -> dict[str, Any]:
+    """Project accepted task activities without rewriting the sealed DAG."""
+    store = grill_core_module("store")
+    snapshot = store.read_snapshot(root)
+    item = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
+    if not isinstance(item, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "orchestration item is absent")
+    context_id = item.get("current_context_id")
+    semantic = dag.get("tasks_semantic_sha256")
+    accepted = dict(dag.get("accepted_tasks") or {})
+    for activity_id, activity in item.get("activities", {}).items():
+        if not isinstance(activity, dict) or activity.get("state") != "ACCEPTED":
+            continue
+        binding = activity.get("task_binding")
+        if (activity.get("step_id") != "implement-parallel" or activity.get("context_id") != context_id
+                or activity.get("accepted_by_context") != context_id or not isinstance(binding, dict)
+                or binding.get("tasks_semantic_sha256") != semantic
+                or binding.get("dag_content_sha256") != dag_sha256):
+            continue
+        task_id = binding.get("task_id")
+        if not isinstance(task_id, str):
+            continue
+        receipt = {"state": "ACCEPTED", "task_binding": binding,
+                   "activity_id": activity_id, "acceptance_ref": activity.get("acceptance_ref")}
+        previous = accepted.get(task_id)
+        if previous is not None and (previous.get("state"), previous.get("task_binding")) != (
+                receipt["state"], receipt["task_binding"]):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-RESULT-DIVERGENT", task_id)
+        accepted[task_id] = receipt
+    return accepted
 
 
 def gauntlet_dag_validate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -4976,7 +5106,7 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     input_divergent = existing is not None and existing.get("input_sha256") != current_input_sha256
     if existing is None or (input_divergent and not (args.phase == "accept"
                                                       and args.kind == "reviewer"
-                                                      and existing.get("state") == "DISPATCHED")):
+                                                      and existing.get("state") in {"DISPATCHED", "RESULT_RECORDED"})):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-INPUT-DIVERGENT", args.activity_id)
     if args.phase == "dispatch":
         if args.kind != "deterministic_check" and not args.observation:
@@ -5034,11 +5164,13 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
 
     if args.phase != "accept":
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ACTIVITY-PHASE", args.phase)
-    if existing.get("state") != "DISPATCHED":
+    if existing.get("state") not in {"DISPATCHED", "RESULT_RECORDED"}:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
     if not args.result and not args.diagnostic:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-REQUIRED", args.activity_id)
     if args.diagnostic and not args.result:
+        if existing.get("state") != "DISPATCHED":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
         diagnostic = _checkpoint_ref(root, args.diagnostic)
         assert diagnostic is not None
         failed = copy.deepcopy(existing); failed.update({"diagnostic_ref": diagnostic["ref"], "state": "FAILED"})
@@ -5049,21 +5181,29 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     result = _checkpoint_ref(root, args.result)
     assert result is not None
     output = {"files": [], "return_ref": result, "effect_ref": None}
-    try:
-        recorded = contract.record_activity_result(existing, result_ref=result["ref"], result_sha256=result["sha256"],
-                                                   output_manifest=output, diagnostic_ref=None)
-    except contract.OrchestrationError as exc:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-INVALID", str(exc)) from exc
-    def record(document: dict[str, Any]) -> dict[str, Any]:
-        updated = _replace_activity(document, args.work_id, args.activity_id, existing, recorded)
-        if recorded["activity_type"] != "deterministic_check":
-            resource_id = recorded["session_resource_id"]
-            resource = updated["agent_orchestration"]["work_items"][args.work_id]["resources"].get(resource_id)
-            if not isinstance(resource, dict) or resource.get("state") != "REGISTERED":
-                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
-            resource["state"] = "CLOSE_PENDING"
-        return updated
-    committed = store.transact(root, record)
+    if existing["state"] == "DISPATCHED":
+        try:
+            recorded = contract.record_activity_result(existing, result_ref=result["ref"], result_sha256=result["sha256"],
+                                                       output_manifest=output, diagnostic_ref=None)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-INVALID", str(exc)) from exc
+        def record(document: dict[str, Any]) -> dict[str, Any]:
+            updated = _replace_activity(document, args.work_id, args.activity_id, existing, recorded)
+            if recorded["activity_type"] != "deterministic_check":
+                resource_id = recorded["session_resource_id"]
+                resource = updated["agent_orchestration"]["work_items"][args.work_id]["resources"].get(resource_id)
+                if not isinstance(resource, dict) or resource.get("state") != "REGISTERED":
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
+                resource["state"] = "CLOSE_PENDING"
+            return updated
+        committed = store.transact(root, record)
+        recorded_revision = committed.revision
+    else:
+        recorded = existing
+        if (recorded.get("result_ref") != result["ref"] or recorded.get("result_sha256") != result["sha256"]
+                or recorded.get("output_manifest") != output or recorded.get("diagnostic_ref") is not None):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-INVALID", args.activity_id)
+        recorded_revision = snapshot.revision
     if args.kind == "deterministic_check":
         snapshot = store.read_snapshot(root); item, bound = current(snapshot.document)
         recorded = item["activities"][args.activity_id]
@@ -5079,7 +5219,7 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
                 "store_revision": committed.revision}, EXIT_OK
     if not args.observation:
         return {"verdict": "RESULT-RECORDED", "activity_id": args.activity_id,
-                "store_revision": committed.revision}, EXIT_OK
+                "store_revision": recorded_revision}, EXIT_OK
     observation, _observation_ref = _activity_json(root, args.observation, "SPECIALIST-CAPABILITY-UNPROVEN")
     snapshot = store.read_snapshot(root); item, bound = current(snapshot.document)
     recorded = item["activities"][args.activity_id]
@@ -6020,6 +6160,7 @@ def build_parser() -> JsonParser:
     prepare_switch_parser.add_argument("--epoch", type=int, required=True)
     prepare_switch_parser.add_argument("--session-ref", required=True)
     prepare_switch_parser.add_argument("--to-runtime", choices=("claude", "codex"), required=True)
+    prepare_switch_parser.add_argument("--released-source", action="store_true")
     attest_parser = subparsers.add_parser("attest")
     attest_parser.add_argument("root")
     attest_parser.add_argument("--work-id", required=True)
