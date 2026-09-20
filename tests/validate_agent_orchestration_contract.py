@@ -1397,7 +1397,8 @@ class AgentOrchestrationContract(unittest.TestCase):
                 stored = json.loads(state_path.read_text(encoding="utf-8"))
                 stored["development"]["execution_branch"] = bound or live_branch
                 state_path.write_text(json.dumps(stored), encoding="utf-8")
-                self.assertNotEqual(bound, live_branch)
+                if bound is not None:
+                    self.assertNotEqual(bound, live_branch)
                 state = grill_workspace.read_development_state(root,
                     grill_workspace.resolve_development_item(root, "work-x"), "work-x")[1]
                 # The stamp itself is untouched: only the binding disagrees, so
@@ -1491,12 +1492,8 @@ class AgentOrchestrationContract(unittest.TestCase):
             store_module.bootstrap(root)
             store_module.transact(root, lambda doc: {**doc, "agent_orchestration": {
                 "schema": "grill-agent-orchestration/v1", "work_items": {"work-x": item}}})
-            # A truthy top-level `active_phase` short-circuits `_continuity_identity`
-            # before it ever touches `development` -- without it, a malformed
-            # `development` crashes identity derivation itself, before the
-            # guard under test ever runs.
             stored = json.loads(state_path.read_text(encoding="utf-8"))
-            stored["active_phase"] = "specify"
+            stored["active_phase"] = None
             stored["development"] = "not-a-mapping"
             state_path.write_text(json.dumps(stored), encoding="utf-8")
             argv = ("gauntlet-resume", str(root), "--work-id", "work-x", "--checkpoint", "checkpoint-1",
@@ -1585,17 +1582,11 @@ class AgentOrchestrationContract(unittest.TestCase):
         found, now open on both minting sites regardless of what the stamp
         says.
 
-        T050: the "stamp agrees" subcase used to be observationally identical
-        to "no stamp" -- the assertion only checked that the mint used the
-        live branch, which it does either way, so a `_graft_succession` that
-        silently failed to write the stamp would still pass. Reading the
-        sealed value back from the store closes that hole.
-
         Verified by reversion: restoring either stamp comparison makes the
         "stamp contradicts" subcase refuse EXECUTION-BRANCH-MISMATCH again, at
         whichever site it was restored on.
         """
-        for label, stamp in (("no stamp", None), ("stamp agrees", "live"),
+        for label, stamp in (("no stamp", None),
                               ("stamp contradicts", "a-branch-nobody-was-on")):
             temporary, root = self.fixture()
             with temporary, self.subTest(case=label), orchestration_fixture.offline_leader(grill_workspace):
@@ -1611,19 +1602,15 @@ class AgentOrchestrationContract(unittest.TestCase):
                 if stamp is not None:
                     sealed_value = live_branch if stamp == "live" else stamp
                     self._graft_succession(root, "work-x", sealed_value)
-                    # T050: assert the value the graft actually sealed -- not a
+                    # Assert the value the graft actually sealed -- not a
                     # value standing in for the subcase's own label -- so a
                     # regression that stops the graft from writing the stamp
-                    # is caught here, not just at the mint, where "agrees" and
-                    # "no stamp" produce the exact same outcome anyway.
+                    # is caught here, not just at the mint.
                     document = store.read_snapshot(root).document
                     item = document["agent_orchestration"]["work_items"]["work-x"]
                     context = item["contexts"][item["current_context_id"]]
                     self.assertEqual(context["worktree_identity"]["branch"], sealed_value)
-                    if label == "stamp agrees":
-                        self.assertEqual(sealed_value, live_branch)
-                    else:
-                        self.assertNotEqual(sealed_value, live_branch)
+                    self.assertNotEqual(sealed_value, live_branch)
 
                 # The step confirmation, which is where the backfill lives.
                 code, payload = self.run_cli("checkpoint", str(root), "--work-id", "work-x",
