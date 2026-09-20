@@ -1,0 +1,12 @@
+{
+  "worker": "p01-b",
+  "feature": "032-continuity-context",
+  "completed": ["T002"],
+  "tasks": {
+    "T002": {
+      "status": "done",
+      "summary": "Adicionada observe_predecessor_termination em agent_runtime.py: le worker-show pelo mesmo read injetavel de LeaderBoundary, sem novo transporte. Terminal quando dispatch.status fora de dispatched/running, ou capabilityRevokedAt != null, ou liveness.verdict==exited com liveness.source==agent_status. not_observable quando session_ref nao casa com o padrao orca:ctx_/ctx-. indeterminate para resposta ausente/ilegivel/JSON invalido, dispatch nao correlacionado, liveness inconclusiva ou excecao do callable read (nunca propaga). Retorno sempre carrega reference e digest sha256 da resposta observada. LeaderBoundary.observe e _orca_observation nao foram alterados.",
+      "evidence": "python3 tests/validate_agent_orchestration_contract.py -> Ran 33 tests, OK (sem edicao de teste). Check ad hoc (nao commitado) com 11 casos sinteticos cobrindo: terminal por status, por capabilityRevokedAt, por liveness exited/agent_status; vivo (indeterminate); liveness unverifiable (indeterminate); liveness exited com source divergente (indeterminate); JSON invalido (indeterminate); ok:false (indeterminate); dispatch divergente (indeterminate); session_ref sem a forma esperada (not_observable, read nao chamado); excecao do callable read (indeterminate, nao propaga) -> ALL_CHECKS_PASSED."
+    }
+  }
+}
