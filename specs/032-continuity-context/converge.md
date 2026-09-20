@@ -704,3 +704,67 @@ Está certo, e a razão é a mesma que motivou vários achados desta entrega: **
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R7.
+
+---
+
+# Rodada 15 — 2026-09-20, consumindo o review R7
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T047), constituição, `review.md` seção R7 · **Desfecho**: `tasks_appended` — seis tarefas em `## Phase 13: Convergence`
+
+O R7 devolveu REQUEST CHANGES com 1 Critical, 2 Important e 9 Minor. O Critical é o que importa, e ele muda a leitura desta entrega inteira.
+
+## O Critical é regressão de um Critical que esta entrega já fechou
+
+| Achado | Gap | Severidade | Origem | Tarefa |
+|---|---|---|---|---|
+| R7-1 — a comparação de branca no caminho de cunhagem congela no carimbo e volta a bloquear permanentemente | contradicts | **CRITICAL** | FR-001, FR-005 | T048 |
+| R7-2 — o subcaso de carimbo coincidente não prova nada | partial | Important | FR-011 | T050 |
+| R7-3 — comentários afirmando o critério antigo | partial | Important | FR-010 | T051 |
+| m1, m3, m5 — nome que promete o que não cumpre, dois detalhes sob um código, documentação citando dois verbos de três | partial | Minor | FR-010 | T052 |
+| m9 — dois ramos de recusa sem teste algum | missing | Minor | FR-011 | T053 |
+| — conversão dos dois casos da Phase 12 ao comportamento novo | partial | — | FR-011 | T049 |
+
+**A rodada 5 desta mesma entrega fechou J1 e H1, ambos CRITICAL, removendo `phase` e `branch` do conjunto comparado.** O registro de fechamento do H1 diz, textualmente, que o caso sem carimbo prévio não pode recusar *"porque recusar tornaria a tomada impossível para sempre, já que não existe verbo de re-carimbo"*.
+
+A Phase 12 reintroduziu a comparação de `branch` — em outro caminho, o da cunhagem do vínculo, mas com a mesma consequência e pelo mesmo mecanismo. O comentário que registra a doutrina do J1 continua no arquivo, **três linhas acima do auxiliar novo**, e descreve o defeito em português claro. Não é um comentário que envelheceu: é um aviso correto que foi atropelado.
+
+## A decisão de conserto foi do humano
+
+Apresentei duas saídas e a decisão foi **remover a comparação** (T048), não mitigá-la com consulta ao audit.
+
+O argumento que sustenta a remoção é que a proteção aparente já existe a montante: tomada e retomada derivam a identidade ao vivo e recusam divergência estrutural antes de mutar, e a varredura de segurança do R7 confirmou no código — não na prosa — que não há caminho de carimbo forjado. Depois de uma sucessão, a branca viva **é** a árvore daquele contexto. A guarda não acrescentava prova; acrescentava uma condição que envelhece.
+
+Consequência assumida: T048 desfaz parte do que o R6 pediu, e os dois casos que a Phase 12 escreveu para assertar recusa passam a assertar vínculo (T049). Nenhum dos dois pode ser apagado — juntos são a única cobertura da sequência que motivou a entrega.
+
+## O padrão das minhas instruções está completo, e tem nome
+
+O critério do R7-1 foi recomendado pelo R6 e repassado por mim ao brief da Phase 12 **sem confronto com o J1, que está neste mesmo arquivo**. O worker executou o brief corretamente. A falha é da instrução, e é a terceira seguida do mesmo tipo:
+
+| # | Tarefa | Critério que instruí | Por que quebrou |
+|---|---|---|---|
+| 1 | T031 | contar candidatos antes dos filtros | "antes dos filtros" incluía o filtro que discriminava |
+| 2 | T040 | recusar quando o contexto tiver predecessor | predecessor só cresce; a decisão precisa ser reavaliável |
+| 3 | T044 | recusar quando o carimbo existir e diferir | o carimbo só nasce na sucessão; a branca se move sem ele |
+
+Os três ancoram uma recusa em estado que **não é reavaliável no momento da decisão**: nos dois primeiros o estado só crescia, no terceiro ele congela. A pergunta que teria pego os três, e que passa a ser obrigatória antes de eu aceitar qualquer critério de recusa: *quem escreve esse estado, quem o limpa, e o que acontece quando o mundo muda legitimamente e ele não muda junto?*
+
+A segunda lição é mais barata e mais constrangedora: **o `converge.md` já continha a resposta**. Bastava ler o fechamento do J1 antes de escrever o brief do T044.
+
+## O que o R7 confirmou fechado
+
+Nenhuma regressão entre R1 e R6 fora a do J1: o ponto único da Phase 10 está intacto e a tupla estrutural é única, o filtro de contexto do R4-3 continua antes da contagem, os quatro achados laterais do R5 seguem fechados, e o R6-2 e o R6-3 estão fechados — este último com as duas metades instalando os mesmos substitutos de fronteira, provado por reversão executada.
+
+Três das quatro reversões que o revisor de teste executou passaram, incluindo a que isola a guarda da virada de fase e prova que os dois sítios são independentemente cobertos. A quarta virou o R7-2.
+
+A varredura de segurança não achou Critical nem Important: a afrouxada da Phase 12 está corretamente ancorada, a branca vem de nome curto validado por `check-ref-format` nos dois sítios, e o dado não entra em construção de caminho em lugar nenhum.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 1 · partial 4 · contradicts 1 · unrequested 0
+- Tarefas acrescentadas: 6 (T048–T053), uma delas CRITICAL
+
+## Próxima ação
+
+Executar `implement-parallel` na Phase 13 e reconvergir. T048 e T049 tocam os mesmos dois arquivos e são sequenciais entre si; T051, T052 e T053 são independentes.
