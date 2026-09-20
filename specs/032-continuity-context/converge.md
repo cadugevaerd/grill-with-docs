@@ -827,3 +827,67 @@ A segunda é a que importa: ela prova que a correção do R7-2 fechou o buraco q
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R8.
+
+---
+
+# Rodada 17 — 2026-09-20, consumindo o review R8
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T053), constituição, `review.md` seção R8 · **Desfecho**: `tasks_appended` — quatro tarefas em `## Phase 14: Convergence`
+
+O R8 devolveu REQUEST CHANGES com **zero Critical**, 3 Important e 5 Minor. É a primeira rodada sem Critical desde o R5, e a diferença de natureza importa: nenhum dos três Important é defeito de comportamento.
+
+| Achado | Gap | Severidade | Origem | Tarefa |
+|---|---|---|---|---|
+| R8-1 — o comentário da tupla estrutural continua afirmando que a branca nunca é comparada | contradicts | Important | FR-010 | T054 |
+| R8-3 — a recusa por esquema é inalcançável quando a fase ativa é nula | partial | Important | FR-010 | T055 |
+| R8-2 — o conserto do R7-2 não fechou o buraco do subcaso que ele anota | partial | Important | FR-011 | T056 |
+| — o caso do T053 prova a guarda só no caminho em que ela já funcionava | partial | — | FR-011 | T057 |
+| n1, n2 | partial | Minor | FR-010, FR-011 | T054, T056 |
+| n3, n4, n5 | — | Minor | — | débito registrado |
+
+## O Critical do R7 está fechado, verificado por três revisores independentes
+
+A tupla estrutural tem **uma definição e um consumidor** no repositório, aplicados nos três verbos, e nada mais compara carimbo para recusar. Os dois sítios de cunhagem seguem vivos e independentemente cobertos, provado por mutação isolada em cada um. A regressão do J1 foi desfeita.
+
+## Duas das afirmações falsas desta rodada são minhas
+
+O R8-1 é o mais instrutivo da entrega inteira. O comentário do T035 diz que a branca é carimbada *"but never compared"*. Isso é falso: o ponto único compara a branca viva contra o vínculo do work item seis linhas abaixo. O T048 tornou verdadeira a parte sobre o **carimbo**, não a frase como escrita.
+
+**E eu registrei, na rodada 16 deste mesmo arquivo, que o bloco "voltou a ser verdadeiro sozinho, sem edição".** Confiei na negativa absoluta em vez de verificá-la — que é exatamente o mecanismo do R7-1, onde um leitor confiou neste mesmo comentário e reintroduziu um Critical.
+
+O n1 é o mesmo erro em outra escala: escrevi no R7 e na rodada 16 que "depois de uma sucessão, a branca viva **é** a árvore daquele contexto". A validação a montante é de projeto, caminho real e diretório comum — **nunca de branca**. Duas brancas na mesma worktree passam idênticas, e um work item que nunca sofreu tomada nem retomada não atravessa cerca nenhuma. A conclusão do T048 continua certa; a razão que registrei para ela, não.
+
+O conserto do R8-1 recusa acrescentar parágrafo ou mover explicação, e estreita a frase no lugar. O motivo é bom: a explicação correta já existe em dois pontos, e um terceiro exemplar seria o R3/R4 outra vez. O que faltava não era explicação — era a frase falsa deixar de ser absoluta.
+
+## O padrão que o R8-2 fecha
+
+É o **quinto** defeito de cobertura falsa nesta entrega: R6-3, o caso da Phase 12 que codificava o próprio defeito, o R7-2, e agora o **conserto do R7-2**, que não fechou o buraco do subcaso que ele anota.
+
+A regularidade é exata e vale como regra: **toda vez que a correção de uma cobertura falsa foi escrita sem rodar a mutação que a motivou, ela não fechou o buraco.** O revisor do R8 rodou seis mutações; a que derrubou o conserto do R7-2 levou segundos.
+
+Por isso o T056 **remove** o subcaso em vez de reforçá-lo: depois da remoção da comparação ele é comportamentalmente idêntico ao subcaso sem carimbo, e todo o poder de detecção está no contraditório.
+
+## Por que subi a severidade do R8-3
+
+O revisor graduou Minor, por ser pré-existente. Subi para Important com evidência que ele não tinha: a fase ativa é **nula em 4 dos 8** work items reais deste repositório, e o auditor **exige** fase ativa nula em milestone terminal.
+
+O nulo não é caso exótico, é estado obrigatório em parte do ciclo. Então a recusa nomeada não acontece justamente nos work items em milestone terminal. O crash é pré-existente; o que é desta entrega é a guarda que afirma tratá-lo e o teste que afirma prová-lo — e o teste só o prova porque planta o único valor que torna a guarda alcançável.
+
+## Débito registrado, fora de escopo
+
+n3: dentro de uma mesma fase, renomear ou apagar a branca vinculada trava os dois sítios e nenhum verbo limpa o vínculo. Recuperável recriando o nome.
+n4: os três verbos deixam erro de armazenamento sair como falha genérica; a tradução vivia no helper que a Phase 12 criou e o T048 removeu.
+n5: preferência de forma no primeiro ramo da cadeia.
+
+R4-4 e R4-5 seguem **não verificáveis**, porque nunca foram declarados fechados — o R4 os remeteu a decisão humana e ela continua pendente.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 3 · contradicts 1 · unrequested 0
+- Tarefas acrescentadas: 4 (T054–T057), nenhuma CRITICAL
+
+## Próxima ação
+
+Executar `implement-parallel` na Phase 14 e reconvergir. T054 e T055 tocam o produto; T056 e T057 tocam o teste, e o T057 depende do T055 ter entrado.
