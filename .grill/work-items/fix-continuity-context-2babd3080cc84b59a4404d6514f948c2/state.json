@@ -30,7 +30,7 @@
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
       "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a",
       "tasks": "se-a7ab93f07b33ace8bcb5b3a0a2f7be0fd89990622ade7c18c5a4a96caf8d11ab",
-      "verify": "se-5bb2ff037ea9e205c2e3ae9dda8ef7e7838daa7c7f0ad7753bc0a2209708c781"
+      "verify": "se-b89d1155fe750cbe8ac1baac68e103d146549924cb4b6788603b1d0a88a1713a"
     },
     "attested_outputs": {
       "analyze": {
@@ -82,9 +82,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:2e80be8fa6e2446767fb504607473233c3c4b90fbb820468dc4126ba06138156",
+        "output_sha256": "sha256:92af17d65e9484b6162b260f097fc0c5fa510f15353684f3069ea08494c2f2e2",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
         "step_id": "verify"
       }
     },
@@ -380,11 +380,23 @@
         "state": "complete",
         "step": "converge",
         "supersedes": ".grill/attestations/032-converge.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/verify.md",
+            "sha256": "92af17d65e9484b6162b260f097fc0c5fa510f15353684f3069ea08494c2f2e2"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "verify R2 apos a Phase 7, sobre a cobertura corrigida",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/032-verify.json"
       }
     ],
-    "chain_stale": [
-      "verify"
-    ],
+    "chain_stale": [],
     "current_step": "review",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
@@ -508,6 +520,20 @@
           "step_execution_id": "se-4564b9cf7df6db6f6cc39453724815f44518baac46356cb01a60d33fc8dcd275",
           "step_id": "specify",
           "superseded_by_step_execution_id": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a"
+        }
+      ],
+      "verify": [
+        {
+          "attempt_id": "verify-1",
+          "attestation": ".grill/attestations/032-verify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:2e80be8fa6e2446767fb504607473233c3c4b90fbb820468dc4126ba06138156",
+          "provenance": "current-generation",
+          "reason": "verify R2 apos a Phase 7, sobre a cobertura corrigida",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-1.terminal.json",
+          "step_execution_id": "se-5bb2ff037ea9e205c2e3ae9dda8ef7e7838daa7c7f0ad7753bc0a2209708c781",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-b89d1155fe750cbe8ac1baac68e103d146549924cb4b6788603b1d0a88a1713a"
         }
       ]
     },
