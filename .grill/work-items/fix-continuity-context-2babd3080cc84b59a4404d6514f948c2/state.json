@@ -12,8 +12,49 @@
     "state": "present"
   },
   "development": {
-    "audit": [],
-    "current_step": "specify",
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-e4eb8a46d2e8ae7e974f967a530fc810e272a6fd36d98e2a6a6524859a5b0c22",
+      "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+      "run_id": "leader-fix-continuity-context-2babd3080cc84b59a4404d6514f948c2",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "specify": "se-4564b9cf7df6db6f6cc39453724815f44518baac46356cb01a60d33fc8dcd275"
+    },
+    "attested_outputs": {
+      "specify": {
+        "output_sha256": "sha256:6142b758f47d10c990052ba778b449529ab3ce3bb67d98528b0673b8025a51ec",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "step_id": "specify"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-specify from FASE-001 handoff",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/spec.md",
+            "sha256": "6142b758f47d10c990052ba778b449529ab3ce3bb67d98528b0673b8025a51ec"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-specify: spec 032 do handoff FASE-001; checklist 16/16",
+        "state": "complete",
+        "step": "specify"
+      }
+    ],
+    "current_step": "plan",
+    "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
     "sequence": [
@@ -38,7 +79,7 @@
       "plan": "pending",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
+      "specify": "complete",
       "tasks": "pending",
       "verify": "pending"
     },
