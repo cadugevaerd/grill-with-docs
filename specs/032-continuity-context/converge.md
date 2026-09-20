@@ -453,3 +453,56 @@ n1, n3, n4, n5, n6 e n7 seguem como débito, sem virar tarefa. n2 virou K6.
 ## Próxima ação
 
 Seis tarefas em `## Phase 10: Convergence`. Executar `implement-parallel` e reconvergir.
+
+---
+
+# Rodada 10 — 2026-09-20, após a Phase 10
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T039), constituição · **Desfecho**: `converged`
+
+Phase 10 entregue pelos nós `p10-a`, `p10-b` e `p10-c` da run `run-ebb3b0c174a59ed859d5a5ff`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 9
+
+| Achado | Situação | Prova |
+|---|---|---|
+| K1 — coleta de retidos ignorava o seletor (CRITICAL) | **fechado** | A coleta passou a exigir escopo: sem atividade selecionada, ou recurso pertencente à atividade pedida. O ramo por atividade deixa de ser rebaixado por recurso alheio |
+| K2 — guarda de identidade sem cobertura (CRITICAL) | **fechado** | O código de recusa passou de **zero** para duas ocorrências nos testes. A reversão que apaga o `raise` inteiro agora reprova — antes fechava verde |
+| K3 — predicado assimétrico | **fechado** | `_CONTINUITY_STRUCTURAL` e `_continuity_identity_matches`, com cinco usos: os três comparadores passaram a compartilhar a mesma regra |
+| K4 — segundo emissor não observado | **fechado** | Asserções replicadas sobre o checkpoint emitido pelo comando de confirmação de etapa, contra o estado vivo |
+| K5 — árvore movida fora do bloco protegido | **fechado** | Troca de branch e reescrita dentro do `try`, com restauração que não exige sucesso |
+| K6 — vocabulário sem regra no protocolo | **fechado** | O código e o campo entraram na tabela de recursos, dizendo que são relato e não recusa, e que não bloqueiam a ação do contexto corrente |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## A causa estrutural, finalmente atacada
+
+Quatro rodadas de review encontraram a mesma forma de defeito: a correção fechava o caso examinado e abria o vizinho. A razão era que a mesma regra de comparação de identidade existia em **três cópias**, e cada rodada corrigia uma.
+
+T035 extraiu a regra para um ponto único. Não é refatoração cosmética: é a remoção da condição que produzia o ciclo.
+
+## Duas decisões de worker que valem registro
+
+**Discordância fundamentada.** A instrução de T035 trazia uma ressalva minha: os irmãos rodam em janela quiescente, então talvez a comparação estrita se justificasse num deles. O worker respondeu que não: **quiescência prova que nada roda *agora*, e não diz nada sobre a idade do carimbo**. Comparar fase e branch equivale a afirmar "nada mudou desde o primeiro carimbo", falso na vida normal do work item. Alinhou os dois e corrigiu o comentário da tomada, que afirmava o contrário. O argumento está certo.
+
+**Alerta de cobertura pelo próprio autor.** O mesmo worker reportou que os dois validadores fecharam verdes **antes e depois** das suas correções — ou seja, nem o defeito nem a correção tinham carga de teste. Levantar isso sobre o próprio trabalho é exatamente o que faltava nas rodadas anteriores, e virou entrada na tarefa de cobertura da wave seguinte.
+
+## Sensibilidade verificada
+
+Seis reversões, todas reprovando. A que importa mais: apagar o `raise` de identidade agora reprova, e o autor registrou que **a mesma deleção fechava verde antes do caso novo** — a diferença entre provar que a guarda não pode ser alargada e provar que ela existe.
+
+Um caso não admitia mutante de produto, por ser ordenação de teste: foi verificado injetando falha entre a troca de branch e a reescrita, asserindo que a árvore voltou ao estado original, e removendo a injeção depois.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1491** testes, 0 falhas, 2 skips condicionados a macOS.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R5.
