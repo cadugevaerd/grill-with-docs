@@ -3308,14 +3308,59 @@ def _continuity_identity_matches(sealed: Any, identity: dict[str, str]) -> bool:
     return all(sealed.get(field) == identity[field] for field in _CONTINUITY_STRUCTURAL)
 
 
-def _continuity_resumed_context(root: Path, work_id: str) -> bool:
-    """True when the current context descends from another one."""
+def _continuity_stamped_branch(root: Path, work_id: str) -> str | None:
+    """The branch the current context's identity stamp claims, or None.
+
+    R6-T044: descending from another context is monotonic -- every succession
+    writes `predecessor_context_id` and `validate_transition` requires it, so
+    no verb ever clears it. Refusing the execution-branch backfill on that
+    property blocked every work item that was ever taken over or resumed,
+    permanently, because the phase turn clears the binding on purpose and no
+    verb re-stamps it. The observable claim is the stamp: takeover and resume
+    both derive it live and validate the structural identity in the act, so a
+    present `branch` is proof of the tree that context ran on. Absent stamp
+    means no prior claim to contradict, and stamping for the first time is
+    exactly what the backfill is for.
+
+    T047: a present-but-invalid store raises StoreError here; translate it to
+    a named refusal instead of letting it surface as a traceback.
+    """
     store = grill_core_module("store")
-    snapshot = store.read_snapshot(root, required=False)
+    try:
+        snapshot = store.read_snapshot(root, required=False)
+    except store.StoreError as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", store.KEBAB_ALIASES.get(error.code, error.code),
+                         error.message, extra={"work_id": work_id}) from error
     block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
     item = block.get("work_items", {}).get(work_id) if isinstance(block, dict) else None
     context = item.get("contexts", {}).get(item.get("current_context_id")) if isinstance(item, dict) else None
-    return isinstance(context, dict) and context.get("predecessor_context_id") is not None
+    sealed = context.get("worktree_identity") if isinstance(context, dict) else None
+    branch = sealed.get("branch") if isinstance(sealed, dict) else None
+    return branch if isinstance(branch, str) and branch else None
+
+
+def _continuity_require_bound_branch(state: Any, identity: dict[str, str], work_id: str) -> None:
+    """Refuse when the work item's sealed branch contradicts the live one.
+
+    R6-T045: this comparison used to exist only in `continuity-resume`, so
+    `prepare-switch` created the operation, wrote the resume point and released
+    the leader before anything noticed the divergence -- which then surfaced on
+    the resume, with the context already loose. The failure has to be named
+    before mutating, so the single point is called by all three verbs.
+
+    T047: `development` is only guarded against an empty value elsewhere here;
+    a non-empty value of the wrong type died with a traceback. Same named code
+    the step-confirmation command already uses for it.
+    """
+    development = state.get("development") if isinstance(state, dict) else None
+    if development is None:
+        development = {}
+    if not isinstance(development, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", work_id)
+    sealed = development.get("execution_branch")
+    if isinstance(sealed, str) and sealed and sealed != identity["branch"]:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE",
+                         f"work item is bound to {sealed}")
 
 
 def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_id: str) -> tuple[list[str], list[str]]:
@@ -3428,6 +3473,7 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
     # judged on the structural tuple only, like the takeover.
     if sealed is not None and not _continuity_identity_matches(sealed, identity):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "worktree identity changed")
+    _continuity_require_bound_branch(state, identity, args.work_id)
     operation_entry = _continuity_operation(item, context_id, args.to_runtime)
     initial_checkpoint = None
     source_checkpoint = None
@@ -3578,10 +3624,7 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     # normal life and no verb re-stamps it. The compensating control is the
     # binding the work item already seals, so compare against *that* SSOT --
     # not against the stamp -- whenever it exists.
-    sealed_branch = (state.get("development") or {}).get("execution_branch")
-    if isinstance(sealed_branch, str) and sealed_branch and sealed_branch != identity["branch"]:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE",
-                         f"work item is bound to {sealed_branch}")
+    _continuity_require_bound_branch(state, identity, args.work_id)
     active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
     if active:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-ACTIVE-WORK", ",".join(active))
@@ -3771,6 +3814,7 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     if sealed is not None and not _continuity_identity_matches(sealed, identity):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-IDENTITY-DIVERGENT",
                          "project or worktree changed since the predecessor stamped its identity")
+    _continuity_require_bound_branch(state, identity, args.work_id)
     # T018: digest the decision, not the coordinator's raw answer.
     # observation["digest"] hashes the live worker-show bytes, and preview and
     # apply are separate CLI invocations: any volatile field there made apply
@@ -5908,15 +5952,16 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             # Explicit backfill for legacy/in-between-phase cycles.  It becomes
             # durable only after the requested state transition is valid.
             #
-            # R5-1: but never from a resumed session. The backfill reads the
-            # LIVE branch, and continuity no longer compares `branch` (T035),
-            # so a switch made before the first confirmed step would mint the
-            # binding on the wrong branch -- permanently, since nothing
-            # re-stamps it. A resumed context cannot prove the live branch is
-            # the one the work item was meant to be bound to.
-            if _continuity_resumed_context(root, args.work_id):
-                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "EXECUTION-BRANCH-UNSET",
-                                 "resumed context cannot backfill the execution branch")
+            # R5-1/R6-T044: but never against a contradicting claim. The
+            # backfill reads the LIVE branch, and continuity no longer compares
+            # `branch` (T035), so a switch made before the first confirmed step
+            # would mint the binding on the wrong branch -- permanently, since
+            # nothing re-stamps it. The evidence is the current context's
+            # identity stamp, not the mere existence of a predecessor.
+            stamped_branch = _continuity_stamped_branch(root, args.work_id)
+            if stamped_branch is not None and stamped_branch != execution_branch:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "EXECUTION-BRANCH-MISMATCH",
+                                 f"context identity is stamped on {stamped_branch}")
         elif not isinstance(existing_branch, str) or not existing_branch:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         elif existing_branch != execution_branch:
@@ -6068,6 +6113,12 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             if not previous_execution_branch:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DETACHED-HEAD", "phase turn requires an attached execution branch")
             run_git(root, "check-ref-format", "--branch", previous_execution_branch)
+            # R6-T044: this mint had no guard at all, so the turn itself could
+            # coin the binding off a resumed tree and then clear it below.
+            stamped_branch = _continuity_stamped_branch(root, args.work_id)
+            if stamped_branch is not None and stamped_branch != previous_execution_branch:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "EXECUTION-BRANCH-MISMATCH",
+                                 f"context identity is stamped on {stamped_branch}")
         elif not isinstance(previous_execution_branch, str) or not previous_execution_branch:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         else:
