@@ -60,24 +60,21 @@ def release_source(dispatch="ctx-1"):
 
 
 def takeover_show(dispatch_id, *, status=None, revoked=None, liveness=None):
-    """T007: a worker-show reply for _takeover_observation (grill_workspace.py).
+    """T007/T014: a worker-show reply for _takeover_observation (grill_workspace.py).
 
     observe_predecessor_termination (agent_runtime.py) parses this raw response
     through the enveloped ``{"ok": true, "result": {...}}`` shape every other
     native worker-show fixture in this file uses (native_show/native_sources).
-    _takeover_observation's own dispatch.status/liveness extraction -- the
-    signal gauntlet-context-takeover uses to tell TAKEOVER-LEADER-ACTIVE apart
-    from TAKEOVER-EVIDENCE-UNPROVEN -- re-parses the SAME bytes but reads
-    "dispatch"/"projection" off the top level, unenveloped. Both are genuine
-    parses of one real CLI response, so the fields are mirrored at both levels
-    here rather than picking one shape and leaving the other reader starved.
+    _takeover_observation's own dispatch.status/liveness extraction now reads
+    the same unwrapped ``result`` mapping via agent_runtime._object, so this
+    fixture produces only the real, enveloped shape.
     """
     dispatch = {"id": dispatch_id}
     if status is not None:
         dispatch["status"] = status
     dispatch["capabilityRevokedAt"] = revoked
     payload = {"dispatch": dispatch, "projection": {"liveness": liveness} if liveness is not None else {}}
-    return json.dumps({"ok": True, "result": payload, **payload}).encode()
+    return json.dumps({"ok": True, "result": payload}).encode()
 
 
 class AgentOrchestrationContract(unittest.TestCase):
@@ -1154,13 +1151,15 @@ class AgentOrchestrationContract(unittest.TestCase):
             # calls the predecessor terminal; every one accepts the takeover. --
             terminal = {
                 "status": (takeover_show(old_dispatch, status="completed",
-                    liveness={"verdict": "live", "source": "agent_status"}), "completed"),
+                    liveness={"verdict": "live", "source": "agent_status"}), "completed",
+                    {"verdict": "live", "source": "agent_status"}),
                 "revoked": (takeover_show(old_dispatch, status="dispatched",
-                    revoked="2026-01-01T00:00:00Z"), "dispatched"),
+                    revoked="2026-01-01T00:00:00Z"), "dispatched", None),
                 "exited": (takeover_show(old_dispatch, status="dispatched",
-                    liveness={"verdict": "exited", "source": "agent_status"}), "dispatched"),
+                    liveness={"verdict": "exited", "source": "agent_status"}), "dispatched",
+                    {"verdict": "exited", "source": "agent_status"}),
             }
-            for label, (raw, expected_status) in terminal.items():
+            for label, (raw, expected_status, expected_liveness) in terminal.items():
                 work_id = "work-terminal-" + label
                 old_context_id = spawn(work_id)
                 new_session = "orca:ctx-new-" + label
@@ -1174,7 +1173,11 @@ class AgentOrchestrationContract(unittest.TestCase):
                     self.assertEqual((code, applied.get("verdict")), (0, "TAKEOVER-APPLIED"), applied)
                     self.assertEqual(applied["from_context_id"], old_context_id)
                     self.assertEqual(applied["succession"]["reason"], "takeover")
+                    # T014/FR-004: dispatch_status and liveness must come from the
+                    # same enveloped {"ok": true, "result": {...}} shape the real
+                    # transport returns, not a top-level read that always misses.
                     self.assertEqual(applied["succession"]["evidence"]["dispatch_status"], expected_status)
+                    self.assertEqual(applied["succession"]["evidence"]["liveness"], expected_liveness)
                     document = store.read_snapshot(root).document["agent_orchestration"]["work_items"][work_id]
                     self.assertEqual(document["contexts"][old_context_id]["state"], "SUPERSEDED")
                     new_context = document["contexts"][applied["context_id"]]
