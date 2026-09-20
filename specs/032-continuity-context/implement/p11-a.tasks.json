@@ -1,0 +1,53 @@
+{
+  "worker": "p11-a",
+  "feature": "032-continuity-context",
+  "completed": ["T040", "T041", "T042", "T043"],
+  "tasks": {
+    "T040": {
+      "status": "done",
+      "summary": "R5-1 fechado nas duas metades, sem recolocar 'branch' no predicado estrutural. (1) Retomada (continuity_resume_command, logo depois da comparacao de identidade): quando development.execution_branch e string nao vazia, a branch viva derivada por _continuity_identity tem de coincidir; divergencia recusa com CONTINUITY-STATE-DIVERGENCE e detalhe 'work item is bound to <branch>', o mesmo codigo que o comando ja usa. Comparacao contra o SSOT que sobrevive a troca, nao contra o carimbo imutavel. (2) Preenchimento retroativo (checkpoint_command, ramo existing_branch ausente/None): recusa com EXECUTION-BRANCH-UNSET ('resumed context cannot backfill the execution branch') quando o contexto corrente tem predecessor. Codigo reusado de gauntlet_runs (mesma semantica: work item sem branch vinculada), nenhum codigo novo cunhado. Helper novo _continuity_resumed_context(root, work_id) le o snapshot (required=False) e responde se o contexto corrente tem predecessor_context_id; store ausente, item ausente ou contexto ausente respondem False, que e o estado de quem nunca foi retomado.",
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py", "tests/validate_agent_orchestration_contract.py"]
+    },
+    "T041": {
+      "status": "done",
+      "summary": "R5-2: nos dois metodos (test_continuity_siblings_judge_only_the_structural_tuple e test_context_takeover) a restauracao virou self.addCleanup(subprocess.run, [...checkout original_branch], check=False), registrada logo depois de capturar original_branch, e o try/finally foi removido. DESVIO NECESSARIO do texto do achado: so mover para teardown reprova de verdade -- os casos seguintes de cada metodo precisam da branch original (init subsequente sai com StoreError/UNEXPECTED-FAILURE, verificado por execucao). Entao cada caso tambem restaura explicitamente no fim do proprio bloco, com check=True: ali nenhuma assercao esta em voo, logo nao mascara nada, e o addCleanup continua como rede para os caminhos que nunca chegam aquela linha. Resultado: restaura sempre, nao mascara e nao deixa janela descoberta. Comentario T038/R4 que afirmava 'belong inside the protected block' foi removido por ter ficado falso.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    },
+    "T042": {
+      "status": "done",
+      "summary": "R5-3: o assertEqual do caso 'identity-divergent' de test_context_takeover foi indentado para dentro do bloco 'with self.subTest(...), mock.patch.object(...)'.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    },
+    "T043": {
+      "status": "done",
+      "choice": "(a) afirmar o invariante na validacao de bloco",
+      "summary": "Premissa do achado confirmada por leitura, nao assumida: o unico produtor de recurso e new_specialist_resource (agent_orchestration.py:900), que fixa origin_context_id = activity['context_id']; prepare_activity recusa com CONTEXT-FENCED quando a atividade nao pertence ao contexto alvo, entao atividade nunca migra; e o seletor do gauntlet-cleanup ja exige item['activities'][activity_id]['context_id'] == context_id. Logo recurso de outro contexto com a atividade pedida e combinacao que o nucleo nao produz. Escolhi (a): validate_block passou a exigir que a atividade de um recurso viva no mesmo contexto que o originou ('resource activity belongs to another context'), uma linha ao lado da checagem de atividade desconhecida que ja existia. Motivo de preferir (a) a (b): validate_block e fronteira de confianca sobre documento lido de disco e editavel a mao, o invariante era so implicito, e afirma-lo converte o caso de teste de confianca falsa em defesa em profundidade honesta, em vez de apagar um relato que passaria a ser silencioso se o invariante algum dia quebrasse. A ramificacao em grill_workspace.py e o caso (5) do cleanup ficam onde estao.",
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py", "tests/validate_agent_orchestration_contract.py"]
+    }
+  },
+  "tests_added": [
+    "test_continuity_resume_compares_the_bound_execution_branch (duas metades: bound-elsewhere recusa CONTINUITY-STATE-DIVERGENCE sem escrever; bound-here segue ate PREVIEW, provando que a guarda nao recusa demais)",
+    "test_checkpoint_never_backfills_the_execution_branch_from_a_resumed_context (recusa EXECUTION-BRANCH-UNSET com state.json byte a byte inalterado; primeiro contexto continua vinculando; e o predicado _continuity_resumed_context exercido sobre documentos que o Store aceita: sucessor True, contexto primeiro False, work item ausente False)",
+    "test_block_refuses_a_resource_whose_activity_lives_in_another_context (o bloco que todo produtor emite valida; o divergente recusa)"
+  ],
+  "reversions": [
+    {"target": "guarda de execution_branch na retomada (grill_workspace.py)", "how": "condicao trocada por 'if False'", "result": "test_continuity_resume_compares_the_bound_execution_branch reprova: a metade bound-elsewhere degrada de CONTINUITY-STATE-DIVERGENCE para GAUNTLET-NOT-ACTIVATED, prova de que o codigo vinha da guarda nova"},
+    {"target": "recusa de preenchimento retroativo (checkpoint_command)", "how": "bloco trocado por 'pass'", "result": "test_checkpoint_never_backfills_the_execution_branch_from_a_resumed_context reprova: contexto retomado vincula o work item a 'master' com verdict UPDATED e exit 0 -- exatamente o defeito descrito no R5-1"},
+    {"target": "invariante em validate_block (agent_orchestration.py)", "how": "linha trocada por 'pass'", "result": "test_block_refuses_a_resource_whose_activity_lives_in_another_context reprova com 'OrchestrationError not raised'"},
+    {"target": "T042 (asserção indentada)", "how": "codigo esperado trocado por literal inexistente, para contar subcasos que reportam", "result": "dois FAIL reportados, case='identity-divergent' com apply=False e apply=True; antes da correcao o laco abortava na primeira iteracao e o subcaso com aplicacao nunca rodava"}
+  ],
+  "verification": {
+    "commands": [
+      {"command": "python3 tests/validate_agent_orchestration_contract.py", "result": "Ran 42 tests, OK, exit 0 (39 antes; 3 novos)"},
+      {"command": "python3 tests/validate_orchestrator_store_contract.py", "result": "Ran 136 tests, OK, exit 0"},
+      {"command": "python3 tests/validate_checkpoint_contract.py", "result": "Ran 80 tests, OK, exit 0 (~175s)"}
+    ],
+    "notes": "tests/run_validators.py nao foi rodado, conforme o brief. Nenhum caso existente foi afrouxado: as unicas alteracoes em casos existentes sao a troca de try/finally por addCleanup mais restauracao explicita (T041), a indentacao da assercao (T042) e a remocao de um comentario que ficou falso."
+  },
+  "files_touched": [
+    "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+    "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+    "tests/validate_agent_orchestration_contract.py",
+    "specs/032-continuity-context/implement/p11-a.tasks.json"
+  ]
+}

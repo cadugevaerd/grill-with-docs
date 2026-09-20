@@ -3308,6 +3308,16 @@ def _continuity_identity_matches(sealed: Any, identity: dict[str, str]) -> bool:
     return all(sealed.get(field) == identity[field] for field in _CONTINUITY_STRUCTURAL)
 
 
+def _continuity_resumed_context(root: Path, work_id: str) -> bool:
+    """True when the current context descends from another one."""
+    store = grill_core_module("store")
+    snapshot = store.read_snapshot(root, required=False)
+    block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+    item = block.get("work_items", {}).get(work_id) if isinstance(block, dict) else None
+    context = item.get("contexts", {}).get(item.get("current_context_id")) if isinstance(item, dict) else None
+    return isinstance(context, dict) and context.get("predecessor_context_id") is not None
+
+
 def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_id: str) -> tuple[list[str], list[str]]:
     """Only explicit terminal observations are quiet; lease expiry and silence are ignored."""
     active, unknown = [], []
@@ -3564,6 +3574,14 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     if not (_continuity_identity_matches(checkpoint.get("worktree_identity"), identity)
             and _continuity_identity_matches(source.get("worktree_identity"), identity)):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "project or worktree changed")
+    # R5-1: `branch` left the structural tuple (T035) because it moves in
+    # normal life and no verb re-stamps it. The compensating control is the
+    # binding the work item already seals, so compare against *that* SSOT --
+    # not against the stamp -- whenever it exists.
+    sealed_branch = (state.get("development") or {}).get("execution_branch")
+    if isinstance(sealed_branch, str) and sealed_branch and sealed_branch != identity["branch"]:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE",
+                         f"work item is bound to {sealed_branch}")
     active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
     if active:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-ACTIVE-WORK", ",".join(active))
@@ -5889,7 +5907,16 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         if existing_branch is _MISSING or existing_branch is None:
             # Explicit backfill for legacy/in-between-phase cycles.  It becomes
             # durable only after the requested state transition is valid.
-            pass
+            #
+            # R5-1: but never from a resumed session. The backfill reads the
+            # LIVE branch, and continuity no longer compares `branch` (T035),
+            # so a switch made before the first confirmed step would mint the
+            # binding on the wrong branch -- permanently, since nothing
+            # re-stamps it. A resumed context cannot prove the live branch is
+            # the one the work item was meant to be bound to.
+            if _continuity_resumed_context(root, args.work_id):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "EXECUTION-BRANCH-UNSET",
+                                 "resumed context cannot backfill the execution branch")
         elif not isinstance(existing_branch, str) or not existing_branch:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         elif existing_branch != execution_branch:

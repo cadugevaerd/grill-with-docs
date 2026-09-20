@@ -1250,22 +1250,31 @@ class AgentOrchestrationContract(unittest.TestCase):
                 "work_items"]["work-sibling"]["contexts"][sibling_context_id]["worktree_identity"])
             original_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
                                              check=True, capture_output=True, text=True).stdout.strip()
-            try:
-                subprocess.run(["git", "-C", str(root), "checkout", "-q", "-b", "a-branch-nobody-was-on"], check=True)
-                state_path = root / ".grill" / "work-items" / "work-sibling" / "state.json"
-                aged = json.loads(state_path.read_text(encoding="utf-8"))
-                aged["active_phase"] = "a-later-step"
-                state_path.write_text(json.dumps(aged), encoding="utf-8")
-                self.assertNotEqual((sealed["phase"], sealed["branch"]),
-                                    ("a-later-step", "a-branch-nobody-was-on"))
-                # The identity check runs before the idempotent reuse of the
-                # switch operation, so reaching that verdict at all is the
-                # proof: with phase and branch still inside the tuple this is
-                # CONTINUITY-STATE-DIVERGENCE, exit 2.
-                code, again = self.run_cli(*switch)
-                self.assertEqual((code, again.get("verdict")), (0, "SWITCH-PREPARED"), again)
-            finally:
-                subprocess.run(["git", "-C", str(root), "checkout", "-q", original_branch], check=False)
+            # R5-2: teardown, not a protected block. The restoration tolerates
+            # failure so it never masks the real assertion (T038), and as a
+            # `finally` that meant the cases *after* it could silently derive
+            # identity from the test branch. Registered as cleanup it always
+            # runs, at the end of the case, with no uncovered window.
+            self.addCleanup(subprocess.run, ["git", "-C", str(root), "checkout", "-q", original_branch],
+                            check=False)
+            subprocess.run(["git", "-C", str(root), "checkout", "-q", "-b", "a-branch-nobody-was-on"], check=True)
+            state_path = root / ".grill" / "work-items" / "work-sibling" / "state.json"
+            aged = json.loads(state_path.read_text(encoding="utf-8"))
+            aged["active_phase"] = "a-later-step"
+            state_path.write_text(json.dumps(aged), encoding="utf-8")
+            self.assertNotEqual((sealed["phase"], sealed["branch"]),
+                                ("a-later-step", "a-branch-nobody-was-on"))
+            # The identity check runs before the idempotent reuse of the
+            # switch operation, so reaching that verdict at all is the
+            # proof: with phase and branch still inside the tuple this is
+            # CONTINUITY-STATE-DIVERGENCE, exit 2.
+            code, again = self.run_cli(*switch)
+            self.assertEqual((code, again.get("verdict")), (0, "SWITCH-PREPARED"), again)
+            # The cases below need the original branch back, so the case
+            # restores it explicitly and demands success -- no assertion is in
+            # flight here, so `check=True` masks nothing. The cleanup above
+            # stays as the net for the paths that never reach this line.
+            subprocess.run(["git", "-C", str(root), "checkout", "-q", original_branch], check=True)
             # The refusal side: narrowing the tuple is not deleting the check.
             # The sealed stamp is immutable in the Store, so the divergence is
             # produced where production produces it -- on the *live* side, the
@@ -1357,6 +1366,157 @@ class AgentOrchestrationContract(unittest.TestCase):
                     code, preview = self.run_cli(*argv)
                 self.assertEqual((code, preview.get("verdict")), (0, "PREVIEW"), preview)
                 self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
+
+    def test_continuity_resume_compares_the_bound_execution_branch(self):
+        """R5-1/T040, the resume half: `branch` left the structural tuple
+        (T035) because it moves in normal life and no verb re-stamps it, and
+        the compensating control -- the execution branch the work item binds --
+        was never read here. So a work item already bound to one branch resumed
+        from any other. The binding is the SSOT that does survive a switch:
+        when it exists, the live branch must equal it; when it does not, the
+        resume stays as permissive as T035 made it.
+
+        Verified by reversion: deleting the comparison makes the bound-elsewhere
+        half return PREVIEW/exit 0.
+        """
+        import validate_orchestrator_store_contract as seed
+        store_module = grill_workspace.grill_core_module("store")
+        runtime, session = "claude", "orca:ctx-destination"
+        for label, bound in (("bound-elsewhere", "a-branch-nobody-was-on"), ("bound-here", None)):
+            temporary, root = self.fixture()
+            with temporary, self.subTest(case=label), orchestration_fixture.offline_leader(grill_workspace):
+                with mock.patch.object(grill_workspace, "_initialize_orchestration", return_value={}):
+                    code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                        "--work-id", "work-x", "--runtime", "codex",
+                        "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+                self.assertEqual(code, 0, payload)
+                state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
+                live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                             check=True, capture_output=True, text=True).stdout.strip()
+                stored = json.loads(state_path.read_text(encoding="utf-8"))
+                stored["development"]["execution_branch"] = bound or live_branch
+                state_path.write_text(json.dumps(stored), encoding="utf-8")
+                self.assertNotEqual(bound, live_branch)
+                state = grill_workspace.read_development_state(root,
+                    grill_workspace.resolve_development_item(root, "work-x"), "work-x")[1]
+                # The stamp itself is untouched: only the binding disagrees, so
+                # a failure here can only come from the new comparison.
+                sealed = grill_workspace._continuity_identity(root, "work-x", state)
+                context = seed.ORCHESTRATION_CONTEXT(state="RELEASED", leader_state="RELEASED")
+                context.update(runtime="codex", adapter="codex", worktree_identity=sealed)
+                checkpoint = seed.ORCHESTRATION_CHECKPOINT()
+                checkpoint.update(worktree_identity=sealed, accepted_outputs={"specify": {"output_sha256": "a" * 64}})
+                checkpoint["checkpoint_sha256"] = store_module.jcs_sha256(
+                    {k: v for k, v in checkpoint.items() if k != "checkpoint_sha256"})
+                operation = seed.ORCHESTRATION_OPERATION()
+                operation.update(kind="continuity-switch", state="APPLIED",
+                                 expected_before={"checkpoint_id": "checkpoint-1"},
+                                 intended_after={"to_runtime": runtime, "campaign_bridge": None})
+                item = seed.ORCHESTRATION_ITEM({"ctx-1": context}, {"op-1": operation})
+                item["policy_ref"] = "assets/agent-orchestration.v1.json"
+                item["policy_sha256"] = context["policy_sha256"] = grill_workspace.hash_bytes(
+                    (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes())
+                item.update(checkpoints={"checkpoint-1": checkpoint}, checkpoint_head="checkpoint-1")
+                store_module.bootstrap(root)
+                store_module.transact(root, lambda doc: {**doc, "agent_orchestration": {
+                    "schema": "grill-agent-orchestration/v1", "work_items": {"work-x": item}}})
+                argv = ("gauntlet-resume", str(root), "--work-id", "work-x", "--checkpoint", "checkpoint-1",
+                        "--runtime", runtime, "--session-ref", session)
+                before = store_module.read_snapshot(root).content_sha256
+                if bound is not None:
+                    code, blocked = self.run_cli(*argv)
+                    self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-STATE-DIVERGENCE"), blocked)
+                    self.assertIn(bound, blocked.get("error", ""))
+                    self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
+                    continue
+                adapter, _show, transcript = orchestration_fixture.boundary(
+                    grill_workspace, root, runtime, session, "work-x")
+                transcript["result"]["transcript"]["messages"][0]["blocks"][0]["input"] = {
+                    "command": shlex.join([sys.executable, "-B", str(SCRIPTS / "grill_workspace.py"), *argv])}
+                with mock.patch.object(grill_workspace, "_continuity_effective_activation",
+                        return_value={"runtime": {"id": runtime, "adapter": runtime}}), \
+                     mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                    code, preview = self.run_cli(*argv)
+                self.assertEqual((code, preview.get("verdict")), (0, "PREVIEW"), preview)
+                self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
+
+    def test_checkpoint_never_backfills_the_execution_branch_from_a_resumed_context(self):
+        """R5-1/T040, the minting half: the backfill reads the LIVE branch, so
+        with `branch` out of the compared tuple a switch made before the first
+        confirmed step would bind the work item to the wrong branch -- and
+        nothing ever re-stamps it. A resumed context cannot prove the live
+        branch is the intended one, so it may not mint the binding.
+
+        Verified by reversion: deleting the refusal makes the resumed half bind
+        and return exit 0.
+        """
+        import validate_orchestrator_store_contract as seed
+        store_module = grill_workspace.grill_core_module("store")
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            with mock.patch.object(grill_workspace, "_initialize_orchestration", return_value={}):
+                code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                    "--work-id", "work-x", "--runtime", "codex",
+                    "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, payload)
+            state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
+            self.assertNotIn("execution_branch", json.loads(state_path.read_text(encoding="utf-8"))["development"])
+            argv = ("checkpoint", str(root), "--work-id", "work-x", "--step", "specify", "--state", "in-progress",
+                    "--operation-id", "op-specify", "--session-ref", orchestration_fixture.SESSION)
+            before = state_path.read_bytes()
+            with mock.patch.object(grill_workspace, "_continuity_resumed_context", return_value=True):
+                code, blocked = self.run_cli(*argv)
+            self.assertEqual((code, blocked.get("code")), (2, "EXECUTION-BRANCH-UNSET"), blocked)
+            self.assertEqual(state_path.read_bytes(), before)
+            # and the refusal is scoped to a resumed context: a first context
+            # still mints the binding, which is the whole point of the backfill.
+            code, updated = self.run_cli(*argv)
+            self.assertEqual(code, 0, updated)
+            live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                         check=True, capture_output=True, text=True).stdout.strip()
+            self.assertEqual(json.loads(state_path.read_text(encoding="utf-8"))[
+                "development"]["execution_branch"], live_branch)
+            # The predicate itself, on documents the Store accepts: only a
+            # context carrying a predecessor counts as resumed.
+            successor = seed.ORCHESTRATION_CONTEXT("ctx-2", 2, predecessor="ctx-1", continuity="op-1")
+            operation = seed.ORCHESTRATION_OPERATION()
+            operation.update(kind="continuity-switch", intended_after={"campaign_bridge": None})
+            resumed = seed.ORCHESTRATION_ITEM({"ctx-1": seed.ORCHESTRATION_CONTEXT(), "ctx-2": successor},
+                                              {"op-1": operation})
+            resumed["current_context_id"] = "ctx-2"
+            first = seed.ORCHESTRATION_ITEM({"ctx-1": seed.ORCHESTRATION_CONTEXT()})
+            store_module.bootstrap(root)
+            store_module.transact(root, lambda doc: {**doc, "agent_orchestration": {
+                "schema": "grill-agent-orchestration/v1",
+                "work_items": {"work-resumed": resumed, "work-first": first}}})
+            self.assertTrue(grill_workspace._continuity_resumed_context(root, "work-resumed"))
+            self.assertFalse(grill_workspace._continuity_resumed_context(root, "work-first"))
+            self.assertFalse(grill_workspace._continuity_resumed_context(root, "work-absent"))
+
+    def test_block_refuses_a_resource_whose_activity_lives_in_another_context(self):
+        """o1/T043: every producer pins a resource to the context of its own
+        activity (`new_specialist_resource`) and no verb moves an activity
+        between contexts (`prepare_activity` fences on it), so the shape the
+        cleanup scope reasons about -- a foreign-context resource carrying the
+        requested activity -- is one the core never emits. It was only implicit:
+        the Store accepted it, which is what made the cleanup case covering
+        that branch a test of a document nothing produces. Asserted here, the
+        branch becomes defence in depth instead of false confidence.
+
+        Verified by reversion: without the invariant the divergent block
+        validates clean.
+        """
+        import validate_orchestrator_store_contract as seed
+        item = seed.ORCHESTRATION_ITEM({"ctx-1": seed.ORCHESTRATION_CONTEXT(),
+                                        "ctx-2": seed.ORCHESTRATION_CONTEXT("ctx-2", 2)})
+        item["activities"] = {"activity-1": seed.ORCHESTRATION_ACTIVITY()}
+        item["resources"] = {"resource-1": seed.ORCHESTRATION_RESOURCE()}
+        block = {"schema": agent_orchestration.SCHEMA, "work_items": {"work-x": item}}
+        agent_orchestration.validate_block(copy.deepcopy(block))
+        divergent = copy.deepcopy(block)
+        divergent["work_items"]["work-x"]["resources"]["resource-1"]["origin_context_id"] = "ctx-2"
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "another context"):
+            agent_orchestration.validate_block(divergent)
 
     def test_prepare_switch_refuses_declared_but_unknown_checkpoint(self):
         """T005: only the "no checkpoint at all yet" branch (checkpoint_head is
@@ -1549,43 +1709,42 @@ class AgentOrchestrationContract(unittest.TestCase):
             # step and someone switches branch once the session is dead.
             original_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
                                              check=True, capture_output=True, text=True).stdout.strip()
-            # T038/R4: the checkout and the state rewrite move the *fixture's*
-            # tree, so they belong inside the protected block. While they sat
-            # above the `try`, a failure between the two left
-            # `a-branch-nobody-was-on` checked out for the rest of the method,
-            # and every case below derived its identity from a tree none of
-            # them declared -- a cascade with a non-obvious cause, or a pass by
-            # accident.
-            try:
-                subprocess.run(["git", "-C", str(root), "checkout", "-q", "-b", "a-branch-nobody-was-on"], check=True)
-                state_path = root / ".grill" / "work-items" / "work-restamp" / "state.json"
-                aged = json.loads(state_path.read_text(encoding="utf-8"))
-                aged["active_phase"] = "a-later-step"
-                state_path.write_text(json.dumps(aged), encoding="utf-8")
-                self.assertNotEqual((sealed_identity["phase"], sealed_identity["branch"]),
-                                    ("a-later-step", "a-branch-nobody-was-on"))
-                env, transport = observing(takeover_show(old_dispatch, status="completed"))
-                with env, transport:
-                    code, preview = takeover("work-restamp", "orca:ctx-new-restamp")
-                    self.assertEqual(code, 0, preview)
-                    code, restamped = takeover("work-restamp", "orca:ctx-new-restamp", "--apply",
-                                               "--expected-sha256", preview["expected_sha256"])
-                self.assertEqual((code, restamped.get("verdict")), (0, "TAKEOVER-APPLIED"), restamped)
-                restamp_item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-restamp"]
-                successor = restamp_item["contexts"][restamped["context_id"]]["worktree_identity"]
-                # The successor carries the *live* values, not the predecessor's
-                # stale copy; every structural field is preserved untouched.
-                self.assertEqual((successor["phase"], successor["branch"]),
-                                 ("a-later-step", "a-branch-nobody-was-on"))
-                self.assertEqual({key: successor[key] for key in
-                                  ("project_id", "work_id", "du", "git_common_dir", "real_path")},
-                                 {key: sealed_identity[key] for key in
-                                  ("project_id", "work_id", "du", "git_common_dir", "real_path")})
-            finally:
-                # T038: restore without demanding success. `check=True` here
-                # raises over whatever assertion actually broke, masking it.
-                subprocess.run(["git", "-C", str(root), "checkout", "-q", original_branch], check=False)
-
+            # R5-2: teardown, not a protected block. The restoration tolerates
+            # failure so it never masks the real assertion (T038), and as a
+            # `finally` that meant the cases *after* it could silently derive
+            # identity from the test branch. Registered as cleanup it always
+            # runs, at the end of the case, with no uncovered window.
+            self.addCleanup(subprocess.run, ["git", "-C", str(root), "checkout", "-q", original_branch],
+                            check=False)
+            subprocess.run(["git", "-C", str(root), "checkout", "-q", "-b", "a-branch-nobody-was-on"], check=True)
+            state_path = root / ".grill" / "work-items" / "work-restamp" / "state.json"
+            aged = json.loads(state_path.read_text(encoding="utf-8"))
+            aged["active_phase"] = "a-later-step"
+            state_path.write_text(json.dumps(aged), encoding="utf-8")
+            self.assertNotEqual((sealed_identity["phase"], sealed_identity["branch"]),
+                                ("a-later-step", "a-branch-nobody-was-on"))
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport:
+                code, preview = takeover("work-restamp", "orca:ctx-new-restamp")
+                self.assertEqual(code, 0, preview)
+                code, restamped = takeover("work-restamp", "orca:ctx-new-restamp", "--apply",
+                                           "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, restamped.get("verdict")), (0, "TAKEOVER-APPLIED"), restamped)
+            restamp_item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-restamp"]
+            successor = restamp_item["contexts"][restamped["context_id"]]["worktree_identity"]
+            # The successor carries the *live* values, not the predecessor's
+            # stale copy; every structural field is preserved untouched.
+            self.assertEqual((successor["phase"], successor["branch"]),
+                             ("a-later-step", "a-branch-nobody-was-on"))
+            self.assertEqual({key: successor[key] for key in
+                              ("project_id", "work_id", "du", "git_common_dir", "real_path")},
+                             {key: sealed_identity[key] for key in
+                              ("project_id", "work_id", "du", "git_common_dir", "real_path")})
+            # The cases below need the original branch back, so the case
+            # restores it explicitly and demands success -- no assertion is in
+            # flight here, so `check=True` masks nothing. The cleanup above
+            # stays as the net for the paths that never reach this line.
+            subprocess.run(["git", "-C", str(root), "checkout", "-q", original_branch], check=True)
             # -- R4-2/T036: the REFUSAL side of the same guard, which no test
             # exercised at all: `grep -rn TAKEOVER-IDENTITY-DIVERGENT tests/`
             # returned zero, and deleting the whole `raise` -- not relaxing it,
@@ -1625,7 +1784,10 @@ class AgentOrchestrationContract(unittest.TestCase):
                     with self.subTest(case="identity-divergent", apply=bool(tail)), \
                          mock.patch.object(takeover_store, "read_snapshot", return_value=divergent_stub):
                         code, blocked = takeover("work-divergent", "orca:ctx-new-divergent", *tail)
-                    self.assertEqual((code, blocked.get("code")), (2, "TAKEOVER-IDENTITY-DIVERGENT"), blocked)
+                        # R5-3: inside the subTest. Dedented, a failure of the
+                        # preview iteration aborted the loop and the apply
+                        # subcase never ran at all.
+                        self.assertEqual((code, blocked.get("code")), (2, "TAKEOVER-IDENTITY-DIVERGENT"), blocked)
             self.assertEqual(store.read_snapshot(root).content_sha256, before)
 
             # -- a live dispatch refuses distinctly from an inconclusive one. --
