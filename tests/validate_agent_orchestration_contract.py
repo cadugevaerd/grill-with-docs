@@ -1377,7 +1377,8 @@ class AgentOrchestrationContract(unittest.TestCase):
         resume stays as permissive as T035 made it.
 
         Verified by reversion: deleting the comparison makes the bound-elsewhere
-        half return PREVIEW/exit 0.
+        half return PREVIEW/exit 0 -- the resume proceeding on a branch the work
+        item is not bound to, not merely a different refusal code (T046).
         """
         import validate_orchestrator_store_contract as seed
         store_module = grill_workspace.grill_core_module("store")
@@ -1423,12 +1424,13 @@ class AgentOrchestrationContract(unittest.TestCase):
                 argv = ("gauntlet-resume", str(root), "--work-id", "work-x", "--checkpoint", "checkpoint-1",
                         "--runtime", runtime, "--session-ref", session)
                 before = store_module.read_snapshot(root).content_sha256
-                if bound is not None:
-                    code, blocked = self.run_cli(*argv)
-                    self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-STATE-DIVERGENCE"), blocked)
-                    self.assertIn(bound, blocked.get("error", ""))
-                    self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
-                    continue
+                # R6-3/T046: both halves get the SAME boundary substitutes. The
+                # divergent half used to run without them, so it stopped short
+                # on the missing activation and the reversion only changed which
+                # refusal code came out first -- exit code and write barrier read
+                # identically with and without the comparison. Installed here,
+                # the reversion degrades this half to PREVIEW/exit 0, which is
+                # what "the resume proceeds on a foreign branch" actually means.
                 adapter, _show, transcript = orchestration_fixture.boundary(
                     grill_workspace, root, runtime, session, "work-x")
                 transcript["result"]["transcript"]["messages"][0]["blocks"][0]["input"] = {
@@ -1436,62 +1438,171 @@ class AgentOrchestrationContract(unittest.TestCase):
                 with mock.patch.object(grill_workspace, "_continuity_effective_activation",
                         return_value={"runtime": {"id": runtime, "adapter": runtime}}), \
                      mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
-                    code, preview = self.run_cli(*argv)
-                self.assertEqual((code, preview.get("verdict")), (0, "PREVIEW"), preview)
+                    code, payload = self.run_cli(*argv)
+                if bound is not None:
+                    self.assertEqual((code, payload.get("code")), (2, "CONTINUITY-STATE-DIVERGENCE"), payload)
+                    self.assertIn(bound, payload.get("error", ""))
+                else:
+                    self.assertEqual((code, payload.get("verdict")), (0, "PREVIEW"), payload)
                 self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
 
-    def test_checkpoint_never_backfills_the_execution_branch_from_a_resumed_context(self):
-        """R5-1/T040, the minting half: the backfill reads the LIVE branch, so
-        with `branch` out of the compared tuple a switch made before the first
-        confirmed step would bind the work item to the wrong branch -- and
-        nothing ever re-stamps it. A resumed context cannot prove the live
-        branch is the intended one, so it may not mint the binding.
-
-        Verified by reversion: deleting the refusal makes the resumed half bind
-        and return exit 0.
+    def _graft_succession(self, root, work_id, branch):
+        """Leave behind the shape a takeover/resume produces: a successor
+        context, descending from the current one, whose worktree identity is
+        stamped on `branch`. The real verbs derive that stamp live and validate
+        the structural identity in the act, so the stamp is the only evidence
+        of which tree the context ran on -- and the Store forbids rewriting a
+        context in place, which is why the succession is grafted as a new one.
         """
         import validate_orchestrator_store_contract as seed
         store_module = grill_workspace.grill_core_module("store")
-        temporary, root = self.fixture()
-        with temporary, orchestration_fixture.offline_leader(grill_workspace):
-            with mock.patch.object(grill_workspace, "_initialize_orchestration", return_value={}):
+        state = grill_workspace.read_development_state(
+            root, grill_workspace.resolve_development_item(root, work_id), work_id)[1]
+        sealed = {**grill_workspace._continuity_identity(root, work_id, state), "branch": branch}
+
+        def apply(document):
+            document = copy.deepcopy(document)
+            item = document["agent_orchestration"]["work_items"][work_id]
+            prior_id = item["current_context_id"]
+            prior = item["contexts"][prior_id]
+            epoch = prior["epoch"] + 1
+            operation = seed.ORCHESTRATION_OPERATION("op-continuity", "ctx-successor")
+            operation.update(kind="continuity-switch", state="APPLIED", fence=epoch,
+                             intended_after={"campaign_bridge": None})
+            item["contexts"][prior_id] = {**prior, "state": "SUPERSEDED",
+                                          "leader": {**prior["leader"], "state": "RELEASING"}}
+            item["contexts"]["ctx-successor"] = {
+                **copy.deepcopy(prior), "context_id": "ctx-successor", "epoch": epoch,
+                "predecessor_context_id": prior_id, "continuity_ref": "op-continuity",
+                "worktree_identity": sealed,
+                "leader": {**prior["leader"], "owner_id": "ctx-successor", "fence": epoch, "epoch": epoch}}
+            item["operations"]["op-continuity"] = operation
+            item["current_context_id"] = "ctx-successor"
+            return document
+
+        store_module.transact(root, apply)
+
+    def _finish_phase(self, state_path, *, unbind):
+        """Complete every step of the matrix so `phase-turn` is admissible,
+        optionally clearing the binding to reach the turn's own minting branch."""
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        development = state["development"]
+        development["steps"] = {step: "complete" for step in development["sequence"]}
+        development["current_step"] = development["sequence"][-1]
+        if unbind:
+            development["execution_branch"] = None
+        state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    def test_execution_branch_minting_refuses_only_a_contradicting_identity_stamp(self):
+        """R6-1/T044. This case used to assert EXECUTION-BRANCH-UNSET whenever
+        `_continuity_resumed_context` was true -- that is, it encoded the defect
+        rather than the protection. Descending from another context is
+        monotonic: every succession writes `predecessor_context_id` and
+        `validate_transition` requires it, so no verb ever clears it. Refusing
+        the mint on that property blocked every work item that was ever taken
+        over or resumed, permanently, because `phase-turn` clears the binding on
+        purpose and nothing re-stamps it.
+
+        The criterion is now evidence, not history: `_continuity_stamped_branch`
+        returns the branch the current context's identity stamp claims, and the
+        refusal (EXECUTION-BRANCH-MISMATCH) fires only when that stamp exists
+        AND contradicts the live branch. Three sides, on both minting sites --
+        the step confirmation and the phase turn, which had no guard at all:
+
+        - no stamp: no prior claim to contradict, so the binding is minted. This
+          is exactly the side the old criterion blocked forever;
+        - stamp agreeing with the live branch: minted;
+        - stamp contradicting it: refused, with nothing written.
+
+        Verified by reversion: restoring the "has a predecessor" criterion makes
+        the two stamped-agreeing halves refuse EXECUTION-BRANCH-UNSET.
+        """
+        for label, stamp, refuses in (("no stamp", None, False),
+                                      ("stamp agrees", "live", False),
+                                      ("stamp contradicts", "a-branch-nobody-was-on", True)):
+            temporary, root = self.fixture()
+            with temporary, self.subTest(case=label), orchestration_fixture.offline_leader(grill_workspace):
                 code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
                     "--work-id", "work-x", "--runtime", "codex",
                     "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+                self.assertEqual(code, 0, payload)
+                state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
+                self.assertNotIn("execution_branch",
+                                 json.loads(state_path.read_text(encoding="utf-8"))["development"])
+                live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                             check=True, capture_output=True, text=True).stdout.strip()
+                if stamp is not None:
+                    self._graft_succession(root, "work-x", live_branch if stamp == "live" else stamp)
+                    self.assertNotEqual(stamp, live_branch)
+
+                # The step confirmation, which is where the backfill lives.
+                before = state_path.read_bytes()
+                code, payload = self.run_cli("checkpoint", str(root), "--work-id", "work-x",
+                    "--step", "specify", "--state", "in-progress", "--operation-id", "op-specify",
+                    "--session-ref", orchestration_fixture.SESSION)
+                if refuses:
+                    self.assertEqual((code, payload.get("code")), (2, "EXECUTION-BRANCH-MISMATCH"), payload)
+                    self.assertIn(stamp, payload.get("error", ""))
+                    self.assertEqual(state_path.read_bytes(), before)
+                else:
+                    self.assertEqual(code, 0, payload)
+                    self.assertEqual(json.loads(state_path.read_text(encoding="utf-8"))[
+                        "development"]["execution_branch"], live_branch)
+
+                # The phase turn mints the binding through its own branch, the
+                # one R6 found without any guard at all.
+                self._finish_phase(state_path, unbind=True)
+                before = state_path.read_bytes()
+                code, payload = self.run_cli("phase-turn", str(root), "--work-id", "work-x",
+                    "--reason", "abrindo a fase seguinte", "--session-ref", orchestration_fixture.SESSION)
+                if refuses:
+                    self.assertEqual((code, payload.get("code")), (2, "EXECUTION-BRANCH-MISMATCH"), payload)
+                    self.assertIn(stamp, payload.get("error", ""))
+                    self.assertEqual(state_path.read_bytes(), before)
+                else:
+                    self.assertEqual((code, payload.get("verdict")), (0, "TURNED"), payload)
+                    turned = json.loads(state_path.read_text(encoding="utf-8"))["development"]
+                    self.assertIsNone(turned["execution_branch"])
+                    self.assertEqual(turned["audit"][-1]["previous_execution_branch"], live_branch)
+
+    def test_a_succeeded_work_item_still_binds_a_branch_after_the_phase_turn(self):
+        """R6-1/T044, the dead end itself, as one uninterrupted sequence:
+        succession, then phase turn, then step confirmation. `phase-turn` clears
+        `development["execution_branch"]` deliberately, so the next phase binds
+        its own branch, and the only other writer is the mint. Under the old
+        monotonic criterion the successor context could never mint again, so the
+        first turn after ANY takeover or resume blocked the work item forever --
+        an availability defect no verb could undo.
+
+        Verified by reversion: restoring the "has a predecessor" criterion makes
+        the final confirmation refuse EXECUTION-BRANCH-UNSET.
+        """
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                "--work-id", "work-x", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
             self.assertEqual(code, 0, payload)
             state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
-            self.assertNotIn("execution_branch", json.loads(state_path.read_text(encoding="utf-8"))["development"])
-            argv = ("checkpoint", str(root), "--work-id", "work-x", "--step", "specify", "--state", "in-progress",
-                    "--operation-id", "op-specify", "--session-ref", orchestration_fixture.SESSION)
-            before = state_path.read_bytes()
-            with mock.patch.object(grill_workspace, "_continuity_resumed_context", return_value=True):
-                code, blocked = self.run_cli(*argv)
-            self.assertEqual((code, blocked.get("code")), (2, "EXECUTION-BRANCH-UNSET"), blocked)
-            self.assertEqual(state_path.read_bytes(), before)
-            # and the refusal is scoped to a resumed context: a first context
-            # still mints the binding, which is the whole point of the backfill.
-            code, updated = self.run_cli(*argv)
-            self.assertEqual(code, 0, updated)
             live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
                                          check=True, capture_output=True, text=True).stdout.strip()
+            code, payload = self.run_cli("checkpoint", str(root), "--work-id", "work-x",
+                "--step", "specify", "--state", "in-progress", "--operation-id", "op-first",
+                "--session-ref", orchestration_fixture.SESSION)
+            self.assertEqual(code, 0, payload)
+            self._graft_succession(root, "work-x", live_branch)
+            self._finish_phase(state_path, unbind=False)
+            code, payload = self.run_cli("phase-turn", str(root), "--work-id", "work-x",
+                "--reason", "fase entregue", "--session-ref", orchestration_fixture.SESSION)
+            self.assertEqual((code, payload.get("verdict")), (0, "TURNED"), payload)
+            self.assertIsNone(json.loads(state_path.read_text(encoding="utf-8"))[
+                "development"]["execution_branch"])
+            code, payload = self.run_cli("checkpoint", str(root), "--work-id", "work-x",
+                "--step", "specify", "--state", "in-progress", "--operation-id", "op-next-phase",
+                "--session-ref", orchestration_fixture.SESSION)
+            self.assertEqual(code, 0, payload)
             self.assertEqual(json.loads(state_path.read_text(encoding="utf-8"))[
                 "development"]["execution_branch"], live_branch)
-            # The predicate itself, on documents the Store accepts: only a
-            # context carrying a predecessor counts as resumed.
-            successor = seed.ORCHESTRATION_CONTEXT("ctx-2", 2, predecessor="ctx-1", continuity="op-1")
-            operation = seed.ORCHESTRATION_OPERATION()
-            operation.update(kind="continuity-switch", intended_after={"campaign_bridge": None})
-            resumed = seed.ORCHESTRATION_ITEM({"ctx-1": seed.ORCHESTRATION_CONTEXT(), "ctx-2": successor},
-                                              {"op-1": operation})
-            resumed["current_context_id"] = "ctx-2"
-            first = seed.ORCHESTRATION_ITEM({"ctx-1": seed.ORCHESTRATION_CONTEXT()})
-            store_module.bootstrap(root)
-            store_module.transact(root, lambda doc: {**doc, "agent_orchestration": {
-                "schema": "grill-agent-orchestration/v1",
-                "work_items": {"work-resumed": resumed, "work-first": first}}})
-            self.assertTrue(grill_workspace._continuity_resumed_context(root, "work-resumed"))
-            self.assertFalse(grill_workspace._continuity_resumed_context(root, "work-first"))
-            self.assertFalse(grill_workspace._continuity_resumed_context(root, "work-absent"))
 
     def test_block_refuses_a_resource_whose_activity_lives_in_another_context(self):
         """o1/T043: every producer pins a resource to the context of its own
