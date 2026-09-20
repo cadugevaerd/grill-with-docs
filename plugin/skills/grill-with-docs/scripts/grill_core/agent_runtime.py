@@ -1014,6 +1014,52 @@ def _orca_observation(source_ref: str, launch_raw: bytes, show_raw: bytes) -> di
     }, (launch_raw, show_raw))
 
 
+def observe_predecessor_termination(session_ref: str, read: Callable[[list[str]], bytes]) -> dict[str, Any]:
+    """Observe whether the dispatch behind ``session_ref`` has already ended.
+
+    Reuses the same worker-show query LeaderBoundary.observe issues, without
+    touching LeaderBoundary or any existing caller. Never raises: any failure
+    to obtain or read the response collapses to "indeterminate". Verdicts:
+
+    - ``terminal``: dispatch.status is outside dispatched/running, or
+      capabilityRevokedAt is not null, or the host liveness verdict is
+      "exited" sourced from "agent_status" (Research R1).
+    - ``not_observable``: session_ref is not a dispatch reference this
+      adapter can query.
+    - ``indeterminate``: missing/illegible/invalid-JSON response, a dispatch
+      uncorrelated to the one requested, unverifiable liveness, or an
+      exception from ``read`` itself.
+
+    The result always carries the reference and the digest of the observed
+    response, for the succession record (FR-004).
+    """
+    if not isinstance(session_ref, str) or not re.fullmatch(r"orca:ctx[-_][A-Za-z0-9_-]+", session_ref):
+        return {"verdict": "not_observable", "reference": session_ref, "digest": None}
+    dispatch_id = session_ref.removeprefix("orca:")
+    digest = None
+    try:
+        raw = read(["orchestration", "worker-show", "--dispatch", dispatch_id, "--json"])
+        if not isinstance(raw, bytes):
+            return {"verdict": "indeterminate", "reference": session_ref, "digest": None}
+        digest = _sha256(raw)
+        show = _object(raw, "Orca worker-show")
+        dispatch = _mapping(show.get("dispatch"), "dispatch")
+        projection = _mapping(show.get("projection"), "projection")
+        if dispatch.get("id") != dispatch_id:
+            _fail("uncorrelated dispatch")
+        status = _string(dispatch.get("status"), "dispatch status")
+        liveness = _mapping(projection.get("liveness"), "liveness") if projection.get("liveness") is not None else {}
+    except Exception:
+        return {"verdict": "indeterminate", "reference": session_ref, "digest": digest}
+    terminal = (
+        status not in ("dispatched", "running")
+        or dispatch.get("capabilityRevokedAt") is not None
+        or (liveness.get("verdict") == "exited" and liveness.get("source") == "agent_status")
+    )
+    verdict = "terminal" if terminal else "indeterminate"
+    return {"verdict": verdict, "reference": session_ref, "digest": digest}
+
+
 @dataclass
 class RuntimeBoundary:
     """Known adapter seam. Its callables return native public response bytes."""
