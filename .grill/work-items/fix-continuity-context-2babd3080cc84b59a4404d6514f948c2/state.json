@@ -211,6 +211,13 @@
         "reason": "grill-partition: 8 nós em 4 fases, T013 no leader; run run-27d4a4df4c0ec78046f8c430 DAG-VALID",
         "state": "complete",
         "step": "partition"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke grill-with-docs:grill-implement-parallel on run-27d4a4df4c0ec78046f8c430",
+        "state": "in-progress",
+        "step": "implement-parallel"
       }
     ],
     "chain_stale": [],
@@ -235,7 +242,7 @@
       "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
-      "implement-parallel": "pending",
+      "implement-parallel": "in-progress",
       "partition": "complete",
       "plan": "complete",
       "review": "pending",
