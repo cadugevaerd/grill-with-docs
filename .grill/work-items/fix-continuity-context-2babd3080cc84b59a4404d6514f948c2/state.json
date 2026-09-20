@@ -719,6 +719,13 @@
         "state": "complete",
         "step": "verify",
         "supersedes": ".grill/attestations/032-verify-r6.json"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "",
+        "state": "in-progress",
+        "step": "review"
       }
     ],
     "chain_stale": [],
@@ -746,7 +753,7 @@
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
-      "review": "pending",
+      "review": "in-progress",
       "ship": "pending",
       "specify": "complete",
       "tasks": "complete",
