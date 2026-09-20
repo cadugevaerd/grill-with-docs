@@ -1,0 +1,47 @@
+{
+  "worker": "p08-c",
+  "feature": "032-continuity-context",
+  "completed": [
+    "T027"
+  ],
+  "tasks": {
+    "T027": {
+      "status": "done",
+      "summary": "Dois casos novos dentro de test_context_takeover (tests/validate_agent_orchestration_contract.py), inseridos antes do bloco de short-circuit TAKEOVER-REUSED. (1) R2-4, projecao de recursos e operacoes: work item novo 'work-projection'; semeados por store.transact uma activity 'activity-projection' em DECLARED (estado quiescente por _continuity_quiescence, entao o binding de criacao do recurso existe sem disparar TAKEOVER-WORK-ACTIVE), dois recursos com a mesma origin_context_id -- 'resource-kept' em REGISTERED e 'resource-closed' em CLOSED -- e duas operacoes -- 'op-kept' em INTENT e 'op-settled' em CONFIRMED (com observation_ref e result_sha256, exigidos por agent_orchestration._operation). Depois do --apply, o teste assere IGUALDADE EXATA: applied['preserved_resources'] == {'resource-kept': ...} e applied['operations_to_reconcile'] == {'op-kept': ...}. A igualdade exata e o que prova o filtro: o item CLOSED e o item CONFIRMED nao podem aparecer. (2) R2-5, TAKEOVER-CAS-CONFLICT: work item 'work-cas'; previa normal, depois mock.patch.object(store_module, 'read_snapshot', return_value=stale) com um Snapshot de revision = real.revision - 1 e o mesmo documento, exatamente o seam que test_prepare_switch_refuses_declared_but_unknown_checkpoint ja usa. A guarda no topo do mutate() ve document['revision'] != snapshot.revision, levanta store.StoreError e o CLI devolve (2, 'TAKEOVER-CAS-CONFLICT'); o teste confirma tambem que o content_sha256 do store nao mudou. O expected_sha256 da previa continua valido sob o stub porque T024 tirou a revisao do digest.",
+      "evidence": "python3 tests/validate_agent_orchestration_contract.py -> Ran 36 tests, OK (rodada final, com o produto em HEAD).",
+      "reversions": [
+        {
+          "reversion": "A -- `retained` e `reconcile` revertidos para `{}` em gauntlet_context_takeover_command",
+          "result": "REPROVA. FAILED (failures=1), AssertionError: {} != {'resource-kept': {...}}"
+        },
+        {
+          "reversion": "B -- linha `\"preserved_resources\": retained, \"operations_to_reconcile\": reconcile,` removida do payload de retorno",
+          "result": "REPROVA. FAILED (errors=1) -- KeyError ao ler as chaves ausentes do resultado do --apply."
+        },
+        {
+          "reversion": "C -- guarda `if document[\"revision\"] != snapshot.revision: raise store.StoreError(...)` removida do topo do mutate()",
+          "result": "REPROVA. FAILED (failures=1) -- com a guarda fora, o --apply sob o snapshot defasado commita e devolve TAKEOVER-APPLIED (0) em vez de (2, 'TAKEOVER-CAS-CONFLICT')."
+        },
+        {
+          "reversion": "D -- filtros removidos das duas compreensoes (tudo projetado, sem excluir CLOSED/REMOVED nem restringir a INTENT/APPLIED/UNKNOWN)",
+          "result": "REPROVA. FAILED (failures=1), AssertionError: {'resource-closed': ...} != {'resource-kept': ...}. Prova que o filtro e testado, nao so a presenca da chave."
+        }
+      ],
+      "reversion_protocol": "Cada reversao foi aplicada temporariamente em plugin/skills/grill-with-docs/scripts/grill_workspace.py, verificada com `python3 tests/validate_agent_orchestration_contract.py AgentOrchestrationContract.test_context_takeover`, e desfeita com `git checkout -- <caminho>` logo em seguida. `git status` ao final mostra apenas os dois caminhos do grant."
+    }
+  },
+  "checks": {
+    "validate_agent_orchestration_contract": "Ran 36 tests, OK"
+  },
+  "broken_cases": [],
+  "not_touched": [
+    "plugin/: fora do grant. As quatro reversoes foram temporarias e restauradas ao HEAD; nenhuma mudanca de produto entregue.",
+    "Nenhum caso existente foi editado, afrouxado ou removido -- o diff do teste e puramente aditivo.",
+    "tasks.md, .grill/ e .specify/reports/: nao tocados.",
+    "tests/run_validators.py nao foi executado (suite completa e do leader)."
+  ],
+  "notes": [
+    "A semeadura dos recursos precisou de binding de criacao valido: agent_orchestration._resource exige activity_id XOR o trio (scheduler_run_id, worker_id, wave_id), e cada um deles precisa existir de fato no item (activity conhecida, scheduler_run conhecido no contexto de origem). Por isso a activity DECLARED foi semeada junto -- o caminho de scheduler_run exigiria semear tambem os scheduler_runs do contexto.",
+    "Nada de runtime real, rede ou processo externo: os casos usam os mesmos seams do arquivo (observing/guarded_run para o worker-show, store.transact para semeadura, mock.patch.object sobre store.read_snapshot)."
+  ]
+}

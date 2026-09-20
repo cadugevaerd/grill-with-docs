@@ -1317,6 +1317,66 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertEqual((code, blocked.get("code")), (2, "TAKEOVER-INPUTS-STALE"), blocked)
                 self.assertEqual(store.read_snapshot(root).content_sha256, before)
 
+            # -- R2-4/T027: the applied takeover projects what stays pinned
+            # under the superseded context. The filters are the point: a
+            # CLOSED resource and a settled operation must NOT appear, so a
+            # projection reverted to {} (or dropped from the payload) fails
+            # here instead of passing the whole suite green. --
+            projection_context_id = spawn("work-projection")
+            projection_policy = store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-projection"]["policy_sha256"]
+            # DECLARED is quiescent (_continuity_quiescence), so the resources
+            # below get a creation binding without refusing the takeover.
+            projection_activity = seed.ORCHESTRATION_ACTIVITY("activity-projection")
+            projection_activity.update(context_id=projection_context_id, policy_sha256=projection_policy)
+            kept_resource = seed.ORCHESTRATION_RESOURCE("resource-kept")
+            kept_resource.update(origin_context_id=projection_context_id, activity_id="activity-projection", state="REGISTERED")
+            closed_resource = seed.ORCHESTRATION_RESOURCE("resource-closed")
+            closed_resource.update(origin_context_id=projection_context_id, activity_id="activity-projection", state="CLOSED")
+            kept_operation = seed.ORCHESTRATION_OPERATION("op-kept", context_id=projection_context_id)
+            settled_operation = seed.ORCHESTRATION_OPERATION("op-settled", context_id=projection_context_id,
+                                                             result_sha256="f" * 64)
+            settled_operation.update(state="CONFIRMED", observation_ref="receipts/op-settled")
+            def add_projection(document):
+                target = document["agent_orchestration"]["work_items"]["work-projection"]
+                target["activities"]["activity-projection"] = copy.deepcopy(projection_activity)
+                target["resources"].update({"resource-kept": copy.deepcopy(kept_resource),
+                                            "resource-closed": copy.deepcopy(closed_resource)})
+                target["operations"].update({"op-kept": copy.deepcopy(kept_operation),
+                                             "op-settled": copy.deepcopy(settled_operation)})
+                return document
+            store.transact(root, add_projection)
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport:
+                code, preview = takeover("work-projection", "orca:ctx-new-projection")
+                self.assertEqual(code, 0, preview)
+                code, projected = takeover("work-projection", "orca:ctx-new-projection", "--apply",
+                                           "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, projected.get("verdict")), (0, "TAKEOVER-APPLIED"), projected)
+            self.assertEqual(projected["preserved_resources"], {"resource-kept": kept_resource})
+            self.assertEqual(projected["operations_to_reconcile"], {"op-kept": kept_operation})
+
+            # -- R2-5/T027: the revision guard at the top of mutate. The whole
+            # verdict is computed from a snapshot read outside the lock; when
+            # the document moved between that read and the commit, the
+            # takeover refuses instead of committing over the newer state.
+            # Same seam the resume sibling's CONTINUITY-CAS-CONFLICT uses. --
+            store_module = grill_workspace.grill_core_module("store")
+            spawn("work-cas")
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport:
+                code, preview = takeover("work-cas", "orca:ctx-new-cas")
+                self.assertEqual(code, 0, preview)
+                before = store.read_snapshot(root).content_sha256
+                real = store_module.read_snapshot(root)
+                stale = store_module.Snapshot(document=real.document, revision=real.revision - 1,
+                    content_sha256=real.content_sha256, project_id=real.project_id, path=real.path)
+                with mock.patch.object(store_module, "read_snapshot", return_value=stale):
+                    code, blocked = takeover("work-cas", "orca:ctx-new-cas", "--apply",
+                                             "--expected-sha256", preview["expected_sha256"])
+                self.assertEqual((code, blocked.get("code")), (2, "TAKEOVER-CAS-CONFLICT"), blocked)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
             # -- an identical, already-applied request short-circuits: no re-observation. --
             before = store.read_snapshot(root).content_sha256
             with guarded_run(None):
