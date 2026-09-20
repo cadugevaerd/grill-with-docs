@@ -1523,6 +1523,50 @@ def _leader_boundary(root: Path, runtime: str, session_ref: str, work_id: str | 
     return agent_runtime.LeaderBoundary(session_ref, root, runtime, handle, read)
 
 
+def _takeover_observation(root: Path, runtime: str, session_ref: str) -> tuple[dict[str, Any], str | None, dict[str, Any] | None]:
+    """Observe predecessor termination through the same read transport as _leader_boundary.
+
+    agent_runtime.observe_predecessor_termination (T002) only returns the
+    verdict/reference/digest; U1/T003 need dispatch.status and liveness too,
+    to tell an alive dispatch (TAKEOVER-LEADER-ACTIVE) apart from every other
+    inconclusive case (TAKEOVER-EVIDENCE-UNPROVEN). Capture the raw response
+    as a side effect of the same read() call instead of reading twice.
+    """
+    agent_runtime = grill_core_module("agent_runtime")
+    handle = os.environ.get("ORCA_TERMINAL_HANDLE")
+    captured: dict[str, bytes] = {}
+    def read(argv: list[str]) -> bytes:
+        if not handle:
+            raise agent_runtime.RuntimeError("LEADER-ADAPTER-UNSUPPORTED")
+        executable = os.environ.get("ORCA_CLI_COMMAND") or "orca"
+        try:
+            result = subprocess.run([executable, *argv], cwd=root, capture_output=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise agent_runtime.RuntimeError("LEADER-ADAPTER-UNAVAILABLE") from exc
+        if result.returncode:
+            raise agent_runtime.RuntimeError("LEADER-ADAPTER-UNAVAILABLE")
+        captured["raw"] = result.stdout
+        return result.stdout
+    observation = agent_runtime.observe_predecessor_termination(session_ref, read)
+    status: str | None = None
+    liveness: dict[str, Any] | None = None
+    raw = captured.get("raw")
+    dispatch_id = session_ref.removeprefix("orca:") if isinstance(session_ref, str) else None
+    if raw is not None:
+        try:
+            show = json.loads(raw.decode("utf-8"))
+            dispatch = show.get("dispatch") if isinstance(show, dict) else None
+            if isinstance(dispatch, dict) and dispatch.get("id") == dispatch_id and isinstance(dispatch.get("status"), str):
+                status = dispatch["status"]
+            projection = show.get("projection") if isinstance(show, dict) else None
+            candidate = projection.get("liveness") if isinstance(projection, dict) else None
+            if isinstance(candidate, dict) and isinstance(candidate.get("verdict"), str):
+                liveness = {"verdict": candidate["verdict"], "source": candidate.get("source")}
+        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+            status, liveness = None, None
+    return observation, status, liveness
+
+
 def _session_readiness(root: Path, runtime: str, session_ref: str | None, *,
                        work_id: str | None) -> dict[str, Any]:
     """Read one adapter observation and derive presentation at the CLI boundary."""
@@ -1646,10 +1690,38 @@ def _same_observed_leader(current: Any, incoming: dict[str, Any]) -> bool:
                     for key in ("session_ref", "incarnation", "observation_ref", "observation_sha256")))
 
 
+def _adoption_conflict(root: Path, work_id: str, inputs: dict[str, Any], policy_sha256: str,
+                       incoming: dict[str, Any]) -> tuple[Any, dict[str, Any] | None]:
+    """Read the existing binding and enforce the write-once/leader checks the
+    apply mutate() closure already applies. T006/FR-007: the preview must
+    raise the same refusal the apply would, not just when applying."""
+    store = grill_core_module("store")
+    existing_snapshot = store.read_snapshot(root, required=False)
+    if existing_snapshot is None:
+        return None, None
+    existing = existing_snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
+    if not isinstance(existing, dict):
+        return existing_snapshot, None
+    if existing.get("origin") != inputs["origin"] or existing.get("policy_sha256") != policy_sha256:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
+    current = existing.get("contexts", {}).get(existing.get("current_context_id"))
+    if current is not None and not _same_observed_leader(current, incoming):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "existing context has different runtime or session")
+    return existing_snapshot, existing
+
+
 def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     contract, inputs = _orchestration_inputs(root, args.work_id, args.runtime, args.session_ref, args.scope_file or [])
     expected = contract.adoption_sha256(inputs)
+    policy = ASSETS / "agent-orchestration.v1.json"
+    policy_bytes = policy.read_bytes()
+    policy_ref, policy_sha256 = "assets/agent-orchestration.v1.json", hash_bytes(policy_bytes)
+    context_id = f"ctx-{expected[:12]}"
+    candidate = contract.new_work_item(inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
+        adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), context_id=context_id)
+    incoming = candidate["contexts"][candidate["current_context_id"]]
+    existing_snapshot, existing = _adoption_conflict(root, args.work_id, inputs, policy_sha256, incoming)
     preview = {"verdict": "PREVIEW", "work_id": args.work_id, "expected_sha256": expected,
                "origin": inputs["origin"], "scope_files": inputs["scope_files"],
                "presentation": inputs["presentation"],
@@ -1659,24 +1731,13 @@ def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any
     if args.expected_sha256 != expected:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "expected_sha256 does not match reread adoption inputs")
     store = grill_core_module("store")
-    policy = ASSETS / "agent-orchestration.v1.json"
-    policy_bytes = policy.read_bytes()
-    policy_ref, policy_sha256 = "assets/agent-orchestration.v1.json", hash_bytes(policy_bytes)
-    candidate = contract.new_work_item(inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
-        adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), context_id=f"ctx-{expected[:12]}")
-    incoming = candidate["contexts"][candidate["current_context_id"]]
-    existing_snapshot = store.read_snapshot(root, required=False)
-    if existing_snapshot is not None:
-        existing = existing_snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
-        current = existing.get("contexts", {}).get(existing.get("current_context_id")) if isinstance(existing, dict) else None
-        if (isinstance(existing, dict) and existing.get("origin") == inputs["origin"]
-                and existing.get("policy_sha256") == policy_sha256 and existing.get("scope_files") == inputs["scope_files"]
-                and _same_observed_leader(current, incoming)
+    if isinstance(existing, dict):
+        current = existing.get("contexts", {}).get(existing.get("current_context_id"))
+        if (existing.get("scope_files") == inputs["scope_files"] and current is not None
                 and current.get("presentation") == inputs["presentation"]):
             return {"verdict": "REUSED", "work_id": args.work_id, "context_id": existing["current_context_id"],
                     "expected_sha256": expected, "store_revision": existing_snapshot.revision}, EXIT_OK
     store.bootstrap(root)
-    context_id = f"ctx-{expected[:12]}"
     def mutate(document: dict[str, Any]) -> dict[str, Any]:
         block = document.get("agent_orchestration")
         if block is None or args.work_id not in block["work_items"]:
@@ -3278,6 +3339,44 @@ def _continuity_checkpoint(item: dict[str, Any], *, operation_id: str, context_i
     return checkpoint_id, checkpoint
 
 
+def _initial_continuity_checkpoint(root: Path, work_id: str, item: dict[str, Any], context: dict[str, Any],
+                                   context_id: str, checkpoint_id: str, identity: dict[str, str],
+                                   state: dict[str, Any], state_bytes: bytes, store_revision: int,
+                                   journal_anchor: dict[str, Any]) -> dict[str, Any]:
+    """T005: project the current state into a first checkpoint instead of
+    refusing switch prep with CONTINUITY-CHECKPOINT-MISSING when no step was
+    confirmed yet. Mirrors the checkpoint shape `checkpoint_command` commits."""
+    contract = grill_core_module("agent_orchestration")
+    store = grill_core_module("store")
+    cleanup_obligations, preserved_resources = _cleanup_checkpoint_projection(root, work_id)
+    development = state.get("development", {})
+    checkpoint = {
+        "schema": contract.CHECKPOINT_SCHEMA, "checkpoint_id": checkpoint_id, "context_id": context_id,
+        "previous_checkpoint_id": None, "worktree_identity": copy.deepcopy(identity),
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "store_revision": store_revision,
+        "journal_anchor": copy.deepcopy(journal_anchor), "state_sha256": hash_bytes(state_bytes),
+        "inputs_manifest": {"evidence": []}, "workflow_sha256": context["inputs_sha256"],
+        "constitution_sha256": item["origin"]["metadata_sha256"], "policy_sha256": item["policy_sha256"],
+        "activation": context["activation"], "campaign": context["campaign"],
+        "development_sequence": development.get("sequence", []),
+        "current_step": development.get("current_step"), "step_states": development.get("steps", {}),
+        "accepted_outputs": development.get("attested_outputs", {}),
+        "accepted_executions": development.get("attested_executions", {}),
+        "pending_attempts": {}, "scheduler_runs": copy.deepcopy(context["scheduler_runs"]),
+        "operations": copy.deepcopy(item["operations"]), "cleanup_obligations": cleanup_obligations,
+        "preserved_resources": preserved_resources, "blocking_activity": None, "visual_state": {},
+        "presentation": context.get("presentation"), "checkpoint_sha256": "",
+    }
+    checkpoint["checkpoint_sha256"] = store.jcs_sha256({key: value for key, value in checkpoint.items()
+                                                          if key != "checkpoint_sha256"})
+    try:
+        contract.validate_block({"schema": contract.SCHEMA, "work_items": {"x": {**item,
+            "checkpoints": {**item["checkpoints"], checkpoint_id: checkpoint}, "checkpoint_head": checkpoint_id}}})
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", str(exc)) from exc
+    return checkpoint
+
+
 def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     store = grill_core_module("store")
@@ -3293,20 +3392,35 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
             or context.get("state") not in {"ACTIVE", "QUIESCING"}):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
     _require_current_leader(root, args.work_id, context, args.session_ref)
-    identity = _continuity_identity(root, args.work_id, read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1])
+    state_path, state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)
+    identity = _continuity_identity(root, args.work_id, state)
     if context.get("worktree_identity") not in (None, identity):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "worktree identity changed")
     operation_entry = _continuity_operation(item, context_id, args.to_runtime)
+    initial_checkpoint = None
+    source_checkpoint = None
     if operation_entry is None:
         source_checkpoint = item.get("checkpoint_head")
-        if not isinstance(source_checkpoint, str) or source_checkpoint not in item.get("checkpoints", {}):
+        if source_checkpoint is not None and source_checkpoint not in item.get("checkpoints", {}):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-CHECKPOINT-MISSING", args.work_id)
+        if source_checkpoint is None:
+            # T005: no confirmed step yet -- project current state into an
+            # initial checkpoint instead of refusing. A declared-but-unknown
+            # head (the branch above) still refuses.
+            source_checkpoint = "cp-init-" + hashlib.sha256(canonical(
+                {"context": context_id, "epoch": args.epoch})).hexdigest()[:24]
+            initial_checkpoint = _initial_continuity_checkpoint(
+                root, args.work_id, item, context, context_id, source_checkpoint, identity, state,
+                safe_read_regular_fd(root, state_path), snapshot.revision + 1, snapshot.document["journal_head"])
         operation_id = "switch-" + hashlib.sha256(canonical({"context": context_id, "checkpoint": source_checkpoint,
             "to_runtime": args.to_runtime})).hexdigest()[:24]
         checkpoint_id = "cp-" + operation_id
         source_campaign = context.get("campaign")
         if source_campaign is None and isinstance(item.get("checkpoints", {}).get(source_checkpoint), dict):
             source_campaign = item["checkpoints"][source_checkpoint].get("campaign")
+        # A fresh initial_checkpoint always carries context["campaign"] verbatim
+        # (T005/_initial_continuity_checkpoint), so source_campaign is already
+        # correct without reading it back from item["checkpoints"].
         bridge = None
         if source_campaign is not None:
             try:
@@ -3339,6 +3453,11 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
         if (not isinstance(source, dict) or target.get("current_context_id") != context_id
                 or source.get("epoch") != args.epoch or source.get("leader", {}).get("session_ref") != args.session_ref):
             raise store.StoreError(store.STATE_DIVERGENCE, "continuity source changed")
+        if initial_checkpoint is not None and source_checkpoint not in target["checkpoints"]:
+            if target.get("checkpoint_head") is not None:
+                raise store.StoreError(store.STATE_DIVERGENCE, "checkpoint head appeared during switch preparation")
+            target["checkpoints"][source_checkpoint] = copy.deepcopy(initial_checkpoint)
+            target["checkpoint_head"] = source_checkpoint
         target["operations"].setdefault(operation_id, copy.deepcopy(operation))
         source.setdefault("worktree_identity", copy.deepcopy(identity))
         if source["campaign"] is None and operation["intended_after"]["campaign_bridge"] is not None:
@@ -3502,6 +3621,140 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         "campaign": expected_campaign, "pending_attempts": pending, "preserved_resources": retained,
         "operations_to_reconcile": reconcile, "store_revision": committed.revision, "presentation": readiness["presentation"],
         **_coordinator_response(args.runtime)}, EXIT_OK
+
+
+def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """T003/T004: a new session assumes a work item once the environment --
+    not the caller -- proves the previous conductor ended (FR-001..FR-005).
+
+    Preview and apply run the exact same checks (contract context-takeover);
+    the only difference is that apply additionally requires a matching
+    --expected-sha256 and performs the CAS mutation. A refusal is raised the
+    same way in both modes, so the preview never lies about what apply would
+    do (mirrors T006's fix to orchestration-adopt for the same reason).
+    """
+    root = project_root(args.root)
+    if not isinstance(args.session_ref, str) or not args.session_ref:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "gauntlet-context-takeover requires --session-ref")
+    store = grill_core_module("store")
+    snapshot = store.read_snapshot(root, required=True)
+    item = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
+    if not isinstance(item, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-MIGRATION-REQUIRED", args.work_id)
+    context_id = item.get("current_context_id")
+    context = item.get("contexts", {}).get(context_id)
+    if not isinstance(context, dict) or context.get("state") not in {"ACTIVE", "QUIESCING"}:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
+    # Idempotent replay: this session already took over as the current context.
+    continuity_ref = context.get("continuity_ref")
+    prior_operation = item.get("operations", {}).get(continuity_ref) if isinstance(continuity_ref, str) else None
+    if (context.get("leader", {}).get("session_ref") == args.session_ref and isinstance(prior_operation, dict)
+            and prior_operation.get("kind") == "continuity-switch"
+            and prior_operation.get("intended_after", {}).get("reason") == "takeover"):
+        return {"verdict": "TAKEOVER-REUSED", "work_id": args.work_id, "context_id": context_id,
+                "from_context_id": context.get("predecessor_context_id"), "epoch": context["epoch"],
+                "store_revision": snapshot.revision}, EXIT_OK
+    old_session_ref = context["leader"]["session_ref"]
+    observation, status, liveness = _takeover_observation(root, context["runtime"], old_session_ref)
+    if observation["verdict"] == "not_observable":
+        # U1: not_observable is the form of the registered identifier; the
+        # adapter cannot even shape a query out of it.
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-NOT-OBSERVABLE", old_session_ref)
+    if observation["verdict"] != "terminal":
+        if status in {"dispatched", "running"}:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-LEADER-ACTIVE", old_session_ref)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-EVIDENCE-UNPROVEN", old_session_ref)
+    # C1 (analysis.md): refuse while specialist activity is not quiescent,
+    # reusing the same check gauntlet-prepare-switch already applies.
+    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
+    if active or unknown:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-WORK-ACTIVE", ",".join(active + unknown))
+    old_campaign = context.get("campaign")
+    checkpoint_ref, bridge = None, None
+    if old_campaign is not None:
+        head = item.get("checkpoint_head")
+        if not isinstance(head, str) or head not in item.get("checkpoints", {}):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-CHECKPOINT-MISSING", args.work_id)
+        checkpoint_ref = head
+        # Same campaign on both sides: the runtime is not changing, only the
+        # session driving it. validate_block only requires the bridge to
+        # agree with the contexts and the referenced checkpoint's outputs.
+        bridge = {"from_campaign": copy.deepcopy(old_campaign), "to_campaign": copy.deepcopy(old_campaign),
+                  "accepted_outputs": copy.deepcopy(item["checkpoints"][head]["accepted_outputs"]),
+                  "worktree_identity": copy.deepcopy(context.get("worktree_identity") or {})}
+    evidence = {"observation_ref": observation["reference"], "observation_sha256": observation["digest"],
+                "dispatch_status": status, "liveness": liveness}
+    operation_id = "takeover-" + hashlib.sha256(canonical({"context": context_id, "session_ref": args.session_ref,
+        "observation": observation})).hexdigest()[:24]
+    new_context_id = "ctx-" + hashlib.sha256(canonical({"operation": operation_id})).hexdigest()[:24]
+    expected = store.jcs_sha256({"work_id": args.work_id, "from_context_id": context_id,
+        "from_session_ref": old_session_ref, "to_session_ref": args.session_ref,
+        "observation": observation, "checkpoint_ref": checkpoint_ref})
+    if not args.apply:
+        return {"verdict": "TAKEOVER-PREVIEW", "work_id": args.work_id, "from_context_id": context_id,
+                "expected_sha256": expected}, EXIT_OK
+    if args.expected_sha256 != expected:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-INPUTS-STALE",
+                         "expected_sha256 does not match reread takeover inputs")
+    next_epoch = context["epoch"] + 1
+    fence = context["leader"]["fence"]
+    taken_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    result_ref = f"context-takeover/{operation_id}.json"
+    result_sha256 = store.jcs_sha256({"from_context": context_id, "to_context": new_context_id,
+        "session_ref": args.session_ref, "evidence": evidence})
+    # kind stays "continuity-switch": validate_block only accepts that kind
+    # for a successor context's continuity_ref (agent_orchestration.py); the
+    # succession facts (reason/evidence/taken_at) live in intended_after.
+    operation = {
+        "kind": "continuity-switch", "context_id": context_id, "fence": fence,
+        "subject_ids": [context_id, new_context_id], "input_sha256": expected,
+        "expected_before": {"context_id": context_id, "session_ref": old_session_ref, "checkpoint_id": checkpoint_ref},
+        "intended_after": {"reason": "takeover", "to_runtime": context["runtime"],
+                            "from_session_ref": old_session_ref, "to_session_ref": args.session_ref,
+                            "evidence": evidence, "taken_at": taken_at, "campaign_bridge": bridge},
+        "idempotency_key": operation_id, "state": "CONFIRMED", "result_ref": result_ref,
+        "result_sha256": result_sha256, "observation_ref": result_ref, "error": None,
+    }
+    leader_advance = {"ACTIVE": "RELEASING", "RELEASING": "RELEASED", "RELEASED": "RELEASED"}
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        target = document["agent_orchestration"]["work_items"][args.work_id]
+        source = target["contexts"].get(context_id)
+        if (not isinstance(source, dict) or target.get("current_context_id") != context_id
+                or source.get("state") not in {"ACTIVE", "QUIESCING"}
+                or source.get("leader", {}).get("session_ref") != old_session_ref):
+            raise store.StoreError(store.STATE_DIVERGENCE, "takeover source changed")
+        if new_context_id in target["contexts"] or operation_id in target["operations"]:
+            raise store.StoreError(store.STATE_DIVERGENCE, "takeover already recorded under a different outcome")
+        source["state"] = "SUPERSEDED"
+        source["leader"]["state"] = leader_advance[source["leader"]["state"]]
+        new_context = {
+            "context_id": new_context_id, "epoch": next_epoch,
+            "predecessor_context_id": context_id, "continuity_ref": operation_id,
+            "runtime": source["runtime"], "adapter": source["adapter"],
+            "activation": copy.deepcopy(source["activation"]), "campaign": copy.deepcopy(source["campaign"]),
+            "scheduler_runs": copy.deepcopy(source["scheduler_runs"]),
+            "leader": {"owner_id": new_context_id, "session_ref": args.session_ref, "incarnation": None,
+                       "fence": next_epoch, "epoch": next_epoch, "state": "ACTIVE",
+                       "observation_ref": None, "observation_sha256": None},
+            "state": "ACTIVE", "policy_sha256": source["policy_sha256"], "inputs_sha256": source["inputs_sha256"],
+        }
+        if "worktree_identity" in source:
+            new_context["worktree_identity"] = copy.deepcopy(source["worktree_identity"])
+        if "presentation" in source:
+            new_context["presentation"] = copy.deepcopy(source["presentation"])
+        target["contexts"][new_context_id] = new_context
+        target["operations"][operation_id] = copy.deepcopy(operation)
+        target["current_context_id"] = new_context_id
+        return document
+    try:
+        committed = store.transact(root, mutate)
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-CAS-CONFLICT", exc.message) from exc
+    return {"verdict": "TAKEOVER-APPLIED", "work_id": args.work_id, "context_id": new_context_id,
+            "from_context_id": context_id, "epoch": next_epoch,
+            "succession": {"from_context_id": context_id, "from_session_ref": old_session_ref,
+                           "reason": "takeover", "evidence": evidence, "taken_at": taken_at},
+            "store_revision": committed.revision}, EXIT_OK
 
 
 @_gauntlet_authorized
@@ -6020,6 +6273,12 @@ def build_parser() -> JsonParser:
     prepare_switch_parser.add_argument("--epoch", type=int, required=True)
     prepare_switch_parser.add_argument("--session-ref", required=True)
     prepare_switch_parser.add_argument("--to-runtime", choices=("claude", "codex"), required=True)
+    context_takeover_parser = subparsers.add_parser("gauntlet-context-takeover")
+    context_takeover_parser.add_argument("root")
+    context_takeover_parser.add_argument("--work-id", required=True)
+    context_takeover_parser.add_argument("--session-ref", required=True)
+    context_takeover_parser.add_argument("--expected-sha256")
+    context_takeover_parser.add_argument("--apply", action="store_true")
     attest_parser = subparsers.add_parser("attest")
     attest_parser.add_argument("root")
     attest_parser.add_argument("--work-id", required=True)
@@ -6094,6 +6353,7 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-run": gauntlet_run_command,
             "gauntlet-resume": gauntlet_resume_command,
             "gauntlet-prepare-switch": gauntlet_prepare_switch_command,
+            "gauntlet-context-takeover": gauntlet_context_takeover_command,
             "gauntlet-prepare-worker": gauntlet_prepare_worker_command,
             "gauntlet-cleanup": gauntlet_cleanup_command,
             "partition-emit": partition_emit_command,
