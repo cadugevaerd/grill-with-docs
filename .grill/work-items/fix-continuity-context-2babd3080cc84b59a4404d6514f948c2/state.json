@@ -24,6 +24,7 @@
     "attested_executions": {
       "analyze": "se-196ab078abaa5484aeeb128524e505bd43e5b22da469bfc4fa6d08756db84fd7",
       "checklist": "se-200f8523aef027ad424fea76587c40b04bc22570883470a24a574eb1a25c6818",
+      "partition": "se-562c71a9e18dda424f158dc39bf53b26c43a05aa2730997f0907d1b2f303209b",
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
       "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a",
       "tasks": "se-a7ab93f07b33ace8bcb5b3a0a2f7be0fd89990622ade7c18c5a4a96caf8d11ab"
@@ -40,6 +41,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
+      },
+      "partition": {
+        "output_sha256": "sha256:08554c8065d1f44667cfbbaa71fd2bc2dab64d58956fa333450b6082ff706bf2",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "step_id": "partition"
       },
       "plan": {
         "output_sha256": "sha256:55a3d99f3840211a9c5a0cba553760ad33fdeeff5285ff1107513c0c0cac24a8",
@@ -185,10 +192,29 @@
         "reason": "speckit-analyze: 0 CRITICAL/HIGH, 2 MEDIUM (U1 não observável, C1 quiescência), 3 LOW; cobertura FR 100%",
         "state": "complete",
         "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke grill-with-docs:grill-partition",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/execution-dag.json",
+            "sha256": "08554c8065d1f44667cfbbaa71fd2bc2dab64d58956fa333450b6082ff706bf2"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "grill-partition: 8 nós em 4 fases, T013 no leader; run run-27d4a4df4c0ec78046f8c430 DAG-VALID",
+        "state": "complete",
+        "step": "partition"
       }
     ],
     "chain_stale": [],
-    "current_step": "partition",
+    "current_step": "implement-parallel",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -210,7 +236,7 @@
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
-      "partition": "pending",
+      "partition": "complete",
       "plan": "complete",
       "review": "pending",
       "ship": "pending",

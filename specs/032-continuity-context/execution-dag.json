@@ -1,0 +1,107 @@
+{
+  "feature": "032-continuity-context",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "specs/032-continuity-context/implement/p01-a.tasks.json"
+      ],
+      "id": "p01-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "specs/032-continuity-context/implement/p01-b.tasks.json"
+      ],
+      "id": "p01-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a",
+        "p01-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p02-a.tasks.json"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p03-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p03-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p03-b.tasks.json",
+        "tests/validate_orchestrator_store_contract.py"
+      ],
+      "id": "p03-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a",
+        "p03-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "specs/032-continuity-context/implement/p04-a.tasks.json",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p04-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a",
+        "p03-b"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "specs/032-continuity-context/implement/p04-b.tasks.json"
+      ],
+      "id": "p04-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a",
+        "p03-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "specs/032-continuity-context/implement/p04-c.tasks.json"
+      ],
+      "id": "p04-c",
+      "parallel": true,
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v1"
+}
