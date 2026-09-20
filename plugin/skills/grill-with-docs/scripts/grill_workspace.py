@@ -3697,15 +3697,44 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     operation_id = "takeover-" + hashlib.sha256(canonical({"context": context_id, "session_ref": args.session_ref,
         "observation": observation})).hexdigest()[:24]
     new_context_id = "ctx-" + hashlib.sha256(canonical({"operation": operation_id})).hexdigest()[:24]
+    # T023: the successor used to inherit a blind copy of the predecessor's
+    # worktree_identity. That identity carries `branch`, and LeaderBoundary
+    # only pins the worktree *path* -- so switching branch after the session
+    # died (routine, once nobody is driving the tree) left the successor
+    # holding an identity that lies about the live tree, and every later
+    # continuity-resume refused forever, with no re-stamp verb in the core.
+    # Derive it live from the same helper the resume sibling uses and store
+    # the derived value below. Computed before `expected` so preview and
+    # apply reach the same verdict.
+    #
+    # When the source carries no stamp at all -- the field is optional in the
+    # context schema -- there is no prior claim to contradict, so the derived
+    # identity is stamped for the first time instead of refusing a takeover
+    # that no verb could ever unblock. Accepted side effect, the same one the
+    # resume already accepts: _continuity_identity refuses on a detached HEAD.
+    state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1]
+    identity = _continuity_identity(root, args.work_id, state)
+    sealed = context.get("worktree_identity")
+    if sealed is not None and sealed != identity:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-IDENTITY-DIVERGENT",
+                         "project/worktree/branch changed since the predecessor stamped its identity")
     # T018: digest the decision, not the coordinator's raw answer.
     # observation["digest"] hashes the live worker-show bytes, and preview and
     # apply are separate CLI invocations: any volatile field there made apply
     # refuse with TAKEOVER-INPUTS-STALE while nothing in the store had moved.
     # The response digest stays in `evidence`, where it is succession proof.
+    #
+    # T024: `snapshot.revision` is gone from here for the same reason. It is
+    # the *global* document revision -- transact stamps current.revision + 1
+    # on the whole document, not per work item -- so any write by any work
+    # item invalidated the preview, including the one @_gauntlet_authorized
+    # itself performs whenever the observed presentation differs from the
+    # persisted one. The revision guard inside `mutate` below already pins
+    # the same thing under the lock, strictly stronger and more precise.
     expected = store.jcs_sha256({"work_id": args.work_id, "from_context_id": context_id,
         "from_session_ref": old_session_ref, "to_session_ref": args.session_ref,
         "observation": {"verdict": observation["verdict"], "reference": observation["reference"]},
-        "revision": snapshot.revision, "checkpoint_ref": checkpoint_ref})
+        "checkpoint_ref": checkpoint_ref})
     if not args.apply:
         return {"verdict": "TAKEOVER-PREVIEW", "work_id": args.work_id, "from_context_id": context_id,
                 "expected_sha256": expected}, EXIT_OK
@@ -3714,10 +3743,14 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
                          "expected_sha256 does not match reread takeover inputs")
     next_epoch = context["epoch"] + 1
     fence = context["leader"]["fence"]
-    # T019: the superseded context never satisfies require_authority again
-    # (current *and* ACTIVE), so gauntlet-cleanup over it refuses forever and
-    # its resources stay pinned in the store. Hand them to the successor, to
-    # be reconciled under its own authority -- same projection as the resume.
+    # T019/T026: the superseded context never satisfies require_authority
+    # again (current *and* ACTIVE), so gauntlet-cleanup over it refuses
+    # forever and its resources stay pinned in the store. This projection
+    # exists for *auditing* only -- it names what stayed pinned. Reconciling
+    # it is NOT implemented: no path in the core reconciles a resource whose
+    # origin_context_id is the superseded context, since both consumers
+    # (gauntlet_cleanup_command and the acceptance path) filter by the
+    # current context. Same projection shape as the resume.
     retained = {resource_id: copy.deepcopy(resource) for resource_id, resource in item.get("resources", {}).items()
                 if resource.get("state") not in {"CLOSED", "REMOVED"}}
     reconcile = {record_id: copy.deepcopy(record) for record_id, record in item.get("operations", {}).items()
@@ -3771,8 +3804,8 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
             "state": "ACTIVE", "policy_sha256": source["policy_sha256"], "inputs_sha256": source["inputs_sha256"],
             "presentation": copy.deepcopy(readiness["presentation"]),
         }
-        if "worktree_identity" in source:
-            new_context["worktree_identity"] = copy.deepcopy(source["worktree_identity"])
+        # T023: the derived identity, never the predecessor's copy.
+        new_context["worktree_identity"] = copy.deepcopy(identity)
         target["contexts"][new_context_id] = new_context
         target["operations"][operation_id] = copy.deepcopy(operation)
         target["current_context_id"] = new_context_id
@@ -3859,6 +3892,20 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
                             "code": None if closed else "SESSION-CLOSE-UNPROVEN"})
         if activity_id is not None and not results:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", "activity has no registered resource")
+    # T025: a selector that matched nothing is a selection failure, not a
+    # clean sweep. With results == [] both any() below are false and the
+    # verdict fell through to CLEANED/exit 0, telling the caller that
+    # resources still open in the store had been closed -- visible after a
+    # takeover, where the successor's cleanup matches no resource of the
+    # predecessor because the filter above compares origin_context_id with
+    # the *current* context. The activity branch already refused this way;
+    # the context and run branches get the same code and state. The
+    # unselected single-worker path is untouched: it returns inside the loop
+    # above with cleanup_worker's own verdict, so a legitimate cleanup that
+    # finds nothing left to do never reaches here.
+    if selected and not results:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT",
+                         "cleanup selector matched no run, worker or resource")
     verdict = ("UNKNOWN" if any(result["verdict"] == "UNKNOWN" for result in results) else
                "PRESERVED" if any(result["verdict"] not in {"CLEANED", "REUSED"} for result in results) else "CLEANED")
     return {"verdict": verdict, "work_id": args.work_id, "context_id": context_id,
