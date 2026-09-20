@@ -768,3 +768,62 @@ A varredura de segurança não achou Critical nem Important: a afrouxada da Phas
 ## Próxima ação
 
 Executar `implement-parallel` na Phase 13 e reconvergir. T048 e T049 tocam os mesmos dois arquivos e são sequenciais entre si; T051, T052 e T053 são independentes.
+
+---
+
+# Rodada 16 — 2026-09-20, após a Phase 13
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T053), constituição · **Desfecho**: `converged`
+
+Phase 13 entregue pelos nós `p13-a` (`eaebb55`) e `p13-b` (`ebbaafc`) da run `run-03358b33038fc478571bf194`, serializados de propósito: o segundo converte os testes que o primeiro quebra. `tasks.md` não foi tocado pelos workers.
+
+## Achados do R7
+
+| Achado | Situação | Prova no código integrado |
+|---|---|---|
+| R7-1 — regressão do J1: comparação de branca congelada bloqueando permanentemente (CRITICAL) | **fechado** | `_continuity_stamped_branch` tem **zero** ocorrências no produto. As duas recusas `EXECUTION-BRANCH-MISMATCH` que restam comparam `development.execution_branch` — o vínculo do próprio work item, que o ciclo escreve e limpa, portanto reavaliável |
+| R7-2 — subcaso de carimbo coincidente era cobertura falsa | **fechado** | O subcaso agora lê o valor selado de volta do store e afirma contra ele; a asserção vizinha passou a comparar o valor selado com a branca viva, não o rótulo literal do subcaso |
+| R7-3 — comentários afirmando o critério antigo | **fechado** | O bloco do T035 voltou a ser verdadeiro sozinho, sem edição, porque o T048 removeu a comparação que o contrariava. O bloco irmão da tomada ganhou a ressalva que faltava |
+| m1, m3, m5 | **fechados** | `_continuity_require_bound_branch` → `_continuity_refuse_branch_contradiction`, 4 usos, zero do nome antigo; a documentação distingue as duas mensagens; o item dos "dois verbos quando são três" vivia na documentação do helper que o T048 apagou |
+| m9, primeira metade | **fechado** | Caso novo cobrindo a recusa por esquema pela retomada |
+| m9, segunda metade | **não implementado**, com justificativa | Ver abaixo |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## A divergência do `p13-b`, que eu endosso
+
+O segundo ramo do T053 — cobrir a tradução de erro de armazenamento para recusa nomeada — **não foi implementado**, e a razão é boa: essa tradução vivia **apenas dentro** do helper que o T048 removeu por inteiro. O worker verificou os três chamadores restantes e reportou que eles chamam a leitura de snapshot exigindo presença, sem tratamento próprio, de modo que o erro cai no tratamento genérico.
+
+Ele preferiu registrar isso no sidecar a inventar cobertura para código que não existe mais. É exatamente a conduta certa, e é o sexto worker desta entrega a divergir do literal do brief com justificativa.
+
+**Débito registrado**: os três verbos de continuidade deixam erro de armazenamento sair como falha genérica em vez de recusa nomeada. É **pré-existente ao T048** — o helper removido era o único ponto que traduzia, e ele nasceu na Phase 12 — então não é regressão desta fase, mas ficou sem dono. O projeto exige que toda recusa diga o que faltou, então isto é trabalho próprio, não polimento.
+
+## O que a Phase 13 realmente fez
+
+Ela **removeu** código. O diff do `p13-a` é negativo no produto: a guarda dos dois sítios de cunhagem e o helper inteiro saíram, e o comentário que registrava a doutrina do J1 voltou a ser verdadeiro sem que ninguém o editasse.
+
+Esse é o sinal de que a remoção foi a leitura certa: quando o conserto faz um comentário antigo voltar a descrever o código, o comentário estava certo e o código é que havia divergido.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1496** testes, 0 falhas. O validador de orquestração fechou em **44**, vindo de 43.
+
+As três reversões que o `p13-b` executou em cópia fora da árvore, e o que cada uma provou:
+
+| Reversão | Falhou onde devia |
+|---|---|
+| reinstaurar o helper e a comparação | subcaso de carimbo contraditório volta a recusar |
+| quebrar o enxerto de sucessão para não gravar a branca pedida | subcaso de carimbo coincidente falha na asserção nova — que é precisamente o buraco do R7-2 |
+| neutralizar a recusa por esquema | caso novo do T053 falha por não recusar |
+
+A segunda é a que importa: ela prova que a correção do R7-2 fechou o buraco que a mutação do revisor tinha aberto.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R8.
