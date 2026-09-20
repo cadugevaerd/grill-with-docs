@@ -1,0 +1,53 @@
+{
+  "worker": "p13-b",
+  "feature": "032-continuity-context",
+  "completed": ["T049", "T050", "T053"],
+  "tasks": {
+    "T049": {
+      "status": "done",
+      "summary": "Confirmado T048 aplicado (grep de _continuity_stamped_branch = 0). O caso que a rodada anterior deixou quebrando (test_execution_branch_minting_refuses_only_a_contradicting_identity_stamp, subcaso 'stamp contradicts') foi convertido: renomeado para test_execution_branch_minting_ignores_the_identity_stamp e reescrito para afirmar o comportamento novo -- carimbo ausente, concordante ou divergente, os tres cunham o vinculo na branch viva em ambos os pontos de cunhagem (checkpoint e phase-turn), porque nenhum dos dois compara mais contra o carimbo apos T048. O loop de 3 subcasos foi mantido (nao apagado) e a sequencia sucessao -> confirmacao de etapa -> virada de fase continua coberta ponta a ponta dentro dele. O caso irmao, test_a_succeeded_work_item_still_binds_a_branch_after_the_phase_turn (sucessao -> virada -> confirmacao), ja passava sem alteracao e foi preservado sem edicao, per instrucao de nao apagar nenhum dos dois.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    },
+    "T050": {
+      "status": "done",
+      "summary": "No subcaso 'stamp agrees' (dentro do teste renomeado por T049): a asserção passou a ler de volta o valor efetivamente selado em contexts[current_context_id].worktree_identity.branch via store.read_snapshot, em vez de inferir apenas pelo resultado do mint (que hoje nunca olha o carimbo, entao 'concordante' e 'ausente' produzem a mesma saida observavel do lado do mint). Corrigida junto a asserção vizinha que comparava o rotulo literal do subcaso ('live'/o nome do subcaso) contra a branch viva -- agora compara o valor efetivamente selado (sealed_value = live_branch se rotulo 'live', senao o proprio rotulo), com assertEqual para 'agrees' e assertNotEqual para 'contradicts'.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    },
+    "T053": {
+      "status": "done",
+      "summary": "Bullet 1 (recusa de esquema): novo teste test_continuity_resume_refuses_a_malformed_development_block cobre DEVELOPMENT-SCHEMA dentro de _continuity_refuse_branch_contradiction (nome pos-T052) alcancado via gauntlet-resume -- ate agora esse ramo so tinha caso via checkpoint/phase-turn, que tem sua propria checagem local independente. Bullet 2 (traducao de StoreError de armazenamento invalido para recusa nomeada): NAO implementado -- achado registrado abaixo em vez de inventar cobertura para codigo inexistente.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    }
+  },
+  "findings": {
+    "T053_bullet_2_code_removed": {
+      "note": "A traducao de StoreError -> recusa nomeada que o bullet 2 pede vivia inteira dentro de _continuity_stamped_branch (try/except store.StoreError em torno de store.read_snapshot(root, required=False), traduzindo error.code via store.KEBAB_ALIASES). O T048 removeu essa funcao por inteiro (commit eaebb55) porque era exclusiva dos dois pontos de cunhagem (checkpoint_command e phase_turn_command), que hoje nao tocam mais o store global nenhuma vez -- so leem o state.json local do work item. Os tres chamadores restantes de _continuity_refuse_branch_contradiction (prepare-switch, continuity-resume, takeover) chamam store.read_snapshot(root, required=True) sem try/except proprio, no topo de cada comando; um StoreError ali propaga sem tratamento especifico ate o `except Exception` generico de main() (UNEXPECTED-FAILURE), comportamento que ja existia antes do T048 e nao foi o que ele quebrou. Conclusao: nao ha, hoje, nenhuma traducao nomeada de StoreError alcancavel do jeito que o bullet pede ('armazenamento presente porem invalido', reachavel pela retomada/prepare-switch/takeover); o bullet descreve uma protecao que morreu junto com o helper removido, nao uma lacuna de teste. Escrever um teste que exigisse 'DEVELOPMENT-SCHEMA' ou codigo similar nesse caminho hoje provaria UNEXPECTED-FAILURE, nao a coisa que o bullet pede -- por isso fica documentado aqui em vez de codificado como teste.",
+      "verified_by": "leitura de continuity_resume_command (linhas ~3577-3608) e gauntlet_prepare_switch_command (linhas ~3435-3457): ambos chamam store.read_snapshot fora de qualquer try/except proprio; git show eaebb55 confirma que o unico try/except store.StoreError em torno de um read_snapshot(required=False) vivia em _continuity_stamped_branch, removido por inteiro."
+    }
+  },
+  "reversion_proofs": {
+    "method": "Copia da worktree em /tmp/gwd-reversion-check/repo (fora da arvore, descartada ao final com rm -rf). Produto revertido so na copia; a worktree nunca foi tocada no produto.",
+    "T049_and_T050": {
+      "reversion": "Reinserido _continuity_stamped_branch (verbatim pre-T048) e a comparacao stamped_branch != execution_branch em checkpoint_command, substituindo o 'pass' do ramo existing_branch ausente.",
+      "result": "test_execution_branch_minting_ignores_the_identity_stamp falha no subcaso 'stamp contradicts' em self.assertEqual(code, 0, payload): AssertionError 2 != 0, payload mostra EXECUTION-BRANCH-MISMATCH -- falha pela asserção certa (o mint foi de fato recusado pela guarda reinstaurada), nao efeito colateral."
+    },
+    "T050_broken_graft": {
+      "reversion": "Em _graft_succession (helper de teste), removida a sobrescrita do campo 'branch' no dict selado -- simula um graft que silenciosamente nao grava o branch pedido.",
+      "result": "Mesmo teste falha no subcaso 'stamp agrees' em self.assertEqual(context['worktree_identity']['branch'], sealed_value): 'master' != 'a-branch-nobody-was-on' (falhou no primeiro subcaso executado por ordem do subTest) -- confirma que a asserção nova (ler o valor do store) detecta a regressao que a asserção antiga (so olhar o resultado do mint) deixava passar."
+    },
+    "T053": {
+      "reversion": "Em _continuity_refuse_branch_contradiction, trocado 'raise CliFailure(... DEVELOPMENT-SCHEMA ...)' por 'development = {}' (continuacao silenciosa) quando development nao e mapping.",
+      "result": "test_continuity_resume_refuses_a_malformed_development_block falha em self.assertEqual((code, blocked.get('code')), (2, 'DEVELOPMENT-SCHEMA'), blocked): (0, None) != (2, 'DEVELOPMENT-SCHEMA') -- a retomada prossegue ate PREVIEW/exit 0 em vez de recusar, confirmando que o teste novo depende da guarda real."
+    }
+  },
+  "verification": {
+    "commands": [
+      {"command": "python3 tests/validate_agent_orchestration_contract.py", "result": "Ran 44 tests in ~22s, OK, exit 0"}
+    ],
+    "notes": "tests/run_validators.py nao foi rodado, conforme o brief (~11min, ja derrubou sessao antes)."
+  },
+  "files_touched": [
+    "tests/validate_agent_orchestration_contract.py",
+    "specs/032-continuity-context/implement/p13-b.tasks.json"
+  ]
+}
