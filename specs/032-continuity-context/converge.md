@@ -304,3 +304,54 @@ Registrado, sem virar tarefa por não violar requisito:
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R3.
+
+---
+
+# Rodada 7 — 2026-09-20, consumindo o review R3
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T029), review.md (R3), constituição · **Desfecho**: `tasks_appended` (Phase 9, T030–T033)
+
+## O padrão desta rodada
+
+A Phase 8 corrigiu os achados do R2 **fechando demais**. As duas guardas que acrescentou para impedir estados ruins passaram a impedir também estados legítimos, e de forma permanente, porque o core não tem verbo de re-carimbo nem de reconciliação. É a terceira rodada seguida em que a correção de um defeito cria outro na direção oposta.
+
+| Achado | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|---|---|---|---|---|---|
+| J1 | contradicts | **CRITICAL** | FR-001 | `grill_workspace.py:3716-3721` compara a identidade inteira; `phase` (`:3289`) avança a cada etapa do ciclo. Contexto criado em `implement-parallel`, ciclo em `converge`, sessão morta: a tomada recusa `TAKEOVER-IDENTITY-DIVERGENT` para sempre. Metade dos work items do repositório cai no fallback para `current_step` | T030 |
+| J2 | contradicts | HIGH | FR-001 | `branch` no mesmo predicado faz a tomada recusar **exatamente** o cenário que o comentário de T023 declara curar. O deadlock mudou do `prepare-switch` para a tomada | T030 |
+| J3 | contradicts | HIGH | FR-010 | `:3888` incrementa `candidates` antes do filtro de `origin_context_id`, contando recurso de outro contexto. Depois de uma tomada, a limpeza do sucessor recusa para sempre por um recurso que ele não pode fechar, e que o próprio T026 declara não reconciliável | T031 |
+| J4 | partial | HIGH | FR-011 | A guarda de `candidates` não tem teste: removida, a suíte inteira passa | T032 |
+| J5 | partial | MEDIUM | FR-011 | O comentário em `validate_orchestrator_store_contract.py:596` promete cobertura do estado projetado que não existe; a validação aceita `dict` ou `list` no campo, então regressão de formato passaria | T033 |
+
+## Decisão sobre o predicado de identidade
+
+**`phase` e `branch` saem da comparação.** Ficam como pinos `project_id`, `work_id`, `du`, `git_common_dir` e `real_path` — os campos que de fato identificam a árvore e o work item, e que não mudam por trabalho normal.
+
+O raciocínio é que a tomada é o **caminho de recuperação**, e o sucessor já grava a identidade **derivada**. Tirando os dois campos voláteis do predicado, a tomada passa a recarimbar fase e branch em vez de recusar por causa delas — e o comentário que promete curar o caso da branch trocada passa a dizer a verdade, porque a cura passa a existir.
+
+A alternativa, manter `branch` no predicado e acrescentar um verbo de re-selagem ao core, é escopo maior e não declarado pela spec. Fica registrada como caminho alternativo em `review.md`, R3-2.
+
+## Uma falha de instrução do coordenador
+
+J3 não é erro do worker. Na rodada anterior devolvi a guarda por estar larga demais e instruí que contasse "candidatos antes dos filtros". O worker seguiu ao pé da letra. A instrução é que estava errada: "antes dos filtros" inclui o filtro de contexto, que é justamente o que deveria filtrar. A guarda que pedi para eliminar um sucesso falso criou um bloqueio permanente na direção oposta.
+
+Fica registrado porque o padrão é instrutivo: uma instrução imprecisa do coordenador produz um defeito que nenhum worker tem autoridade para questionar.
+
+## Os Minor não viram tarefa
+
+m1 é consequência de J1 e J2 e se resolve junto. m2 — `sealed is None` aceitar árvore que o predecessor nunca usou — é limitação conhecida, estreita e sem remédio barato. m3, m4 e m5 são polimento sem requisito violado. Todos registrados como débito em `review.md`.
+
+## Versão
+
+6.0.3 segue sem publicar, `main` em 6.0.2. Sem novo bump.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação
+- Achados: missing 0 · partial 2 · contradicts 3 · unrequested 0
+- Severidade: CRITICAL 1 · HIGH 3 · MEDIUM 1
+
+## Próxima ação
+
+Quatro tarefas em `## Phase 9: Convergence`. Executar `implement-parallel` e reconvergir.
