@@ -1,0 +1,69 @@
+{
+  "worker": "p12-a",
+  "feature": "032-continuity-context",
+  "completed": ["T044", "T045", "T047"],
+  "tasks": {
+    "T044": {
+      "status": "done",
+      "summary": "Criterio monotonico trocado por evidencia, nos dois pontos que cunham o vinculo. _continuity_resumed_context (predicado 'o contexto corrente tem predecessor') foi substituido por _continuity_stamped_branch(root, work_id) -> str | None, que le worktree_identity['branch'] do contexto corrente. (1) checkpoint_command, ramo de preenchimento retroativo: recusa EXECUTION-BRANCH-MISMATCH ('context identity is stamped on <branch>') somente quando ha carimbo e ele difere da branch viva; carimbo ausente vincula, que e a razao de existir do backfill. (2) phase_turn_command, ramo que cunhava o vinculo sem guarda alguma antes de anula-lo: mesma guarda, mesmo codigo. Codigo de recusa mudou de EXECUTION-BRANCH-UNSET para EXECUTION-BRANCH-MISMATCH porque a recusa agora e por contradicao observada, nao por ausencia de vinculo -- e EXECUTION-BRANCH-MISMATCH ja e o codigo que o mesmo bloco usa para contradicao. _continuity_resumed_context foi removido: nenhum outro chamador no produto.",
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]
+    },
+    "T045": {
+      "status": "done",
+      "summary": "Comparacao entre branch viva e vinculo selado extraida para _continuity_require_bound_branch(state, identity, work_id), com o codigo e a mensagem que a retomada ja usava (CONTINUITY-STATE-DIVERGENCE, 'work item is bound to <branch>'). Chamada nos tres verbos logo depois de derivar a identidade: continuity_resume_command (onde a comparacao inline foi removida), gauntlet_prepare_switch_command (imediatamente apos a checagem de worktree_identity, antes de _continuity_operation e de qualquer criacao de operacao, ponto de retomada ou liberacao do condutor) e gauntlet_context_takeover_command (logo apos TAKEOVER-IDENTITY-DIVERGENT). A falha passa a ser nomeada antes de mutar.",
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]
+    },
+    "T047": {
+      "status": "done",
+      "summary": "Dois tracebacks viraram recusa nomeada. (1) Acesso ao bloco de desenvolvimento: o padrao '(state.get(\"development\") or {}).get(...)' so tratava valor vazio, entao valor nao vazio de tipo errado quebrava; _continuity_require_bound_branch agora exige isinstance(development, dict) e recusa DEVELOPMENT-SCHEMA, o mesmo codigo que checkpoint_command ja usa para o caso equivalente. Como os tres verbos passam por esse ponto unico (T045), a protecao cobre retomada, preparacao de troca e tomada. (2) Leitura de store dentro de _continuity_stamped_branch: store.read_snapshot com store presente porem invalido levantava StoreError nao capturada; agora e traduzida para CliFailure com store.KEBAB_ALIASES.get(error.code, error.code) -- verificado ao vivo: ORCHESTRATOR-INVALID -- mesmo padrao de traducao usado pelos demais chamadores de store no arquivo. Store ausente continua sendo None (nenhuma reivindicacao), nao recusa.",
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]
+    }
+  },
+  "tests_added": [],
+  "tests_note": "Nenhum teste adicionado: tests/ esta fora do grant deste worker. Cobertura fica para T046 e para quem cuidar da regressao. As reversoes abaixo foram exercidas por um probe descartavel fora da arvore (/tmp, nao commitado) que subclasse AgentOrchestrationContract e semeia o Store com o mesmo fixture de validate_orchestrator_store_contract.",
+  "reversions": [
+    {
+      "target": "T044 -- criterio de evidencia em _continuity_stamped_branch",
+      "how": "corpo trocado pelo criterio monotonico (predecessor_context_id presente -> reivindicacao estrangeira), mantendo o nome do helper",
+      "result": "detectado: contexto retomado SEM carimbo volta a ser tratado como reivindicacao (retorna 'resumed-context' em vez de None) e o caso do carimbo divergente deixa de distinguir -- 2 falhas. Restaurado."
+    },
+    {
+      "target": "T044 -- fiacao da guarda nos dois pontos de cunhagem",
+      "how": "helper renomeado de volta para _continuity_resumed_context",
+      "result": "detectado: 3 erros + 1 falha (AttributeError nos probes e a contagem de call sites). Restaurado."
+    },
+    {
+      "target": "T045 -- as duas chamadas novas",
+      "how": "removidas de gauntlet_prepare_switch_command e gauntlet_context_takeover_command",
+      "result": "detectado: 1 falha (a comparacao volta a existir so na retomada). Restaurado."
+    },
+    {
+      "target": "T047(1) -- guarda de tipo do bloco development",
+      "how": "restaurado o padrao 'state.get(\"development\") or {}'",
+      "result": "detectado: 1 erro -- AttributeError ('list' object has no attribute 'get') em vez de DEVELOPMENT-SCHEMA. Restaurado."
+    },
+    {
+      "target": "T047(2) -- try/except em torno de store.read_snapshot",
+      "how": "removido",
+      "result": "detectado: 1 erro -- StoreError ORCHESTRATOR_INVALID escapa em vez de CliFailure ORCHESTRATOR-INVALID. Restaurado."
+    }
+  ],
+  "verification": {
+    "commands": [
+      {"command": "python3 tests/validate_agent_orchestration_contract.py", "result": "Ran 42 tests, FAILED (errors=1), exit 1"},
+      {"command": "python3 tests/validate_orchestrator_store_contract.py", "result": "Ran 136 tests, OK, exit 0"}
+    ],
+    "broken": [
+      {
+        "test": "test_checkpoint_never_backfills_the_execution_branch_from_a_resumed_context (tests/validate_agent_orchestration_contract.py)",
+        "why": "Quebra legitima e esperada de T044. O caso encodava o defeito: fazia mock.patch.object(grill_workspace, '_continuity_resumed_context', return_value=True) e exigia EXECUTION-BRANCH-UNSET, isto e, afirmava exatamente o criterio monotonico que o R6 mandou remover. Com o helper removido o patch levanta AttributeError. A segunda metade do caso (exercicio direto do predicado sobre documentos que o Store aceita) cai pelo mesmo motivo. Reescrever o caso sobre _continuity_stamped_branch (carimbo ausente -> vincula; carimbo divergente -> EXECUTION-BRANCH-MISMATCH; carimbo igual -> vincula) e trabalho de tests/, fora deste grant.",
+        "owner": "T046 / cobertura"
+      }
+    ],
+    "notes": "tests/run_validators.py nao foi rodado, conforme o brief. Nenhum caso existente foi afrouxado -- tests/ nao foi tocado. Nenhum outro caso das duas suites mudou de resultado."
+  },
+  "files_touched": [
+    "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+    "specs/032-continuity-context/implement/p12-a.tasks.json"
+  ]
+}
