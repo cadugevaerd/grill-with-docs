@@ -68,15 +68,22 @@ def ORCHESTRATION_CHECKPOINT_V2(checkpoint_id='checkpoint-1', previous=None, rev
 # a successor's continuity_ref (T004 in p02-a.tasks.json). Raising STATE_DIVERGENCE
 # when the source already moved is the same defence-in-depth the CLI mutate() applies,
 # used here to drive the concurrent-takeover test below.
+# T028: evidence['liveness'] used to be the bare string 'exited' -- a TYPE the
+# product never emits: grill_workspace._takeover_observation returns either
+# {'verdict': ..., 'source': ...} or None (grill_workspace.py ~1552-1570), and
+# agent_orchestration does not validate the field, so validate_block accepted
+# the string and this file froze a shape no emitter produces. The divergence is
+# now gone rather than documented: the default below is the product's mapping.
 def CONTEXT_TAKEOVER(document, work_id='orchestration-work', from_context='ctx-1', to_context='ctx-2',
                       to_session_ref='session-2', operation_id='takeover-1', taken_at='2026-01-02T00:00:00Z',
-                      dispatch_status='completed', liveness='exited',
+                      dispatch_status='completed', liveness=None,
                       observation_ref='receipts/dispatch-observation', observation_sha256='c'*64):
  item=document['agent_orchestration']['work_items'][work_id]
  source=item['contexts'][from_context]
  if source['state'] not in {'ACTIVE','QUIESCING'}: raise store.StoreError(store.STATE_DIVERGENCE,'takeover source changed')
  leader_advance={'ACTIVE':'RELEASING','RELEASING':'RELEASED','RELEASED':'RELEASED'}
  old_session_ref=source['leader']['session_ref']
+ if liveness is None: liveness={'verdict':'exited','source':'agent_status'}
  evidence={'observation_ref':observation_ref,'observation_sha256':observation_sha256,'dispatch_status':dispatch_status,'liveness':liveness}
  source['state']='SUPERSEDED'; source['leader']['state']=leader_advance[source['leader']['state']]
  new_context={
@@ -542,7 +549,7 @@ class StoreContract(unittest.TestCase):
   after=operation['intended_after']
   self.assertEqual((after['reason'],after['from_session_ref'],after['to_session_ref'],after['taken_at']),('takeover','session-1','session-2','2026-03-04T05:06:07Z'))
   self.assertEqual(set(after['evidence']),{'observation_ref','observation_sha256','dispatch_status','liveness'})
-  self.assertEqual(after['evidence'],{'observation_ref':'receipts/dispatch-observation','observation_sha256':'c'*64,'dispatch_status':'completed','liveness':'exited'})
+  self.assertEqual(after['evidence'],{'observation_ref':'receipts/dispatch-observation','observation_sha256':'c'*64,'dispatch_status':'completed','liveness':{'verdict':'exited','source':'agent_status'}})
   self.assertEqual(operation['state'],'CONFIRMED'); self.assertIsInstance(operation['observation_ref'],str); self.assertIsInstance(operation['result_sha256'],str)
 
  # T020: was named "concurrent takeovers on the same revision have one winner"
@@ -566,27 +573,26 @@ class StoreContract(unittest.TestCase):
   self.assertEqual(item['current_context_id'],'ctx-2')
   self.assertNotIn('ctx-3',item['contexts'])
 
- def test_checkpoint_synthesized_right_after_creation_is_a_resumable_point(self):
+ def test_store_accepts_a_day_zero_v2_checkpoint_as_head_and_lets_a_later_one_chain_onto_it(self):
   self.register()
   store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
-  # T020: the day-zero checkpoint now comes from the PRODUCT. The previous
-  # version hand-built a v1 checkpoint (with development_sequence as a dict)
-  # that no emitter has produced since T015, then asserted back the literals it
-  # had just written -- a tautology that passed with the product reverted.
-  # grill_workspace._initial_continuity_checkpoint is what gauntlet-prepare-switch
-  # calls right after gauntlet-init (T005); it is imported here, in the only case
-  # that needs it, and needs nothing beyond the store this test already set up.
-  import grill_workspace
-  from grill_core import agent_orchestration
+  # T029: this case used to import grill_workspace._initial_continuity_checkpoint,
+  # the emitter gauntlet-prepare-switch calls right after gauntlet-init. The
+  # import was wrong on two counts: it froze a PRIVATE helper of the CLI as a
+  # de facto interface (the same debt already recorded for agent_runtime._object),
+  # and that helper calls _cleanup_checkpoint_projection(root, work_id), which
+  # READS DISK -- so this store contract was exercising CLI I/O. The emitter
+  # belongs in grill_core (pure, parameterised with the cleanup obligations and
+  # preserved resources already read at the CLI boundary, the pattern
+  # grill_core/triage.py sets), but moving it requires editing grill_workspace.py,
+  # outside this node's grant; see specs/032-continuity-context/implement/p08-b.tasks.json.
+  # Until then this file imports grill_core only and proves what a store contract
+  # can prove on its own: the store accepts a day-zero v2 checkpoint as head and
+  # a later checkpoint chains onto it. Emitter fidelity (v2 schema, list sequence,
+  # projected development state) is CLI-level and is exercised through
+  # gauntlet-prepare-switch in tests/validate_agent_orchestration_contract.py.
   snapshot=store.read_snapshot(self.r)
-  work_item=snapshot.document['agent_orchestration']['work_items']['orchestration-work']
-  initial=grill_workspace._initial_continuity_checkpoint(
-   self.r,'orchestration-work',work_item,work_item['contexts']['ctx-1'],'ctx-1','cp-init',
-   {},{},b'{}',snapshot.revision,{})
-  # Nothing confirmed yet, so the emitter projects an empty development state --
-  # and it emits v2, with a *list* sequence.
-  self.assertEqual(initial['schema'],agent_orchestration.CHECKPOINT_SCHEMA_V2)
-  self.assertEqual((initial['development_sequence'],initial['current_step'],initial['accepted_outputs'],initial['accepted_executions']),([],None,{},{}))
+  initial=ORCHESTRATION_CHECKPOINT_V2('cp-init',revision=snapshot.revision)
   self.assertIsNone(initial['previous_checkpoint_id'])
   def prepare(document):
    item=document['agent_orchestration']['work_items']['orchestration-work']; item['checkpoints']['cp-init']=initial; item['checkpoint_head']='cp-init'; return document
@@ -601,6 +607,11 @@ class StoreContract(unittest.TestCase):
   item=resumed.document['agent_orchestration']['work_items']['orchestration-work']
   self.assertEqual(item['checkpoint_head'],'cp-resumed')
   self.assertEqual(item['checkpoints']['cp-init'],initial)
+  # A day-zero head that declares a predecessor nobody stored is refused, so the
+  # acceptance above is the chain rule holding, not the store taking any document.
+  orphan=ORCHESTRATION_CHECKPOINT_V2('cp-orphan','cp-missing',revision=resumed.revision)
+  with self.assertRaises(store.StoreError):
+   store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['checkpoints'].update({'cp-orphan':orphan}),document)[1],now=CLOCK)
 
  def test_checkpoint_v1_stays_legible_and_unrewritten_once_a_v2_checkpoint_chains_onto_it(self):
   self.register()
