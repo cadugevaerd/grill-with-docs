@@ -141,3 +141,59 @@ A 6.0.3 ainda não foi publicada — `main` está em 6.0.2. Correções que entr
 ## Próxima ação
 
 Sete tarefas anexadas em `## Phase 7: Convergence`. Executar `implement-parallel` e reconvergir; depois `verify` e `review` de novo.
+
+---
+
+# Rodada 4 — 2026-09-20, após a Phase 7
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T022), constituição (11 cláusulas) · **Desfecho**: `converged`
+
+A Phase 7 foi entregue pelos nós `p07-a`, `p07-b` e `p07-c` da run `run-dc0dc8ba5b7a8f9de176ddb2` e integrada até `6ed634a`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 3
+
+Cada um verificado no código integrado, não no relato dos workers.
+
+| Achado | Situação | Prova |
+|---|---|---|
+| G1 — líder sucessor sem observação (CRITICAL) | **fechado** | `_session_readiness` da sessão entrante é chamado em `grill_workspace.py:3681`, antes do cálculo de `expected`, então vale para prévia e aplicação; os três campos são gravados no líder do sucessor em `:3768-3770`. A cobertura correspondente executa `gauntlet-step-enter` com o `--session-ref` da sessão entrante e exige saída 0, atravessando `_require_current_leader` |
+| G2 — sem guarda de revisão | **fechado** | `grill_workspace.py:3750`, primeira linha do `mutate`, com o comentário nomeando a janela que fecha: um worker transicionando entre a leitura e o commit faria `TAKEOVER-APPLIED` sair onde `TAKEOVER-WORK-ACTIVE` era devido |
+| G3 — digest da resposta viva | **fechado** | `expected` passou a digerir `verdict`, `reference` e `snapshot.revision`; o digest dos bytes crus permanece apenas em `evidence`, onde é prova de sucessão e não entrada de comparação |
+| G4 — casos do store exercitando a fixture | **fechado** | Os que permanecem na fixture declaram no nome que são aceitação de formato do `validate_block`, e o cabeçalho da fixture lista as divergências em relação ao produto. O caso dito de concorrência virou `test_takeover_over_an_already_superseded_source_is_refused`, sequencial. O do ponto de retomada passou a chamar `grill_workspace._initial_continuity_checkpoint`, o emissor real |
+| G5 — cobertura deslocada do prepare-switch | **fechado** | Depois do veredito, o caso relê o snapshot e assere `schema == CHECKPOINT_SCHEMA_V2`, `previous_checkpoint_id` nulo e os dois digests contra `context["inputs_sha256"]` e `item["origin"]["metadata_sha256"]` |
+| G6 — recursos órfãos | **fechado** | `preserved_resources` e `operations_to_reconcile` projetados e devolvidos em `TAKEOVER-APPLIED` |
+| G7 — comentário falso | **fechado** | Reescrito: desde T015 todo emissor usa v2, e v1 permanece apenas para leitura de documentos já materializados, nunca sendo emitida |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Sensibilidade à regressão
+
+O ponto que faltava nas rodadas anteriores, e que explicava o Critical ter atravessado 1488 testes verdes, foi atacado de frente. O worker de T021 verificou por reversão temporária, com o arquivo restaurado ao final:
+
+- T016 revertido — líder com os três campos nulos: **3 subcasos reprovam**;
+- T016 revertido **com as asserções de campo removidas**, deixando apenas o comando autorizado: **3 reprovam**, com `LEADER-AUTHORITY-UNPROVEN`. O caso sozinho reproduz o defeito ponta a ponta, sem depender de asserção sobre estrutura interna;
+- `presentation` revertida para cópia do predecessor: **3 reprovam** — a asserção não é vácua, os dois valores divergem de fato na fixture;
+- checkpoint inicial revertido para v1: **1 reprova**.
+
+## Decisão sobre a apresentação do sucessor
+
+A linha de T021 em `tasks.md` pedia asserir a apresentação "herdada do predecessor". Isso está errado e foi corrigido na condução, não no texto: apresentação é propriedade da sessão, e herdar a de uma sessão comprovadamente morta seria prova falsa. O sucessor grava a apresentação observada da sessão entrante, espelhando `continuity_resume_command`; `worktree_identity` segue herdada do predecessor. Quem levantou a contradição foi o próprio worker que implementou T016, antes de o caso errado ser escrito.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, 1488 testes, 0 falhas, 2 skips condicionados a macOS. A contagem não subiu porque as asserções novas entraram em casos existentes, via subTests, e o trabalho no store foi de renomeação e precisão, não de volume.
+
+## Versão
+
+A 6.0.3 continua sem publicar — `main` está em 6.0.2. As correções desta fase entram na mesma versão e não exigem novo bump; os oito pontos de distribuição seguem coerentes.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais verificadas: 11 — sem violação
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+- Severidade: nenhuma
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R2.
