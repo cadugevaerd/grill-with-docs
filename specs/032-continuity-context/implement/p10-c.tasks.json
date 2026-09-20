@@ -1,0 +1,22 @@
+{
+  "worker": "p10-c",
+  "feature": "032-continuity-context",
+  "completed": ["T039"],
+  "tasks": {
+    "T039": {
+      "status": "done",
+      "summary": "gauntlet-cleanup criou vocabulario novo (codigo RESOURCE-RETAINED-ELSEWHERE e campo retained) e session-protocol.md nao o ensinava. Documentado na linha da familia 'Recursos' da tabela de recusas (secao 'Recusas e aceite da candidata', por volta da linha 103), no mesmo formato denso das demais entradas: codigo entre crases + explicacao de uma frase. Texto deixa explicito: (1) RESOURCE-RETAINED-ELSEWHERE aparece por item dentro do campo retained de um veredito PRESERVED; (2) sinaliza recurso preso a um contexto ja encerrado, fora do alcance e do fechamento da selecao corrente; (3) e relato, nao recusa -- nao bloqueia a acao do contexto corrente; (4) o veredito deixar de ser CLEANED e informacao honesta sobre o store, nao falha da operacao pedida. Isso evita a leitura padrao (preservacao = bloqueio, reforcada pela regra geral da linha 111 'nao converter preservacao/UNKNOWN... em PASS') sendo aplicada ao contrario do desenho pretendido para este caso especifico. Nao criei secao nova: a tabela existente comportava a extensao. Heading de versao '# Protocolo de sessao v6.0.3' nao foi tocado.",
+      "files": ["plugin/skills/grill-with-docs/references/session-protocol.md"]
+    }
+  },
+  "verification": {
+    "commands": [
+      {"command": "python3 tests/validate_distribution.py", "result": "distribution: OK, exit 0"}
+    ],
+    "notes": "tests/run_validators.py nao foi rodado, conforme instrucao do brief (evitar disputa de CPU com outro worker da wave)."
+  },
+  "files_touched": [
+    "plugin/skills/grill-with-docs/references/session-protocol.md",
+    "specs/032-continuity-context/implement/p10-c.tasks.json"
+  ]
+}
