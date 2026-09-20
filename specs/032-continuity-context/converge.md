@@ -197,3 +197,55 @@ A 6.0.3 continua sem publicar — `main` está em 6.0.2. As correções desta fa
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R2.
+
+---
+
+# Rodada 5 — 2026-09-20, consumindo o review R2
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T022), review.md (R2), constituição · **Desfecho**: `tasks_appended` (Phase 8, T023–T029)
+
+## Correção de um erro da rodada 4
+
+A rodada 4 declarou G6 **fechado**. Estava errado, e quem pegou foi o revisor de correção do R2. Verifiquei que `preserved_resources` e `operations_to_reconcile` passaram a ser devolvidos; não verifiquei que algum caminho os consome. Nenhum consome: `gauntlet_cleanup_command` filtra por contexto corrente e a verificação de autoridade exige corrente e ativo, condições que o contexto encerrado pela tomada não satisfaz mais.
+
+Presença de código não é cumprimento de requisito. O registro fica, porque o erro é instrutivo: nas rodadas anteriores a verificação foi feita contra o diff, e não contra o comportamento que o diff deveria produzir.
+
+## Findings
+
+| ID | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|----|----------|------------|--------|-----------|--------|
+| H1 | contradicts | **CRITICAL** | FR-001, FR-005 | `grill_workspace.py:3774` copia `worktree_identity` sem reverificar, enquanto o irmão de retomada deriva a identidade viva e recusa (`:3544-3546`). A identidade inclui a branch, então trocar de branch depois da morte da sessão faz o sucessor herdar identidade falsa, e toda retomada posterior falha sem verbo de re-carimbo | T023 |
+| H2 | contradicts | HIGH | FR-003 | `snapshot.revision` no digest (`:3705-3708`) é a revisão global do documento; qualquer escrita invalida a prévia, inclusive a do próprio decorador de autorização (`:3227-3233`). A guarda sob lock (`:3749`) já cobre isso de forma mais forte | T024 |
+| H3 | contradicts | HIGH | FR-010 | `gauntlet_cleanup_command:3862` avalia `any()` sobre lista vazia e devolve `CLEANED` com saída zero. Defeito **pré-existente**, não introduzido pela Phase 7 | T025 |
+| H4 | partial | HIGH | FR-011 | As duas projeções não têm asserção alguma; revertê-las para vazio passa verde nos 1488 testes | T027 |
+| H5 | partial | HIGH | FR-011 | `TAKEOVER-CAS-CONFLICT` só aparece em comentário | T027 |
+| H6 | contradicts | MEDIUM | FR-004 | O comentário de T019 afirma entrega ao sucessor para reconciliação; nada reconcilia | T026 |
+| H7 | partial | MEDIUM | FR-011 | O cabeçalho da fixture omite que `evidence.liveness` é string na fixture e `dict` ou `None` no produto | T028 |
+| H8 | partial | LOW | FR-011 | O contrato do store importa um helper privado do CLI que toca disco | T029 |
+
+## Decisão sobre a reconciliação de recursos
+
+**Não implementar nesta entrega.** O trace de G6 sempre foi inferido, e está registrado como tal desde a rodada 3: a spec não menciona limpeza de recursos em ponto algum. Implementar a reconciliação agora seria escopo novo entrando sem passar pela spec.
+
+O que entra é corrigir as duas mentiras que a entrega produziu: a afirmação falsa no comentário (H6) e o sucesso falso do verbo de limpeza (H3). A reconciliação de recursos de contexto encerrado fica registrada como trabalho próprio, a ser especificado.
+
+Essa escolha é deliberada e revisável: a alternativa — fazer o cleanup aceitar recursos cuja origem esteja na cadeia de predecessores — está descrita em `review.md`, R2-2, opção (a).
+
+## O que não virou tarefa
+
+Preferência de design, sem requisito violado: derivar o identificador de operação a partir do hash de entradas em vez da observação; a prévia devolver a apresentação; o tamanho da função de tomada, hoje em 162 linhas contra o teto de 200; extrair a projeção de recursos para o núcleo; e os quatro itens de débito já registrados na rodada 3.
+
+## Versão
+
+A 6.0.3 continua sem publicar — `main` em 6.0.2. Sem novo bump.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação
+- Achados: missing 0 · partial 4 · contradicts 4 · unrequested 0
+- Severidade: CRITICAL 1 · HIGH 4 · MEDIUM 2 · LOW 1
+
+## Próxima ação
+
+Sete tarefas em `## Phase 8: Convergence`. Executar `implement-parallel` e reconvergir.
