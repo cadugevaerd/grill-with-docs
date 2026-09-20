@@ -601,3 +601,59 @@ Quatro reversões, todas reprovando. A mais relevante é a do preenchimento retr
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R6.
+
+---
+
+# Rodada 13 — 2026-09-20, consumindo o review R6
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T043), review.md (R6), constituição · **Desfecho**: `tasks_appended` (Phase 12, T044–T047)
+
+## A lição de método desta rodada
+
+O Critical do R6 veio de **instrução minha**. A tarefa T040 dizia, literalmente, "recusar o preenchimento retroativo quando o contexto corrente tiver predecessor". O worker implementou exatamente isso, e o resultado é um bloqueio permanente.
+
+É a **segunda vez** nesta entrega. A primeira foi T031: "contar candidatos antes dos filtros" — e "antes dos filtros" incluía justamente o filtro que deveria discriminar, o que produziu o bloqueio do R4-3.
+
+O padrão comum não é técnico, é de método: **critério baseado em estado que só cresce, aplicado a uma decisão que precisa ser reavaliável**. "Tem predecessor" nunca deixa de ser verdade. "Antes dos filtros" nunca exclui nada. Nos dois casos escrevi uma condição estrutural onde cabia uma condição de evidência.
+
+A correção de T044 aplica a doutrina que T023 e T035 já haviam adotado neste mesmo arquivo, e que eu não apliquei ao redigir T040: **recusar por contradição observada, não por propriedade herdada**.
+
+## Findings
+
+| ID | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|---|---|---|---|---|---|
+| M1 | contradicts | **CRITICAL** | FR-001, FR-005 | A referência ao contexto anterior é gravada em toda sucessão e nunca removida — `validate_transition:1513` a exige. Com a virada de fase zerando o vínculo de branch de propósito (`:6088`) e nenhum verbo o restabelecendo, todo work item que sofreu sucessão trava no primeiro ponto de confirmação seguinte. Reproduzido por execução. Agrava que a virada de fase tem o ramo de preenchimento idêntico **sem** guarda alguma | T044 |
+| M2 | partial | HIGH | FR-010 | A comparação de branch só existe na retomada. A preparação de troca cria a operação, grava o ponto de retomada e **libera o condutor** antes de qualquer checagem | T045 |
+| M3 | partial | MEDIUM | FR-011 | A metade divergente do caso discrimina apenas pela cadeia do código de recusa: sem a guarda, o resultado é recusa por ativação ausente, não prévia bem-sucedida. Nunca prova que a retomada prosseguiria | T046 |
+| M4 | partial | MEDIUM | FR-010 | Dois caminhos morrem com traceback em vez de recusa nomeada. Ausência de resposta não é recusa | T047 |
+
+Nenhum achado novo além dos que o review trouxe.
+
+## Sobre M4, que era Minor no review
+
+Promovido a tarefa porque o projeto inteiro opera sob fail-closed com recusa **nomeada**, e um traceback não é recusa — é ausência de resposta. O comando de confirmação de etapa já protege o caso equivalente com código próprio, então a assimetria é do tipo que esta entrega vem pagando caro: mesma lógica, tratamento diferente em pontos irmãos.
+
+## O desvio do worker na Phase 11, confirmado correto
+
+Pedi ao revisor que julgasse se o desvio de T041 — manter restauração explícita em vez de usar apenas limpeza de encerramento — estava certo. Está, e foi verificado nos dois sentidos: aplicar minha instrução ao pé da letra reprova dois casos, porque os casos seguintes precisam da branch restaurada de imediato; e a verificação estrita não reintroduz o mascaramento do R5, porque fica depois de todas as asserções, sendo inalcançável quando alguma falha. Mais que isso, ela **corrige** o silêncio que o bloco original produzia.
+
+Registro porque é o contraponto exato da lição acima: quando o worker questionou a instrução, o resultado melhorou; quando obedeceu a uma instrução mal formulada, o resultado piorou.
+
+## Débito
+
+p3, p4 e p5 do R6 seguem como débito, junto com o já registrado em R1 a R5.
+
+## Versão
+
+6.0.3 sem publicar, `main` em 6.0.2. Sem novo bump.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação
+- Achados: missing 0 · partial 3 · contradicts 1 · unrequested 0
+- Severidade: CRITICAL 1 · HIGH 1 · MEDIUM 2
+
+## Próxima ação
+
+Quatro tarefas em `## Phase 12: Convergence`. Executar `implement-parallel` e reconvergir.
