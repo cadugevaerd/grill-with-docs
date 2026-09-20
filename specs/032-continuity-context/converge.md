@@ -91,3 +91,53 @@ A suíte completa foi reexecutada de propósito: T015 mudou o schema que a emiss
 ## Próxima ação
 
 Seguir para `verify`.
+
+---
+
+# Rodada 3 — 2026-09-20, consumindo o review R1
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T015), review.md (R1), constituição (11 cláusulas) · **Desfecho**: `tasks_appended` (Phase 7, T016–T022)
+
+O review R1 devolveu `REQUEST CHANGES` com 1 Critical e 7 Important. Esta rodada avaliou cada achado contra a intenção declarada e converteu em tarefa o que é lacuna real de requisito.
+
+## Findings
+
+| ID | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|----|----------|------------|--------|-----------|--------|
+| G1 | contradicts | **CRITICAL** | FR-001, FR-003 (US1, P1) | `grill_workspace.py:3739-3741` grava o líder sucessor com encarnação, referência e digest de observação nulos; `_require_current_leader` (`:1629-1632`) compara esses campos contra observação fresca, então os 14 comandos com `@_gauntlet_authorized` recusam a sessão entrante com `LEADER-AUTHORITY-UNPROVEN`, sem saída | T016 |
+| G2 | contradicts | HIGH | FR-002, FR-003 | O bloco de mutação (`:3722-3729`) revalida só identidade de contexto; quiescência (`:3672`), ponto de retomada corrente (`:3681`) e campanha são decididos sobre o snapshot de `:3643`, fora do lock | T017 |
+| G3 | contradicts | HIGH | FR-003, FR-010 | O hash de entradas relidas (`:3693-3699`) inclui o digest dos bytes crus da resposta viva; campo volátil torna a aplicação inalcançável e a recusa mente sobre a causa | T018 |
+| G4 | partial | HIGH | FR-011, SC-002, SC-004 | Os casos de tomada em `validate_orchestrator_store_contract.py` exercitam a fixture `CONTEXT_TAKEOVER`, que reimplementa a mutação; o produto nunca roda. O caso dito de concorrência não concorre, e o ponto de retomada sintetizado é testado na versão anterior do formato | T020 |
+| G5 | partial | MEDIUM | FR-011 | Cobertura da preparação de troca deslocada para estado inalcançável em produção; o caminho novo só assere o veredito, sem verificar o documento gravado | T021 |
+| G6 | partial | MEDIUM | Key Entity "Contexto de orquestração", FR-005 | Recursos do predecessor ficam inalcançáveis: a verificação de autoridade exige contexto corrente e ativo, e a tomada deixa o anterior encerrado | T019 |
+| G7 | contradicts | LOW | FR-008 | O comentário em `agent_orchestration.py:28-32` afirma que a emissão ainda usa a versão anterior; falso desde T015, e convida a reverter a entrega | T022 |
+
+## O que não virou tarefa
+
+Débito de design registrado, sem requisito violado, portanto fora do escopo de tarefa desta rodada:
+
+- `observe_predecessor_termination` devolver `dispatch_status` e `liveness`, eliminando o reparse, o canal lateral de captura e o acoplamento ao nome privado `_object`;
+- extrair a leitura de transporte comum entre a observação de tomada e a fronteira de líder, removendo o parâmetro `runtime` morto;
+- construtor único para o documento de ponto de retomada, hoje duplicado em dois emissores;
+- mover a tabela decisória da tomada para `grill_core`, pelo critério que rege `triage.py`.
+
+Os dois primeiros tocam exatamente a fronteira que T016 e T018 vão editar, então entram como orientação de implementação dessas tarefas — não como escopo novo.
+
+## Ressalva sobre G6
+
+É o único achado cujo trace de requisito é **inferido, não literal**: a spec não menciona limpeza de recursos em nenhum ponto. O vínculo vem da Key Entity declarar que o contexto registra as atividades do work item, e de FR-005 exigir que o estado sobreviva à tomada — um recurso preso num contexto encerrado é estado que não sobreviveu de forma utilizável. Se a leitura humana for de que isso é escopo novo, T019 deve sair desta entrega e virar work item próprio.
+
+## Versão
+
+A 6.0.3 ainda não foi publicada — `main` está em 6.0.2. Correções que entrem nesta mesma versão não exigem novo bump, e os oito pontos de distribuição seguem coerentes.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais verificadas: 11 — sem violação
+- Achados: missing 0 · partial 3 · contradicts 4 · unrequested 0
+- Severidade: CRITICAL 1 · HIGH 3 · MEDIUM 2 · LOW 1
+
+## Próxima ação
+
+Sete tarefas anexadas em `## Phase 7: Convergence`. Executar `implement-parallel` e reconvergir; depois `verify` e `review` de novo.
