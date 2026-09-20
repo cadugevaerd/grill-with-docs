@@ -1,0 +1,37 @@
+{
+  "worker": "p07-c",
+  "feature": "032-continuity-context",
+  "completed": ["T021"],
+  "tasks": {
+    "T021": {
+      "status": "done",
+      "summary": "Em tests/validate_agent_orchestration_contract.py, tres acrescimos, nenhum caso existente afrouxado. (1) O caso que faltava: no laco terminal de test_context_takeover, depois de --apply, gauntlet-step-enter roda como a sessao entrante (--context-id do sucessor, --epoch do apply, --session-ref novo) e precisa sair 0. Esse verbo passa por _require_current_leader, que e exatamente onde o defeito T016 se manifestava. O mesmo bloco assere que leader.observation_ref, observation_sha256 e incarnation do contexto persistido sao nao-nulos e iguais a _session_readiness da sessao entrante. (2) Heranca e conteudo da sucessao: presentation do contexto sucessor igual ao readiness da sessao entrante (e igual ao devolvido em applied), e a operacao persistida sob continuity_ref conferida em kind, context_id, subject_ids e intended_after (reason, to_runtime, from_session_ref, to_session_ref, evidence, taken_at). worktree_identity herdada ganhou caso proprio, work-inherit: contexto fresco nao tem identidade, entao o predecessor passa antes por gauntlet-prepare-switch (que a carimba e deixa o contexto QUIESCING, estado que a tomada ainda aceita) e a tomada seguinte precisa reproduzi-la byte a byte no sucessor. (3) Preparacao de troca: depois do veredito QUIESCING em test_every_work_entry_reobserves_authority_and_requires_presentation, o snapshot e relido e o ponto de retomada sintetizado e exigido como checkpoint_head, com schema CHECKPOINT_SCHEMA_V2, previous_checkpoint_id nulo, context_inputs_sha256 igual a context['inputs_sha256'] e origin_metadata_sha256 igual a item['origin']['metadata_sha256'].",
+      "evidence": "tests/validate_agent_orchestration_contract.py: Ran 36 tests, OK. Nenhum caso existente editado para passar; as tres adicoes sao puramente aditivas."
+    }
+  },
+  "validators": {
+    "tests/validate_agent_orchestration_contract.py": "Ran 36 tests, OK"
+  },
+  "regression_sensitivity": {
+    "method": "Reversao temporaria da correcao em grill_workspace.py, rodada do validador, e restauracao do arquivo. grill_workspace.py nao esta no grant deste no e terminou identico ao HEAD (git status so acusa o arquivo de teste).",
+    "checks": [
+      {
+        "reverted": "T016, leader do contexto sucessor de volta a incarnation/observation_ref/observation_sha256 nulos",
+        "result": "FAILED (failures=3) -- test_context_takeover nos tres casos terminais (status, revoked, exited)"
+      },
+      {
+        "reverted": "T016 (nulos) com as assercoes de leader e presentation removidas, deixando so o comando autorizado",
+        "result": "FAILED (failures=3), AssertionError: 2 != 0 : {'code': 'LEADER-AUTHORITY-UNPROVEN', 'error': 'current leader changed'}. Confirma que o caso do item 1 sozinho reproduz o defeito ponta a ponta, sem depender das assercoes de campo."
+      },
+      {
+        "reverted": "T016 apenas na parte de presentation (voltando a copiar a do predecessor em vez de usar o readiness da sessao entrante)",
+        "result": "FAILED (failures=3) -- os presentation divergem de fato na fixture; a assercao nao e vacua"
+      },
+      {
+        "reverted": "T005/T001 no checkpoint inicial: schema para CHECKPOINT_SCHEMA e campos para workflow_sha256/constitution_sha256",
+        "result": "FAILED (failures=1), AssertionError: 'grill-continuity-checkpoint/v1' != 'grill-continuity-checkpoint/v2'"
+      }
+    ]
+  },
+  "notes": "Nenhum caso existente precisou mudar. A suite completa (tests/run_validators.py) nao foi rodada por instrucao do leader: e responsabilidade dele depois da convergencia, para nao competir por CPU com o outro worker da wave. Fora do escopo deste no e nao feito: o debito de agent_runtime.py registrado por p07-a (observe_predecessor_termination devolver dispatch_status e liveness) continua aberto."
+}

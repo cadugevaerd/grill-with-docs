@@ -275,6 +275,21 @@ class AgentOrchestrationContract(unittest.TestCase):
                     "--session-ref", orchestration_fixture.SESSION, "--context-id", quiescing_context_id,
                     "--epoch", "1", "--to-runtime", "claude")
                 self.assertEqual((code, prepared.get("verdict")), (0, "QUIESCING"), prepared)
+                # T021/FR-006: the verdict alone proves nothing -- read the
+                # snapshot back and require the synthesized resume point to be
+                # committed as the head, in the current checkpoint schema, with
+                # no predecessor and both digests taken from their real sources.
+                seeded_item = store.read_snapshot(root).document["agent_orchestration"][
+                    "work_items"]["work-quiescing-check"]
+                head = seeded_item["checkpoint_head"]
+                self.assertIsInstance(head, str)
+                initial = seeded_item["checkpoints"][head]
+                self.assertEqual(initial["schema"], agent_orchestration.CHECKPOINT_SCHEMA_V2)
+                self.assertEqual((initial["checkpoint_id"], initial["context_id"]), (head, quiescing_context_id))
+                self.assertIsNone(initial["previous_checkpoint_id"])
+                self.assertEqual(initial["context_inputs_sha256"],
+                                 seeded_item["contexts"][quiescing_context_id]["inputs_sha256"])
+                self.assertEqual(initial["origin_metadata_sha256"], seeded_item["origin"]["metadata_sha256"])
             def restore(document):
                 document["agent_orchestration"]["work_items"]["work-x"]["contexts"][context_id] = copy.deepcopy(context)
                 return document
@@ -1182,7 +1197,63 @@ class AgentOrchestrationContract(unittest.TestCase):
                     self.assertEqual(document["contexts"][old_context_id]["state"], "SUPERSEDED")
                     new_context = document["contexts"][applied["context_id"]]
                     self.assertEqual((new_context["state"], new_context["leader"]["session_ref"]), ("ACTIVE", new_session))
+                    # T021/T016/FR-001: the successor leader must carry the
+                    # *incoming* session's own observation. These three were
+                    # installed as None, so every @_gauntlet_authorized command
+                    # refused the very session the takeover had just installed.
+                    readiness = grill_workspace._session_readiness(root, "codex", new_session, work_id=work_id)
+                    leader = new_context["leader"]
+                    self.assertEqual([leader["observation_ref"], leader["observation_sha256"], leader["incarnation"]],
+                                     [readiness["ref"], readiness["sha256"], readiness["incarnation"]])
+                    self.assertTrue(all(leader[key] is not None for key in
+                                        ("observation_ref", "observation_sha256", "incarnation")))
+                    # FR-004: the presentation now comes from the incoming
+                    # session's readiness (mirroring continuity_resume_command),
+                    # not from a copy of the predecessor's context.
+                    self.assertEqual(new_context["presentation"], readiness["presentation"])
+                    self.assertEqual(applied["presentation"], new_context["presentation"])
+                    # FR-004: the persisted succession operation carries reason,
+                    # destination runtime, proof and instant -- the response is
+                    # not the record.
+                    operation = document["operations"][new_context["continuity_ref"]]
+                    self.assertEqual(operation["kind"], "continuity-switch")
+                    self.assertEqual(operation["context_id"], old_context_id)
+                    self.assertEqual(operation["subject_ids"], [old_context_id, applied["context_id"]])
+                    self.assertEqual({key: operation["intended_after"][key] for key in
+                                      ("reason", "to_runtime", "from_session_ref", "to_session_ref", "evidence", "taken_at")},
+                                     {"reason": "takeover", "to_runtime": "codex", "from_session_ref": old_session,
+                                      "to_session_ref": new_session, "evidence": applied["succession"]["evidence"],
+                                      "taken_at": applied["succession"]["taken_at"]})
+                    # The case that would have caught T016: an authorized verb
+                    # run as the incoming session must be accepted, end to end,
+                    # through _require_current_leader.
+                    code, entered = self.run_cli("gauntlet-step-enter", str(root), "--work-id", work_id,
+                        "--context-id", applied["context_id"], "--epoch", str(applied["epoch"]),
+                        "--session-ref", new_session, "--step", "implement-parallel")
+                    self.assertEqual(code, 0, entered)
             applied_work_id, applied_session = "work-terminal-status", "orca:ctx-new-status"
+
+            # -- T021/FR-004: worktree identity is inherited, not re-derived. A
+            # fresh context has none yet, so the predecessor is first taken
+            # through prepare-switch (which stamps it and leaves the context
+            # QUIESCING, a state takeover still accepts). --
+            inherit_context_id = spawn("work-inherit")
+            code, quiescing = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-inherit",
+                "--session-ref", old_session, "--context-id", inherit_context_id, "--epoch", "1",
+                "--to-runtime", "claude")
+            self.assertEqual((code, quiescing.get("verdict")), (0, "QUIESCING"), quiescing)
+            stamped = store.read_snapshot(root).document["agent_orchestration"]["work_items"][
+                "work-inherit"]["contexts"][inherit_context_id]["worktree_identity"]
+            self.assertTrue(stamped)
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport:
+                code, preview = takeover("work-inherit", "orca:ctx-new-inherit")
+                self.assertEqual(code, 0, preview)
+                code, inherited = takeover("work-inherit", "orca:ctx-new-inherit", "--apply",
+                                           "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, inherited.get("verdict")), (0, "TAKEOVER-APPLIED"), inherited)
+            inherit_item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-inherit"]
+            self.assertEqual(inherit_item["contexts"][inherited["context_id"]]["worktree_identity"], stamped)
 
             # -- a live dispatch refuses distinctly from an inconclusive one. --
             spawn("work-leader-active")
