@@ -3292,6 +3292,22 @@ def _continuity_identity(root: Path, work_id: str, state: dict[str, Any]) -> dic
             "real_path": str(root.resolve()), "branch": branch}
 
 
+# T035: the structural tuple, in one place. `phase` and `branch` are stamped
+# for the record but never compared: both move in normal life -- a step turn
+# advances the phase, a branch is switched -- and no verb ever re-stamps, so
+# comparing them means "nothing moved since the stamp was first written",
+# which is not what quiescence proves. Quiescence proves nothing is running
+# *now*; it says nothing about how old the stamp is.
+_CONTINUITY_STRUCTURAL = ("project_id", "work_id", "du", "git_common_dir", "real_path")
+
+
+def _continuity_identity_matches(sealed: Any, identity: dict[str, str]) -> bool:
+    """Fail-closed: a missing or non-mapping stamp never matches."""
+    if not isinstance(sealed, dict):
+        return False
+    return all(sealed.get(field) == identity[field] for field in _CONTINUITY_STRUCTURAL)
+
+
 def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_id: str) -> tuple[list[str], list[str]]:
     """Only explicit terminal observations are quiet; lease expiry and silence are ignored."""
     active, unknown = [], []
@@ -3397,7 +3413,10 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
     _require_current_leader(root, args.work_id, context, args.session_ref)
     state_path, state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)
     identity = _continuity_identity(root, args.work_id, state)
-    if context.get("worktree_identity") not in (None, identity):
+    sealed = context.get("worktree_identity")
+    # An absent stamp is stamped below for the first time; a present one is
+    # judged on the structural tuple only, like the takeover.
+    if sealed is not None and not _continuity_identity_matches(sealed, identity):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "worktree identity changed")
     operation_entry = _continuity_operation(item, context_id, args.to_runtime)
     initial_checkpoint = None
@@ -3542,8 +3561,9 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", args.checkpoint)
     state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1]
     identity = _continuity_identity(root, args.work_id, state)
-    if checkpoint.get("worktree_identity") != identity or source.get("worktree_identity") != identity:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "project/worktree/branch changed")
+    if not (_continuity_identity_matches(checkpoint.get("worktree_identity"), identity)
+            and _continuity_identity_matches(source.get("worktree_identity"), identity)):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "project or worktree changed")
     active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
     if active:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-ACTIVE-WORK", ",".join(active))
@@ -3715,9 +3735,12 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     # them made the takeover refuse the very scenario it exists to cure, and
     # refuse it forever, since only a successful takeover rewrites the stamp
     # and the core has no re-stamp verb. Both are re-stamped from the derived
-    # identity below instead of being asserted here. The resume sibling and
-    # `prepare-switch` still compare the whole identity, which is correct for
-    # them: their window is quiescent by construction, so nothing may move.
+    # identity below instead of being asserted here. T035: the resume sibling
+    # and `prepare-switch` now share the same structural tuple. Their window
+    # being quiescent does not justify the strict comparison -- quiescence
+    # proves nothing is running now, not that the stamp is fresh, and since a
+    # takeover stamps the phase of that instant and nothing ever re-stamps,
+    # the first step turn made `prepare-switch` refuse forever.
     #
     # When the source carries no stamp at all -- the field is optional in the
     # context schema -- there is no prior claim to contradict, so the derived
@@ -3727,8 +3750,7 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1]
     identity = _continuity_identity(root, args.work_id, state)
     sealed = context.get("worktree_identity")
-    structural = ("project_id", "work_id", "du", "git_common_dir", "real_path")
-    if sealed is not None and any(sealed.get(field) != identity[field] for field in structural):
+    if sealed is not None and not _continuity_identity_matches(sealed, identity):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-IDENTITY-DIVERGENT",
                          "project or worktree changed since the predecessor stamped its identity")
     # T018: digest the decision, not the coordinator's raw answer.
@@ -3910,7 +3932,19 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
                 # not read success over a resource still open in the store.
                 # So report it and let the verdict stop being CLEANED, instead
                 # of refusing the cleanup of what this context does own.
-                if resource["state"] not in {"CLOSED", "REMOVED"}:
+                #
+                # T034: and only when the selection would have reached it.
+                # The collection used to happen before any selector
+                # discrimination -- the activity filter is applied further
+                # down -- so a cleanup aimed at one activity came back
+                # downgraded because of a resource that selection was never
+                # meant to touch, and permanently, for the same reason. The
+                # run branch and the unselected single-worker path never get
+                # here: the loop is guarded by `args.run_id is None`, and the
+                # single-worker path returns inside the run loop above, before
+                # `retained` is read by the verdict they share.
+                in_scope = activity_id is None or resource["activity_id"] == activity_id
+                if in_scope and resource["state"] not in {"CLOSED", "REMOVED"}:
                     retained.append({"resource_id": resource_id, "kind": resource["kind"],
                                      "state": resource["state"],
                                      "origin_context_id": resource["origin_context_id"],
