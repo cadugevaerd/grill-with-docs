@@ -1,0 +1,12 @@
+{
+  "worker": "p04-b",
+  "feature": "032-continuity-context",
+  "completed": ["T010"],
+  "tasks": {
+    "T010": {
+      "status": "done",
+      "summary": "Versao bump 6.0.2 -> 6.0.3 (FR-012) apenas no campo 'version' do plugin grill-with-docs, um por arquivo, sem tocar em nenhum outro campo: plugin/.claude-plugin/plugin.json, plugin/.codex-plugin/plugin.json, .claude-plugin/marketplace.json (entrada plugins[0].version) e .agents/plugins/marketplace.json (entrada plugins[0].version). Diff de uma linha por arquivo, sem reformatacao/reordenacao.",
+      "evidence": "Leitura dos 4 arquivos antes e depois da edicao confirma que apenas a linha 'version' mudou em cada um. Suite completa (tests/run_validators.py) nao rodada aqui: espera-se falha em validate_distribution.py ate p04-a, p04-c e o leader completarem os outros 4 pontos de distribuicao (VERSION do validador, headings de SKILL.md/session-protocol.md/README.md/CHANGELOG.md), conforme instrucao explicita do brief."
+    }
+  }
+}
