@@ -684,3 +684,124 @@ Obrigatório antes do ship:
 Registráveis como débito: n1 a n7, mais o já listado em R1, R2 e R3. **n2 merece atenção**: inventamos vocabulário de protocolo sem ensiná-lo a quem o consome.
 
 Próximo passo: corrigir, rodar `/speckit.converge`, depois `verify` e `review` de novo.
+
+---
+
+## Review Report — R5
+
+**Verdict: REQUEST CHANGES**
+
+Source fingerprint: tree `b9e289cedc9b4eb86f51a62cd3fd43212922767dce409e595382de9939a23a30` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `55cd6e61bbe2d7fe692ce9daf62df87d17a115a4263bcd992f6a321ddbb0e468`
+
+Casa com `converge.md` (rodada 10) e `verify.md` (R5). Converge `CONVERGED`, Verify `PASS`.
+
+**Primeira rodada sem Critical.** Três Important e quatro Minor, todos de arrumação ou de buraco lateral — nenhum reabre o defeito que a entrega existe para corrigir.
+
+### A pergunta que decidia a rodada, respondida
+
+As quatro rodadas anteriores acharam a **mesma forma de defeito** porque a regra de comparação de identidade vivia em três cópias. A Phase 10 extraiu para um ponto único. A pergunta era: a extração está completa, ou produziu a quinta instância?
+
+**Está completa.** Os três comparadores de identidade contra a árvore viva passam todos pelo helper, e a varredura por `worktree_identity`, `real_path`, `git_common_dir`, `project_identity` e `worktree_key` não achou nenhum outro ponto comparando campo a campo — nem por igualdade de dicionário, nem por `in`, nem por subconjunto, nem dentro de validação de schema.
+
+E apareceu uma distinção que vale mais que a confirmação: existe uma **quarta** comparação de identidade, em `validate_transition`, que compara o dicionário inteiro — e ela está **correta fora do helper**, porque responde outra pergunta. O helper responde "o carimbo bate com a árvore viva"; `validate_transition` responde "ninguém reescreveu o carimbo". São coisas diferentes, e só a primeira pode relaxar.
+
+É justamente ela que fecha o argumento de T035 por via mecânica: carimbo imutável mais ausência de verbo de re-selagem implica que campo que se move na vida normal do contexto **tem** de ficar fora do predicado, ou a recusa é permanente. O raciocínio do worker estava certo por necessidade estrutural, não por preferência.
+
+---
+
+### Important Issues
+
+#### R5-1 — Tirar `branch` do predicado abriu um buraco novo no carimbo de branch de execução
+
+`grill_workspace.py:3301` (tupla), `:3564` (retomada), `:5889-5899` (preenchimento retroativo)
+
+Existe controle compensatório real: `development["execution_branch"]` e a recusa por branch divergente impedem confirmar etapa na branch errada. **Mas esse controle só existe depois que alguém o carimbou**, e o código trata o campo ausente como preenchimento retroativo a partir da branch viva.
+
+Cenário, verificado no código:
+
+1. work item novo, nenhuma etapa confirmada, então a preparação de troca sintetiza o checkpoint inicial — e `execution_branch` ainda não existe;
+2. o humano troca de branch na árvore, que é exatamente o que T035 declara rotineiro;
+3. a retomada, que antes recusava por `branch`, agora passa — `real_path` e o diretório git comum são os mesmos;
+4. a primeira confirmação de etapa preenche o campo e **liga o work item permanentemente à branch errada**.
+
+Não é o defeito original voltando — ninguém lê sucesso sobre recurso aberto. É buraco novo aberto pela relaxação.
+
+**Correção**: não recolocar `branch` na tupla, porque isso reabre a recusa permanente. Comparar contra o SSOT que já existe: na retomada, quando `execution_branch` for string não vazia, exigir que a branch viva coincida. E recusar o preenchimento retroativo quando o contexto corrente tem predecessor — carimbo de branch não deve nascer de uma sessão retomada.
+
+#### R5-2 — Restauração de branch falha em silêncio, com casos depois dela
+
+`tests/validate_agent_orchestration_contract.py:1587` e `:1268`
+
+A troca de `check=True` por `check=False` na restauração está certa quanto ao mascaramento, mas **os dois métodos continuam executando casos depois do bloco**. Se a restauração falhar, ela agora falha em silêncio e os casos seguintes derivam identidade da branch de teste — exatamente a cascata que o comentário da correção diz estar fechando. O problema saiu do meio do bloco e foi para depois dele.
+
+**Correção**: registrar a restauração como limpeza de teardown logo depois de capturar a branch original, e remover o `try`/`finally`. Restaura sempre, sem mascarar e sem deixar janela descoberta.
+
+#### R5-3 — Asserção fora do `subTest` anula metade do caso de recusa
+
+`tests/validate_agent_orchestration_contract.py:1624-1628`
+
+O `assertEqual` está desindentado, fora do `with self.subTest(...)`. Confirmado por inspeção. Falhar a primeira iteração aborta o laço, e o caso com aplicação **nunca roda**. O arquivo usa o padrão correto noutro ponto, então é inconsistência interna.
+
+Consequência: uma regressão que quebre só o caminho de aplicação fica invisível enquanto a prévia também estiver quebrada, e um relatório de falha mostra um subcaso em vez de dois.
+
+**Correção**: indentar a asserção para dentro do bloco.
+
+---
+
+### Minor Issues
+
+| # | Local | Achado |
+|---|---|---|
+| o1 | `grill_workspace.py:3946` e `tests/...:909-915` | A disjunção do escopo é **inalcançável**: o core fixa a origem do recurso como o contexto da atividade, e o seletor por atividade já exige que a atividade pertença ao contexto — então recurso de outro contexto nunca tem a atividade pedida. E o caso que a cobre monta um documento que **nenhum produtor gera** e que a validação não proíbe. É "fixture mais limpa que a realidade" invertido: dá confiança numa ramificação morta. Escolher entre afirmar o invariante na validação, tornando o caso defesa em profundidade honesta, ou reduzir a condição e apagar o caso |
+| o2 | `tests/...:312` | A única cobertura dos dois emissores de estado projetado mora num teste cujo nome não a anuncia. Quem enxugar esse teste derruba a guarda sem perceber |
+| o3 | `tests/...:1626` | Substituição de leitura por valor fixo em vez de função: inofensivo hoje, mas uma leitura futura com parâmetro diferente seria atendida por um objeto que o ignora |
+| o4 | `grill_workspace.py:3714` vs `:3454` | O bridge da campanha leva o carimbo selado na tomada e a identidade viva na preparação de troca. Ninguém compara esse campo; é desigualdade de auditoria herdada, sem efeito de runtime |
+
+---
+
+### Test Quality
+
+**Esta é a parte que mudou de patamar**, e merece registro depois de três rodadas apontando o contrário.
+
+A prova decisiva veio de execução, não de leitura: **antes dos casos novos, três das quatro reversões fechavam verdes** nos três validadores que tocam tomada e continuidade. Agora reprovam. Em particular, o código de recusa da guarda de identidade tinha **zero** ocorrências nos testes e passou a ter duas, ambas no caso novo.
+
+E houve rigor acima do pedido: **mutação diferencial** nos cinco campos projetados do segundo emissor, um a um — todos passavam com os testes antigos, todos reprovam com os novos. Isso não prova só que a cobertura existe; prova que ela discrimina campo a campo.
+
+Sobre a solidez dos casos:
+
+- o caso da recusa substitui a leitura de snapshot em vez de mover a árvore, porque o campo é imutável no store. **É sólido**: quem julga é o produto, a derivação de identidade roda de verdade sobre a árvore real, e a comparação é igualdade simétrica — mover o selado ou mover o vivo produz a mesma desigualdade. A prova é que apagar a guarda faz o caso reprovar; um teste da substituição passaria;
+- os casos dos dois irmãos **provam o que prometem**: o teste move exatamente os campos que a derivação lê, e alargar a tupla de volta reprova os dois — uma fixture sem divergência real deixaria o mutante passar;
+- **nenhum caso foi afrouxado**. Das nove remoções, oito são deslocamento sem mudança de conteúdo e acréscimo de parâmetro; a nona é a troca para restauração tolerante, que é o R5-2.
+
+### Runtime Correctness
+
+Verificado e limpo fora do R5-1:
+
+- **o escopo da coleta está correto nos quatro caminhos**: por contexto o relato é idêntico ao de antes; por atividade passa a se comportar como o ramo de recurso próprio já se comportava; por run e no caminho de worker único o laço nunca é alcançado, por guarda pré-existente;
+- **a mudança não reabriu o defeito original**: nenhuma combinação de seletor relê sucesso sobre recurso aberto. O único silêncio novo é sobre recurso de outra atividade, que a seleção não pede nem pode fechar;
+- **fail-closed íntegro**: dicionário vazio e campo ausente bloqueiam nos dois lados, e o caminho de sucesso alargou apenas em `phase`, que é correto, e em `branch`, que é o R5-1;
+- **nenhum irmão precisava ser mais estrito em `phase`**, e há prova mecânica: o checkpoint é carimbado com a identidade de nascimento do contexto, então a primeira virada de etapa travava os dois irmãos para sempre.
+
+---
+
+### Constitution References
+
+Nenhum conflito constitucional descoberto.
+
+---
+
+### Final Recommendation
+
+**REQUEST CHANGES**, com escopo pequeno e bem delimitado — os três Important somam poucas linhas.
+
+Obrigatório antes do ship:
+
+1. **R5-1** — fechar o buraco do carimbo de branch de execução comparando contra o SSOT existente, sem recolocar `branch` no predicado;
+2. **R5-2** — restauração por limpeza de teardown, que não mascara e não deixa janela;
+3. **R5-3** — indentar a asserção para dentro do bloco, para o segundo subcaso rodar.
+
+Recomendado junto, por ser da mesma família e custar pouco: **o1**, escolhendo entre afirmar o invariante ou remover a ramificação morta com o caso que a cobre.
+
+Registráveis como débito: o2, o3, o4, mais o já listado em R1 a R4.
+
+Próximo passo: corrigir, rodar `/speckit.converge`, depois `verify` e `review` de novo.
