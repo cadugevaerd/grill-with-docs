@@ -101,7 +101,7 @@ Quem audita um ponto de retomada encontra campos cujo nome corresponde ao conte�
 - **FR-001**: O sistema DEVE permitir que uma sessão nova assuma um work item quando o encerramento do condutor anterior estiver provado por observação do ambiente que hospeda o trabalho, e não por declaração de quem pede.
 - **FR-002**: O sistema DEVE recusar a tomada quando o condutor anterior estiver ativo, quando a observação não concluir, e quando o condutor anterior não for um trabalho observável; cada caso DEVE ter código de recusa próprio e distinto.
 - **FR-003**: A tomada DEVE ser prévia por padrão, exigir confirmação explícita da entrada relida para efetivar e ser idempotente para a mesma entrada.
-- **FR-004**: A tomada DEVE registrar a sucessão: contexto anterior encerrado, contexto novo com a época seguinte, e o motivo.
+- **FR-004**: A tomada DEVE registrar a sucessão de forma auditável: identificação do contexto anterior e de quem o conduzia, identificação do contexto novo e da época seguinte, o motivo, a referência e o digest da observação que serviu de prova, e o instante da tomada.
 - **FR-005**: A tomada NÃO DEVE alterar estado do ciclo, campanha, resultados já aceitos nem escopo declarado do work item.
 - **FR-006**: O sistema DEVE permitir preparar a troca ordenada mesmo quando nenhuma etapa do ciclo foi confirmada, produzindo um ponto de retomada a partir do estado corrente.
 - **FR-007**: A prévia da adoção DEVE aplicar as mesmas verificações do comando efetivo e devolver a mesma recusa quando houver, sem escrever nada.

@@ -22,20 +22,27 @@
       "runtime": "claude"
     },
     "attested_executions": {
-      "plan": "se-5474f6065d2a822d47ae69a1ce1e4a09aebed43055b4e269de577d49eb1a4a1d",
-      "specify": "se-4564b9cf7df6db6f6cc39453724815f44518baac46356cb01a60d33fc8dcd275"
+      "checklist": "se-200f8523aef027ad424fea76587c40b04bc22570883470a24a574eb1a25c6818",
+      "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
+      "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a"
     },
     "attested_outputs": {
+      "checklist": {
+        "output_sha256": "sha256:f9d8e19e3dc8ee480b2555d2cb38cdaff9132ea99a57dbe5fca4b6011cd54e09",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
       "plan": {
         "output_sha256": "sha256:55a3d99f3840211a9c5a0cba553760ad33fdeeff5285ff1107513c0c0cac24a8",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-2.terminal.json",
         "step_id": "plan"
       },
       "specify": {
-        "output_sha256": "sha256:6142b758f47d10c990052ba778b449529ab3ce3bb67d98528b0673b8025a51ec",
+        "output_sha256": "sha256:305b6a9b66a108dfe9bd0cb30fb1192fe2a2075b7d2a5aff8f39468c4b108f04",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
         "step_id": "specify"
       }
     },
@@ -84,9 +91,52 @@
         "reason": "invoke /speckit-checklist",
         "state": "in-progress",
         "step": "checklist"
+      },
+      {
+        "chain_stale": [
+          "plan"
+        ],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/spec.md",
+            "sha256": "305b6a9b66a108dfe9bd0cb30fb1192fe2a2075b7d2a5aff8f39468c4b108f04"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "checklist CHK006: FR-004 passa a dizer o que o registro de sucessão precisa conter",
+        "state": "complete",
+        "step": "specify",
+        "supersedes": ".grill/attestations/032-specify.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/plan.md",
+            "sha256": "55a3d99f3840211a9c5a0cba553760ad33fdeeff5285ff1107513c0c0cac24a8"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "re-attest após specify r2",
+        "state": "complete",
+        "step": "plan",
+        "supersedes": ".grill/attestations/032-plan.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/checklists/continuity.md",
+            "sha256": "f9d8e19e3dc8ee480b2555d2cb38cdaff9132ea99a57dbe5fca4b6011cd54e09"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-checklist: 25 itens, 1 gap corrigido na spec",
+        "state": "complete",
+        "step": "checklist"
       }
     ],
-    "current_step": "checklist",
+    "chain_stale": [],
+    "current_step": "tasks",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -105,7 +155,7 @@
     ],
     "steps": {
       "analyze": "pending",
-      "checklist": "in-progress",
+      "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
@@ -115,6 +165,36 @@
       "specify": "complete",
       "tasks": "pending",
       "verify": "pending"
+    },
+    "superseded_outputs": {
+      "plan": [
+        {
+          "attempt_id": "plan-1",
+          "attestation": ".grill/attestations/032-plan.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:55a3d99f3840211a9c5a0cba553760ad33fdeeff5285ff1107513c0c0cac24a8",
+          "provenance": "current-generation",
+          "reason": "re-attest após specify r2",
+          "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+          "step_execution_id": "se-5474f6065d2a822d47ae69a1ce1e4a09aebed43055b4e269de577d49eb1a4a1d",
+          "step_id": "plan",
+          "superseded_by_step_execution_id": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d"
+        }
+      ],
+      "specify": [
+        {
+          "attempt_id": "specify-1",
+          "attestation": ".grill/attestations/032-specify.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:6142b758f47d10c990052ba778b449529ab3ce3bb67d98528b0673b8025a51ec",
+          "provenance": "current-generation",
+          "reason": "checklist CHK006: FR-004 passa a dizer o que o registro de sucessão precisa conter",
+          "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+          "step_execution_id": "se-4564b9cf7df6db6f6cc39453724815f44518baac46356cb01a60d33fc8dcd275",
+          "step_id": "specify",
+          "superseded_by_step_execution_id": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a"
+        }
+      ]
     },
     "workflow_version": "v4"
   },
