@@ -1,0 +1,32 @@
+{
+  "worker": "p07-a",
+  "feature": "032-continuity-context",
+  "completed": ["T016", "T017", "T018", "T019"],
+  "tasks": {
+    "T016": {
+      "status": "done",
+      "summary": "CRITICAL. Em gauntlet_context_takeover_command: a sessao entrante passa a ser observada antes do mutate, com _session_readiness, e o lider do contexto sucessor grava incarnation, observation_ref e observation_sha256 dessa observacao, no lugar dos nulos anteriores. Sem isso _require_current_leader comparava nulo contra observacao fresca e os 14 comandos com @_gauntlet_authorized recusavam a sessao nova com LEADER-AUTHORITY-UNPROVEN, sem saida. O presentation do sucessor tambem passou a vir do readiness da sessao entrante, em vez de ser copiado do predecessor, espelhando continuity_resume_command: apresentacao e propriedade da sessao, nao do contexto. _session_readiness recusa quando a observacao nao conclui, entao ausencia de prova continua sem autorizar.",
+      "evidence": "Fechado pelo leader apos o worker ficar sem resposta. Diff conferido linha a linha pelo coordenador antes do fechamento."
+    },
+    "T017": {
+      "status": "done",
+      "summary": "Guarda de revisao no inicio do mutate da tomada: recusa com STATE_DIVERGENCE quando document['revision'] difere de snapshot.revision, identica a que continuity_resume_command ja tinha. Fecha a janela em que quiescencia, checkpoint_head, bridge e campanha eram decididos fora do lock e um worker transicionando DECLARED para PREPARING entre a leitura e o commit faria TAKEOVER-APPLIED sair onde TAKEOVER-WORK-ACTIVE era devido.",
+      "evidence": "Fechado pelo leader. Diff conferido pelo coordenador."
+    },
+    "T018": {
+      "status": "done",
+      "summary": "O hash de entradas relidas passa a digerir a decisao, nao a resposta viva: no lugar da observacao inteira entram verdict e reference, mais snapshot.revision. O digest dos bytes crus de worker-show permanece apenas em evidence, onde e prova de sucessao. Antes, qualquer campo volatil da resposta do coordenador mudava o digest entre previa e aplicacao, tornando o apply inalcancavel com TAKEOVER-INPUTS-STALE mentindo sobre a causa.",
+      "evidence": "Fechado pelo leader. Diff conferido pelo coordenador."
+    },
+    "T019": {
+      "status": "done",
+      "summary": "A tomada aplicada passa a projetar e devolver preserved_resources (recursos fora de CLOSED e REMOVED) e operations_to_reconcile (operacoes em INTENT, APPLIED ou UNKNOWN) do contexto encerrado, como continuity_resume_command ja devolvia. Sem isso os recursos ficavam presos: require_authority exige contexto corrente e ACTIVE, e o contexto que a tomada encerra nunca mais aceita gauntlet-cleanup.",
+      "evidence": "Fechado pelo leader. Diff conferido pelo coordenador."
+    }
+  },
+  "validators": {
+    "tests/validate_agent_orchestration_contract.py": "Ran 36 tests, OK",
+    "tests/validate_orchestrator_store_contract.py": "Ran 136 tests, OK"
+  },
+  "notes": "Nenhum caso existente quebrou, e isso e evidencia do achado do review R1, nao ausencia dele: os casos de tomada no CLI so asserem state e session_ref do contexto sucessor, e os do store exercitam a fixture CONTEXT_TAKEOVER em vez do mutate real. A cobertura que enxergaria estas quatro correcoes e justamente T020 e T021, da wave seguinte. O refactor recomendado pelo review -- observe_predecessor_termination devolver dispatch_status e liveness, eliminando o reparse e o acoplamento ao helper privado _object -- NAO foi feito: agent_runtime.py esta fora do grant deste no. Fica pendente e registrado como debito. Encerramento executado pelo leader porque o worker parou de responder com o diff pronto e os validadores por rodar; nenhum trabalho dele foi descartado."
+}

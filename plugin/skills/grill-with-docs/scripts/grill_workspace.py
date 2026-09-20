@@ -3672,6 +3672,13 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
     if active or unknown:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-WORK-ACTIVE", ",".join(active + unknown))
+    # T016: the environment proves the predecessor ended, but nobody had
+    # observed the *incoming* session, so its leader was installed with null
+    # incarnation/observation and every @_gauntlet_authorized command refused
+    # it with LEADER-AUTHORITY-UNPROVEN. Same readiness source the resume
+    # sibling uses; it raises when the observation does not conclude, so the
+    # absence of proof never authorizes the takeover.
+    readiness = _session_readiness(root, context["runtime"], args.session_ref, work_id=args.work_id)
     old_campaign = context.get("campaign")
     checkpoint_ref, bridge = None, None
     if old_campaign is not None:
@@ -3690,9 +3697,15 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     operation_id = "takeover-" + hashlib.sha256(canonical({"context": context_id, "session_ref": args.session_ref,
         "observation": observation})).hexdigest()[:24]
     new_context_id = "ctx-" + hashlib.sha256(canonical({"operation": operation_id})).hexdigest()[:24]
+    # T018: digest the decision, not the coordinator's raw answer.
+    # observation["digest"] hashes the live worker-show bytes, and preview and
+    # apply are separate CLI invocations: any volatile field there made apply
+    # refuse with TAKEOVER-INPUTS-STALE while nothing in the store had moved.
+    # The response digest stays in `evidence`, where it is succession proof.
     expected = store.jcs_sha256({"work_id": args.work_id, "from_context_id": context_id,
         "from_session_ref": old_session_ref, "to_session_ref": args.session_ref,
-        "observation": observation, "checkpoint_ref": checkpoint_ref})
+        "observation": {"verdict": observation["verdict"], "reference": observation["reference"]},
+        "revision": snapshot.revision, "checkpoint_ref": checkpoint_ref})
     if not args.apply:
         return {"verdict": "TAKEOVER-PREVIEW", "work_id": args.work_id, "from_context_id": context_id,
                 "expected_sha256": expected}, EXIT_OK
@@ -3701,6 +3714,14 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
                          "expected_sha256 does not match reread takeover inputs")
     next_epoch = context["epoch"] + 1
     fence = context["leader"]["fence"]
+    # T019: the superseded context never satisfies require_authority again
+    # (current *and* ACTIVE), so gauntlet-cleanup over it refuses forever and
+    # its resources stay pinned in the store. Hand them to the successor, to
+    # be reconciled under its own authority -- same projection as the resume.
+    retained = {resource_id: copy.deepcopy(resource) for resource_id, resource in item.get("resources", {}).items()
+                if resource.get("state") not in {"CLOSED", "REMOVED"}}
+    reconcile = {record_id: copy.deepcopy(record) for record_id, record in item.get("operations", {}).items()
+                 if record.get("state") in {"INTENT", "APPLIED", "UNKNOWN"}}
     taken_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     result_ref = f"context-takeover/{operation_id}.json"
     result_sha256 = store.jcs_sha256({"from_context": context_id, "to_context": new_context_id,
@@ -3720,6 +3741,13 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     }
     leader_advance = {"ACTIVE": "RELEASING", "RELEASING": "RELEASED", "RELEASED": "RELEASED"}
     def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        # T017: the whole verdict (observation, quiescence, checkpoint_head,
+        # bridge) was computed from `snapshot`, read outside the lock. Without
+        # this guard a worker transitioning DECLARED->PREPARING between the
+        # read and the commit would be committed over, and TAKEOVER-APPLIED
+        # would be returned where TAKEOVER-WORK-ACTIVE was due.
+        if document["revision"] != snapshot.revision:
+            raise store.StoreError(store.STATE_DIVERGENCE, "takeover inputs changed during observation")
         target = document["agent_orchestration"]["work_items"][args.work_id]
         source = target["contexts"].get(context_id)
         if (not isinstance(source, dict) or target.get("current_context_id") != context_id
@@ -3736,15 +3764,15 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
             "runtime": source["runtime"], "adapter": source["adapter"],
             "activation": copy.deepcopy(source["activation"]), "campaign": copy.deepcopy(source["campaign"]),
             "scheduler_runs": copy.deepcopy(source["scheduler_runs"]),
-            "leader": {"owner_id": new_context_id, "session_ref": args.session_ref, "incarnation": None,
+            "leader": {"owner_id": new_context_id, "session_ref": args.session_ref,
+                       "incarnation": readiness["incarnation"],
                        "fence": next_epoch, "epoch": next_epoch, "state": "ACTIVE",
-                       "observation_ref": None, "observation_sha256": None},
+                       "observation_ref": readiness["ref"], "observation_sha256": readiness["sha256"]},
             "state": "ACTIVE", "policy_sha256": source["policy_sha256"], "inputs_sha256": source["inputs_sha256"],
+            "presentation": copy.deepcopy(readiness["presentation"]),
         }
         if "worktree_identity" in source:
             new_context["worktree_identity"] = copy.deepcopy(source["worktree_identity"])
-        if "presentation" in source:
-            new_context["presentation"] = copy.deepcopy(source["presentation"])
         target["contexts"][new_context_id] = new_context
         target["operations"][operation_id] = copy.deepcopy(operation)
         target["current_context_id"] = new_context_id
@@ -3757,6 +3785,8 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
             "from_context_id": context_id, "epoch": next_epoch,
             "succession": {"from_context_id": context_id, "from_session_ref": old_session_ref,
                            "reason": "takeover", "evidence": evidence, "taken_at": taken_at},
+            "preserved_resources": retained, "operations_to_reconcile": reconcile,
+            "presentation": readiness["presentation"],
             "store_revision": committed.revision}, EXIT_OK
 
 
