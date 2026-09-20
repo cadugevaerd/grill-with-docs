@@ -506,3 +506,55 @@ Um caso não admitia mutante de produto, por ser ordenação de teste: foi verif
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R5.
+
+---
+
+# Rodada 11 — 2026-09-20, consumindo o review R5
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T039), review.md (R5), constituição · **Desfecho**: `tasks_appended` (Phase 11, T040–T043)
+
+## O ciclo quebrou
+
+Esta é a primeira rodada em que o review **não** encontrou Critical, e a razão é estrutural, não sorte. As quatro rodadas anteriores acharam a mesma forma de defeito porque a regra de comparação de identidade vivia em três cópias e cada rodada corrigia uma. A Phase 10 extraiu para um ponto único, e o revisor confirmou por varredura que **a extração está completa** — nenhum outro ponto compara identidade campo a campo.
+
+Registro também a distinção que o revisor trouxe, porque ela explica por que a extração é correta e não apenas conveniente: existe uma quarta comparação, em `validate_transition`, que compara o dicionário inteiro e está **certa fora do helper**, porque responde outra pergunta. O helper pergunta "o carimbo bate com a árvore viva"; `validate_transition` pergunta "ninguém reescreveu o carimbo". Só a primeira pode relaxar. E é a segunda que torna a relaxação **obrigatória**: carimbo imutável mais ausência de verbo de re-selagem implica que campo que se move na vida normal do contexto tem de ficar fora do predicado, ou a recusa é permanente.
+
+## Findings
+
+| ID | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|---|---|---|---|---|---|
+| L1 | contradicts | HIGH | FR-001, FR-005 | `grill_workspace.py:5889-5899` trata o carimbo de branch de execução ausente como preenchimento a partir da branch viva. Com `branch` fora do predicado, um work item sem etapa confirmada aceita retomada em branch trocada, e a primeira confirmação o liga permanentemente à errada | T040 |
+| L2 | partial | MEDIUM | FR-011 | A restauração de branch é tolerante a falha, o que evita mascarar o erro real, mas os dois métodos seguem executando casos **depois** dela: a falha passa em silêncio e contamina os seguintes. A correção anterior moveu o problema, não o fechou | T041 |
+| L3 | partial | MEDIUM | FR-011 | Asserção fora do bloco de subcaso: falhar a primeira iteração aborta o laço e o subcaso com aplicação nunca roda | T042 |
+| L4 | partial | LOW | FR-011 | Ramificação inalcançável coberta por documento que nenhum produtor gera. Confiança falsa é pior que ausência de cobertura | T043 |
+
+## Por que L1 não se resolve recolocando `branch`
+
+Seria a correção óbvia e é a errada: reabre exatamente a recusa permanente que a Phase 10 acabou de fechar. O controle certo já existe e é o carimbo de branch de execução, que é fonte única de verdade — o defeito é que ele **só protege depois de existir**, e o código trata sua ausência como autorização para preencher a partir do que estiver vivo.
+
+A correção tem duas metades: comparar contra o carimbo quando ele existir, e recusar que ele nasça de uma sessão retomada.
+
+## Sobre L4, que quase ficou como débito
+
+A pergunta era se ramificação morta coberta por teste é lacuna ou polimento. É lacuna, sob FR-011: um caso que monta um documento que produtor nenhum gera não valida cenário nenhum — dá confiança numa ramificação que não existe. Cobertura falsa é pior que ausência, porque desencoraja a cobertura verdadeira.
+
+A escolha entre afirmar o invariante na validação, tornando o caso defesa em profundidade honesta, ou remover ramo e caso, fica com quem implementa, mediante justificativa.
+
+## Débito
+
+o2 (a única cobertura dos dois emissores mora em teste de nome alheio), o3 (substituição por valor fixo em vez de função) e o4 (desigualdade de auditoria no bridge da campanha) seguem como débito, junto com o já registrado em R1 a R4.
+
+## Versão
+
+6.0.3 sem publicar, `main` em 6.0.2. Sem novo bump.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação
+- Achados: missing 0 · partial 3 · contradicts 1 · unrequested 0
+- Severidade: CRITICAL 0 · HIGH 1 · MEDIUM 2 · LOW 1
+
+## Próxima ação
+
+Quatro tarefas em `## Phase 11: Convergence`. Executar `implement-parallel` e reconvergir.
