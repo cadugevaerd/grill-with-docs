@@ -118,3 +118,12 @@ Phase 5 (T013, leader)
 ## Implementation strategy
 
 MVP = Phase 1 mais Phase 2 mais T007: a tomada existe, é recusada sem prova e a prévia para de mentir. A Phase 3 completa a rede de proteção de estado e a Phase 4 acompanha por obrigação constitucional de bump.
+
+---
+
+## Phase 6: Convergence
+
+- [ ] T014 Em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, em `_takeover_observation`: ler `dispatch` e `projection` do mesmo nível desembrulhado que o adapter já consome, em vez do nível de topo da resposta crua — hoje `json.loads` devolve o envelope e `show.get` não acha campo algum, então `status` e `liveness` são sempre nulos contra a resposta real, o líder vivo é recusado com o código de prova inconclusiva em vez do código de líder ativo, e a prova gravada na sucessão nasce vazia; manter o retorno nulo para resposta ausente, ilegível ou não correlacionada; e em `tests/validate_agent_orchestration_contract.py`, corrigir o fixture sintético para produzir somente a forma real (envelopada), acrescentando o caso de líder vivo que exige o código de líder ativo e o caso que exige os dois campos de prova preenchidos no registro de sucessão per FR-002, FR-004, FR-010 (contradicts)
+- [ ] T015 Em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, nos dois pontos de emissão de ponto de retomada (o do comando de confirmação de etapa e o da projeção do estado corrente na preparação de troca): emitir a versão nova do formato, com os campos de digest renomeados, em vez da versão anterior; e em `tests/validate_checkpoint_contract.py`, acrescentar o caso que exige a versão nova na emissão, preservando intocado o caso existente que exercita um documento da versão anterior, porque a versão anterior continua legível e utilizável sem reescrita per FR-008, FR-009 (partial)
+
+**Checkpoint**: `python3 tests/validate_agent_orchestration_contract.py`, `python3 tests/validate_checkpoint_contract.py` e `python3 tests/validate_orchestrator_store_contract.py` fecham em exit 0; nenhum caso existente editado para passar.

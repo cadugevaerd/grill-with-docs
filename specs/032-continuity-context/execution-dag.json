@@ -101,6 +101,22 @@
       "id": "p04-c",
       "parallel": true,
       "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p04-a",
+        "p04-b",
+        "p04-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p06-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_checkpoint_contract.py"
+      ],
+      "id": "p06-a",
+      "parallel": true,
+      "tier": "medium"
     }
   ],
   "schema": "grill-gauntlet-execution-dag/v1"
