@@ -1,0 +1,120 @@
+---
+
+description: "Task list for 032 — continuidade de contexto sem líder vivo"
+---
+
+# Tasks: Continuidade de contexto sem líder vivo
+
+**Input**: Design documents from `/specs/032-continuity-context/`
+
+**Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md
+
+**Tests**: obrigatórios (FR-011). A recusa atual é total: nem contexto encerrado libera o work item. Sem os casos novos, nada prova que a tomada só acontece com prova, nem que a recusa continua firme sem ela.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: pode rodar em paralelo (arquivos disjuntos, sem dependência pendente)
+- **[Story]**: US1..US5 do `spec.md`
+- Todo caminho é repo-relativo e explícito, porque o `partition` só fenceia o que a linha nomeia; nenhuma outra palavra das linhas de tarefa contém barra
+
+## Path Conventions
+
+Repositório existente, sem estrutura nova. Arquivos tocados (10): o CLI do core, o contrato do checkpoint, dois validadores, os quatro manifests, o validador de distribuição e os dois headings sob `plugin/`; mais `README.md` e `CHANGELOG.md` na raiz.
+
+**Fronteira conhecida do `partition`**: `README.md` e `CHANGELOG.md` estão na raiz e são infenceáveis para um worker. A fase final os entrega ao **leader**, nomeando um caminho de evidência de coordenador.
+
+---
+
+## Phase 1: Contrato do checkpoint e prova de encerramento
+
+**Purpose**: As duas bases que as demais tarefas consomem. Arquivos disjuntos.
+
+- [ ] T001 [P] [US5] Em `plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py`, acrescentar a versão seguinte do schema de checkpoint de continuidade ao lado da atual: as mesmas chaves obrigatórias, com `workflow_sha256` renomeada para `context_inputs_sha256` e `constitution_sha256` para `origin_metadata_sha256`; a validação escolhe o conjunto de chaves pelo valor de `schema` no próprio documento, aceita as duas versões e nunca tenta uma e depois a outra; documentar no docstring qual valor cada campo carrega (FR-008, FR-009, ADR-0002, Contract continuity-checkpoint-v2)
+- [ ] T002 [P] [US1] [US2] Em `plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py`, expor uma observação de encerramento reaproveitando o adapter existente: a partir da resposta de `worker-show` do dispatch anterior, devolver terminal somente quando `dispatch.status` estiver fora de `dispatched` e `running`, ou `capabilityRevokedAt` não for nulo, ou a liveness do host for `exited` com origem `agent_status`; resposta ausente, ilegível, não correlacionada ao dispatch pedido ou com liveness `unverifiable` devolve indeterminado, nunca terminal; não alterar `LeaderBoundary.observe` nem nenhum caminho existente (FR-001, FR-002, Research R1)
+
+**Checkpoint**: `python3 tests/validate_agent_orchestration_contract.py` continua passando sem edição de teste.
+
+---
+
+## Phase 2: Tomada, troca e paridade da prévia
+
+**Purpose**: O verbo novo e as duas correções de caminho existente. Todas no mesmo arquivo, serializadas de propósito.
+
+- [ ] T003 [US1] [US2] Em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, acrescentar o verbo `gauntlet-context-takeover` com `--work-id`, `--session-ref`, `--expected-sha256` e `--apply`: sem `--apply` executa todas as verificações e devolve `TAKEOVER-PREVIEW` com o hash das entradas relidas, ou a recusa que o apply devolveria, sem escrever byte algum; com `--apply` exige hash coincidente, senão `TAKEOVER-INPUTS-STALE`; recusa `TAKEOVER-LEADER-ACTIVE` quando a observação do dispatch anterior não for terminal por estar vivo, `TAKEOVER-EVIDENCE-UNPROVEN` quando a observação não concluir e `TAKEOVER-NOT-OBSERVABLE` quando o líder registrado não for um dispatch observável; repetição idêntica já aplicada devolve `TAKEOVER-REUSED`; a mutação usa o mesmo compare-and-swap por revisão do store (FR-001, FR-002, FR-003, FR-010, Contract context-takeover, Research R2, R3, R6)
+- [ ] T004 [US1] Em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, gravar a sucessão ao aplicar a tomada: contexto anterior passa a encerrado, contexto novo nasce na época seguinte e carrega o bloco de sucessão com o contexto e a sessão de origem, o motivo, a referência e o digest da observação usada como prova, e o instante; `development`, campanha, resultados aceitos e escopo declarado permanecem byte a byte iguais (FR-004, FR-005, Data model)
+- [ ] T005 [US3] Em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, no comando de preparação de troca perto da linha 3300: quando o item não tiver checkpoint corrente conhecido, emitir o checkpoint inicial a partir do estado corrente em vez de recusar com `CONTINUITY-CHECKPOINT-MISSING`; manter a recusa para checkpoint declarado porém desconhecido (FR-006, Research R4)
+- [ ] T006 [US4] Em `plugin/skills/grill-with-docs/scripts/grill_workspace.py`, no comando de adoção: executar na prévia a mesma verificação de contexto existente que hoje só roda no caminho de aplicação, devolvendo a recusa em vez de prévia quando a aplicação recusaria; a prévia continua sem escrever nada (FR-007, US4)
+
+**Checkpoint**: `python3 tests/validate_agent_orchestration_contract.py` e `python3 tests/validate_orchestrator_store_contract.py` fecham em exit 0.
+
+---
+
+## Phase 3: Cobertura
+
+**Purpose**: Travar comportamento novo e o que não pode regredir. Dois arquivos disjuntos.
+
+- [ ] T007 [P] [US1] [US2] [US4] Em `tests/validate_agent_orchestration_contract.py`, acrescentar casos com observação sintética do adapter: dispatch terminal por status, por capacidade revogada e por liveness `exited` liberam a tomada; dispatch vivo recusa com `TAKEOVER-LEADER-ACTIVE`; observação ausente, ilegível, não correlacionada e `unverifiable` recusam com `TAKEOVER-EVIDENCE-UNPROVEN`; líder sem dispatch observável recusa com `TAKEOVER-NOT-OBSERVABLE`; prévia e aplicação concordam no veredito em cada caso; prévia não escreve; hash divergente devolve `TAKEOVER-INPUTS-STALE`; repetição idêntica devolve `TAKEOVER-REUSED`; prévia de adoção diante de contexto de outra sessão devolve a mesma recusa da aplicação; nenhum caso usa runtime real ou rede (FR-001, FR-002, FR-003, FR-007, FR-010, FR-011, SC-002, SC-004)
+- [ ] T008 [P] [US1] [US3] [US5] Em `tests/validate_orchestrator_store_contract.py`, acrescentar casos de estado: tomada aplicada encerra o contexto anterior, abre a época seguinte e preserva `development`, campanha, resultados aceitos e escopo; o bloco de sucessão contém origem, motivo, prova e instante; duas tomadas concorrentes sobre a mesma revisão terminam com uma aceita e a outra recusada por estado alterado; preparação de troca logo após a criação do work item produz ponto de retomada e a retomada por ele funciona; checkpoint da versão anterior continua legível e utilizável, sem reescrita (FR-004, FR-005, FR-006, FR-009, FR-011, SC-001, SC-003, SC-005)
+
+**Checkpoint**: os dois validadores fecham em exit 0 e nenhum caso existente foi editado para passar.
+
+---
+
+## Phase 4: Distribuição
+
+**Purpose**: Sincronizar a versão. Arquivos disjuntos.
+
+- [ ] T009 [P] Atualizar a constante `VERSION` para `6.0.3` em `tests/validate_distribution.py` (FR-012)
+- [ ] T010 [P] Atualizar a versão para `6.0.3` nos quatro manifests: `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json`, `.claude-plugin/marketplace.json` e `.agents/plugins/marketplace.json` (FR-012)
+- [ ] T011 [P] Atualizar o heading para `# Grill with Docs v6.0.3` em `plugin/skills/grill-with-docs/SKILL.md` e acrescentar, na seção de identidade e inicialização, uma frase de que a tomada de contexto existe como ato explícito, autorizada por observação de dispatch terminal (FR-012, ADR-0001)
+- [ ] T012 [P] Atualizar o heading para `# Protocolo de sessão v6.0.3` em `plugin/skills/grill-with-docs/references/session-protocol.md` (FR-012)
+
+**Checkpoint**: `python3 tests/validate_distribution.py` ainda reprova em `README.md` até a fase seguinte.
+
+---
+
+## Phase 5: Fechamento do leader
+
+**Purpose**: Os arquivos da raiz que nenhum worker pode fencear e o registro da conferência.
+
+- [ ] T013 Sincronizar o heading `**v6.0.3` em README.md, abrir a entrada `## 6.0.3` em CHANGELOG.md (tomada de contexto autorizada por observação de dispatch terminal, com recusas distintas para líder vivo, prova inconclusiva e líder não observável; preparação de troca possível desde a criação do work item; prévia de adoção com o mesmo veredito da aplicação; campos do checkpoint renomeados em versão nova, com a anterior ainda legível), e registrar a conferência dos oito pontos de distribuição e o resultado de `python3 tests/run_validators.py` em `.grill/work-items/fix-continuity-context-2babd3080cc84b59a4404d6514f948c2/AUDIT.md` (FR-012, SC-006, quickstart 2 e 3)
+
+**Checkpoint**: os oito pontos concordam; `python3 tests/run_validators.py` fecha em exit 0; `git diff --check` limpo.
+
+---
+
+## Dependencies
+
+```
+Phase 1 (T001 ∥ T002)   barreira
+        ↓
+Phase 2 (T003 → T004 → T005 → T006, serial por arquivo)   barreira
+        ↓
+Phase 3 (T007 ∥ T008)   barreira
+        ↓
+Phase 4 (T009 ∥ T010 ∥ T011 ∥ T012)   barreira
+        ↓
+Phase 5 (T013, leader)
+```
+
+- T003 depende de T002 (observação de encerramento) e T004 do estado que T003 aplica.
+- T007 e T008 dependem da Phase 2 inteira.
+- T001 é independente, mas T008 depende dele para o caso de compatibilidade.
+
+## Parallel opportunities
+
+- Phase 1: T001 e T002 em arquivos disjuntos.
+- Phase 3: T007 e T008 em validadores disjuntos.
+- Phase 4: as quatro tarefas em arquivos disjuntos.
+
+## Independent test criteria
+
+- **US1**: tomada aceita com dispatch terminal, sucessão registrada, estado preservado (T007, T008).
+- **US2**: cada variação sem prova recusa com seu código (T007).
+- **US3**: troca preparada logo após a criação e retomada por ela (T008).
+- **US4**: prévia e aplicação com o mesmo veredito (T007).
+- **US5**: checkpoint novo com nomes corrigidos e checkpoint antigo ainda legível (T001, T008).
+
+## Implementation strategy
+
+MVP = Phase 1 mais Phase 2 mais T007: a tomada existe, é recusada sem prova e a prévia para de mentir. A Phase 3 completa a rede de proteção de estado e a Phase 4 acompanha por obrigação constitucional de bump.

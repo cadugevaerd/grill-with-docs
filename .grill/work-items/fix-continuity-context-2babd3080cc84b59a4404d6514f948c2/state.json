@@ -24,7 +24,8 @@
     "attested_executions": {
       "checklist": "se-200f8523aef027ad424fea76587c40b04bc22570883470a24a574eb1a25c6818",
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
-      "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a"
+      "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a",
+      "tasks": "se-a7ab93f07b33ace8bcb5b3a0a2f7be0fd89990622ade7c18c5a4a96caf8d11ab"
     },
     "attested_outputs": {
       "checklist": {
@@ -44,6 +45,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/specify-specify-2.terminal.json",
         "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:8be44ef0f2ccc94e4703c17fbf3ff7e1df6a2aafa0e4b33ac434f12451f097de",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "step_id": "tasks"
       }
     },
     "audit": [
@@ -133,10 +140,36 @@
         "reason": "speckit-checklist: 25 itens, 1 gap corrigido na spec",
         "state": "complete",
         "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-tasks",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/tasks.md",
+            "sha256": "8be44ef0f2ccc94e4703c17fbf3ff7e1df6a2aafa0e4b33ac434f12451f097de"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-tasks: 13 tarefas em 5 fases; preview do partition com 8 nós, grants limpos, T013 no leader",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-analyze",
+        "state": "in-progress",
+        "step": "analyze"
       }
     ],
     "chain_stale": [],
-    "current_step": "tasks",
+    "current_step": "analyze",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -154,7 +187,7 @@
       "ship"
     ],
     "steps": {
-      "analyze": "pending",
+      "analyze": "in-progress",
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
@@ -163,7 +196,7 @@
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
-      "tasks": "pending",
+      "tasks": "complete",
       "verify": "pending"
     },
     "superseded_outputs": {
