@@ -1428,6 +1428,13 @@ def validate_block(block: Any) -> dict[str, Any]:
         for resource_id, resource in item["resources"].items():
             _resource(resource_id, resource, item["contexts"])
             if resource["activity_id"] is not None and resource["activity_id"] not in item["activities"]: _fail("resource has unknown activity")
+            # o1: every producer pins the resource to the context of its own
+            # activity (`new_specialist_resource`), and no verb moves an
+            # activity between contexts (`prepare_activity` fences on it). The
+            # invariant was only implicit, so a hand-edited block could carry a
+            # resource whose activity lives in another context -- a shape the
+            # cleanup scope reasons about and the store used to accept.
+            if resource["activity_id"] is not None and item["activities"][resource["activity_id"]]["context_id"] != resource["origin_context_id"]: _fail("resource activity belongs to another context")
             if resource["scheduler_run_id"] is not None and resource["scheduler_run_id"] not in item["contexts"][resource["origin_context_id"]]["scheduler_runs"]: _fail("resource has unknown scheduler run")
             if resource["operation_id"] is not None and resource["operation_id"] not in item["operations"]: _fail("resource has unknown operation")
         for activity in item["activities"].values():
