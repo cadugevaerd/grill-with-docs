@@ -1,0 +1,29 @@
+{
+  "worker": "p08-b",
+  "feature": "032-continuity-context",
+  "completed": ["T028", "T029"],
+  "tasks": {
+    "T028": {
+      "status": "done",
+      "summary": "R2-6: evidence['liveness'] da fixture CONTEXT_TAKEOVER era a string 'exited', um TIPO que emissor nenhum produz -- grill_workspace._takeover_observation (grill_workspace.py ~1552-1570) devolve {'verdict': ..., 'source': ...} ou None, e agent_orchestration nao valida o campo, entao validate_block aceitava a string e o caso congelava um formato irreal. Escolhi ELIMINAR a divergencia em vez de documenta-la, porque era barato e nao havia nenhum caso dependendo da string: o default do parametro virou None com sentinela para {'verdict':'exited','source':'agent_status'} (evita default mutavel compartilhado entre chamadas), e a unica assercao literal (test_store_accepts_hand_built_continuity_switch_operation_record) passou a exigir o mapa. O cabecalho da fixture registra o que era, por que era errado e que a divergencia foi fechada, nao apenas listada. Nenhum outro chamador passava liveness=; nenhum caso afrouxado.",
+      "files": ["tests/validate_orchestrator_store_contract.py"]
+    },
+    "T029": {
+      "status": "done",
+      "decision": "(b) -- mover o emissor exigiria editar grill_workspace.py, fora do grant",
+      "summary": "R2-7: o caso do ponto de retomada inicial importava grill_workspace._initial_continuity_checkpoint, helper PRIVADO do CLI que chama _cleanup_checkpoint_projection(root, work_id) e le disco -- o contrato do store exercitava I/O do CLI e travava interface privada de outro modulo, o mesmo debito ja registrado para agent_runtime._object. Avaliei (a) e ela nao existe dentro do grant: _initial_continuity_checkpoint e chamado apenas de gauntlet_prepare_switch_command (grill_workspace.py:3415) e usa CliFailure/EXIT_BLOCKED/grill_core_module/hash_bytes do proprio CLI; criar a versao pura em grill_core sem religar o CLI deixaria duas implementacoes do mesmo emissor, exatamente o estado final proibido pelo brief. Por isso agent_orchestration.py NAO foi tocado nesta wave. Fiz (b): o caso deixou de importar grill_workspace, passou a usar a fixture compartilhada ORCHESTRATION_CHECKPOINT_V2 como cp-init e foi renomeado para test_store_accepts_a_day_zero_v2_checkpoint_as_head_and_lets_a_later_one_chain_onto_it -- o nome agora diz o que ele prova. Para nao virar tautologia (o defeito que o R2 anterior fechou), as asserccoes de shape do emissor sairam e o caso prova comportamento real do store: cp-init aceito como head, cp-resumed encadeando, cp-init byte-identico depois, e um cp-orphan com previous inexistente RECUSADO -- ou seja, a aceitacao acima e a regra de cadeia valendo, nao o store aceitando qualquer documento.",
+      "coverage_cost": "A fidelidade do emissor day-zero (schema v2, development_sequence como lista, projecao vazia) deixou de ser verificada aqui. Ela e de nivel CLI e o caminho gauntlet-prepare-switch em tests/validate_agent_orchestration_contract.py exercita o emissor end-to-end; nenhum caso assertivo sobre o emissor existia fora deste arquivo.",
+      "pending": "Mover o emissor do ponto de retomada inicial para plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py, recebendo cleanup_obligations e preserved_resources ja lidos na fronteira do CLI (padrao de grill_core/triage.py: logica pura, sem disco, sem importar grill_workspace), e reduzir _initial_continuity_checkpoint a um wrapper que le disco e delega. Exige editar grill_workspace.py, arquivo fora do grant deste no -- fica para um no que tenha os dois arquivos no mesmo grant.",
+      "files": ["tests/validate_orchestrator_store_contract.py"]
+    }
+  },
+  "verification": {
+    "command": "python3 tests/validate_orchestrator_store_contract.py",
+    "result": "Ran 136 tests -- OK",
+    "notes": "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py nao foi modificado, entao validate_checkpoint_contract.py nao foi rodado."
+  },
+  "files_touched": [
+    "tests/validate_orchestrator_store_contract.py",
+    "specs/032-continuity-context/implement/p08-b.tasks.json"
+  ]
+}
