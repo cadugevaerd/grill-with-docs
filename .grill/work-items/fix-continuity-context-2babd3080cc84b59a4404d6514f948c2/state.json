@@ -24,7 +24,7 @@
     "attested_executions": {
       "analyze": "se-196ab078abaa5484aeeb128524e505bd43e5b22da469bfc4fa6d08756db84fd7",
       "checklist": "se-200f8523aef027ad424fea76587c40b04bc22570883470a24a574eb1a25c6818",
-      "converge": "se-dd16fd2d2c1e09c04488871205320120979b68cd49c880d6cefde23739bb5822",
+      "converge": "se-cb8c0474e383c2bf201bb2839172080eaa872f1680c9a14018629641e6085083",
       "implement-parallel": "se-8ee6e18d49f8e4bb96ee443a0af0ccc31a2358071df6bf6c8df816aa6b9ea398",
       "partition": "se-cfc1c7cad294dbe420e70f5ac6301beb5a5fdf639aa577b9068e9f08284775f6",
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
@@ -46,9 +46,9 @@
         "step_id": "checklist"
       },
       "converge": {
-        "output_sha256": "sha256:f4d036bfce748f2f83598562eb5cdc8017fc6ed039e98e53e06946bd45de8e98",
+        "output_sha256": "sha256:114078cb3be4405f97537cc85e8a38691aaa4ef41e36c6f4cfb281ecac9e829c",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/converge-converge-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-3.terminal.json",
         "step_id": "converge"
       },
       "implement-parallel": {
@@ -429,10 +429,25 @@
         "state": "complete",
         "step": "implement-parallel",
         "supersedes": ".grill/attestations/032-implement-parallel-r3.json"
+      },
+      {
+        "chain_stale": [
+          "verify"
+        ],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/converge.md",
+            "sha256": "114078cb3be4405f97537cc85e8a38691aaa4ef41e36c6f4cfb281ecac9e829c"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "rodada 6 apos a Phase 8: H1 a H8 fechados, nenhum achado novo",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/032-converge-r2.json"
       }
     ],
     "chain_stale": [
-      "converge",
       "verify"
     ],
     "current_step": "review",
@@ -478,6 +493,18 @@
           "step_execution_id": "se-ee5d99fdb084f14c2a8ff46f220c47cc947af095f10e798302a47bd442925559",
           "step_id": "converge",
           "superseded_by_step_execution_id": "se-dd16fd2d2c1e09c04488871205320120979b68cd49c880d6cefde23739bb5822"
+        },
+        {
+          "attempt_id": "converge-2",
+          "attestation": ".grill/attestations/032-converge-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:f4d036bfce748f2f83598562eb5cdc8017fc6ed039e98e53e06946bd45de8e98",
+          "provenance": "current-generation",
+          "reason": "rodada 6 apos a Phase 8: H1 a H8 fechados, nenhum achado novo",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-2.terminal.json",
+          "step_execution_id": "se-dd16fd2d2c1e09c04488871205320120979b68cd49c880d6cefde23739bb5822",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-cb8c0474e383c2bf201bb2839172080eaa872f1680c9a14018629641e6085083"
         }
       ],
       "implement-parallel": [
