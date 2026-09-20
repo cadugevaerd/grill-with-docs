@@ -22,12 +22,19 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "analyze": "se-196ab078abaa5484aeeb128524e505bd43e5b22da469bfc4fa6d08756db84fd7",
       "checklist": "se-200f8523aef027ad424fea76587c40b04bc22570883470a24a574eb1a25c6818",
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
       "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a",
       "tasks": "se-a7ab93f07b33ace8bcb5b3a0a2f7be0fd89990622ade7c18c5a4a96caf8d11ab"
     },
     "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:1d732b22c3dfe056faab16f37a97ab455b08e6ca88ef9600652558144efe1a7a",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "step_id": "analyze"
+      },
       "checklist": {
         "output_sha256": "sha256:f9d8e19e3dc8ee480b2555d2cb38cdaff9132ea99a57dbe5fca4b6011cd54e09",
         "provenance": "current-generation",
@@ -166,10 +173,22 @@
         "reason": "invoke /speckit-analyze",
         "state": "in-progress",
         "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/analysis.md",
+            "sha256": "1d732b22c3dfe056faab16f37a97ab455b08e6ca88ef9600652558144efe1a7a"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-analyze: 0 CRITICAL/HIGH, 2 MEDIUM (U1 não observável, C1 quiescência), 3 LOW; cobertura FR 100%",
+        "state": "complete",
+        "step": "analyze"
       }
     ],
     "chain_stale": [],
-    "current_step": "analyze",
+    "current_step": "partition",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -187,7 +206,7 @@
       "ship"
     ],
     "steps": {
-      "analyze": "in-progress",
+      "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
