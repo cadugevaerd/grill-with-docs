@@ -70,6 +70,10 @@ def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def _dispatch_matches_outcome(dispatch: dict[str, Any], outcome: Any) -> bool:
+    return dispatch.get("status") == {"succeeded": "completed", "failed": "failed"}.get(outcome)
+
+
 def validate_impeccable_observation(value: Any) -> dict[str, Any]:
     """Accept a closed observation of an already-resolved Impeccable invocation.
 
@@ -848,7 +852,7 @@ class LeaderBoundary:
         if (terminal.get("worktreePath") != str(self.root) or terminal.get("orphaned") is not False
                 or terminal.get("connected") is not False or terminal.get("writable") is not False
                 or observation.get("status") != "exited" or observation.get("exactWorker") is not True
-                or dispatch.get("status") != "completed" or not isinstance(dispatch.get("completedAt"), str)
+                or not _dispatch_matches_outcome(dispatch, outcome) or not isinstance(dispatch.get("completedAt"), str)
                 or not isinstance(dispatch.get("capabilityRevokedAt"), str)
                 or worker.get("stage") != "settled" or outcome not in ("succeeded", "failed")
                 or projection.get("outcome") != outcome
@@ -1037,7 +1041,8 @@ def _orca_observation(source_ref: str, launch_raw: bytes, show_raw: bytes) -> di
     if projection_host is not None:
         _same("host", host, _mapping(projection_host, "projection host").get("id"))
     closed = (resource.get("releaseState") == "released" and isinstance(liveness, dict)
-              and worker.get("agentWait", object()) is not None and dispatch.get("status") == "completed"
+              and worker.get("agentWait", object()) is not None
+              and _dispatch_matches_outcome(dispatch, worker.get("state"))
               and worker.get("stage") == "settled" and worker.get("state") in {"succeeded", "failed"}
               and liveness.get("verdict") == "exited" and liveness.get("source") == "resource_release"
               and _mapping(projection.get("resource"), "release resource").get("releaseState") == "released"

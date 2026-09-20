@@ -1015,6 +1015,11 @@ class AgentOrchestrationContract(unittest.TestCase):
             with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
                 adapter.observe_released()
             result["terminalResource"]["archive"]["status"] = "captured"
+            result["dispatch"]["status"] = "failed"
+            result["worker"]["state"] = result["projection"]["outcome"] = "failed"
+            self.assertEqual(adapter.observe_released()["outcome"], "failed")
+            result["dispatch"]["status"] = "completed"
+            result["worker"]["state"] = result["projection"]["outcome"] = "succeeded"
             argv = ("gauntlet-prepare-switch", str(root), "--work-id", "work-x", "--context-id", context_id,
                     "--epoch", "1", "--session-ref", orchestration_fixture.SESSION,
                     "--to-runtime", "claude", "--released-source")
@@ -1437,6 +1442,15 @@ class AgentOrchestrationContract(unittest.TestCase):
         self.assertEqual(observed["dispatch_incarnation"], "dispatch-inc-1")
         self.assertEqual(observed["task_id"], "task-1")
         self.assertEqual(observed["worktree_id"], "worktree-1")
+
+    def test_failed_released_dispatch_is_closed(self):
+        launch, show = native_sources(released=True)
+        failed = json.loads(show)
+        failed["result"]["dispatch"]["status"] = "failed"
+        failed["result"]["worker"]["state"] = "failed"
+        observed = grill_workspace.grill_core_module("agent_runtime")._orca_observation(
+            "orca:worker-show:ctx-1", launch, pack(failed))
+        self.assertEqual((observed["close"], observed["activity"]), ("closed", "exited"))
 
     def test_unrelated_or_invented_native_source_is_refused_before_payload(self):
         boundary, calls = self.boundary(probe=(b"unrelated bytes", native_sources()[1]))
