@@ -951,3 +951,136 @@ Recomendado junto, por custarem uma linha cada: **p1** e **p2**.
 Registráveis como débito: p3, p4, p5, mais o já listado em R1 a R5.
 
 Próximo passo: corrigir, rodar `/speckit.converge`, depois `verify` e `review` de novo.
+
+---
+
+# R7 — 2026-09-20, após a Phase 12
+
+## Review Report
+
+**Verdict: REQUEST CHANGES** — 1 Critical, 2 Important, 9 Minor
+
+Source fingerprint: tree `831d81aea348dfa6de4f72508d51448e3199e7bb8ef3f24391a3818a61811e32` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `fb2993563b5e77a0737d9b3bb8885b5f9c560c78d15022191df10b2de626207f` — casa com o converge rodada 14 e o verify rodada 7.
+
+Quatro revisores read-only: correção em runtime, qualidade de teste, arquitetura/legibilidade, segurança e regressão.
+
+## O que esta rodada achou, em uma frase
+
+A Phase 12 **estreitou** o Critical do R6 em vez de eliminá-lo, e a própria base de código tinha um comentário avisando por que o critério novo não funcionaria.
+
+## Critical
+
+### R7-1 — O carimbo congela no contexto, e a virada de fase legítima volta a bloquear permanentemente
+
+`plugin/skills/grill-with-docs/scripts/grill_workspace.py:5961-5965` e `:6118-6122`
+
+O R6 recusou o critério monotônico "o contexto corrente tem predecessor" porque ele bloqueava permanentemente todo work item já sucedido. A Phase 12 trocou por "o carimbo de branch existe e difere da branch viva". O critério novo é melhor, mas **continua irreavaliável**, por três propriedades que se combinam:
+
+1. **Ninguém limpa o carimbo.** `worktree_identity` não está no conjunto mutável de `agent_orchestration.py:1488` — `{state, activation, campaign, scheduler_runs, leader, presentation}` — então `transact` recusa qualquer reescrita com `context immutable field changed`. Só a criação de contexto novo escreve o carimbo: `:3905` (takeover), `:3693` (resume), `:3540` (`setdefault` do prepare-switch).
+2. **A virada de fase zera o vínculo de propósito**, e o comentário em `:6135-6137` diz por quê: *"so the first `specify` of the next phase can bind its own branch"*. Ou seja, o design **prevê** que a fase seguinte rode noutra branch.
+3. **O preenchimento retroativo compara com o carimbo velho.** Sucessão em `A` → carimbo `A` → virada de fase → fase nova vincula `B` → `EXECUTION-BRANCH-MISMATCH`, para sempre.
+
+A saída é só uma sucessão nova, e `takeover` exige sessão predecessora morta enquanto `resume` exige prepare-switch ou troca de runtime. **Um líder vivo não se sucede**: o work item fica parado até a sessão morrer. É a mesma classe que a própria 032 classificou CRITICAL em J1/H1 — *"não há verbo de re-selagem"* — agora estreitada de "todo contexto sucedido" para "contexto sucedido que legitimamente troca de branch".
+
+**A base de código previu isto.** O comentário do T035, em `:3294-3299`, ainda está no arquivo e diz literalmente:
+
+> `phase` and `branch` are stamped for the record but never compared: both move in normal life — a step turn advances the phase, a branch is switched — and no verb ever re-stamps, so comparing them means "nothing moved since the stamp was first written", which is not what quiescence proves.
+
+A Phase 12 passou a comparar `branch` exatamente contra esse aviso. Não é um comentário que ficou velho: é um aviso correto que foi ignorado, e o defeito que ele descreve é este achado.
+
+**Cobertura:** nenhum caso exercita carimbo `A` → virada → branch `B`. Os dois casos novos só cobrem carimbo igual à branch viva, ou branch fictícia sem virada (`tests/validate_agent_orchestration_contract.py:1521-1568`, `:1569-1605`).
+
+**Conserto proposto**, sem campo novo e sem tocar a imutabilidade do store, usando o audit append-only que a virada já grava: considerar o carimbo **superado** quando a última entrada `phase-turn` de `development["audit"]` tiver `previous_execution_branch == stamped_branch`. O carimbo descreve então uma fase encerrada, logo não contradiz nada. A recusa fica só para carimbo não superado por virada — que é exatamente o caso do R6 original, carimbo de branch em que ninguém esteve.
+
+Contra FR-001 e FR-005.
+
+## Important
+
+### R7-2 — O subcaso "carimbo coincidente" é cobertura falsa, provado por mutação
+
+`tests/validate_agent_orchestration_contract.py:1534-1535`
+
+O revisor trocou `if stamp is not None:` por `if stamp is not None and stamp != "live":` — ou seja, fez o subcaso `"stamp agrees"` não carimbar nada — e **o teste passou**. Esse subcaso é observacionalmente idêntico ao `"no stamp"`: ambos só assertam que o vínculo foi cunhado.
+
+O terceiro lado que a docstring promete, "carimbo coincidente vinculando", **não é provado**. Se `_graft_succession` regredisse em silêncio — contexto errado, chave errada — só o lado divergente acusaria.
+
+Conserto, uma linha depois do graft:
+
+```python
+self.assertEqual(grill_workspace._continuity_stamped_branch(root, "work-x"),
+                 live_branch if stamp == "live" else stamp)
+```
+
+Agrava que `:1536` faz `self.assertNotEqual(stamp, live_branch)`, comparando o **literal** `"live"` com a branch viva em vez do valor carimbado — no subcaso agrees isso afirma apenas que a branch não se chama `"live"`.
+
+Contra FR-011.
+
+### R7-3 — O comentário do ponto único afirma que `branch` nunca é comparado
+
+`plugin/skills/grill-with-docs/scripts/grill_workspace.py:3292-3299`, e o bloco irmão em `:3790-3796`
+
+Falso desde `0eddb29`. É o mesmo material do R7-1, mas registrado à parte porque é uma **afirmação falsa deixada no código**, que é o gênero de defeito que esta entrega já viu em quase toda rodada. Um leitor que confie no comentário conclui que a comparação de branch não existe.
+
+O bloco de `takeover` em `:3790-3796` tem o irmão do problema: diz que a árvore de uma sessão morta é *"free to change"*, sem ressalvar que o carimbo velho agora bloqueia a cunhagem até um takeover ou resume re-carimbar.
+
+Conserto: reescrever para "fora do conjunto **estrutural** — nenhuma recusa de continuidade olha `branch`; a cunhagem do vínculo olha, como evidência, via `_continuity_stamped_branch`", com ponteiro ao helper. Se o R7-1 for consertado como proposto, o comentário precisa dizer também que o carimbo superado por virada não contradiz.
+
+## Minor
+
+| # | Local | Achado |
+|---|---|---|
+| m1 | `grill_workspace.py:3341` | `_continuity_require_bound_branch` **não exige vínculo**: carimbo ausente ou vazio passa em silêncio. O nome promete requisito, o comportamento é "recusa contradição". Renomear para `_continuity_refuse_diverged_branch` |
+| m2 | `grill_workspace.py:3345-3348` | A docstring diz "the single point is called by all three verbs" — verdade só para os verbos de continuidade. A mesma regra vive em quarta cópia em `grill_core/gauntlet_runs.py:2470-2475`, e a mesma condição sai como `CONTINUITY-STATE-DIVERGENCE` nos verbos de continuidade e `EXECUTION-BRANCH-MISMATCH` nos de ciclo, sem nada explicando a diferença |
+| m3 | `grill_workspace.py:5963` vs `:6134` | `EXECUTION-BRANCH-MISMATCH` carrega dois detalhes de causas distintas: `context identity is stamped on X` e `work item is bound to X` |
+| m4 | `grill_workspace.py:3310`, `:3341` | Os nomes não marcam a fonte: um lê o Store (carimbo do contexto), o outro lê `state.json` (vínculo do work item). **Não** devem ser fundidos — fontes e donos diferentes |
+| m5 | `grill_workspace.py:3320-3322` | A docstring cita dois verbos que derivam a identidade ao vivo; `prepare-switch` também deriva e sustenta a mesma prova. São três |
+| m6 | `references/session-protocol.md:104` | `EXECUTION-BRANCH-MISMATCH` e `DEVELOPMENT-SCHEMA` não constam da família `Checkpoint`. **Lacuna, não quebra de contrato**: a coluna é rotulada "Recusas **principais** e ação" e nenhum validador amarra o conjunto de códigos ao documento. Um operador que encontra `context identity is stamped on X` não acha ação nenhuma no protocolo aprovado |
+| m7 | `grill_workspace.py:6106-6107` | `phase_turn_command` zera `steps`/`current_step` em memória antes da guarda de `:6118`. Não há persistência entre os dois pontos, então não é observável; é frágil a edição futura |
+| m8 | `grill_workspace.py:3327` | `_continuity_stamped_branch` lê o snapshot **fora** do `orchestrator_lock`, enquanto `:3181-3187` documenta que a autoridade é lida sob lock. Sob commit concorrente: recusa espúria ou carimbo obsoleto. Há precedente sem lock, então é consistência, não regressão |
+| m9 | `grill_workspace.py:3359` e `:3331-3333` | Dois ramos sem teste algum: o `DEVELOPMENT-SCHEMA` do helper e a tradução de `StoreError`. Trocar qualquer um por `pass` deixa a suíte verde |
+
+## Test Quality
+
+Quatro reversões executadas de verdade, em cópia do repo fora da árvore, com o original intocado. **Três passaram**:
+
+- reverter a guarda do checkpoint faz o caso falhar com o defeito real no payload — `verdict: UPDATED`, `execution_branch` cunhado, exit 0 — não por troca de string de código;
+- reverter **só** a guarda da virada de fase produz falha isolada naquela asserção: os dois sítios de cunhagem são independentemente cobertos, que era o buraco do R6;
+- reverter o helper faz a metade `bound-elsewhere` degradar para `PREVIEW`/exit 0, como a docstring afirma. R6-3 está fechado: as duas metades instalam os mesmos substitutos de fronteira, num único `run_cli`.
+
+A quarta é o R7-2 acima.
+
+Duas docstrings (`:1517-1518`, `:1577-1578`) prometem uma reversão em termos do critério **removido** — irreproduzível hoje. É o gênero do R7-3, na camada de teste.
+
+## Runtime Correctness
+
+Fora do R7-1: `_continuity_require_bound_branch` tem os três call sites declarados e **todos falham antes de mutar** — `:3476` antes de montar operação e checkpoint, `:3627` antes do preview, `:3817` antes do `transact`. Erros não capturados foram fechados pelo T047: `development` não-dicionário vira `DEVELOPMENT-SCHEMA`, store inválido vira recusa nomeada, store ausente devolve `None` sem reivindicação.
+
+## Security
+
+**Nenhum achado Critical ou Important.** A afrouxada da Phase 12 — carimbo ausente passou de "recusa" para "vincula" — está corretamente ancorada, e isso foi confirmado no código, não só na prosa do converge:
+
+- `branch` é campo **required** do `worktree_identity` em `agent_orchestration.py:632` quando a chave existe, e vazio é recusado, então "carimbo presente sem branch" é inalcançável por documento válido;
+- retomada e tomada derivam a identidade **ao vivo** e exigem coincidência estrutural contra o checkpoint e contra o contexto de origem antes de qualquer mutação; o sucessor é carimbado com a identidade derivada, nunca com cópia do predecessor;
+- o contexto não pode ser reescrito no lugar, e nenhum verbo apaga `worktree_identity`.
+
+Não há caminho em que o carimbo seja apagado ou omitido e o vínculo seja cunhado a partir de contexto não verificado.
+
+**Fronteira**: a branch vem de `git branch --show-current`, nome curto, nunca prefixado de `refs/heads/`. Vazio recusa nomeado nos três pontos. Os dois sítios de cunhagem rodam `git check-ref-format --branch`. Toda comparação é igualdade de string crua, e `branch` não entra em `Path`, `join` nem nome de arquivo em lugar nenhum — o padrão do achado antigo, segmento com drive reancorando caminho, não se aplica aqui.
+
+## Regressão R1–R6
+
+**Nenhuma regressão.** Verificado no código integrado: o ponto único da Phase 10 está intacto e `_CONTINUITY_STRUCTURAL` é a única tupla, consumida pelos três verbos; o filtro de `origin_context_id` do R4-3 continua antes da contagem de candidatos; os quatro achados laterais do R5 seguem fechados; o R6-2 e o R6-3 estão fechados. `_continuity_resumed_context` e o `EXECUTION-BRANCH-UNSET` do caminho antigo não deixaram chamador órfão — o `EXECUTION-BRANCH-UNSET` remanescente é de `gauntlet_runs.py:2470`, outro contrato.
+
+## Observação de qualidade que não é achado
+
+`_graft_succession` (`tests/…:1449`) escreve o carimbo direto no store — fixture derivada do código, não da saída dos verbos reais. É o padrão que já mordeu este projeto. Aqui está mitigado porque `tests/…:1845-1848` prova, com tomada real, que o sucessor carrega a branch viva; o elo entre os dois existe, só não está no mesmo caso.
+
+## Constitution References
+
+Nenhum conflito descoberto. 6.0.3 sem publicar, `main` em 6.0.2, sem novo bump exigido.
+
+## Final Recommendation
+
+**REQUEST CHANGES**: consertar o R7-1 e os dois Important, rodar `/speckit.converge`, depois verify e review de novo.
+
+Recomendo tratar junto os Minor m1, m3 e m5, de uma linha cada, e m9, que é a cobertura dos dois ramos que hoje podem virar `pass` sem reprovar nada. Os demais ficam como débito registrado.
