@@ -558,3 +558,46 @@ o2 (a única cobertura dos dois emissores mora em teste de nome alheio), o3 (sub
 ## Próxima ação
 
 Quatro tarefas em `## Phase 11: Convergence`. Executar `implement-parallel` e reconvergir.
+
+---
+
+# Rodada 12 — 2026-09-20, após a Phase 11
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T043), constituição · **Desfecho**: `converged`
+
+Phase 11 entregue pelo nó `p11-a` da run `run-6806206e7518e395e9d1a080`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 11
+
+| Achado | Situação | Prova |
+|---|---|---|
+| L1 — carimbo de branch de execução só protegia depois de existir | **fechado** | A retomada passou a exigir coincidência com o carimbo quando ele existe (`grill_workspace.py:3581`), e o preenchimento retroativo é recusado quando o contexto corrente tem predecessor. `branch` **não** voltou ao conjunto comparado |
+| L2 — restauração de branch falhando em silêncio | **fechado** | Restauração explícita ao fim de cada bloco, com limpeza de encerramento como rede |
+| L3 — asserção fora do subcaso | **fechado** | Movida para dentro do bloco (`:1790`), com comentário registrando por que a posição importa |
+| L4 — ramificação inalcançável com cobertura falsa | **fechado** | O invariante foi afirmado na validação de bloco: a atividade de um recurso tem de viver no contexto que o originou |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Duas decisões do worker que corrigiram a condução
+
+**Desvio fundamentado em L2, e a instrução do coordenador é que estava incompleta.** Eu mandei substituir o bloco protegido por limpeza de encerramento. O worker verificou por execução que **só teardown não funciona**: os casos seguintes de cada método precisam da branch original de imediato, não no fim do teste — sem isso, a inicialização seguinte falha. Manteve restauração explícita ao fim de cada bloco, onde não há asserção em voo e portanto não há o que mascarar, e deixou o teardown como rede. A instrução estava errada por omissão; ele descobriu testando.
+
+**Premissa verificada antes de agir, em L4.** Antes de escolher, confirmou no código que o produtor é único e fixa a origem do recurso no contexto da atividade, e que nenhum verbo move atividade entre contextos. Só então concluiu que a ramificação é morta. Escolheu afirmar o invariante em vez de apagar o ramo, porque a validação de bloco é **fronteira de confiança sobre documento editável à mão** e o invariante era apenas implícito — o caso de teste deixa de ser cobertura falsa e vira defesa em profundidade.
+
+## Sensibilidade verificada
+
+Quatro reversões, todas reprovando. A mais relevante é a do preenchimento retroativo: neutralizada, o contexto retomado vincula o work item à branch errada e o comando devolve sucesso — exatamente o defeito que o R5 descreveu. E a de L3 produziu **dois** fracassos onde antes só rodava um subcaso, o que prova que a indentação mudou o alcance do teste.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1494** testes, 0 falhas, 2 skips condicionados a macOS. O validador de orquestração subiu de 39 para 42.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R6.
