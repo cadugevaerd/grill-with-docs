@@ -1043,9 +1043,23 @@ class AgentOrchestrationContract(unittest.TestCase):
             result["terminalResource"]["archive"]["status"] = "missing"
             with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
                 adapter.observe_released()
+            result["dispatch"].update(status="failed", lastFailure="stopped")
+            result["worker"].update(state="stopped", stage="process_stopped")
+            result["projection"]["outcome"] = "failed"
+            result["terminalResource"]["archive"] = {"source": None, "status": "unavailable"}
+            with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                adapter.observe_released()
+            fenced = adapter.observe_released(allow_unarchived_stopped=True)
+            self.assertEqual((fenced["outcome"], fenced["release_proof"]), ("failed", "resource-fence"))
+            with mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                recovered = grill_workspace._require_released_leader(
+                    root, "work-x", item["contexts"][context_id], orchestration_fixture.SESSION)
+            self.assertEqual(recovered["release_proof"], "resource-fence")
             result["terminalResource"]["archive"]["status"] = "captured"
+            result["terminalResource"]["archive"]["source"] = "transcript"
             result["dispatch"]["status"] = "failed"
             result["worker"]["state"] = result["projection"]["outcome"] = "failed"
+            result["worker"]["stage"] = "settled"
             self.assertEqual(adapter.observe_released()["outcome"], "failed")
             result["dispatch"]["status"] = "completed"
             result["worker"]["state"] = result["projection"]["outcome"] = "succeeded"

@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.9
+
+- Fix: `gauntlet-prepare-switch --released-source` recupera um líder cujo processo foi parado e liberado pelo Orca sem archive somente quando dispatch, capability revogada, terminal, incarnation, worktree, liveness e recurso liberado formam um fence exato. A exceção não vale para resultados de atividades, que continuam exigindo transcript capturado antes de fechar `CLOSE_PENDING` ou aceitar qualquer evidência.
+
 ## 6.0.8
 
 - Fix: o primeiro checkpoint após `gauntlet-resume` promove a `attestation_campaign` do estado de desenvolvimento somente quando o `campaign_bridge` validado da operação de continuidade liga exatamente a geração anterior à campanha do contexto sucessor. Divergência sem bridge exato continua bloqueada por `CHECKPOINT-CAMPAIGN-DIVERGENT`.

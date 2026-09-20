@@ -823,8 +823,8 @@ class LeaderBoundary:
         observed["source_sha256"] = _sha256(json.dumps(observed, sort_keys=True).encode())
         return validate_observation(observed)
 
-    def observe_released(self) -> dict[str, Any]:
-        """Verify an exact Orca release archive; silence and lease expiry are never proof."""
+    def observe_released(self, *, allow_unarchived_stopped: bool = False) -> dict[str, Any]:
+        """Verify an exact Orca release; worker results still require an archive."""
         if not isinstance(self.session_ref, str) or not re.fullmatch(r"orca:ctx[-_][A-Za-z0-9_-]+", self.session_ref):
             _fail("LEADER-ADAPTER-UNSUPPORTED")
         dispatch_id = self.session_ref.removeprefix("orca:")
@@ -848,19 +848,24 @@ class LeaderBoundary:
         process = _same("dispatch incarnation", dispatch.get("processIncarnation"), resource.get("endpointIncarnation"))
         if process != _string(terminal.get("ptyId"), "pty") + ":" + incarnation:
             _fail("LEADER-RELEASE-UNPROVEN")
-        outcome = worker.get("state")
+        archived = (worker.get("stage") == "settled" and worker.get("state") in ("succeeded", "failed")
+                    and _dispatch_matches_outcome(dispatch, worker.get("state"))
+                    and projection.get("outcome") == worker.get("state")
+                    and archive.get("source") == "transcript" and archive.get("status") == "captured")
+        fenced_stop = (allow_unarchived_stopped and worker.get("state") == "stopped"
+                       and worker.get("stage") == "process_stopped" and dispatch.get("status") == "failed"
+                       and projection.get("outcome") == "failed"
+                       and archive.get("source") is None and archive.get("status") == "unavailable")
+        outcome = worker.get("state") if archived else "failed"
         if (terminal.get("worktreePath") != str(self.root) or terminal.get("orphaned") is not False
                 or terminal.get("connected") is not False or terminal.get("writable") is not False
                 or observation.get("status") != "exited" or observation.get("exactWorker") is not True
-                or not _dispatch_matches_outcome(dispatch, outcome) or not isinstance(dispatch.get("completedAt"), str)
+                or not (archived or fenced_stop) or not isinstance(dispatch.get("completedAt"), str)
                 or not isinstance(dispatch.get("capabilityRevokedAt"), str)
-                or worker.get("stage") != "settled" or outcome not in ("succeeded", "failed")
-                or projection.get("outcome") != outcome
                 or _mapping(projection.get("liveness"), "liveness") != {"verdict": "exited", "source": "resource_release"}
                 or any(projected_resource.get(key) != "released" for key in ("state", "releaseState", "terminalState"))
                 or resource.get("ownershipState") != "released" or resource.get("releaseState") != "released"
                 or not isinstance(resource.get("releaseCompletedAt"), str) or resource.get("releaseError") is not None
-                or archive.get("source") != "transcript" or archive.get("status") != "captured"
                 or effective.get("agent") != self.runtime):
             _fail("LEADER-RELEASE-UNPROVEN")
         released = {"source_ref": self.session_ref, "provider": self.runtime, "adapter": "orca",
@@ -869,7 +874,8 @@ class LeaderBoundary:
                     "owner_dispatch": dispatch_id, "handle": handle, "worktree_id": worktree,
                     "runtime_instance": _same("runtime instance", worker.get("runtimeEpoch"), resource.get("endpointId")),
                     "task_id": _same("task", dispatch.get("taskId"), projection.get("taskId")),
-                    "outcome": outcome, "release_completed_at": resource["releaseCompletedAt"]}
+                    "outcome": outcome, "release_proof": "archive" if archived else "resource-fence",
+                    "release_completed_at": resource["releaseCompletedAt"]}
         released["source_sha256"] = _sha256(json.dumps(released, sort_keys=True).encode())
         return released
 

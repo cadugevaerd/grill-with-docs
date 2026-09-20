@@ -1588,7 +1588,8 @@ def _require_current_leader(root: Path, work_id: str, context: dict[str, Any], s
 def _require_released_leader(root: Path, work_id: str, context: dict[str, Any], session_ref: str) -> dict[str, Any]:
     runtime = grill_core_module("agent_runtime")
     try:
-        observed = _leader_boundary(root, context["runtime"], session_ref, work_id).observe_released()
+        observed = _leader_boundary(root, context["runtime"], session_ref, work_id).observe_released(
+            allow_unarchived_stopped=True)
     except runtime.RuntimeError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-RELEASE-UNPROVEN", str(exc)) from exc
     if (context["leader"].get("session_ref") != observed["source_ref"]
