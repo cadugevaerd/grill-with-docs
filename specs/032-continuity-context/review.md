@@ -966,7 +966,7 @@ Quatro revisores read-only: correção em runtime, qualidade de teste, arquitetu
 
 ## O que esta rodada achou, em uma frase
 
-A Phase 12 **estreitou** o Critical do R6 em vez de eliminá-lo, e a própria base de código tinha um comentário avisando por que o critério novo não funcionaria.
+A Phase 12 trocou o Critical do R6 por uma **regressão do J1**, um Critical que esta mesma entrega fechou na rodada 5 — e o comentário que registra o fechamento do J1 está três linhas acima do helper novo.
 
 ## Critical
 
@@ -980,19 +980,54 @@ O R6 recusou o critério monotônico "o contexto corrente tem predecessor" porqu
 2. **A virada de fase zera o vínculo de propósito**, e o comentário em `:6135-6137` diz por quê: *"so the first `specify` of the next phase can bind its own branch"*. Ou seja, o design **prevê** que a fase seguinte rode noutra branch.
 3. **O preenchimento retroativo compara com o carimbo velho.** Sucessão em `A` → carimbo `A` → virada de fase → fase nova vincula `B` → `EXECUTION-BRANCH-MISMATCH`, para sempre.
 
-A saída é só uma sucessão nova, e `takeover` exige sessão predecessora morta enquanto `resume` exige prepare-switch ou troca de runtime. **Um líder vivo não se sucede**: o work item fica parado até a sessão morrer. É a mesma classe que a própria 032 classificou CRITICAL em J1/H1 — *"não há verbo de re-selagem"* — agora estreitada de "todo contexto sucedido" para "contexto sucedido que legitimamente troca de branch".
+A saída é só uma sucessão nova, e `takeover` exige sessão predecessora morta enquanto `resume` exige prepare-switch ou troca de runtime. **Um líder vivo não se sucede**: o work item fica parado até a sessão morrer.
 
-**A base de código previu isto.** O comentário do T035, em `:3294-3299`, ainda está no arquivo e diz literalmente:
+**Isto é regressão de um Critical que esta mesma entrega já fechou.** Não é classe parecida — é o mesmo defeito, pelo mesmo mecanismo:
+
+- **J1** (converge rodada 5, CRITICAL, FR-001): *"compara a identidade inteira; `phase` avança a cada etapa do ciclo… a tomada recusa `TAKEOVER-IDENTITY-DIVERGENT` para sempre"*. Fechado no T030 **removendo `phase` e `branch` do conjunto comparado**, deixando `("project_id", "work_id", "du", "git_common_dir", "real_path")`.
+- **H1** (CRITICAL, FR-001 e FR-005): *"trocar de branch depois da morte da sessão faz o sucessor herdar identidade falsa, e toda retomada posterior falha **sem verbo de re-carimbo**"*. O registro de fechamento do H1 diz, com todas as letras, que o caso sem carimbo prévio não recusa *"porque recusar tornaria a tomada impossível para sempre, já que não existe verbo de re-carimbo"*.
+
+A Phase 12 **reintroduziu a comparação de `branch`** — no caminho de cunhagem do vínculo, não no de identidade, mas com a mesma consequência que o J1 tinha e pelo mesmo motivo de fundo: a branch se move na vida normal e nada a re-carimba.
+
+**O comentário do T035 é a justificativa de fechamento do J1**, ainda no arquivo em `:3294-3299`:
 
 > `phase` and `branch` are stamped for the record but never compared: both move in normal life — a step turn advances the phase, a branch is switched — and no verb ever re-stamps, so comparing them means "nothing moved since the stamp was first written", which is not what quiescence proves.
 
-A Phase 12 passou a comparar `branch` exatamente contra esse aviso. Não é um comentário que ficou velho: é um aviso correto que foi ignorado, e o defeito que ele descreve é este achado.
+A Phase 12 passou a comparar `branch` exatamente contra esse aviso. Não é um comentário que ficou velho: é o registro de por que o J1 foi fechado daquele jeito, e o defeito que ele descreve, em português claro, é este achado.
+
+É o terceiro caso nesta entrega de **regra certa registrada e depois contrariada**, e o mais caro, porque desta vez o registro estava no próprio arquivo, três linhas acima do helper novo.
 
 **Cobertura:** nenhum caso exercita carimbo `A` → virada → branch `B`. Os dois casos novos só cobrem carimbo igual à branch viva, ou branch fictícia sem virada (`tests/validate_agent_orchestration_contract.py:1521-1568`, `:1569-1605`).
 
-**Conserto proposto**, sem campo novo e sem tocar a imutabilidade do store, usando o audit append-only que a virada já grava: considerar o carimbo **superado** quando a última entrada `phase-turn` de `development["audit"]` tiver `previous_execution_branch == stamped_branch`. O carimbo descreve então uma fase encerrada, logo não contradiz nada. A recusa fica só para carimbo não superado por virada — que é exatamente o caso do R6 original, carimbo de branch em que ninguém esteve.
+### Duas saídas, e por que recomendo a mais curta
+
+**Opção A — remover a comparação de branch do caminho de cunhagem** (recomendada).
+
+O J1 foi fechado com a doutrina de que `branch` não se compara, porque se move e nada a re-carimba. A sucessão **é** o re-carimbo: `takeover` e `resume` derivam a identidade ao vivo e validam a identidade estrutural no ato, e o `r7-sec` confirmou no código que não existe caminho de carimbo forjado. Logo, depois de uma sucessão, a branch viva **é** a árvore daquele contexto, e vincular a ela é correto por construção.
+
+O que a guarda supostamente protege — "o vínculo não deve nascer de sessão retomada" — já está protegido a montante, pela validação de identidade da própria sucessão. A guarda não acrescenta prova; acrescenta uma condição que envelhece.
+
+**Opção B — considerar o carimbo superado pela virada** (conservadora).
+
+Sem campo novo e sem tocar a imutabilidade do store, usando o audit append-only que a virada já grava: tratar o carimbo como **superado** quando a última entrada `phase-turn` de `development["audit"]` tiver `previous_execution_branch == stamped_branch`. O carimbo descreve então uma fase encerrada, logo não contradiz nada. A recusa sobra só para carimbo não superado por virada.
+
+Recomendo **A**. B mantém viva uma comparação que o J1 já julgou insustentável e paga isso com uma consulta ao audit em dois sítios; A devolve o código ao estado que o J1 estabeleceu e deixa a prova onde ela é produzida. Se a implementação escolher B, o comentário do T035 precisa deixar de dizer que `branch` nunca é comparado.
 
 Contra FR-001 e FR-005.
+
+### Procedência deste achado
+
+O critério que produziu o R7-1 foi **recomendado pelo próprio R6** e repassado por mim ao brief da Phase 12 sem confronto com o J1 — que está no mesmo `converge.md` que eu estava escrevendo. O worker executou o brief corretamente; a falha é da instrução.
+
+É a terceira vez nesta entrega, e o padrão agora está completo:
+
+| # | Tarefa | Critério que instruí | Por que quebrou |
+|---|---|---|---|
+| 1 | T031 | "contar candidatos antes dos filtros" | "antes dos filtros" incluía o filtro que discriminava |
+| 2 | T040 | "recusar quando o contexto tiver predecessor" | predecessor só cresce; decisão precisa ser reavaliável |
+| 3 | T044 | "recusar quando o carimbo existir e diferir" | carimbo só é escrito na sucessão; a branch se move sem ele |
+
+Os três são **critérios ancorados em estado que não é reavaliável no momento da decisão**. Nos dois primeiros o estado só crescia; neste ele congela. A lição operacional é a mesma: antes de aceitar um critério de recusa, perguntar *quem escreve esse estado, quem o limpa, e o que acontece quando o mundo muda legitimamente e ele não muda junto*.
 
 ## Important
 
