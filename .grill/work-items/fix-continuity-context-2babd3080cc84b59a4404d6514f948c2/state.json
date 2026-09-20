@@ -22,9 +22,16 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "plan": "se-5474f6065d2a822d47ae69a1ce1e4a09aebed43055b4e269de577d49eb1a4a1d",
       "specify": "se-4564b9cf7df6db6f6cc39453724815f44518baac46356cb01a60d33fc8dcd275"
     },
     "attested_outputs": {
+      "plan": {
+        "output_sha256": "sha256:55a3d99f3840211a9c5a0cba553760ad33fdeeff5285ff1107513c0c0cac24a8",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
       "specify": {
         "output_sha256": "sha256:6142b758f47d10c990052ba778b449529ab3ce3bb67d98528b0673b8025a51ec",
         "provenance": "current-generation",
@@ -51,9 +58,35 @@
         "reason": "speckit-specify: spec 032 do handoff FASE-001; checklist 16/16",
         "state": "complete",
         "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-plan for spec 032",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/plan.md",
+            "sha256": "55a3d99f3840211a9c5a0cba553760ad33fdeeff5285ff1107513c0c0cac24a8"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "speckit-plan: plan, research, data-model, dois contratos, quickstart",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-checklist",
+        "state": "in-progress",
+        "step": "checklist"
       }
     ],
-    "current_step": "plan",
+    "current_step": "checklist",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -72,11 +105,11 @@
     ],
     "steps": {
       "analyze": "pending",
-      "checklist": "pending",
+      "checklist": "in-progress",
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
-      "plan": "pending",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
