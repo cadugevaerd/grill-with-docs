@@ -1,4 +1,4 @@
-# Protocolo de sessão v6.0.9
+# Protocolo de sessão v6.0.10
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -141,6 +141,8 @@ Para cada heading normativo H2/H3, `CONSTITUTION-CHECK.md` deve conter exatament
 - `constitution_sha256` atual.
 
 `PENDING|UNMAPPED|BLOCKED|VIOLATION`, cobertura ausente/duplicada, hash stale, status desconhecido ou ambiguidade retornam exit `3`. Nenhum ADR funciona como waiver.
+
+Constituição alterada permanece stale até o líder atual executar `constitution-reseal` em preview/apply com `expected_sha256` e evidência humana. O novo selo atualiza `WORK-ITEM.json`, `state.json` e `CONSTITUTION-CHECK.md` como um bundle recuperável e reconcilia por CAS a activation. Um contexto que já vinculou activation é write-once: `continuity_required=true` exige sucessor pelo protocolo normal, preservando o contexto antigo e os aceites.
 
 ## Loop de entrevista
 

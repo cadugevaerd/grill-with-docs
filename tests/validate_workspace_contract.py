@@ -626,6 +626,48 @@ class WorkspaceV2Contract(unittest.TestCase):
         process, _payload = invoke("init", third, "--type", "feature", "--slug", "placeholder", "--work-id", "placeholder-id", '--skip-backlog')
         self.assertEqual(process.returncode, 3)
 
+    def test_constitution_reseal_is_preview_first_authorized_and_auditable(self) -> None:
+        constitution = self._constitution()
+        item = self._init_item(work_id="reseal-gate")
+        original = self._metadata(item)
+        constitution.write_text(constitution.read_text(encoding="utf-8") + "\n### III. Storage Rule\nUse trunk 44.\n", encoding="utf-8")
+        common = Path(git(self.root, "rev-parse", "--git-common-dir"))
+        if not common.is_absolute():
+            common = self.root / common
+        store = json.loads((common / "grill/orchestrator.json").read_text(encoding="utf-8"))
+        adopted = store["agent_orchestration"]["work_items"]["reseal-gate"]
+        context_id = adopted["current_context_id"]
+        epoch = adopted["contexts"][context_id]["epoch"]
+        arguments = ("constitution-reseal", self.root, "--work-id", "reseal-gate",
+                     "--context-id", context_id, "--epoch", str(epoch),
+                     "--session-ref", orchestration_fixture.SESSION,
+                     "--human-evidence", "operator approved amendment and trunk 44")
+        before = snapshot(item)
+        unauthorized = list(arguments)
+        unauthorized[unauthorized.index(orchestration_fixture.SESSION)] = "orca:intruder"
+        process, payload = invoke(*unauthorized)
+        self.assertEqual((process.returncode, payload["code"]), (2, "LEADER-AUTHORITY-UNPROVEN"))
+        self.assertEqual(snapshot(item), before)
+        process, preview = invoke(*arguments)
+        self.assertEqual((process.returncode, preview["code"]), (0, "CONSTITUTION-RESEAL-READY"))
+        self.assertEqual(snapshot(item), before)
+        process, payload = invoke(*arguments, "--apply", "--expected-sha256", "0" * 64)
+        self.assertEqual((process.returncode, payload["code"]), (2, "CONSTITUTION-RESEAL-STALE"))
+        self.assertEqual(snapshot(item), before)
+        process, payload = invoke(*arguments, "--apply", "--expected-sha256", preview["expected_sha256"])
+        self.assertEqual((process.returncode, payload["code"]), (0, "CONSTITUTION-RESEALED"))
+        updated = self._metadata(item)
+        self.assertEqual(updated["immutable"]["constitution"]["sha256"], payload["to_sha256"])
+        self.assertEqual(updated["constitution_reseals"][-1]["previous_immutable_sha256"], original["immutable_sha256"])
+        self.assertEqual({key: value for key, value in updated["immutable"].items() if key != "constitution"},
+                         {key: value for key, value in original["immutable"].items() if key != "constitution"})
+        process, audit = invoke("audit", self.root, "--work-id", "reseal-gate")
+        self.assertNotEqual(audit.get("code"), "CONSTITUTION-STALE")
+        sealed = snapshot(item)
+        process, payload = invoke(*arguments, "--apply", "--expected-sha256", preview["expected_sha256"])
+        self.assertEqual((process.returncode, payload["code"]), (0, "CONSTITUTION-ALREADY-SEALED"))
+        self.assertEqual(snapshot(item), sealed)
+
     def test_reconcile_source_root_and_real_qualified_ids(self) -> None:
         source = self._new_repo()
         item = self._init_item(source, "source-one")

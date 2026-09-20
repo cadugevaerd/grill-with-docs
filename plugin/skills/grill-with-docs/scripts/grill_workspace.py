@@ -648,6 +648,22 @@ def validate_constitution_check(root: Path, files: dict[str, bytes], recorded: d
     return {"state": "present", "sha256": current["sha256"], "clauses": len(expected)}
 
 
+def constitution_reseal_check(info: dict[str, Any], clauses: list[dict[str, str]], evidence: str) -> bytes:
+    payload = {
+        "constitution_state": "present",
+        "constitution_sha256": info["sha256"],
+        "clauses": [{
+            "id": clause["id"], "heading": clause["heading"], "status": "PASS",
+            "evidence": [evidence], "justification": "approved after reviewing the amended constitution",
+        } for clause in clauses],
+    }
+    return (
+        "# Constitution Check\n\n" + CHECK_START + "\n```json\n"
+        + json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
+        + "\n```\n" + CHECK_END + "\n"
+    ).encode("utf-8")
+
+
 def workflow_info(root: Path) -> dict[str, Any]:
     path = root / "WORKFLOW.md"
     if not path.exists():
@@ -1045,6 +1061,29 @@ def write_bundle_staging(root: Path, work_id: str, metadata: dict[str, Any], fil
             (json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
         )
         return staging
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+
+def replace_work_item_bundle(root: Path, target: Path, metadata: dict[str, Any], files: dict[str, bytes]) -> None:
+    """Publish a complete replacement and restore the old bundle on failure."""
+    parent = target.parent
+    staging = write_bundle_staging(root, target.name, metadata, files)
+    backup = parent / f".{target.name}-backup-{uuid.uuid4().hex}"
+    try:
+        rename_child(parent, target, backup)
+        try:
+            rename_child(parent, staging, target)
+            read_local_bundle(root, target)
+        except Exception:
+            failed = parent / f".{target.name}-failed-{uuid.uuid4().hex}"
+            if target.exists():
+                rename_child(parent, target, failed)
+            rename_child(parent, backup, target)
+            shutil.rmtree(failed, ignore_errors=True)
+            raise
+        shutil.rmtree(backup, ignore_errors=True)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
@@ -2021,6 +2060,124 @@ def hotfix_go_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         output = ((exc.stdout or "") if isinstance(exc.stdout, str) else "")[:4096]
         return {"verdict": "NO-GO", "code": "CORRECTION-TEST-TIMEOUT", "output": output}, EXIT_NO_GO
     return {"verdict": "HOTFIX-GO", "code": "HOTFIX-GO", "work_id": args.work_id, "test": {"returncode": 0, "output": output}}, EXIT_OK
+
+
+def reconcile_resealed_activation(root: Path, bundle: ItemBundle, args: argparse.Namespace) -> dict[str, bool]:
+    """Project the bundle reseal into Gauntlet; bound contexts remain write-once."""
+    history = bundle.metadata.get("constitution_reseals")
+    if not isinstance(history, list) or not history:
+        return {"activation_reconciled": False, "continuity_required": False}
+    latest = history[-1]
+    check = bundle.files.get("CONSTITUTION-CHECK.md")
+    current = bundle.metadata["immutable"].get("constitution")
+    if (not isinstance(latest, dict) or latest.get("to") != current or check is None
+            or latest.get("check_sha256") != hash_bytes(check)):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONSTITUTION-RESEAL-SCHEMA", args.work_id)
+    raw = bundle.files["WORK-ITEM.json"]
+    document_sha256 = hash_bytes(raw)
+    gauntlet = grill_core_module("gauntlet")
+    work_item_v3 = grill_core_module("work_item_v3")
+    try:
+        previous, activation, config_changed = gauntlet.reseal_work_item_activation(
+            root=root, work_id=args.work_id, document_sha256=document_sha256, work_item_v3=work_item_v3)
+    except gauntlet.GauntletError as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+    store = grill_core_module("gauntlet_runs").store
+    snapshot = store.read_snapshot(root, required=False)
+    block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+    orchestrated = block.get("work_items", {}).get(args.work_id) if isinstance(block, dict) else None
+    if not isinstance(orchestrated, dict):
+        return {"activation_reconciled": config_changed, "continuity_required": False}
+    contract = grill_core_module("agent_orchestration")
+    context = orchestrated.get("contexts", {}).get(args.context_id)
+    try:
+        contract.require_authority(orchestrated, args.context_id, args.epoch, args.session_ref)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+    if isinstance(context, dict) and context.get("activation") is None and activation is None:
+        return {"activation_reconciled": config_changed, "continuity_required": False}
+    if not isinstance(context, dict) or not isinstance(context.get("activation"), dict) or activation is None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-STALE", "resealed activation is unavailable")
+    bound_sha256 = context["activation"].get("work_item", {}).get("document_sha256")
+    if bound_sha256 == document_sha256:
+        return {"activation_reconciled": config_changed, "continuity_required": False}
+    if previous != document_sha256 and bound_sha256 != previous:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-STALE", "activation changed during reseal")
+    return {"activation_reconciled": config_changed, "continuity_required": True}
+
+
+def constitution_reseal_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Rebind a stale work item to the current Constitution under the leader fence."""
+    root = project_root(args.root)
+    if not isinstance(args.human_evidence, str) or not args.human_evidence.strip():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONSTITUTION-EVIDENCE-REQUIRED", "--human-evidence is required")
+    item = root / ".grill" / "work-items" / args.work_id
+    lock = acquire_lock(root, args.work_id, item) if args.apply else None
+    try:
+        bundle = read_local_bundle(root, item)
+        immutable = validate_metadata(bundle.metadata, args.work_id)
+        previous_check = bundle.files.get("CONSTITUTION-CHECK.md")
+        if previous_check is None:
+            raise CliFailure(EXIT_CONSTITUTION, "BLOCKED-CONSTITUTION", "CHECK-MISSING", "CONSTITUTION-CHECK.md")
+        current, _text, clauses = constitution_info(root)
+        if current.get("state") != "present":
+            raise CliFailure(EXIT_CONSTITUTION, "BLOCKED-CONSTITUTION", "CONSTITUTION-NOT-PRESENT", args.work_id)
+        recorded = immutable.get("constitution", {})
+        if recorded.get("state") == current["state"] and recorded.get("sha256") == current["sha256"]:
+            constitutional = validate_constitution_check(root, bundle.files, recorded)
+            activation_status = reconcile_resealed_activation(root, bundle, args)
+            return {"verdict": "REUSED", "code": "CONSTITUTION-ALREADY-SEALED", "work_id": args.work_id,
+                    "constitutional": constitutional, **activation_status}, EXIT_OK
+        check = constitution_reseal_check(current, clauses, args.human_evidence.strip())
+        request = {
+            "work_id": args.work_id, "bundle_fingerprint": bundle.fingerprint,
+            "from": recorded, "to": current, "check_sha256": hash_bytes(check),
+            "human_evidence": args.human_evidence.strip(), "context_id": args.context_id,
+            "epoch": args.epoch, "session_ref": args.session_ref,
+        }
+        expected = hash_bytes(canonical(request))
+        if not args.apply:
+            return {"verdict": "PREVIEW", "code": "CONSTITUTION-RESEAL-READY", "work_id": args.work_id,
+                    "from_sha256": recorded.get("sha256"), "to_sha256": current["sha256"],
+                    "expected_sha256": expected}, EXIT_OK
+        if args.expected_sha256 != expected:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONSTITUTION-RESEAL-STALE", "reseal inputs changed")
+        files = {path: data for path, data in bundle.files.items() if path != "WORK-ITEM.json"}
+        state_raw = files.get("state.json")
+        try:
+            state = json.loads(state_raw.decode("utf-8")) if state_raw is not None else None
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STATE-SCHEMA", args.work_id) from exc
+        if not isinstance(state, dict):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STATE-SCHEMA", args.work_id)
+        state["constitution"] = current
+        files["state.json"] = (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+        files["CONSTITUTION-CHECK.md"] = check
+        metadata = copy.deepcopy(bundle.metadata)
+        previous_immutable_sha256 = metadata["immutable_sha256"]
+        metadata["immutable"]["constitution"] = current
+        metadata["immutable_sha256"] = hash_bytes(canonical(metadata["immutable"]))
+        history = metadata.setdefault("constitution_reseals", [])
+        if not isinstance(history, list):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONSTITUTION-RESEAL-SCHEMA", args.work_id)
+        history.append({
+            "schema": "grill-constitution-reseal/v1", "from": recorded, "to": current,
+            "previous_immutable_sha256": previous_immutable_sha256,
+            "immutable_sha256": metadata["immutable_sha256"],
+            "previous_check_sha256": hash_bytes(previous_check),
+            "check_sha256": hash_bytes(check), "human_evidence": args.human_evidence.strip(),
+            "context_id": args.context_id, "epoch": args.epoch, "session_ref": args.session_ref,
+        })
+        validate_metadata(metadata, args.work_id)
+        validate_constitution_check(root, {**files, "WORK-ITEM.json": b""}, metadata["immutable"]["constitution"])
+        replace_work_item_bundle(root, item, metadata, files)
+        activation_status = reconcile_resealed_activation(root, read_local_bundle(root, item), args)
+        return {"verdict": "APPLIED", "code": "CONSTITUTION-RESEALED", "work_id": args.work_id,
+                "from_sha256": recorded.get("sha256"), "to_sha256": current["sha256"],
+                "expected_sha256": expected, **activation_status}, EXIT_OK
+    finally:
+        if lock is not None:
+            shutil.rmtree(lock, ignore_errors=True)
 
 
 def audit_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -3187,9 +3344,11 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
                                        selected_epoch if selected_epoch is not None else context["epoch"], session_ref)
         except contract.OrchestrationError as exc:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
-        # Cleanup requires a current leader, independently of presentation.
+        # Cleanup and constitutional recovery require the current observed
+        # leader, but must remain usable when presentation itself is stale.
         cleanup = handler.__name__ == "gauntlet_cleanup_command"
-        if cleanup:
+        administrative_recovery = cleanup or handler.__name__ == "constitution_reseal_command"
+        if administrative_recovery:
             readiness = None
         else:
             try:
@@ -3200,7 +3359,7 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "runtime changed without continuity")
             readiness = _session_readiness(root, context["runtime"], session_ref, work_id=args.work_id)
         _require_current_leader(root, args.work_id, context, session_ref, readiness)
-        if not cleanup:
+        if not administrative_recovery:
             if any(context["presentation"].get(key) != readiness["presentation"].get(key)
                    for key in ("session_identity", "config_fingerprint", "scope", "policy_sha256", "gwd_skill_sha256")):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STYLE-SCOPE-CONFLICT", "presentation configuration changed; bootstrap again")
@@ -3222,6 +3381,9 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
         except store.StoreError as exc:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
     return wrapped
+
+
+constitution_reseal_command = _gauntlet_authorized(constitution_reseal_command)
 
 
 @_gauntlet_authorized
@@ -5993,6 +6155,15 @@ def build_parser() -> JsonParser:
     audit_parser.add_argument("--work-id")
     audit_parser.add_argument("--artifact-root")
     audit_parser.add_argument("--project-root")
+    reseal_parser = subparsers.add_parser("constitution-reseal")
+    reseal_parser.add_argument("root")
+    reseal_parser.add_argument("--work-id", required=True)
+    reseal_parser.add_argument("--context-id", required=True)
+    reseal_parser.add_argument("--epoch", type=int, required=True)
+    reseal_parser.add_argument("--session-ref", required=True)
+    reseal_parser.add_argument("--human-evidence", required=True)
+    reseal_parser.add_argument("--apply", action="store_true")
+    reseal_parser.add_argument("--expected-sha256")
     reconcile_parser = subparsers.add_parser("reconcile")
     reconcile_parser.add_argument("root")
     reconcile_parser.add_argument("--source-root", action="append", default=[])
@@ -6280,6 +6451,7 @@ def main(argv: list[str] | None = None) -> int:
         handlers = {
             "init": init_command,
             "audit": audit_command,
+            "constitution-reseal": constitution_reseal_command,
             "reconcile": reconcile_command,
             "migrate": migrate_command,
             "migrate-v3": migrate_v3_command,

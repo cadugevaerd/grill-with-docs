@@ -634,6 +634,37 @@ def activate(
     return "ACTIVATED"
 
 
+def reseal_work_item_activation(*, root: Path, work_id: str, document_sha256: str,
+                                work_item_v3: Any) -> tuple[str | None, dict[str, Any] | None, bool]:
+    """CAS-update only the work-item digest after an authorized Constitution reseal."""
+    if not isinstance(document_sha256, str) or not SHA256_RE.fullmatch(document_sha256):
+        raise _fail("IDENTITY-STALE", "replacement work-item identity is invalid")
+    lock = acquire_config_lock(root)
+    try:
+        document, baseline, mode = _read_config(lock.grill_fd)
+        record = document["activations"].get(work_id)
+        if record is None:
+            return None, None, False
+        previous = record["work_item"]["document_sha256"]
+        if previous == document_sha256:
+            return previous, copy.deepcopy(record), False
+        candidate = copy.deepcopy(record)
+        candidate["work_item"] = {"document_sha256": document_sha256}
+        _validate_record(work_id, candidate)
+        current, _ = _read_regular_at(lock.grill_fd, CONFIG_NAME)
+        if current != baseline:
+            raise _fail("CONFIG-CHANGED", "Gauntlet configuration changed during reseal")
+        document["activations"][work_id] = candidate
+        data = (json.dumps(document, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+        try:
+            work_item_v3._atomic_replace_at(lock.grill_fd, CONFIG_NAME, data, mode=mode if mode is not None else 0o600)
+        except work_item_v3.WorkItemError as exc:
+            raise _fail(_public_code(exc.code), "could not atomically reseal Gauntlet configuration") from exc
+        return previous, candidate, True
+    finally:
+        release_config_lock(lock)
+
+
 def open_config_directory(root: Path) -> int:
     """Open the read-only Gauntlet configuration parent without a lock."""
     return _safe_directory_fd(root)

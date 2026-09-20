@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.10
+
+- Fix: `constitution-reseal` permite ao líder atual revalidar uma Constituição alterada sem recriar o work item nem editar o selo manualmente. O fluxo exige preview/apply, `expected_sha256`, fence de contexto/epoch/session e evidência humana; publica `WORK-ITEM.json`, `state.json` e `CONSTITUTION-CHECK.md` como um bundle recuperável, preserva o selo anterior, reconcilia por CAS a activation e exige continuidade sucessora quando o contexto ativo já tem activation write-once, preservando aceites sem reescrever história.
+
 ## 6.0.9
 
 - Fix: `gauntlet-prepare-switch --released-source` recupera um líder cujo processo foi parado e liberado pelo Orca sem archive somente quando dispatch, capability revogada, terminal, incarnation, worktree, liveness e recurso liberado formam um fence exato. A exceção não vale para resultados de atividades, que continuam exigindo transcript capturado antes de fechar `CLOSE_PENDING` ou aceitar qualquer evidência.
