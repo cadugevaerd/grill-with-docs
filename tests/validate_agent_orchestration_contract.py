@@ -59,6 +59,27 @@ def release_source(dispatch="ctx-1"):
     return pack({"ok": True, "result": {"dispatchId": dispatch, "state": "released", "processAction": "closed_agent_terminal", "archive": {"status": "captured"}}})
 
 
+def takeover_show(dispatch_id, *, status=None, revoked=None, liveness=None):
+    """T007: a worker-show reply for _takeover_observation (grill_workspace.py).
+
+    observe_predecessor_termination (agent_runtime.py) parses this raw response
+    through the enveloped ``{"ok": true, "result": {...}}`` shape every other
+    native worker-show fixture in this file uses (native_show/native_sources).
+    _takeover_observation's own dispatch.status/liveness extraction -- the
+    signal gauntlet-context-takeover uses to tell TAKEOVER-LEADER-ACTIVE apart
+    from TAKEOVER-EVIDENCE-UNPROVEN -- re-parses the SAME bytes but reads
+    "dispatch"/"projection" off the top level, unenveloped. Both are genuine
+    parses of one real CLI response, so the fields are mirrored at both levels
+    here rather than picking one shape and leaving the other reader starved.
+    """
+    dispatch = {"id": dispatch_id}
+    if status is not None:
+        dispatch["status"] = status
+    dispatch["capabilityRevokedAt"] = revoked
+    payload = {"dispatch": dispatch, "projection": {"liveness": liveness} if liveness is not None else {}}
+    return json.dumps({"ok": True, "result": payload, **payload}).encode()
+
+
 class AgentOrchestrationContract(unittest.TestCase):
     def test_current_leader_adapter_and_exact_read_sources(self):
         core = grill_workspace.grill_core_module("agent_runtime")
@@ -228,10 +249,35 @@ class AgentOrchestrationContract(unittest.TestCase):
                 for command in commands:
                     with self.subTest(command=command[0], case="absent"):
                         self.assertEqual(invoke(command)[1]["code"], "STYLE-LOAD-UNCONFIRMED")
+            # T005/FR-006: exercised on a disposable, freshly-adopted work item
+            # (created here, before _session_readiness is mocked below, since
+            # init still needs full presentation) so the shared "work-x" context
+            # this test keeps reusing below stays ACTIVE -- gauntlet-prepare-switch
+            # commits a real QUIESCING transition (checkpoint, operation,
+            # worktree_identity) once it succeeds, and the Store's history is
+            # append-only, so that would not be safely reversible in place.
+            code, seeded = self.run_cli("init", str(root), "--work-id", "work-quiescing-check", "--type", "feature",
+                "--slug", "work-quiescing-check", "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION,
+                "--skip-backlog")
+            self.assertEqual(code, 0, seeded)
+            quiescing_context_id = store.read_snapshot(root).document["agent_orchestration"]["work_items"][
+                "work-quiescing-check"]["current_context_id"]
             with mock.patch.object(grill_workspace, "_session_readiness", side_effect=AssertionError("cleanup requires style")):
                 code, cleaned = invoke(("gauntlet-cleanup", "--context-id", context_id, "--epoch", "1"))
                 self.assertEqual((code, cleaned["verdict"]), (0, "CLEANED"))
-                self.assertEqual(invoke(("gauntlet-prepare-switch", "--context-id", context_id, "--epoch", "1", "--to-runtime", "claude"))[1]["code"], "CONTINUITY-CHECKPOINT-MISSING")
+                # A fresh work item has no committed checkpoint yet (checkpoint_head
+                # is None), so this no longer refuses with CONTINUITY-CHECKPOINT-MISSING
+                # -- it succeeds and projects an initial checkpoint from the current
+                # state instead. The refusal still applies to a *declared but
+                # unknown* checkpoint_head (a string that doesn't resolve inside
+                # checkpoints); that branch is covered on its own in
+                # test_prepare_switch_refuses_declared_but_unknown_checkpoint, since
+                # the Store itself refuses to persist a document shaped that way
+                # through any legitimate write (see p02-a's T005 notes).
+                code, prepared = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-quiescing-check",
+                    "--session-ref", orchestration_fixture.SESSION, "--context-id", quiescing_context_id,
+                    "--epoch", "1", "--to-runtime", "claude")
+                self.assertEqual((code, prepared.get("verdict")), (0, "QUIESCING"), prepared)
             def restore(document):
                 document["agent_orchestration"]["work_items"]["work-x"]["contexts"][context_id] = copy.deepcopy(context)
                 return document
@@ -1024,6 +1070,209 @@ class AgentOrchestrationContract(unittest.TestCase):
                         "--context-id", destination["context_id"], "--epoch", "2", "--session-ref", session,
                         "--step", "implement-parallel")
                     self.assertEqual(code, 0, entered)
+
+    def test_prepare_switch_refuses_declared_but_unknown_checkpoint(self):
+        """T005: only the "no checkpoint at all yet" branch (checkpoint_head is
+        None) was relaxed to synthesize one (FR-006, see
+        test_every_work_entry_reobserves_authority_and_requires_presentation).
+        A checkpoint_head that IS set but does not resolve inside checkpoints
+        still refuses CONTINUITY-CHECKPOINT-MISSING. validate_block already
+        refuses to persist a document shaped that way through any real write
+        (p02-a's own T005 finding), so this stubs store.read_snapshot for one
+        call instead of writing it to disk."""
+        temp, root = self.fixture()
+        store_module = grill_workspace.grill_core_module("store")
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            code, created = self.run_cli("init", str(root), "--work-id", "work-x", "--type", "feature",
+                "--slug", "x", "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            real = store_module.read_snapshot(root)
+            context_id = real.document["agent_orchestration"]["work_items"]["work-x"]["current_context_id"]
+            tampered = copy.deepcopy(real.document)
+            tampered["agent_orchestration"]["work_items"]["work-x"]["checkpoint_head"] = "cp-declared-but-unknown"
+            stub = store_module.Snapshot(document=tampered, revision=real.revision,
+                content_sha256=real.content_sha256, project_id=real.project_id, path=real.path)
+            with mock.patch.object(store_module, "read_snapshot", return_value=stub):
+                code, blocked = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-x",
+                    "--context-id", context_id, "--epoch", "1", "--session-ref", orchestration_fixture.SESSION,
+                    "--to-runtime", "claude")
+                self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-CHECKPOINT-MISSING"), blocked)
+
+    def test_context_takeover(self):
+        """T007: gauntlet-context-takeover accepts a takeover only on a proven
+        terminal observation of the predecessor dispatch, refuses every live or
+        inconclusive signal with its own code, preview and apply agree on every
+        verdict, preview never writes, a stale hash is refused and an identical
+        replay short-circuits without re-observing (contracts/context-takeover.md)."""
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            old_session = orchestration_fixture.SESSION
+            old_dispatch = old_session.removeprefix("orca:")
+
+            def spawn(work_id):
+                code, created = self.run_cli("init", str(root), "--work-id", work_id, "--type", "feature",
+                    "--slug", work_id, "--runtime", "codex", "--session-ref", old_session, "--skip-backlog")
+                self.assertEqual(code, 0, created)
+                item = store.read_snapshot(root).document["agent_orchestration"]["work_items"][work_id]
+                return item["current_context_id"]
+
+            def takeover(work_id, new_session, *tail):
+                return self.run_cli("gauntlet-context-takeover", str(root), "--work-id", work_id,
+                                    "--session-ref", new_session, *tail)
+
+            real_run = subprocess.run
+
+            def guarded_run(raw):
+                # Only the orca worker-show call _takeover_observation issues is
+                # synthetic (or forbidden, when raw is None); every other
+                # subprocess call (git, via store.read_snapshot et al.) still
+                # runs for real -- it must pass through untouched either way.
+                def run(cmd, **kwargs):
+                    if isinstance(cmd, list) and "worker-show" in cmd:
+                        if raw is None:
+                            raise AssertionError("observation must not run here")
+                        return subprocess.CompletedProcess(cmd, 0, stdout=raw)
+                    return real_run(cmd, **kwargs)
+                return mock.patch.object(subprocess, "run", side_effect=run)
+
+            def observing(raw):
+                return mock.patch.dict(os.environ, {"ORCA_TERMINAL_HANDLE": "term-fixture"}), guarded_run(raw)
+
+            def assert_refused_and_unwritten(work_id, new_session, code_, raw=None):
+                context = observing(raw) if raw is not None else (guarded_run(None),)
+                with contextlib.ExitStack() as stack:
+                    for manager in context:
+                        stack.enter_context(manager)
+                    before = store.read_snapshot(root).content_sha256
+                    for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                        with self.subTest(work_id=work_id, code=code_, apply=bool(tail)):
+                            status, blocked = takeover(work_id, new_session, *tail)
+                            self.assertEqual((status, blocked.get("code")), (2, code_), blocked)
+                    self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            # -- three independent, real reasons observe_predecessor_termination
+            # calls the predecessor terminal; every one accepts the takeover. --
+            terminal = {
+                "status": (takeover_show(old_dispatch, status="completed",
+                    liveness={"verdict": "live", "source": "agent_status"}), "completed"),
+                "revoked": (takeover_show(old_dispatch, status="dispatched",
+                    revoked="2026-01-01T00:00:00Z"), "dispatched"),
+                "exited": (takeover_show(old_dispatch, status="dispatched",
+                    liveness={"verdict": "exited", "source": "agent_status"}), "dispatched"),
+            }
+            for label, (raw, expected_status) in terminal.items():
+                work_id = "work-terminal-" + label
+                old_context_id = spawn(work_id)
+                new_session = "orca:ctx-new-" + label
+                env, transport = observing(raw)
+                with self.subTest(case=label), env, transport:
+                    before = store.read_snapshot(root).content_sha256
+                    code, preview = takeover(work_id, new_session)
+                    self.assertEqual((code, preview.get("verdict")), (0, "TAKEOVER-PREVIEW"), preview)
+                    self.assertEqual(store.read_snapshot(root).content_sha256, before)
+                    code, applied = takeover(work_id, new_session, "--apply", "--expected-sha256", preview["expected_sha256"])
+                    self.assertEqual((code, applied.get("verdict")), (0, "TAKEOVER-APPLIED"), applied)
+                    self.assertEqual(applied["from_context_id"], old_context_id)
+                    self.assertEqual(applied["succession"]["reason"], "takeover")
+                    self.assertEqual(applied["succession"]["evidence"]["dispatch_status"], expected_status)
+                    document = store.read_snapshot(root).document["agent_orchestration"]["work_items"][work_id]
+                    self.assertEqual(document["contexts"][old_context_id]["state"], "SUPERSEDED")
+                    new_context = document["contexts"][applied["context_id"]]
+                    self.assertEqual((new_context["state"], new_context["leader"]["session_ref"]), ("ACTIVE", new_session))
+            applied_work_id, applied_session = "work-terminal-status", "orca:ctx-new-status"
+
+            # -- a live dispatch refuses distinctly from an inconclusive one. --
+            spawn("work-leader-active")
+            assert_refused_and_unwritten("work-leader-active", "orca:ctx-new-active", "TAKEOVER-LEADER-ACTIVE",
+                takeover_show(old_dispatch, status="dispatched", liveness={"verdict": "live", "source": "agent_status"}))
+
+            # -- every inconclusive shape of the observation refuses the same way. --
+            spawn("work-evidence-absent")
+            with mock.patch.dict(os.environ, clear=False):
+                os.environ.pop("ORCA_TERMINAL_HANDLE", None)
+                assert_refused_and_unwritten("work-evidence-absent", "orca:ctx-new-absent", "TAKEOVER-EVIDENCE-UNPROVEN")
+            for label, raw in (
+                ("illegible", b"\xff\xfe\x00not-utf8"),
+                ("invalid-json", b"not a json document at all"),
+                ("uncorrelated", takeover_show("some-other-dispatch", status="dispatched")),
+                ("liveness-unverifiable", takeover_show(old_dispatch, status=None, liveness={"verdict": "unverifiable"})),
+            ):
+                work_id = "work-evidence-" + label
+                spawn(work_id)
+                assert_refused_and_unwritten(work_id, "orca:ctx-new-" + label, "TAKEOVER-EVIDENCE-UNPROVEN", raw)
+
+            # -- a session_ref the adapter cannot even shape a query out of.
+            # A legitimate init always observes the LeaderBoundary form (same
+            # regex as observe_predecessor_termination), so this can only be a
+            # pre-existing binding -- built directly, like the seeded store
+            # fixtures elsewhere in this file, rather than mutating one that
+            # went through init (the Store's write-once transition guard
+            # refuses a live context's leader identity changing underfoot). --
+            import validate_orchestrator_store_contract as seed
+            legacy_context = seed.ORCHESTRATION_CONTEXT()
+            legacy_context["leader"]["session_ref"] = "orca:legacy-worker-1"
+            legacy_item = seed.ORCHESTRATION_ITEM({"ctx-1": legacy_context})
+            def add_legacy_item(document):
+                document["agent_orchestration"]["work_items"]["work-not-observable"] = legacy_item
+                return document
+            store.transact(root, add_legacy_item)
+            assert_refused_and_unwritten("work-not-observable", "orca:ctx-new-unobservable", "TAKEOVER-NOT-OBSERVABLE")
+
+            # -- specialist activity still in flight refuses even a terminal observation. --
+            active_context_id = spawn("work-active")
+            active_policy_sha256 = store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-active"]["policy_sha256"]
+            activity = seed.ORCHESTRATION_ACTIVITY("activity-live")
+            activity.update(context_id=active_context_id, state="BOOTSTRAPPING", policy_sha256=active_policy_sha256)
+            def add_activity(document):
+                document["agent_orchestration"]["work_items"]["work-active"]["activities"]["activity-live"] = activity
+                return document
+            store.transact(root, add_activity)
+            assert_refused_and_unwritten("work-active", "orca:ctx-new-work", "TAKEOVER-WORK-ACTIVE",
+                takeover_show(old_dispatch, status="completed"))
+
+            # -- a reread hash mismatch on --apply refuses without writing. --
+            spawn("work-stale")
+            env, transport = observing(takeover_show(old_dispatch, status="completed",
+                liveness={"verdict": "live", "source": "agent_status"}))
+            with env, transport:
+                code, preview = takeover("work-stale", "orca:ctx-new-stale")
+                self.assertEqual(code, 0, preview)
+                before = store.read_snapshot(root).content_sha256
+                code, blocked = takeover("work-stale", "orca:ctx-new-stale", "--apply", "--expected-sha256", "0" * 64)
+                self.assertEqual((code, blocked.get("code")), (2, "TAKEOVER-INPUTS-STALE"), blocked)
+                self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            # -- an identical, already-applied request short-circuits: no re-observation. --
+            before = store.read_snapshot(root).content_sha256
+            with guarded_run(None):
+                for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                    code, reused = takeover(applied_work_id, applied_session, *tail)
+                    self.assertEqual((code, reused.get("verdict")), (0, "TAKEOVER-REUSED"), reused)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+    def test_orchestration_adopt_preview_matches_apply_when_context_fenced(self):
+        """T006/T007: a preview against a work item already bound to another
+        observed leader refuses CONTEXT-FENCED exactly like --apply would, and
+        writes nothing either way (contracts/context-takeover.md parity note)."""
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            code, created = self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x",
+                "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            args = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex",
+                    "--session-ref", orchestration_fixture.SESSION, "--scope-file", "src/a.py")
+            code, preview = self.run_cli(*args)
+            self.assertEqual(code, 0, preview)
+            code, adopted = self.run_cli(*args, "--apply", "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, adopted.get("verdict")), (0, "ORCHESTRATION-ADOPTED"), adopted)
+            before = store.read_snapshot(root).content_sha256
+            other = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex",
+                     "--session-ref", "orca:ctx-other-leader", "--scope-file", "src/a.py")
+            for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                code, fenced = self.run_cli(*other, *tail)
+                self.assertEqual((code, fenced.get("code")), (2, "CONTEXT-FENCED"), fenced)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
 
     def boundary(self, probe=None, after=None, release=None, adapter="orca", capabilities=None, calls=None):
         probe = probe or native_sources()
