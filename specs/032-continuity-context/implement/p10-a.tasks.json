@@ -1,0 +1,72 @@
+{
+  "worker": "p10-a",
+  "feature": "032-continuity-context",
+  "completed": ["T036", "T037", "T038"],
+  "tasks": {
+    "T036": {
+      "status": "done",
+      "summary": "Caso irmao do 'work-restamp', no mesmo metodo test_context_takeover: work-divergent e carimbado por um gauntlet-prepare-switch (QUIESCING, estado que a tomada aceita) e entao um campo ESTRUTURAL do carimbo selado -- real_path -- e movido, em vez de fase e branch. Preview e --apply exigem (2, 'TAKEOVER-IDENTITY-DIVERGENT') e o content_sha256 do store e comparado antes/depois com a leitura real. worktree_identity e campo imutavel de contexto: store.transact recusa a reescrita com ORCHESTRATOR_INVALID 'context immutable field changed' (verificado por execucao), entao a divergencia e entregue por um unico read stubbado, a mesma tecnica de test_prepare_switch_refuses_declared_but_unknown_checkpoint; a verificacao de 'nada foi escrito' le o arquivo de verdade, fora do stub.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    },
+    "T037": {
+      "status": "done",
+      "summary": "Segundo emissor do estado de desenvolvimento projetado passa a ser observado. Em test_every_work_entry_reobserves_authority_and_requires_presentation, novo work item 'work-confirm-projection' roda o verbo 'checkpoint' (--operation-id + --session-ref, caminho orquestrado de _commit_orchestrated_checkpoint) ate o veredito UPDATED; o checkpoint e relido do store pelo checkpoint_head e confrontado com o estado vivo lido de volta por read_development_state -- nunca contra literais: development_sequence (isinstance list, nao vazio, igual a development['sequence']), current_step, step_states, accepted_outputs e accepted_executions, mais schema v2 e checkpoint_id igual ao da resposta.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    },
+    "T038": {
+      "status": "done",
+      "summary": "No caso 'work-restamp', o try abre logo depois de capturar original_branch: o 'git checkout -b a-branch-nobody-was-on' e a reescrita do state.json ficaram dentro do bloco protegido, e o checkout de restauracao no finally passou de check=True para check=False, para que uma falha na restauracao nao mascare a assercao que de fato quebrou.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    }
+  },
+  "extra_coverage": {
+    "summary": "Lacuna sinalizada pelo worker do codigo: nem o defeito nem a correcao de T034 e T035 tinham carga de teste. Coberta aqui, dentro do mesmo grant.",
+    "T034": {
+      "where": "test_cleanup_candidate_guard_and_resources_retained_elsewhere",
+      "summary": "payload_for ganhou seletor e activities. Caso (4): limpeza dirigida a 'activity-mine', com recurso proprio CLOSED+aceito dessa atividade e recurso aberto do predecessor ('ctx-old') em OUTRA atividade -- exige (0, 'CLEANED'), retained vazio e resources apenas com o recurso proprio. Caso (5): o mesmo recurso do predecessor agora NA atividade pedida -- exige (2, 'PRESERVED') e retained com ele, provando que o escopo e filtro e nao mudez."
+    },
+    "T035": {
+      "where": "test_continuity_siblings_judge_only_the_structural_tuple e test_continuity_resume_judges_only_the_structural_tuple",
+      "summary": "prepare-switch: work-sibling e carimbado, a arvore viva move fase (state.json) e branch (checkout -b, dentro de try/finally com restauracao check=False), e a segunda chamada tem de chegar a (0, 'SWITCH-PREPARED') -- a checagem de identidade roda antes do reuso idempotente da operacao, entao alcancar o veredito ja e a prova. A recusa usa um work item novo (work-sibling-moved), porque o primeiro ja comitou o switch e seu contexto RELEASED recusaria antes, por autoridade: com _continuity_identity devolvendo um real_path movido -- a divergencia produzida no lado VIVO, onde producao a produz --, exige (2, 'CONTINUITY-STATE-DIVERGENCE') e store inalterado. resume: fixture sembrada RELEASED (a mesma de test_public_continuity_resume_observes_destination_before_commit), em duas fixtures independentes; carimbo com phase/branch defasados tem de chegar a (0, 'PREVIEW'); carimbo com real_path movido tem de recusar (2, 'CONTINUITY-STATE-DIVERGENCE') sem escrever -- e nesse caso nem precisa de boundary, porque a checagem de identidade roda antes de qualquer observacao de lider."
+    }
+  },
+  "reversions": {
+    "note": "Cada reversao foi aplicada em plugin/skills/grill-with-docs/scripts/grill_workspace.py, a suite rodada, e o arquivo restaurado com git checkout -- <caminho>. plugin/ esta fora do grant; nenhuma alteracao de produto sobreviveu.",
+    "results": [
+      {
+        "target": "T036 -- raise TAKEOVER-IDENTITY-DIVERGENT apagado inteiro (guarda deletada, nao relaxada)",
+        "result": "FAILED (failures=1), test_context_takeover: AssertionError: Tuples differ: (0, None) != (2, 'TAKEOVER-IDENTITY-DIVERGENT'); a tomada respondeu TAKEOVER-PREVIEW sobre a arvore divergente. Antes deste caso, a mesma delecao fechava a suite verde."
+      },
+      {
+        "target": "T037 -- emissor de checkpoint_command regredido para o mapa v1 ('development_sequence': development['steps'])",
+        "result": "FAILED (failures=1), test_every_work_entry_reobserves_authority_and_requires_presentation: AssertionError: {'analyze': 'pending', ... 'specify': 'in-progress', ...} is not an instance of <class 'list'>. Apenas o segundo emissor foi mexido; o inicial ficou intacto."
+      },
+      {
+        "target": "T034 -- filtro in_scope removido (retained coletado antes da discriminacao por seletor)",
+        "result": "FAILED (failures=1), test_cleanup_candidate_guard_and_resources_retained_elsewhere: AssertionError: Tuples differ: (2, 'PRESERVED', [{'code': 'RESOURCE-RETAI...'}]) != (0, 'CLEANED', []). E exatamente o rebaixamento permanente descrito em R4-1."
+      },
+      {
+        "target": "T035 (a) -- irmaos voltando a comparar a identidade inteira (sealed != identity no prepare-switch; == identity nas duas comparacoes do resume)",
+        "result": "FAILED (failures=2): test_continuity_siblings_judge_only_the_structural_tuple (2, 'BLOCKED') != (0, 'SWITCH-PREPARED') e test_continuity_resume_judges_only_the_structural_tuple[stale-phase-and-branch] (2, 'BLOCKED') != (0, 'PREVIEW')."
+      },
+      {
+        "target": "T035 (b) -- as duas guardas irmas apagadas por inteiro, para provar que o lado da recusa tambem esta coberto",
+        "result": "FAILED (failures=2): test_continuity_siblings_judge_only_the_structural_tuple (0, None) != (2, 'CONTINUITY-STATE-DIVERGENCE') e test_continuity_resume_judges_only_the_structural_tuple[structural] (2, 'GAUNTLET-NOT-ACTIVATED') != (2, 'CONTINUITY-STATE-DIVERGENCE') -- sem a guarda, o resume segue adiante e so morre depois, por outro motivo."
+      },
+      {
+        "target": "T038 -- sem reversao de produto possivel (correcao estrutural do proprio teste). Verificado por injecao de falha: um raise entre o checkout e a reescrita do state.json",
+        "result": "FAILED (failures=1) com 'BRANCH-AFTER-FINALLY: master' -- o finally executou e devolveu a arvore. Com a ordenacao anterior o raise ficava fora do try e a branch 'a-branch-nobody-was-on' permanecia ativa. Injecao e print removidos depois; arquivo restaurado da copia e suite reexecutada verde."
+      }
+    ]
+  },
+  "verification": {
+    "commands": [
+      {"command": "python3 tests/validate_agent_orchestration_contract.py", "result": "Ran 39 tests, OK, exit 0"}
+    ],
+    "notes": "tests/run_validators.py nao foi rodado, conforme o brief. Contagem passou de 37 para 39: os dois metodos novos de T035. Nenhum caso existente foi afrouxado; os unicos ajustes em casos existentes sao o try/finally de T038 e a assinatura de payload_for, que ganhou parametros opcionais e mantem todas as chamadas anteriores."
+  },
+  "files_touched": [
+    "tests/validate_agent_orchestration_contract.py",
+    "specs/032-continuity-context/implement/p10-a.tasks.json"
+  ]
+}
