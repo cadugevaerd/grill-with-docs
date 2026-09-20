@@ -2,7 +2,7 @@
   "deferred_to_leader": [
     "T013"
   ],
-  "dispatchable_tasks": 42,
+  "dispatchable_tasks": 46,
   "feature": "032-continuity-context",
   "max_workers": 3,
   "nodes": [
@@ -215,6 +215,26 @@
         "T042",
         "T043"
       ]
+    },
+    {
+      "id": "p12-a",
+      "parallel": true,
+      "phase": 12,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T044",
+        "T045",
+        "T047"
+      ]
+    },
+    {
+      "id": "p12-b",
+      "parallel": true,
+      "phase": 12,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T046"
+      ]
     }
   ],
   "phases": [
@@ -319,11 +339,22 @@
       "tasks": 4,
       "title": "Convergence",
       "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 12,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 4,
+      "title": "Convergence",
+      "unmapped_tasks": 0
     }
   ],
   "requested_groups": 3,
   "schema": "grill-partition-report/v1",
-  "tasks": 43,
+  "tasks": 47,
   "unmapped_task_ids": [],
   "verdict": "PARTITION-DEGRADED"
 }
