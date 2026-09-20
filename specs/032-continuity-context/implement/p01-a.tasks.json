@@ -1,0 +1,12 @@
+{
+  "worker": "p01-a",
+  "feature": "032-continuity-context",
+  "completed": ["T001"],
+  "tasks": {
+    "T001": {
+      "status": "done",
+      "summary": "Adicionada CHECKPOINT_SCHEMA_V2 = 'grill-continuity-checkpoint/v2' ao lado de CHECKPOINT_SCHEMA (v1, inalterada) em agent_orchestration.py. _checkpoint() agora resolve o par de campos de digest ('workflow_sha256'/'constitution_sha256' para v1, 'context_inputs_sha256'/'origin_metadata_sha256' para v2) por lookup direto em _CHECKPOINT_DIGEST_FIELDS[value['schema']] -- uma unica escolha determinada pelo schema do documento, nunca tenta um conjunto e cai no outro. Schema fora do dict continua recusando com 'invalid checkpoint schema'. Comentario acima da tabela documenta que ambos os pares carregam o mesmo conteudo real (digest das entradas do contexto e digest dos metadados de origem do work item), so os nomes v1 sao legados. DECISAO DE ESCOPO: a emissao (grill_workspace.py, fora do meu grant) continua usando contract.CHECKPOINT_SCHEMA (v1) e nao foi trocada para CHECKPOINT_SCHEMA_V2, porque tests/validate_checkpoint_contract.py:143 (CommittedCheckpointContract.test_content_wal_recovers_state_and_commits_head) fixa literalmente 'schema': contract.CHECKPOINT_SCHEMA junto com os nomes de campo v1 (workflow_sha256/constitution_sha256); trocar o valor de CHECKPOINT_SCHEMA quebraria esse teste, que nao devo editar. A validacao aceita as duas versoes; a troca da constante usada na emissao fica para o worker que tocar grill_workspace.py.",
+      "evidence": "python3 tests/validate_agent_orchestration_contract.py -> Ran 33 tests, OK. python3 tests/validate_orchestrator_store_contract.py -> Ran 130 tests, OK. Nenhum teste editado."
+    }
+  }
+}

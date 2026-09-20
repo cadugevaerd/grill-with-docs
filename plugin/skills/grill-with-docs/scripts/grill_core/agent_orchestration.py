@@ -25,6 +25,11 @@ except ImportError:
 SCHEMA = "grill-agent-orchestration/v1"
 EVENT_SCHEMA = "grill-orchestration-event/v1"
 CHECKPOINT_SCHEMA = "grill-continuity-checkpoint/v1"
+# v2 renames two v1 fields; emission still uses CHECKPOINT_SCHEMA (v1) because
+# validate_checkpoint_contract.py fixes that constant literally against v1
+# field names. Validation below accepts both, keyed off the document's own
+# "schema" value. See specs/032-continuity-context/contracts/continuity-checkpoint-v2.md.
+CHECKPOINT_SCHEMA_V2 = "grill-continuity-checkpoint/v2"
 CHECKPOINT_REQUEST_SCHEMA = "grill-checkpoint-request/v1"
 CHECKPOINT_CONTENT_SCHEMA = "grill-checkpoint-content/v1"
 MAX_CHECKPOINT_STATE_BYTES = 8 * 1024 * 1024
@@ -666,16 +671,30 @@ def _checkpoint_digest(value: dict[str, Any]) -> str:
     return jcs_sha256(payload)
 
 
+# Per-schema digest field names: first entry carries the context-inputs
+# digest (v1: workflow_sha256, v2: context_inputs_sha256 = context["inputs_sha256"]);
+# second carries the work item's origin-metadata digest (v1: constitution_sha256,
+# v2: origin_metadata_sha256 = item["origin"]["metadata_sha256"]). Same content
+# either way, only the v1 names were historical.
+_CHECKPOINT_DIGEST_FIELDS = {
+    CHECKPOINT_SCHEMA: ("workflow_sha256", "constitution_sha256"),
+    CHECKPOINT_SCHEMA_V2: ("context_inputs_sha256", "origin_metadata_sha256"),
+}
+
+
 def _checkpoint(checkpoint_id: str, value: Any) -> None:
     _id(checkpoint_id, "checkpoint id")
-    required = {"schema", "checkpoint_id", "context_id", "previous_checkpoint_id", "worktree_identity", "created_at", "store_revision", "journal_anchor", "state_sha256", "inputs_manifest", "workflow_sha256", "constitution_sha256", "policy_sha256", "activation", "campaign", "development_sequence", "current_step", "step_states", "accepted_outputs", "accepted_executions", "pending_attempts", "scheduler_runs", "operations", "cleanup_obligations", "preserved_resources", "blocking_activity", "visual_state", "presentation", "checkpoint_sha256"}
+    if not isinstance(value, dict) or value.get("schema") not in _CHECKPOINT_DIGEST_FIELDS:
+        _fail("invalid checkpoint schema")
+    inputs_field, origin_field = _CHECKPOINT_DIGEST_FIELDS[value["schema"]]
+    required = {"schema", "checkpoint_id", "context_id", "previous_checkpoint_id", "worktree_identity", "created_at", "store_revision", "journal_anchor", "state_sha256", "inputs_manifest", inputs_field, origin_field, "policy_sha256", "activation", "campaign", "development_sequence", "current_step", "step_states", "accepted_outputs", "accepted_executions", "pending_attempts", "scheduler_runs", "operations", "cleanup_obligations", "preserved_resources", "blocking_activity", "visual_state", "presentation", "checkpoint_sha256"}
     value = _object(value, required, set(), "checkpoint")
-    if value["schema"] != CHECKPOINT_SCHEMA or value["checkpoint_id"] != checkpoint_id or type(value["store_revision"]) is not int or value["store_revision"] < 0:
+    if value["checkpoint_id"] != checkpoint_id or type(value["store_revision"]) is not int or value["store_revision"] < 0:
         _fail("invalid checkpoint")
     _id(value["context_id"], "checkpoint context")
     _text(value["previous_checkpoint_id"], "checkpoint previous_checkpoint_id", nullable=True)
     _text(value["created_at"], "checkpoint created_at")
-    for key in ("state_sha256", "workflow_sha256", "constitution_sha256", "policy_sha256", "checkpoint_sha256"):
+    for key in ("state_sha256", inputs_field, origin_field, "policy_sha256", "checkpoint_sha256"):
         _digest(value[key], f"checkpoint {key}")
     for key in ("worktree_identity", "journal_anchor", "inputs_manifest", "step_states", "accepted_outputs", "accepted_executions", "pending_attempts", "scheduler_runs", "operations", "cleanup_obligations", "preserved_resources", "visual_state"):
         if not isinstance(value[key], dict): _fail(f"invalid checkpoint {key}")
