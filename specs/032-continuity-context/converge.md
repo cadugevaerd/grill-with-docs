@@ -355,3 +355,51 @@ m1 é consequência de J1 e J2 e se resolve junto. m2 — `sealed is None` aceit
 ## Próxima ação
 
 Quatro tarefas em `## Phase 9: Convergence`. Executar `implement-parallel` e reconvergir.
+
+---
+
+# Rodada 8 — 2026-09-20, após a Phase 9
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T033), constituição · **Desfecho**: `converged`
+
+Phase 9 entregue pelos nós `p09-a` e `p09-b` da run `run-de9b8afd4321a379178c64fb`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 7
+
+| Achado | Situação | Prova |
+|---|---|---|
+| J1 e J2 — `phase` e `branch` no predicado (CRITICAL) | **fechado** | `grill_workspace.py:3730` compara apenas `("project_id", "work_id", "du", "git_common_dir", "real_path")`. A identidade derivada segue sendo gravada no sucessor, então a tomada **recarimba** fase e branch em vez de recusar |
+| J3 — contador inflado por recurso de outro contexto | **fechado** | O filtro de `origin_context_id` foi separado e vem **antes** do incremento; o recurso de outro contexto vai para a lista `retained`, que rebaixa o veredito em vez de recusar a operação |
+| J4 — guarda sem teste | **fechado** | Caso novo cobrindo os dois lados, com quatro reversões verificadas |
+| J5 — estado projetado sem asserção | **fechado** | Asserções sobre sequência, etapa corrente e resultados aceitos, com verificação de que a sequência é lista |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Duas decisões do worker que corrigiram o enunciado
+
+**O texto de T032 estava desatualizado, e o worker percebeu.** A tarefa mandava semear, para o lado da recusa, "recurso cujo contexto de origem é outro". Mas isso **deixou de ser candidato** justamente por causa de T031, que entrou na mesma fase. O enunciado foi escrito antes de a correção existir. O worker usou o candidato que a guarda de fato protege hoje — recurso do próprio contexto sem atividade vinculada — e moveu o cenário original para os casos de relato. Ler o código em vez de obedecer à prosa é o comportamento correto, e fica registrado.
+
+**O caso de recarimbo é fiel à produção.** `worktree_identity` é campo imutável no store, então não havia como alterar o carimbo. Em vez de forçar, o worker moveu a **árvore viva**: `git checkout -b` real e `active_phase` novo no `state.json`, que é exatamente o que acontece quando um humano troca de branch depois de a sessão morrer. A branch original é restaurada no `finally`.
+
+## Sensibilidade verificada
+
+Quatro reversões, todas reprovando:
+
+- predicado de volta à identidade inteira → o caso `work-restamp` reprova com `TAKEOVER-IDENTITY-DIVERGENT`, que **é** o bloqueio permanente descrito no R3;
+- filtro de volta para depois do contador → o sucessor volta a ser recusado em vez de ter o veredito rebaixado;
+- guarda neutralizada → a seleção que não alcança nada volta a devolver sucesso, o buraco do R3-4;
+- guarda alargada de volta → reprova pelo lado do no-op legítimo.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1489** testes, 0 falhas, 2 skips condicionados a macOS. A contagem subiu de 1488 com o caso `work-restamp`.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R4.
