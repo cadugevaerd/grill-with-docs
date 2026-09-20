@@ -24,6 +24,7 @@
     "attested_executions": {
       "analyze": "se-196ab078abaa5484aeeb128524e505bd43e5b22da469bfc4fa6d08756db84fd7",
       "checklist": "se-200f8523aef027ad424fea76587c40b04bc22570883470a24a574eb1a25c6818",
+      "converge": "se-ee5d99fdb084f14c2a8ff46f220c47cc947af095f10e798302a47bd442925559",
       "implement-parallel": "se-b39fd980d756eacbcdfcf73e32b553d2ae48b2ce3b5794b54595f13d95e3d1aa",
       "partition": "se-6005632e27542d7864d0dd5ae212d4900bd22195216a9f60d7848c4c59c04392",
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
@@ -42,6 +43,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
+      },
+      "converge": {
+        "output_sha256": "sha256:9ded9e59b2c1554c620df866a322584d6b44e00417c2a4c7f16978e2444c4682",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-1.terminal.json",
+        "step_id": "converge"
       },
       "implement-parallel": {
         "output_sha256": "sha256:a8b9e5b66683ed8128b790e954d4dce3b241eceeba5dd30aff16a1b5cc142dfa",
@@ -267,10 +274,34 @@
         "state": "complete",
         "step": "implement-parallel",
         "supersedes": ".grill/attestations/032-implement-parallel.json"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/converge.md",
+            "sha256": "9ded9e59b2c1554c620df866a322584d6b44e00417c2a4c7f16978e2444c4682"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "",
+        "state": "in-progress",
+        "step": "converge"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/converge.md",
+            "sha256": "9ded9e59b2c1554c620df866a322584d6b44e00417c2a4c7f16978e2444c4682"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "",
+        "state": "complete",
+        "step": "converge"
       }
     ],
     "chain_stale": [],
-    "current_step": "converge",
+    "current_step": "verify",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -290,7 +321,7 @@
     "steps": {
       "analyze": "complete",
       "checklist": "complete",
-      "converge": "pending",
+      "converge": "complete",
       "implement-parallel": "complete",
       "partition": "complete",
       "plan": "complete",
