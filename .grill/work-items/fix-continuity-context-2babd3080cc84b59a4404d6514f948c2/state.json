@@ -30,7 +30,7 @@
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
       "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a",
       "tasks": "se-a7ab93f07b33ace8bcb5b3a0a2f7be0fd89990622ade7c18c5a4a96caf8d11ab",
-      "verify": "se-b89d1155fe750cbe8ac1baac68e103d146549924cb4b6788603b1d0a88a1713a"
+      "verify": "se-3ce6049223263558505e121faa55e1e3a6e30c4446a17903602fac77d4217e4c"
     },
     "attested_outputs": {
       "analyze": {
@@ -82,9 +82,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:92af17d65e9484b6162b260f097fc0c5fa510f15353684f3069ea08494c2f2e2",
+        "output_sha256": "sha256:565cf3565a2a97606d8b45d4e50487ac32144a2cbab9623d10118c43b0b1d9af",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-3.terminal.json",
         "step_id": "verify"
       }
     },
@@ -445,11 +445,23 @@
         "state": "complete",
         "step": "converge",
         "supersedes": ".grill/attestations/032-converge-r2.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/verify.md",
+            "sha256": "565cf3565a2a97606d8b45d4e50487ac32144a2cbab9623d10118c43b0b1d9af"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "verify R3 apos a Phase 8",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/032-verify-r2.json"
       }
     ],
-    "chain_stale": [
-      "verify"
-    ],
+    "chain_stale": [],
     "current_step": "review",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
@@ -623,6 +635,18 @@
           "step_execution_id": "se-5bb2ff037ea9e205c2e3ae9dda8ef7e7838daa7c7f0ad7753bc0a2209708c781",
           "step_id": "verify",
           "superseded_by_step_execution_id": "se-b89d1155fe750cbe8ac1baac68e103d146549924cb4b6788603b1d0a88a1713a"
+        },
+        {
+          "attempt_id": "verify-2",
+          "attestation": ".grill/attestations/032-verify-r2.json",
+          "execution_round": 2,
+          "output_sha256": "sha256:92af17d65e9484b6162b260f097fc0c5fa510f15353684f3069ea08494c2f2e2",
+          "provenance": "current-generation",
+          "reason": "verify R3 apos a Phase 8",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-2.terminal.json",
+          "step_execution_id": "se-b89d1155fe750cbe8ac1baac68e103d146549924cb4b6788603b1d0a88a1713a",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-3ce6049223263558505e121faa55e1e3a6e30c4446a17903602fac77d4217e4c"
         }
       ]
     },
