@@ -290,6 +290,25 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertEqual(initial["context_inputs_sha256"],
                                  seeded_item["contexts"][quiescing_context_id]["inputs_sha256"])
                 self.assertEqual(initial["origin_metadata_sha256"], seeded_item["origin"]["metadata_sha256"])
+                # T033/FR-011: the *projected development state*, which nothing
+                # else asserts. The store contract dropped the equivalent
+                # assertion when T029 stopped importing the CLI emitter, and its
+                # comment claims this case exercises it -- it did not: schema,
+                # identifiers and the two digests say nothing about what the
+                # emitter projected. And validate_block accepts a dict OR a list
+                # in development_sequence, so an emitter regressed to the v1 map
+                # would pass the whole suite. Read the live state back and
+                # require the checkpoint to carry it, in list form.
+                _, live_state = grill_workspace.read_development_state(
+                    root, grill_workspace.resolve_development_item(root, "work-quiescing-check"),
+                    "work-quiescing-check")
+                development = live_state["development"]
+                self.assertIsInstance(initial["development_sequence"], list)
+                self.assertTrue(initial["development_sequence"])
+                self.assertEqual(initial["development_sequence"], development["sequence"])
+                self.assertEqual(initial["current_step"], development.get("current_step"))
+                self.assertEqual(initial["accepted_outputs"], development.get("attested_outputs", {}))
+                self.assertEqual(initial["accepted_executions"], development.get("attested_executions", {}))
             def restore(document):
                 document["agent_orchestration"]["work_items"]["work-x"]["contexts"][context_id] = copy.deepcopy(context)
                 return document
@@ -776,6 +795,68 @@ class AgentOrchestrationContract(unittest.TestCase):
                     self.assertEqual((code, payload["verdict"], len(payload["resources"])), (2, "PRESERVED", 2))
                     self.assertEqual(cleanup.call_count, 2)
 
+    def test_cleanup_candidate_guard_and_resources_retained_elsewhere(self):
+        """T032/T031/FR-010/FR-011: the `candidates` guard of gauntlet-cleanup,
+        both sides, plus the successor case it used to deadlock.
+
+        R3-4 verified by execution that replacing the guard with `pass` left the
+        whole suite green: the only RESOURCE-IDENTITY-DIVERGENT exercised today
+        goes through --activity-id and is refused much earlier, by the activity
+        ownership check, so it never reaches the counter. Both sides matter --
+        without the zero-candidate case the guard could be widened back to
+        `selected and not results` without failing anything.
+
+        The third case is R3-3: a resource pinned by a *superseded* predecessor
+        is not a candidate of this selection at all. Counting it made the
+        successor's own cleanup refuse forever (T026 leaves no verb to reconcile
+        it). It must be reported in `retained` and drop the verdict, never
+        refuse the operation.
+        """
+        temporary, root = self.fixture()
+
+        def resource(origin, activity_id, state="REGISTERED"):
+            return {"kind": "session", "activity_id": activity_id, "origin_context_id": origin,
+                    "identity": {"handle": "term-1"}, "state": state, "result_acceptance_ref": None}
+
+        def payload_for(resources):
+            context = {"context_id": "ctx-1", "epoch": 1, "state": "ACTIVE", "scheduler_runs": {},
+                       "leader": {"state": "ACTIVE", "session_ref": "session-1"}}
+            item = {"current_context_id": "ctx-1", "contexts": {"ctx-1": context},
+                    "activities": {}, "resources": resources}
+            snapshot = SimpleNamespace(document={"agent_orchestration": {"work_items": {"wx": item}}})
+            with mock.patch.object(grill_workspace.grill_core_module("gauntlet_runs").store,
+                                   "read_snapshot", return_value=snapshot):
+                return self.run_cli("gauntlet-cleanup", str(root), "--work-id", "wx", "--context-id", "ctx-1",
+                                    "--epoch", "1", "--session-ref", "session-1")
+
+        with temporary:
+            # (1) Candidates exist and the selection reaches none of them: this
+            # context owns the resource, so it is counted, but it carries no
+            # activity_id and the filter skips it. Falling through to CLEANED
+            # would tell the caller a resource still open in the store had been
+            # closed.
+            code, refused = payload_for({"resource-orphan": resource("ctx-1", None)})
+            self.assertEqual((code, refused.get("code")), (2, "RESOURCE-IDENTITY-DIVERGENT"), refused)
+            # (2) No candidate at all: cleaning a context that owns nothing is a
+            # legitimate no-op, and the verdict stays a success.
+            code, empty = payload_for({})
+            self.assertEqual((code, empty["verdict"], empty["resources"], empty["retained"]), (0, "CLEANED", [], []))
+            # (3) R3-3: the successor of a takeover owns nothing; the open
+            # resource belongs to the SUPERSEDED predecessor and can never be
+            # closed from here. It is reported, not counted -- so no refusal --
+            # and the verdict stops being CLEANED.
+            code, retained = payload_for({"resource-predecessor": resource("ctx-old", "activity-1")})
+            self.assertEqual((code, retained["verdict"]), (2, "PRESERVED"), retained)
+            self.assertNotIn("code", retained)
+            self.assertEqual(retained["resources"], [])
+            self.assertEqual(retained["retained"], [{"resource_id": "resource-predecessor", "kind": "session",
+                                                     "state": "REGISTERED", "origin_context_id": "ctx-old",
+                                                     "code": "RESOURCE-RETAINED-ELSEWHERE"}])
+            # A predecessor resource already CLOSED is nothing to report, so it
+            # must not drag the verdict down either.
+            code, settled = payload_for({"resource-predecessor": resource("ctx-old", "activity-1", state="CLOSED")})
+            self.assertEqual((code, settled["verdict"], settled["retained"]), (0, "CLEANED", []), settled)
+
     def test_failed_or_unproven_cleaned_worker_never_unblocks_dependency(self):
         for state, converged in (("FAILED", True), ("CLEANED", False)):
             with self.subTest(state=state, converged=converged):
@@ -1254,6 +1335,53 @@ class AgentOrchestrationContract(unittest.TestCase):
             self.assertEqual((code, inherited.get("verdict")), (0, "TAKEOVER-APPLIED"), inherited)
             inherit_item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-inherit"]
             self.assertEqual(inherit_item["contexts"][inherited["context_id"]]["worktree_identity"], stamped)
+
+            # -- R3-1/R3-2/T030: `phase` and `branch` move during the normal
+            # life of a context (phase with every cycle step, branch by routine
+            # human action once nobody drives the tree), and only a successful
+            # takeover rewrites the stamp -- there is no re-stamp verb. While
+            # they were inside the compared identity, the takeover refused the
+            # very scenario it exists to cure, permanently. They must be
+            # re-stamped from the live derived identity instead. --
+            restamp_context_id = spawn("work-restamp")
+            code, quiescing = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-restamp",
+                "--session-ref", old_session, "--context-id", restamp_context_id, "--epoch", "1",
+                "--to-runtime", "claude")
+            self.assertEqual((code, quiescing.get("verdict")), (0, "QUIESCING"), quiescing)
+            sealed_identity = copy.deepcopy(store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-restamp"]["contexts"][restamp_context_id]["worktree_identity"])
+            # The stamp is immutable in the Store, so the *live* tree is what
+            # moves -- exactly as it does in production: the cycle advances a
+            # step and someone switches branch once the session is dead.
+            original_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                             check=True, capture_output=True, text=True).stdout.strip()
+            subprocess.run(["git", "-C", str(root), "checkout", "-q", "-b", "a-branch-nobody-was-on"], check=True)
+            state_path = root / ".grill" / "work-items" / "work-restamp" / "state.json"
+            aged = json.loads(state_path.read_text(encoding="utf-8"))
+            aged["active_phase"] = "a-later-step"
+            state_path.write_text(json.dumps(aged), encoding="utf-8")
+            try:
+                self.assertNotEqual((sealed_identity["phase"], sealed_identity["branch"]),
+                                    ("a-later-step", "a-branch-nobody-was-on"))
+                env, transport = observing(takeover_show(old_dispatch, status="completed"))
+                with env, transport:
+                    code, preview = takeover("work-restamp", "orca:ctx-new-restamp")
+                    self.assertEqual(code, 0, preview)
+                    code, restamped = takeover("work-restamp", "orca:ctx-new-restamp", "--apply",
+                                               "--expected-sha256", preview["expected_sha256"])
+                self.assertEqual((code, restamped.get("verdict")), (0, "TAKEOVER-APPLIED"), restamped)
+                restamp_item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-restamp"]
+                successor = restamp_item["contexts"][restamped["context_id"]]["worktree_identity"]
+                # The successor carries the *live* values, not the predecessor's
+                # stale copy; every structural field is preserved untouched.
+                self.assertEqual((successor["phase"], successor["branch"]),
+                                 ("a-later-step", "a-branch-nobody-was-on"))
+                self.assertEqual({key: successor[key] for key in
+                                  ("project_id", "work_id", "du", "git_common_dir", "real_path")},
+                                 {key: sealed_identity[key] for key in
+                                  ("project_id", "work_id", "du", "git_common_dir", "real_path")})
+            finally:
+                subprocess.run(["git", "-C", str(root), "checkout", "-q", original_branch], check=True)
 
             # -- a live dispatch refuses distinctly from an inconclusive one. --
             spawn("work-leader-active")
