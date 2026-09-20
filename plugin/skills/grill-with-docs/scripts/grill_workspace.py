@@ -3319,6 +3319,48 @@ def _released_activity_sessions(root: Path, item: dict[str, Any], work_id: str) 
     return released
 
 
+def _transferred_activity_sessions(item: dict[str, Any]) -> dict[str, tuple[str, str, dict[str, str]]]:
+    """Find abandoned dispatches whose exact terminal was closed by an accepted retry."""
+    physical = ("provider", "adapter", "host", "runtime_instance", "handle", "incarnation",
+                "dispatch_incarnation", "worktree_id")
+    recovered: dict[str, tuple[str, str, dict[str, str]]] = {}
+    activities, resources = item.get("activities", {}), item.get("resources", {})
+    for activity_id, activity in activities.items():
+        resource_id = activity.get("session_resource_id")
+        resource = resources.get(resource_id)
+        if (activity.get("state") != "DISPATCHED" or not isinstance(resource_id, str)
+                or not isinstance(resource, dict) or resource.get("kind") != "session"
+                or resource.get("state") != "REGISTERED" or resource.get("activity_id") != activity_id):
+            continue
+        identity = resource.get("identity", {})
+        matches = []
+        for successor_id, successor in activities.items():
+            successor_resource = resources.get(successor.get("session_resource_id"))
+            if (successor_id == activity_id or successor.get("state") != "ACCEPTED"
+                    or successor.get("context_id") != activity.get("context_id")
+                    or successor.get("activity_type") != activity.get("activity_type")
+                    or successor.get("step_id") != activity.get("step_id")
+                    or successor.get("author_activity_ids") != activity.get("author_activity_ids")
+                    or not isinstance(successor_resource, dict) or successor_resource.get("state") != "CLOSED"
+                    or successor_resource.get("activity_id") != successor_id
+                    or successor_resource.get("result_acceptance_ref") != successor.get("acceptance_ref")):
+                continue
+            successor_identity = successor_resource.get("identity", {})
+            if (any(identity.get(key) != successor_identity.get(key) for key in physical)
+                    or identity.get("owner_dispatch") == successor_identity.get("owner_dispatch")
+                    or resource.get("creation_observation", {}).get("collected_at", "")
+                       >= successor_resource.get("creation_observation", {}).get("collected_at", "")):
+                continue
+            observation_ref = successor_resource.get("last_observation")
+            receipts = [receipt for receipt in successor_resource.get("evidence_manifest", {}).get("receipts", [])
+                        if receipt.get("ref") == observation_ref]
+            if len(receipts) == 1:
+                matches.append((resource_id, successor_id, copy.deepcopy(receipts[0])))
+        if len(matches) == 1:
+            recovered[activity_id] = matches[0]
+    return recovered
+
+
 def _continuity_operation(item: dict[str, Any], context_id: str, to_runtime: str) -> tuple[str, dict[str, Any]] | None:
     matches = [(operation_id, operation) for operation_id, operation in item.get("operations", {}).items()
                if operation.get("kind") == "continuity-switch" and operation.get("context_id") == context_id
@@ -3373,6 +3415,7 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
     if released is None:
         _require_current_leader(root, args.work_id, context, args.session_ref)
     released_sessions = _released_activity_sessions(root, item, args.work_id) if released is not None else {}
+    transferred_sessions = _transferred_activity_sessions(item) if released is not None else {}
     identity = _continuity_identity(root, args.work_id, read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1])
     if context.get("worktree_identity") not in (None, identity):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "worktree identity changed")
@@ -3411,7 +3454,8 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
         checkpoint_id = operation.get("expected_before", {}).get("checkpoint_id")
         if not isinstance(checkpoint_id, str):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", operation_id)
-    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id, set(released_sessions))
+    quiet_sessions = set(released_sessions) | set(transferred_sessions)
+    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id, quiet_sessions)
     began_active = context["state"] == "ACTIVE"
     def mutate(document: dict[str, Any]) -> dict[str, Any]:
         target = document["agent_orchestration"]["work_items"][args.work_id]
@@ -3438,6 +3482,20 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
                                  "accepted_by_context": source["context_id"],
                                  "acceptance_ref": activity["result_ref"],
                                  "review_verdict": "APPROVED", "state": "ACCEPTED"})
+        for activity_id, (resource_id, successor_id, receipt) in transferred_sessions.items():
+            activity = target["activities"].get(activity_id)
+            resource = target["resources"].get(resource_id)
+            successor = target["activities"].get(successor_id)
+            if (not isinstance(activity, dict) or activity.get("state") != "DISPATCHED"
+                    or not isinstance(resource, dict) or resource.get("state") != "REGISTERED"
+                    or not isinstance(successor, dict) or successor.get("state") != "ACCEPTED"):
+                raise store.StoreError(store.STATE_DIVERGENCE, "transferred activity session changed")
+            if receipt not in resource["evidence_manifest"]["receipts"]:
+                resource["evidence_manifest"]["receipts"].append(copy.deepcopy(receipt))
+            resource.update({"state": "PRESERVED", "last_observation": receipt["ref"],
+                             "preservation_reasons": ["RESULT_NOT_DURABLE"], "operation_id": operation_id})
+            activity.update({"state": "FAILED", "diagnostic_ref":
+                             f"orca:{resource['identity']['owner_dispatch']}:superseded-by:{successor_id}"})
         source.setdefault("worktree_identity", copy.deepcopy(identity))
         if source["campaign"] is None and operation["intended_after"]["campaign_bridge"] is not None:
             source["campaign"] = copy.deepcopy(operation["intended_after"]["campaign_bridge"]["from_campaign"])

@@ -948,6 +948,35 @@ class AgentOrchestrationContract(unittest.TestCase):
             {"activities": {}, "resources": {}}, "work-x")
         self.assertEqual(active, []); self.assertEqual(unknown, ["worker:run-1:w"])
 
+        physical = {"provider": "codex", "adapter": "orca", "host": "local", "runtime_instance": "runtime-1",
+                    "handle": "term-1", "incarnation": "inc-1", "dispatch_incarnation": "process-1",
+                    "worktree_id": "worktree-1"}
+        transferred = {"activities": {
+            "review-1": {"state": "DISPATCHED", "session_resource_id": "session-1", "context_id": "ctx-1",
+                         "activity_type": "reviewer", "step_id": "checklist", "author_activity_ids": ["author-1"]},
+            "review-2": {"state": "ACCEPTED", "session_resource_id": "session-2", "context_id": "ctx-1",
+                         "activity_type": "reviewer", "step_id": "checklist", "author_activity_ids": ["author-1"],
+                         "acceptance_ref": "results/review-2.md"},
+        }, "resources": {
+            "session-1": {"kind": "session", "state": "REGISTERED", "activity_id": "review-1",
+                          "identity": {**physical, "owner_dispatch": "ctx-old", "task_id": "task-old"},
+                          "creation_observation": {"collected_at": "2026-01-01T00:00:00Z"}},
+            "session-2": {"kind": "session", "state": "CLOSED", "activity_id": "review-2",
+                          "identity": {**physical, "owner_dispatch": "ctx-new", "task_id": "task-new"},
+                          "creation_observation": {"collected_at": "2026-01-01T00:01:00Z"},
+                          "result_acceptance_ref": "results/review-2.md", "last_observation": "orca:ctx-new:closed",
+                          "evidence_manifest": {"receipts": [
+                              {"ref": "orca:ctx-new:closed", "sha256": "a" * 64}]}}
+        }}
+        self.assertEqual(grill_workspace._transferred_activity_sessions(transferred), {
+            "review-1": ("session-1", "review-2", {"ref": "orca:ctx-new:closed", "sha256": "a" * 64})})
+        transferred["activities"]["review-3"] = copy.deepcopy(transferred["activities"]["review-2"])
+        transferred["activities"]["review-3"]["session_resource_id"] = "session-3"
+        transferred["resources"]["session-3"] = copy.deepcopy(transferred["resources"]["session-2"])
+        transferred["resources"]["session-3"]["activity_id"] = "review-3"
+        transferred["resources"]["session-3"]["identity"]["owner_dispatch"] = "ctx-third"
+        self.assertEqual(grill_workspace._transferred_activity_sessions(transferred), {})
+
     def test_prepare_switch_recovers_an_exact_released_source(self):
         import validate_orchestrator_store_contract as seed
         core = grill_workspace.grill_core_module("agent_runtime")
