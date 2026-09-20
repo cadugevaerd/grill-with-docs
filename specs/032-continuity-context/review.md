@@ -1119,3 +1119,138 @@ Nenhum conflito descoberto. 6.0.3 sem publicar, `main` em 6.0.2, sem novo bump e
 **REQUEST CHANGES**: consertar o R7-1 e os dois Important, rodar `/speckit.converge`, depois verify e review de novo.
 
 Recomendo tratar junto os Minor m1, m3 e m5, de uma linha cada, e m9, que é a cobertura dos dois ramos que hoje podem virar `pass` sem reprovar nada. Os demais ficam como débito registrado.
+
+---
+
+# R8 — 2026-09-20, após a Phase 13
+
+## Review Report
+
+**Verdict: REQUEST CHANGES** — 0 Critical, 3 Important, 5 Minor
+
+Source fingerprint: tree `c7d9d101b55e62fb6f35a53a044fffb338bd1e393ddd19a3e504a21e583f7f4c` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `17a6be04aea20edbe11af3113a6a63cde11ba657097052bdbec020a762d50e6e` — casa com o converge rodada 16 e o verify rodada 8.
+
+Três revisores read-only: correção em runtime, qualidade de teste por mutação, varredura de afirmação e regressão.
+
+## Primeira rodada sem Critical desde o R5
+
+O Critical do R7 está fechado e **verificado independentemente pelos três revisores**: a tupla estrutural tem uma definição e um consumidor, nada mais compara carimbo para recusar, e os dois sítios de cunhagem seguem vivos e cobertos. A regressão do J1 foi desfeita.
+
+Os três Important que restam **não são defeito de comportamento**. Todos são da mesma família: **o código faz uma coisa e alguma afirmação diz outra**. É a família que mais apareceu nesta entrega, e desta vez duas das afirmações falsas são minhas.
+
+## Important
+
+### R8-1 — O comentário do T035 continua falso, e eu registrei que ele tinha voltado a ser verdadeiro
+
+`plugin/skills/grill-with-docs/scripts/grill_workspace.py:3295-3301`
+
+O bloco afirma que `phase` e `branch` são carimbados *"but never compared"*. Para `phase` é verdade. Para `branch` **não é**: `_continuity_refuse_branch_contradiction`, seis linhas abaixo em `:3318`, compara `identity["branch"]` — a mesma chave do mesmo dicionário produzido por `_continuity_identity` logo acima — contra `development["execution_branch"]`, e recusa com `CONTINUITY-STATE-DIVERGENCE`. Os três verbos chamam esse helper imediatamente depois de comparar a tupla estrutural.
+
+O T048 tornou verdadeira a parte sobre o **carimbo**. Não tornou verdadeira a frase como escrita.
+
+**E eu escrevi, no converge rodada 16, que o bloco "voltou a ser verdadeiro sozinho, sem edição".** Era eu confiando na negativa absoluta em vez de verificá-la — precisamente o erro que produziu o R7-1, quando um leitor confiou neste mesmo comentário.
+
+**Conserto** (o revisor propôs, e concordo com o raciocínio): não acrescentar parágrafo nem mover explicação, porque a explicação correta já existe em dois lugares — `:3604-3608` e a docstring do helper — e um terceiro exemplar seria o R3/R4 de novo. **Estreitar a afirmação no lugar** e apontar:
+
+```
+# ... `phase` and `branch` are stamped for the record but stay OUT of it ...
+# comparing the *stamped* value means "nothing moved since it was first written" ...
+# The live branch IS compared, against a different source and by a different
+# function: see `_continuity_refuse_branch_contradiction` below.
+```
+
+A última linha é a que fecha o R7-1: é o que faltou ao leitor da Phase 12.
+
+Contra FR-010.
+
+### R8-2 — O conserto do R7-2 não fechou o buraco no subcaso para o qual foi escrito
+
+`tests/validate_agent_orchestration_contract.py:1614-1623`
+
+Provado por mutação: removendo a escrita do carimbo de branca em `_graft_succession`, **só o subcaso de carimbo contraditório falha**. O subcaso `stamp agrees` fica verde, porque a identidade derivada já devolve `branch == live_branch` e o valor de fallback é idêntico ao valor asserido.
+
+O comentário em `:1616-1618` diz que o readback pega *"a regression that stops the graft from writing the stamp"*. É falso exatamente para o subcaso que ele anota.
+
+O readback ganhou alguma coisa — pega enxerto ausente por completo — mas continua sem distinguir "enxerto selou carimbo coincidente" de "enxerto selou carimbo sem branca".
+
+**Conserto**: remover o subcaso `stamp agrees`. Depois do T048 ele é comportamentalmente idêntico a `no stamp`, e todo o poder de detecção está no subcaso contraditório — confirmado por mutação independente nos dois sítios. Menos código, zero perda de cobertura.
+
+É o **quinto** defeito desta família nesta entrega: R6-3, o caso da Phase 12 que codificava o próprio defeito, o R7-2, e agora o conserto do R7-2. Vale registrar o padrão: **toda vez que a correção de uma cobertura falsa foi escrita sem rodar a mutação que a motivou, ela não fechou o buraco.**
+
+Contra FR-011.
+
+### R8-3 — A recusa por esquema é inalcançável justamente quando `active_phase` é nulo, e o teste planta o valor que a torna alcançável
+
+`plugin/skills/grill-with-docs/scripts/grill_workspace.py:3289` e `tests/validate_agent_orchestration_contract.py:1494-1501`
+
+`_continuity_identity` faz:
+
+```python
+phase = state.get("active_phase") or state.get("development", {}).get("current_step") or "unassigned"
+```
+
+Com `development` presente e não-mapping, `.get` levanta `AttributeError` — e `_continuity_identity` roda em `:3451`, `:3600` e `:3803`, **antes** da guarda `DEVELOPMENT-SCHEMA` que vive em `:3340`. Só o curto-circuito do `or` salva: se `active_phase` for verdadeiro, o segundo operando nem é avaliado.
+
+O caso do T053 planta `active_phase = "specify"` e **documenta honestamente** que sem isso a derivação quebra antes da guarda sob teste.
+
+O revisor graduou como Minor por ser pré-existente. **Subo para Important**, com evidência que ele não tinha:
+
+- `active_phase` é **nulo em 4 dos 8** work items reais deste repositório;
+- `audit_decisions.py:780` **exige** `active_phase` nulo em milestone terminal.
+
+O nulo não é caso exótico: é estado obrigatório em parte do ciclo. Então a recusa nomeada que o projeto exige não acontece justamente nos work items em milestone terminal, e no lugar dela sai falha genérica. A guarda existe, o teste passa, e nenhum dos dois vale no caminho que mais importa.
+
+**Conserto**: validar o tipo de `development` dentro de `_continuity_identity`, ou resolver `phase` sem assumir mapping. Aí a recusa vale incondicionalmente e o teste dispensa a muleta.
+
+O crash em si é pré-existente. O que é desta entrega é a guarda que afirma tratá-lo e o teste que afirma prová-lo.
+
+Contra FR-010.
+
+## Minor
+
+| # | Local | Achado |
+|---|---|---|
+| n1 | `grill_workspace.py:5952-5956` | O comentário diz que "a branca viva já é a árvore em que aquele contexto rodou". Verdadeiro para a **árvore**, e só quando algum verbo de continuidade rodou — a validação é de projeto, caminho real e `git_common_dir`, e `branch` está fora da tupla de propósito. Duas branches na mesma worktree passam idênticas |
+| n2 | `tests/…:1395` | `assertNotEqual(bound, live_branch)` roda também no subcaso em que `bound is None`, onde é trivialmente verdadeira. Mover para dentro da condição |
+| n3 | `grill_workspace.py:5961`, `:6123` | Dentro de uma mesma fase, renomear ou apagar a branca vinculada trava os dois pontos, e nenhum verbo limpa o vínculo. Recuperável recriando o nome. Pré-existente, escopo estreito |
+| n4 | `grill_workspace.py:3441`, `:3585`, `:3770` | Os três verbos chamam a leitura de snapshot fora de tratamento próprio, então store inválido sai como falha genérica em vez de recusa nomeada. Pré-existente ao T048 — a tradução vivia no helper que a Phase 12 criou e o T048 removeu |
+| n5 | `grill_workspace.py:5942-5958` | O primeiro ramo da cadeia ficou com corpo `pass` precedido de 14 linhas de comentário. Não é inalcançável nem incorreto; a cadeia precisa dele. Preferência |
+
+## Test Quality
+
+Seis mutações executadas em cópia fora da árvore, com a worktree intacta. **Cinco confirmaram o que deviam**:
+
+- restaurar a guarda **só** na confirmação de etapa, e **só** na virada de fase, faz falhar a asserção daquele sítio e só dela — os dois continuam independentemente cobertos;
+- restaurar o critério monotônico derruba três casos, incluindo o que cobre a sequência sucessão → virada → confirmação;
+- neutralizar o `raise` do T053 faz o caso novo falhar pela asserção certa;
+- remover o enxerto por completo é pego pelo readback.
+
+A sexta virou o R8-2.
+
+O elo entre a fixture que enxerta e os verbos reais **existe e é forte**: o caso de tomada exercita `prepare-switch` e `takeover --apply` de verdade e afirma que o sucessor carrega a branca derivada ao vivo mais os cinco campos estruturais. A forma que o enxerto fabrica é a forma que o verbo real emite.
+
+## Runtime Correctness
+
+**Sem achado Critical ou Important.** A remoção não deixou buraco:
+
+- `development.execution_branch` tem exatamente **um escritor e um limpador** em toda a árvore do plugin, e os demais pontos só leem. As duas recusas remanescentes comparam contra estado que o próprio ciclo derruba a cada virada — não sofrem do defeito monotônico do carimbo, que é campo imutável escrito só na criação de contexto. A diferença é real, não cosmética;
+- os três usos do helper renomeado falham **antes de mutar**, cada um antes do respectivo `transact`;
+- nenhum chamador órfão, import morto ou ramo inalcançável ficou para trás.
+
+## Regressão R1–R7
+
+**Nenhuma regressão.** Varredura independente por dois revisores: a tupla estrutural tem definição e consumidor únicos aplicados nos três verbos; o filtro de contexto continua antes da contagem de candidatos; os achados do R4 e do R5 seguem fechados com seus casos; o R6-2 e o R6-3 seguem fechados.
+
+A segunda metade do L1 — recusar o preenchimento retroativo quando o contexto tem predecessor — foi removida **de propósito**, pelo caminho R6-1 → R7-1 opção A, com o motivo escrito no código. É supersessão registrada, não regressão.
+
+R4-4 e R4-5 continuam **não verificáveis**, porque nunca foram declarados fechados: o R4 os remeteu a decisão humana e eles seguem pendentes.
+
+## Constitution References
+
+Nenhum conflito descoberto. 6.0.3 sem publicar, `main` em 6.0.2, sem novo bump exigido.
+
+## Final Recommendation
+
+**REQUEST CHANGES**: consertar os três Important, rodar `/speckit.converge`, depois verify e review de novo.
+
+Os três são pequenos — uma edição de comentário, uma remoção de subcaso e uma validação de tipo — e nenhum muda comportamento observável salvo o R8-3, que troca falha genérica por recusa nomeada. Recomendo tratar junto os Minor n1 e n2, de uma linha cada. n3, n4 e n5 ficam como débito registrado.
