@@ -952,3 +952,64 @@ A curva é a esperada de uma entrega convergindo, mas o custo foi alto e a causa
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R9.
+
+---
+
+# Rodada 19 — 2026-09-21, consumindo o review R9
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T057), constituição, `review.md` seção R9 · **Desfecho**: `tasks_appended` — seis tarefas em `## Phase 15: Convergence`
+
+O R9 devolveu REQUEST CHANGES com **zero Critical** pela segunda rodada seguida, 3 Important e 4 Minor. Nenhum achado é defeito de comportamento.
+
+| Achado | Gap | Severidade | Origem | Tarefa |
+|---|---|---|---|---|
+| R9-1 — a alegação que causou o Critical do R7 sobrevive em duas cópias | contradicts | Important | FR-010 | T058 |
+| R9-2 — a guarda do ponto único virou inalcançável, e o teste carrega recibo de reversão falsificado | contradicts | Important | FR-010, FR-011 | T059, T060, T061 |
+| R9-3 — a cláusula que preserva ausência como estado legítimo não tem teste | missing | Important | FR-011 | T062 |
+| p1, p2, p3 | partial | Minor | FR-011 | T061, T063 |
+| p4 | — | Minor | — | registro, sem ação |
+
+## O que o R9 realmente mediu
+
+A Phase 14 existiu **principalmente para consertar afirmações falsas**. O R9 mostrou que ela corrigiu **uma de três cópias** da principal, e que o conserto de uma guarda deixou outra guarda morta com um recibo de reversão que já não descreve o sistema.
+
+Duas mutações sustentam isso, e o coordenador reproduziu ambas de forma independente:
+
+| Mutação | Resultado |
+|---|---|
+| trocar o `raise` da guarda do ponto único por atribuição silenciosa | **44 testes passam** — guarda inalcançável, sem cobertura |
+| transformar ausência de bloco em recusa | **suíte inteira verde** — a cláusula que separa ausência legítima de ausência recusada não é protegida |
+
+## A sexta instrução minha da mesma família
+
+O T054 dizia "o comentário do sítio de cunhagem", **no singular**, e não mandou varrer por cópias. Havia três; ele consertou uma. A cópia esquecida no caminho da virada de fase fica a **seis linhas** da corrigida, e diz o oposto dela.
+
+A regularidade agora é firme e cara:
+
+| # | Tarefa | O que instruí | O que faltou |
+|---|---|---|---|
+| 1 | T031 | contar candidatos antes dos filtros | "antes dos filtros" incluía o filtro que discriminava |
+| 2 | T040 | recusar quando o contexto tiver predecessor | estado monotônico |
+| 3 | T044 | recusar quando o carimbo existir e diferir | estado congelado |
+| 4 | rodada 16 | declarei um comentário "de novo verdadeiro" | não verifiquei |
+| 5 | T057 | tornar a guarda alcançável | tornou a **outra** guarda alcançável e matou a original |
+| 6 | T054 | corrigir **o** comentário | eram três cópias |
+
+As três primeiras são critérios ancorados em estado não reavaliável. As três últimas são **afirmações declaradas sem varredura**. O conserto de método está no T058, que exige explicitamente a varredura antes de dar a tarefa por concluída — a primeira vez nesta entrega em que a instrução carrega a verificação em vez de nomear o ponto.
+
+## A decisão doutrinária do R9-2
+
+A guarda inalcançável podia ser apagada — menor diff, remove código morto. **Escolhi mantê-la**, e a razão é doutrinária: a assinatura aceita valor de qualquer tipo, o projeto é fail-closed, e apagar deixaria armadilha para um quarto chamador que não passe pela derivação. Validação em fronteira de confiança não se simplifica por economia.
+
+O custo é honesto: a guarda precisa dizer na documentação que é defesa em profundidade inalcançável hoje (T059) e ganhar cobertura própria (T061), em vez de continuar anunciando-se como a guarda efetiva.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 2 · partial 2 · contradicts 2 · unrequested 0
+- Tarefas acrescentadas: 6 (T058–T063), nenhuma CRITICAL
+
+## Próxima ação
+
+Executar `implement-parallel` na Phase 15 e reconvergir. T058 e T059 tocam o produto; T060 a T063 tocam o teste, e o T060 depende do T059 ter entrado.
