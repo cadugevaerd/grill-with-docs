@@ -1,51 +1,46 @@
 ## Verify Report
 
-**Verdict: PASS** — rodada 10, sobre a base mesclada com a `main`
+**Verdict: PASS** — rodada 11, após a Phase 16 e a terceira integração da `main`
 
-Source fingerprint: tree `872f172172b94aea0409562a9e05f601f552865b907283cc780b188b4580af85` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `c93b998468329cb61546c4dd452596a539be41cebb562413508487f1e30c82c7`   (gate reports excluídos)
+Source fingerprint: tree `f7a7fa6194bd0cbaa16b37dde35dffad1f5befc903b34459a521517fd81785c0` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `84fd7c6723e50a6796af64596b568bd4aef74c727dfdae775d0c276d5f13fc2c`   (gate reports excluídos)
 
-Converge: **CONVERGED** — rodada 21, `specs/032-continuity-context/converge.md`, zero achados, invariantes da 032 conferidos na árvore mesclada, atestado e selado (`032-converge-r14.json`).
+Converge: **CONVERGED** — rodada 23, `specs/032-continuity-context/converge.md`, zero achados, os cinco achados do R10 verificados fechados, atestado e selado (`032-converge-r16.json`).
 
 ### Operational Gates
 
 | Gate | Comando | Resultado | Evidência | Validador |
 |---|---|---|---|---|
-| Testes | `python3 tests/run_validators.py` | **PASS** | exit 0 — 30 validadores, **1505** testes, 0 falhas | coordenador |
-| Contrato de distribuição | `python3 tests/validate_distribution.py` | **PASS** | `distribution: OK` — oito pontos em 6.0.13 | coordenador |
-| Bump de versão | comparação com `origin/main` | **PASS** | `main` publicada em 6.0.12, HEAD em **6.0.13**. A branch está **0 commits atrás** da `main` | coordenador |
+| Testes | `python3 tests/run_validators.py` | **PASS** | exit 0 — 30 validadores, **1508** testes, 0 falhas | coordenador |
+| Contrato de distribuição | `python3 tests/validate_distribution.py` | **PASS** | `distribution: OK` — oito pontos em 6.0.15 | coordenador |
+| Bump de versão | comparação com `origin/main` | **PASS** | `main` publicada em 6.0.14, HEAD em **6.0.15**, **0 commits atrás** | coordenador |
 | Sintaxe | `python3 -m py_compile` nos arquivos tocados | **PASS** | sem erro | coordenador |
 | Espaço em branco | `git diff --check` | **PASS** | limpo | coordenador |
-| Segredos | varredura no diff da entrega | **PASS** | nenhum `.env`, `secret`, `credential`, `.pem` ou `id_rsa` | coordenador |
+| Segredos | varredura no diff da entrega | **PASS** | nada sensível | coordenador |
 | Lint / typecheck / format | — | **SKIPPED** | o projeto não declara essas ferramentas | — |
 
-A contagem foi de 1498 para **1505**, e o validador de orquestração de 46 para **51**. O acréscimo é da `main`: os casos que acompanham os sete commits de orquestração e governança.
+O validador de orquestração fechou em **54** casos, vindo de 51: dois da Phase 16 e um trazido pela `main`.
 
-**O gate de bump mudou de natureza nesta rodada.** Nas nove anteriores ele passava porque a 6.0.3 estava acima da 6.0.2 publicada. A `main` publicou até 6.0.12 durante a entrega, o que colocou a branch **abaixo** da publicada e tornou o fechamento impossível sem integrar. Hoje passa por 6.0.13 contra 6.0.12.
+**O gate de bump reprovou duas vezes durante esta rodada, antes de passar.** Na primeira medição a `main` estava em 6.0.11 e a branch em 6.0.3; depois de integrar, a `main` publicou 6.0.12; e ao coletar a evidência do R11 ela já estava em 6.0.14, tendo publicado também uma 6.0.13 própria — **tomando a numeração que esta branch havia reservado**. É a segunda colisão de versão da entrega.
 
 ### Diff Hygiene
 
-Entrega em 145 commits, de `73a90bd` ao HEAD, incluindo as integrações do gauntlet das quinze runs e os dois merges da `main`.
+Entrega em 164 commits, de `73a90bd` ao HEAD, incluindo as integrações do gauntlet das dezesseis runs e **três** merges da `main`: `43f8cd3` (6.0.11), `dba49b2` (6.0.12) e o desta rodada (6.0.14).
 
-Os merges são `43f8cd3` (6.0.11) e `dba49b2` (6.0.12). Ambos carregam no corpo da mensagem a justificativa das resoluções semânticas, de propósito: a decisão de manter a comparação estrutural precisa ser encontrável por quem investigar o arquivo depois.
+Os três merges carregam no corpo da mensagem a justificativa das resoluções, de propósito — a decisão de manter a comparação estrutural precisa ser encontrável por quem investigar o arquivo depois, porque **o conserto correspondente não está na `main`** e cada integração futura vai reoferecer a linha ruim.
 
 Nada gerado foi commitado por engano; nenhum arquivo fora do escopo.
 
 ### Executable Scenarios
 
-Esta rodada não verifica implementação nova — a Phase 15 já fora verificada na rodada 9. Ela verifica que a **integração** preservou o que a entrega estabeleceu.
+A Phase 16 fechou os cinco achados do R10, e todos os consertos são de **prova**, não de comportamento — salvo o T064, que corrige um veredito:
 
-Seis invariantes conferidos diretamente na árvore mesclada:
+- **T064**: o atalho de reuso voltou a exigir igualdade de origem. Medido por execução: o mesmo cenário devolvia reuso antes e devolve adoção depois, igual à `main`. Era o segundo defeito de junção da primeira integração, e o único que nenhum teste pegava, porque o estado em disco não muda — só o veredito;
+- **T065**: a seção 6.0.12 do CHANGELOG foi restaurada. Aquela versão tem tag e Release, e perdê-la fazia um item já entregue reaparecer como novidade;
+- **T066**: a paridade prévia/apply ganhou cobertura no caminho de origem alterada. Mutação: removendo a recusa, a prévia aceita enquanto o apply recusa — a inversão exata que a integração produziu e que só foi notada porque um caso **da `main`** exercitava o caminho;
+- **T067**: as duas metades que o R6-2 mandou acrescentar ganharam prova, **cinco fases depois de entrarem**. Mutação: a troca vira `QUIESCING`/exit 0 e a tomada vira prévia/exit 0, em vez de recusar;
+- **T068**: o fail-closed de carimbo malformado ganhou uma linha de afirmação.
 
-- a tupla estrutural tem **uma** definição, sem `phase` nem `branch`, com dois usos;
-- **zero** comparações de identidade inteira para recusar — o que importa porque o lado entrante do `prepare-switch` fazia exatamente isso, e aceitá-lo teria reintroduzido o Critical J1/H1 sem conflito visível e sem teste reprovando, já que a `main` não tem os casos que o cobrem;
-- **zero** ocorrências da comparação de branca congelada do R7-1;
-- **zero** ocorrências em fonte da alegação falsa do R9-1;
-- o ponto único renomeado, com 7 usos;
-- os dois casos novos da Phase 15 vivos.
-
-**Um defeito foi criado pela junção e pego pela suíte.** A 6.0.3 fez a prévia de `orchestration-adopt` rodar a mesma verificação do apply, para que os dois nunca discordassem; a `main` afrouxou o apply. Somados, a prévia ficou mais estrita que o apply — a inversão exata que a mudança existia para impedir. Nenhum dos lados estava errado isolado.
-
-Foi um teste da `main` rodando sobre código desta branch que o revelou, no primeiro `run_validators` pós-merge. Registro como evidência de que auto-merge limpo não é compatibilidade semântica.
+A terceira integração não exigiu resolução de código — `grill_workspace.py` e o contrato de orquestração fizeram auto-merge limpo, e um dos commits entrantes mexe em continuidade, área da feature. A suíte confirma compatibilidade.
 
 Nenhum teste depende de runtime real, rede ou processo externo (FR-011).
 
@@ -53,7 +48,7 @@ Nenhum teste depende de runtime real, rede ou processo externo (FR-011).
 
 Nenhum.
 
-**Risco operacional, não bloqueio**: há outra sessão trabalhando neste repositório, e os sete commits que a `main` recebeu durante esta entrega tocam os mesmos arquivos da 032. A integração final no `ship` precisará ser refeita contra a `main` daquele instante, e o bump decidido lá.
+**Risco operacional conhecido, e agora quantificado**: a `main` recebeu **nove** commits durante esta entrega, publicando de 6.0.3 a 6.0.14, por outra sessão trabalhando nos mesmos arquivos. Cada ciclo de converge/verify/review leva mais tempo do que o intervalo entre publicações, então o número de versão desta branch não estabiliza sozinho. A integração final no `ship` terá de ser refeita contra a `main` daquele instante, e o bump decidido lá.
 
 ### Next Action
 
