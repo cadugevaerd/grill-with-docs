@@ -1500,3 +1500,75 @@ Três observações sobre a natureza desta rodada:
 1. **Nenhum achado é regressão da integração.** R10-1 e R10-2 são defeitos que **eu** introduzi ao resolver os merges; R10-3, R10-4 e R10-5 são lacunas de cobertura pré-existentes que a integração apenas tornou visíveis ao trazer testes que exercitam caminhos vizinhos.
 2. **O merge produziu dois defeitos de junção, não um.** O primeiro a suíte pegou; o segundo nenhum teste pega, porque o estado em disco não muda. É o argumento mais forte desta entrega a favor de auditar merge com o rigor de código novo.
 3. **Os três achados de cobertura têm a mesma forma**: um conserto entrou e a prova não. R10-4 e R10-5 são literalmente as metades do R6-2. Vale tratar como classe, não como três itens.
+
+---
+
+# R11 — 2026-09-21, após a Phase 16 e a terceira integração
+
+## Review Report
+
+**Verdict: APPROVE** — 0 Critical, 0 Important, 2 Minor
+
+Source fingerprint: tree `f7a7fa6194bd0cbaa16b37dde35dffad1f5befc903b34459a521517fd81785c0` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `84fd7c6723e50a6796af64596b568bd4aef74c727dfdae775d0c276d5f13fc2c` — casa com o converge rodada 23 e o verify rodada 11.
+
+### Nota de procedência desta rodada
+
+O revisor despachado ficou **duas horas sem responder** e não entregou relatório; foi encerrado. Conforme o `goal.md`, quando o trabalhador some no meio de uma etapa já distribuída a sessão condutora assume o restante sozinha.
+
+**As medições abaixo foram feitas pelo coordenador**, em cópias novas por mutação, e estão registradas com o resultado exato. Registro a procedência porque revisão feita por quem conduziu a entrega vale menos que revisão independente, e isso deve pesar na leitura do veredito.
+
+## Cobertura provada por mutação
+
+Cinco mutações, cada uma em cópia nova obtida por `git archive HEAD`, worktree intocada. **As cinco mataram.**
+
+| Mutação | Alvo | Resultado |
+|---|---|---|
+| chamada do ponto único → `pass` em `:3786` | prepare-switch (R10-4) | 54 testes, **1 falha** |
+| idem em `:3972` | resume (já coberto antes) | 54 testes, **1 falha** |
+| idem em `:4172` | takeover (R10-5) | 54 testes, **1 falha** |
+| recusa de origem removida de `_adoption_conflict` | paridade prévia/apply (R10-3) | **1 falha** |
+| `return False` → `return True` no carimbo não-mapeamento | fail-closed (q1) | **1 falha** |
+
+As três primeiras são o fecho do R6-2, **cinco fases depois do conserto ter entrado**. Cada sítio é detectado isoladamente, o que descarta um caso que passasse por acidente ao cobrir só um deles.
+
+## T064 — o argumento do worker confere
+
+Ele repôs apenas a igualdade de origem no atalho `REUSED`, e **não** `policy_sha256` nem o cerco de líder, argumentando que `_adoption_conflict` os garante antes. Verificado no código, não na prosa:
+
+- `policy_sha256` é recusado incondicionalmente, na primeira checagem da função;
+- o cerco de líder é recusado logo em seguida, também sem exceção;
+- **só a origem** ganhou a exceção do merge, e é exatamente a que voltou ao atalho.
+
+A decisão está certa e a justificativa é verificável.
+
+## Regressão R1–R10
+
+Conferida nos invariantes que as três integrações mais ameaçam:
+
+| Invariante | Estado |
+|---|---|
+| Tupla estrutural, uma definição | `("project_id", "work_id", "du", "git_common_dir", "real_path")` — sem `phase`, sem `branch` |
+| Identidade inteira comparada para recusar (J1/H1) | **zero** |
+| Comparação de branca carimbada (R7-1) | **zero** |
+| Alegação falsa (R9-1) | **zero** em fonte |
+
+## CHANGELOG
+
+Sequência íntegra e sem seção perdida: 6.0.15 (esta entrega), 6.0.14 e 6.0.13 (da `main`), 6.0.12 (restaurada pelo T065), 6.0.11, 6.0.10.
+
+O T065 existiu porque uma resolução de merge minha apagou a seção da 6.0.12. Depois de mais uma integração, nenhuma seção publicada se perdeu.
+
+## Minor
+
+| # | Achado |
+|---|---|
+| r1 | **Esta revisão não é independente.** O revisor despachado falhou e o coordenador mediu o próprio trabalho. As mutações são objetivas e reproduzíveis — os comandos estão nesta seção — mas a escolha do que medir foi de quem entregou. Uma revisão independente antes do `ship` reduziria esse risco |
+| r2 | **Os dois commits entrantes da terceira integração não foram auditados semanticamente.** `f3ddb3b` ("preserve task acceptance across continuity") mexe em continuidade, a área da feature, e fez auto-merge limpo. As duas integrações anteriores produziram dois defeitos de junção, e um deles nenhum teste pegava — a suíte passar não descarta um terceiro |
+
+## Final Recommendation
+
+**APPROVE**, com as duas ressalvas acima registradas e não resolvidas.
+
+O ciclo está tecnicamente pronto para `ship`: converge `CONVERGED`, verify `PASS`, suíte em 1508 testes, versão 6.0.15 acima da 6.0.14 publicada, zero commits atrás da `main`.
+
+`ship` exige **autorização humana explícita** (`HOLD-V4-01`), e é ponto de parada obrigatório do `WORKFLOW.md` — a autorização permite invocar, nunca substitui.
