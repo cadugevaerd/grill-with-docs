@@ -546,18 +546,23 @@ def _load_request_command(command: list[str], observed: dict[str, Any], request:
     if len(command) < 5 or command[:3] != [sys.executable, "-B", script] or command[4] != request["scope"].get("root"):
         return False
     verb = command[3]
-    if verb not in {"preflight", "init", "gauntlet-orchestration-adopt", "gauntlet-resume"}:
+    if verb not in {"preflight", "init", "gauntlet-orchestration-adopt", "gauntlet-resume", "gauntlet-step-enter"}:
         return False
     fields, flags = {}, set()
     args = iter(command[5:])
     for key in args:
         if key == "--skip-backlog" and verb in {"preflight", "init"} and key not in flags:
             flags.add(key)
-        elif key in {"--runtime", "--session-ref", "--work-id", "--type", "--slug", "--checkpoint"} and key not in fields:
+        elif key in {"--new-how", "--frontend"} and verb == "gauntlet-step-enter" and key not in flags:
+            flags.add(key)
+        elif key in {"--runtime", "--session-ref", "--work-id", "--type", "--slug", "--checkpoint",
+                     "--context-id", "--epoch", "--step"} and key not in fields:
             fields[key] = next(args, None)
         else:
             return False
-    expected = {"--runtime": observed["provider"], "--session-ref": observed["source_ref"]}
+    expected = {"--session-ref": observed["source_ref"]}
+    if verb != "gauntlet-step-enter":
+        expected["--runtime"] = observed["provider"]
     work_id = request["scope"].get("work_id")
     if verb == "preflight":
         return work_id is None and fields == expected
@@ -572,6 +577,14 @@ def _load_request_command(command: list[str], observed: dict[str, Any], request:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", fields.get("--checkpoint") or ""):
             return False
         expected["--checkpoint"] = fields["--checkpoint"]
+    if verb == "gauntlet-step-enter":
+        if (not re.fullmatch(r"ctx-[0-9a-f]{24}", fields.get("--context-id") or "")
+                or not (fields.get("--epoch") or "").isdigit()
+                or int(fields["--epoch"]) < 1
+                or fields.get("--step") not in {"specify", "plan", "checklist", "tasks", "analyze", "partition",
+                                                    "implement-parallel", "converge", "verify", "review", "ship"}):
+            return False
+        expected.update({key: fields[key] for key in ("--context-id", "--epoch", "--step")})
     return fields == expected
 
 

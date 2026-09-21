@@ -1,6 +1,6 @@
 # Changelog
 
-## 6.0.13
+## 6.0.15
 
 - Fix: o ciclo de vida do contexto de orquestração ganha transição de saída. Até a 6.0.2 um work item cujo líder encerrava a sessão ficava permanentemente inalcançável: `_bind_orchestration` só aceitava continuidade com observação de líder idêntica e `ACTIVE`, e a recusa `CONTEXT-FENCED` persistia mesmo com o líder anterior `RELEASED` ou o contexto inteiro encerrado — não havia verbo algum que mudasse o vínculo. O verbo novo `gauntlet-context-takeover` é o ato explícito de tomada, autorizado **somente** por observação de dispatch terminal do líder anterior: status fora de `dispatched`/`running`, `capabilityRevokedAt` não nulo, ou liveness `exited` vinda de `agent_status`. Sem `--apply` ele executa todas as verificações e devolve `TAKEOVER-PREVIEW` com o hash das entradas relidas, ou exatamente a recusa que o apply devolveria, sem escrever byte algum. As recusas são distintas e fail-closed: `TAKEOVER-LEADER-ACTIVE` (líder ainda vivo), `TAKEOVER-EVIDENCE-UNPROVEN` (observação ausente, ilegível, não correlacionada ao dispatch pedido ou com liveness `unverifiable`), `TAKEOVER-NOT-OBSERVABLE` (líder registrado não é um dispatch observável), `TAKEOVER-WORK-ACTIVE` (trabalho de especialista em voo), `TAKEOVER-INPUTS-STALE` (hash divergente) e `TAKEOVER-REUSED` (repetição idêntica já aplicada, sem reobservar). A mutação usa o mesmo compare-and-swap por revisão do store, então duas tomadas concorrentes sobre a mesma revisão terminam com uma aceita e a outra recusada por estado alterado. Aplicada a tomada, o contexto anterior passa a encerrado e o sucessor nasce na época seguinte carregando o bloco de sucessão — contexto e sessão de origem, motivo, referência e digest da observação usada como prova, e o instante —, enquanto `development`, campanha, resultados aceitos e escopo declarado permanecem byte a byte iguais.
 - Fix: `gauntlet-prepare-switch` deixa de recusar `CONTINUITY-CHECKPOINT-MISSING` quando o work item ainda não tem checkpoint corrente conhecido. Como `checkpoint_head` só era escrito ao confirmar uma etapa, o caminho ordenado de troca não existia antes da primeira etapa confirmada; agora o checkpoint inicial é emitido a partir do estado corrente, e esse ponto é retomável de verdade. A recusa continua firme para checkpoint declarado porém desconhecido.
@@ -8,6 +8,15 @@
 - Os campos do checkpoint de continuidade foram renomeados numa versão nova do schema, ao lado da atual: `workflow_sha256` passa a `context_inputs_sha256` e `constitution_sha256` a `origin_metadata_sha256`, nomes que dizem o que o campo de fato carrega. A validação escolhe o conjunto de chaves pelo valor de `schema` no próprio documento e aceita as duas versões sem tentar uma e depois a outra; um checkpoint da versão anterior continua legível e utilizável, sem reescrita.
 - Integra a `main` em 6.0.11. O conflito de `gauntlet-prepare-switch` foi resolvido mantendo a comparação **estrutural** de identidade de worktree desta entrega — o lado entrante comparava o mapeamento inteiro, que é o defeito J1/H1 fechado aqui, porque `phase` e `branch` se movem na vida normal e nenhum verbo os re-carimba — e tomando do lado entrante a lógica de líder liberado (`--released-source`).
 - Integra também a `main` em 6.0.12 (`0ca6760`). Sem conflito de código: apenas o CHANGELOG, porque os dois lados haviam numerado 6.0.12. A versão desta entrega sobe para 6.0.13 para ficar acima da publicada.
+- Integra a `main` em 6.0.14. Sem conflito de código: `grill_workspace.py` e o contrato de orquestração fizeram auto-merge limpo. Versão sobe para 6.0.15 para ficar acima da publicada.
+
+## 6.0.14
+
+- Preserva aceitações de tarefas vinculadas ao DAG através da linhagem canônica de contextos após continuity switch, sem aceitar atividades de contextos irmãos.
+
+## 6.0.13
+
+- Fix: `gauntlet-step-enter` pode emitir e comprovar diretamente o `load_request` obrigatório após compactação, sem depender de um comando de retomada já consumido; contexto, época e passo são validados antes de aceitar a leitura integral.
 
 ## 6.0.12
 

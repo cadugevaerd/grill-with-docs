@@ -4881,14 +4881,26 @@ def _scheduler_accepted_tasks(root: Path, work_id: str, dag: Mapping[str, Any],
     if not isinstance(item, dict):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "orchestration item is absent")
     context_id = item.get("current_context_id")
+    contexts = item.get("contexts", {})
+    lineage: set[str] = set()
+    cursor = context_id
+    while isinstance(cursor, str) and cursor not in lineage:
+        context = contexts.get(cursor)
+        if not isinstance(context, dict):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "context lineage is incomplete")
+        lineage.add(cursor)
+        cursor = context.get("predecessor_context_id")
+    if cursor is not None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "context lineage is cyclic")
     semantic = dag.get("tasks_semantic_sha256")
     accepted = dict(dag.get("accepted_tasks") or {})
     for activity_id, activity in item.get("activities", {}).items():
         if not isinstance(activity, dict) or activity.get("state") != "ACCEPTED":
             continue
         binding = activity.get("task_binding")
-        if (activity.get("step_id") != "implement-parallel" or activity.get("context_id") != context_id
-                or activity.get("accepted_by_context") != context_id or not isinstance(binding, dict)
+        activity_context = activity.get("context_id")
+        if (activity.get("step_id") != "implement-parallel" or activity_context not in lineage
+                or activity.get("accepted_by_context") != activity_context or not isinstance(binding, dict)
                 or binding.get("tasks_semantic_sha256") != semantic
                 or binding.get("dag_content_sha256") != dag_sha256):
             continue

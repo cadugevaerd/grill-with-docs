@@ -379,6 +379,16 @@ class AgentOrchestrationContract(unittest.TestCase):
 
     def test_native_exec_result_variable_wrapper(self):
         core = grill_workspace.grill_core_module("agent_runtime")
+        observed = {"provider": "codex", "source_ref": "orca:ctx_leader"}
+        request = {"scope": {"root": "/repo", "work_id": "work-x"}}
+        enter = [sys.executable, "-B", str(Path(grill_workspace.__file__).resolve()), "gauntlet-step-enter", "/repo",
+                 "--work-id", "work-x", "--context-id", "ctx-0123456789abcdef01234567", "--epoch", "10",
+                 "--session-ref", "orca:ctx_leader", "--step", "implement-parallel"]
+        self.assertTrue(core._load_request_command(enter, observed, request))
+        for index, value in ((8, "bad"), (10, "0"), (14, "unknown")):
+            altered = list(enter)
+            altered[index] = value
+            self.assertFalse(core._load_request_command(altered, observed, request))
         literal = '{cmd:"/usr/bin/true",workdir:"/tmp",yield_time_ms:30000,max_output_tokens:12000}'
         wrapper = "const r = await tools.exec_command(" + literal + "); text(JSON.stringify(r));"
         call = {"type": "tool-call", "name": "exec", "input": wrapper}
@@ -3044,6 +3054,34 @@ class AgentOrchestrationContract(unittest.TestCase):
                     command(args)
                 self.assertEqual(blocked.exception.code, "TASK-PHASE-PENDING")
                 guard.assert_called_once()
+
+    def test_scheduler_acceptances_survive_continuity_lineage_only(self):
+        semantic, dag_hash = "a" * 64, "b" * 64
+        binding = lambda task: {"task_id": task, "phase": "1", "tasks_semantic_sha256": semantic,
+                                "dag_content_sha256": dag_hash}
+        item = {
+            "current_context_id": "ctx-successor",
+            "contexts": {
+                "ctx-successor": {"predecessor_context_id": "ctx-source"},
+                "ctx-source": {"predecessor_context_id": None},
+                "ctx-sibling": {"predecessor_context_id": None},
+            },
+            "activities": {
+                "source": {"state": "ACCEPTED", "step_id": "implement-parallel", "context_id": "ctx-source",
+                           "accepted_by_context": "ctx-source", "task_binding": binding("T001"),
+                           "acceptance_ref": "source.md"},
+                "sibling": {"state": "ACCEPTED", "step_id": "implement-parallel", "context_id": "ctx-sibling",
+                            "accepted_by_context": "ctx-sibling", "task_binding": binding("T002"),
+                            "acceptance_ref": "sibling.md"},
+            },
+        }
+        snapshot = SimpleNamespace(document={"agent_orchestration": {"work_items": {"work": item}}})
+        dag = {"tasks_semantic_sha256": semantic, "accepted_tasks": {}}
+        store_seam = SimpleNamespace(read_snapshot=mock.Mock(return_value=snapshot))
+        with mock.patch.object(grill_workspace, "grill_core_module", return_value=store_seam):
+            accepted = grill_workspace._scheduler_accepted_tasks(Path("."), "work", dag, dag_hash)
+        self.assertEqual(set(accepted), {"T001"})
+        self.assertEqual(accepted["T001"]["activity_id"], "source")
 
     def test_visual_gate(self):
         with tempfile.TemporaryDirectory() as temporary:
