@@ -1013,3 +1013,66 @@ O custo é honesto: a guarda precisa dizer na documentação que é defesa em pr
 ## Próxima ação
 
 Executar `implement-parallel` na Phase 15 e reconvergir. T058 e T059 tocam o produto; T060 a T063 tocam o teste, e o T060 depende do T059 ter entrado.
+
+---
+
+# Rodada 20 — 2026-09-21, após a Phase 15
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T063), constituição · **Desfecho**: `converged`
+
+Phase 15 entregue pelos nós `p15-b` (`98dbf40`, produto) e `p15-a` (`b14ab2e`, teste), nesta ordem, porque o segundo depende do primeiro.
+
+## Achados do R9
+
+| Achado | Situação | Prova no código integrado |
+|---|---|---|
+| R9-1 — a alegação que causou o Critical do R7 sobrevivia em duas cópias | **fechado** | **Zero** ocorrências em toda a fonte. A única batida restante é um `.pyc` de cache |
+| R9-2 — guarda inalcançável com recibo de reversão falsificado | **fechado** | O recibo antigo tem zero ocorrências; a docstring do produto declara explicitamente que a guarda é defesa em profundidade e que nenhum caminho de CLI a alcança; caso novo cobre a guarda diretamente |
+| R9-3 — a cláusula que preserva ausência não tinha teste | **fechado** | Caso novo cobrindo bloco ausente com fase ativa nula |
+| p1, p2, p3 | **fechados** | Asserções tautológicas rotuladas como sanidade de fixture, ternário morto removido, docstring reduzida a duas situações |
+| p4 | registro | Ordem das guardas, sem ação |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## O conserto de método funcionou, e é mensurável
+
+A rodada 19 mudou a forma da instrução: em vez de nomear **o** ponto a corrigir, o T058 exigiu **varrer o repositório e registrar todas as ocorrências**, incluindo as fora do grant.
+
+O resultado foi a primeira varredura completa desta entrega. O worker achou **três** cópias da alegação, corrigiu a sua, e registrou as outras duas com destino:
+
+- uma no arquivo de teste, que era do nó seguinte e foi corrigida por ele;
+- uma no `review.md`, que é **citação histórica do próprio achado** e corretamente não deve ser alterada.
+
+Esse segundo registro importa: a varredura literal encontraria a frase e um worker menos cuidadoso a "corrigiria", apagando o registro do defeito. Distinguir ocorrência viva de citação histórica foi julgamento dele, não do brief.
+
+Comparação direta: a instrução anterior, que dizia "o comentário" no singular, corrigiu **uma de três**. A instrução com varredura obrigatória corrigiu **três de três**, com destino explícito para cada uma.
+
+## Um erro meu de processo, que o projeto já tinha registrado
+
+O `gauntlet-tasks-reconcile` marcou **zero tarefas** na primeira tentativa, e **não emitiu erro algum** — `missing_sidecars` veio vazio, o veredito veio `APPLIED`. A causa: os dois sidecars gravaram a lista sob a chave `tasks`, e o reconciliador lê **apenas** `completed`.
+
+Isto está registrado nos aprendizados do projeto, e mordeu assim mesmo, porque o brief não especifica a chave e o worker escolheu um nome razoável. Corrigi os dois sidecars e remarquei.
+
+O defeito de fundo não é dos workers: **um reconciliador que não acha nada e reporta sucesso é indistinguível de um que achou tudo**. Vale como trabalho próprio no core.
+
+## Uma correção retroativa
+
+O sidecar do nó `p14-b` afirmava que mover uma asserção a tornara não-trivial. O R9 mediu e mostrou que não — ela permanece tautológica, e é sanidade de fixture, não cobertura. O nó `p15-a` sinalizou que a frase estava fora do grant dele; corrigi o sidecar como coordenador.
+
+Registro isso porque é o mesmo padrão da entrega em escala menor: **a afirmação sobre o conserto era mais forte que o conserto**.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1498** testes, 0 falhas. O validador de orquestração foi de 44 a **46**, com os dois casos novos — a guarda de defesa em profundidade e a tolerância a bloco ausente.
+
+Todas as mutações desta fase foram medidas antes de a tarefa ser declarada pronta, conforme a regra que a rodada 18 estabeleceu e a rodada 19 tornou obrigatória no brief.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R10.
