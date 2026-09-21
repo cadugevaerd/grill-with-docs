@@ -1220,3 +1220,57 @@ A instrução de "provar por mutação" desta entrega passa a exigir **uma cópi
 ## Próxima ação
 
 Executar `implement-parallel` na Phase 16 e reconvergir. T064 e T065 tocam produto e documentação; T066, T067 e T068 tocam o mesmo arquivo de teste.
+
+---
+
+# Rodada 23 — 2026-09-21, após a Phase 16
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T068), constituição · **Desfecho**: `converged`
+
+Phase 16 entregue pelos nós `p16-b` (`d31d9b3`, produto), `p16-a` (`e001d77`, teste) e `p16-serial` (coordenador, T065).
+
+## Achados do R10
+
+| Achado | Situação | Prova |
+|---|---|---|
+| R10-1 — o atalho de reuso perdeu a checagem de origem | **fechado** | Igualdade de origem reposta. Medido por execução: o mesmo cenário devolvia reuso antes e devolve adoção depois, igual à `main` |
+| R10-2 — a seção 6.0.12 sumiu do CHANGELOG | **fechado** | Seção restaurada com o item que de fato saiu nela; sequência de versões íntegra; `distribution: OK` |
+| R10-3 — paridade prévia/apply sem teste no caminho de origem | **fechado** | Caso novo cobrindo os dois lados. Mutação: removendo a recusa do ponto de conflito, a prévia passa a aceitar enquanto o apply recusa — exatamente a inversão descrita |
+| R10-4, R10-5 — as duas metades do R6-2 sem prova | **fechado** | Caso novo cobrindo os dois verbos. Mutação: a troca vira `QUIESCING`/exit 0 e a tomada vira prévia/exit 0, em vez de recusar |
+| q1 — fail-closed de carimbo malformado | **fechado** | Uma linha no caso direto; mutação confirmada |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## O T067 fechou um conserto que estava aberto desde a Phase 11
+
+Vale nomear, porque é o achado mais instrutivo da entrega sobre o próprio método.
+
+O R6-2 mandou acrescentar a comparação de vínculo na preparação de troca e na tomada, com o argumento de que a preparação *"cria a operação, grava o ponto de retomada e libera o líder antes de qualquer checagem"*. O conserto entrou na Phase 11 e foi **aprovado em cinco rodadas de review seguidas**.
+
+Só que, até hoje, trocar qualquer uma das duas chamadas por continuação deixava os 51 testes verdes. O conserto estava certo e **completamente desprotegido**.
+
+Ele só apareceu porque o R10 mutou o que já estava dado por pronto. A regra que esta entrega vinha aplicando a código novo — provar por mutação — precisava valer também **retroativamente**, para consertos aprovados antes da regra existir.
+
+## O que a partição léxica não enxerga
+
+O T065 caiu como tarefa **não mapeada**: `CHANGELOG.md` está na raiz e não contém barra, então o extrator de caminhos não o vê, e o nó que recebeu a tarefa não tem o arquivo no grant. Um worker despachado ali reprovaria com `GRANT-SCOPE-VIOLATION` ao tocar o único arquivo que a tarefa manda tocar.
+
+Editar o DAG à mão é o remédio que o projeto proíbe. A saída foi o coordenador executar a tarefa e registrar o porquê no sidecar do nó — mesma natureza da correção retroativa feita no sidecar do `p14-b` na rodada 20, e legítima porque o conserto era da **própria resolução de merge do coordenador**.
+
+Registro como limitação conhecida: **tarefa cujo alvo é arquivo de raiz sem barra no nome nunca entra em grant de worker**.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1507** testes, 0 falhas. O validador de orquestração foi de 51 a **53**, com os dois métodos novos.
+
+As cinco mutações desta fase foram medidas antes de qualquer tarefa ser declarada pronta, cada uma em cópia nova — a ressalva metodológica que o R10 levantou, depois de reusar o mesmo diretório ter produzido falso positivo.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.13 sem publicar
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R11.
