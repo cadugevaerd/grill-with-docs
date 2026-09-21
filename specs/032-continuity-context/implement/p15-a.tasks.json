@@ -63,5 +63,11 @@
   "out_of_scope_confirmed_not_touched": [
     "specs/032-continuity-context/review.md:1284,1288 (citacao historica do achado da R7 -- fora do meu grant, ja flagueado por p15-b)",
     "plugin/skills/grill-with-docs/scripts/grill_workspace.py (produto) -- ja corrigido por p15-b nesta mesma wave; nao tocado por mim"
+  ],
+  "completed": [
+    "T060",
+    "T061",
+    "T062",
+    "T063"
   ]
 }

@@ -52,14 +52,46 @@
       "scan": {
         "method": "grep -n DEVELOPMENT-SCHEMA no arquivo inteiro + leitura de contexto de cada ocorrencia para achar outras afirmacoes sobre alcance/efetividade dessa guarda especifica",
         "occurrences_checked": [
-          {"lines": "3289-3296", "site": "comentario T055 dentro de _continuity_identity", "finding": "ja correto -- ja documenta que o guarda de _continuity_refuse_branch_contradiction roda DEPOIS desta funcao nos tres verbos; nenhuma edicao necessaria"},
-          {"lines": "3299", "site": "raise dentro de _continuity_identity", "finding": "e o raise efetivo hoje; sem comentario de alcance a corrigir"},
-          {"lines": "3334-3337 (antes)/3334-3341 (depois)", "site": "docstring T047 de _continuity_refuse_branch_contradiction", "finding": "alvo do T059 -- corrigido"},
-          {"lines": "3354", "site": "raise redundante dentro de _continuity_refuse_branch_contradiction", "finding": "guarda mantida, nao removida, conforme instrucao doutrinaria"},
-          {"lines": "5915", "site": "comando nao-continuidade (step-confirmation mint), validacao de forma da trilha/audit", "finding": "guarda distinta, sem relacao com o alcance da guarda do T059; nenhuma alegacao falsa"},
-          {"lines": "5978", "site": "confirmacao de etapa -- elif de tipo invalido de existing_branch", "finding": "guarda distinta (branch, nao development); sem alegacao falsa"},
-          {"lines": "6097", "site": "virada de fase -- REASON-REQUIRED, nao relacionado", "finding": "sem relacao"},
-          {"lines": "6142", "site": "virada de fase -- elif de tipo invalido de previous_execution_branch", "finding": "guarda distinta (branch, nao development); sem alegacao falsa"}
+          {
+            "lines": "3289-3296",
+            "site": "comentario T055 dentro de _continuity_identity",
+            "finding": "ja correto -- ja documenta que o guarda de _continuity_refuse_branch_contradiction roda DEPOIS desta funcao nos tres verbos; nenhuma edicao necessaria"
+          },
+          {
+            "lines": "3299",
+            "site": "raise dentro de _continuity_identity",
+            "finding": "e o raise efetivo hoje; sem comentario de alcance a corrigir"
+          },
+          {
+            "lines": "3334-3337 (antes)/3334-3341 (depois)",
+            "site": "docstring T047 de _continuity_refuse_branch_contradiction",
+            "finding": "alvo do T059 -- corrigido"
+          },
+          {
+            "lines": "3354",
+            "site": "raise redundante dentro de _continuity_refuse_branch_contradiction",
+            "finding": "guarda mantida, nao removida, conforme instrucao doutrinaria"
+          },
+          {
+            "lines": "5915",
+            "site": "comando nao-continuidade (step-confirmation mint), validacao de forma da trilha/audit",
+            "finding": "guarda distinta, sem relacao com o alcance da guarda do T059; nenhuma alegacao falsa"
+          },
+          {
+            "lines": "5978",
+            "site": "confirmacao de etapa -- elif de tipo invalido de existing_branch",
+            "finding": "guarda distinta (branch, nao development); sem alegacao falsa"
+          },
+          {
+            "lines": "6097",
+            "site": "virada de fase -- REASON-REQUIRED, nao relacionado",
+            "finding": "sem relacao"
+          },
+          {
+            "lines": "6142",
+            "site": "virada de fase -- elif de tipo invalido de previous_execution_branch",
+            "finding": "guarda distinta (branch, nao development); sem alegacao falsa"
+          }
         ],
         "conclusion": "Unica alegacao falsa sobre o alcance da guarda DEVELOPMENT-SCHEMA de _continuity_refuse_branch_contradiction era o paragrafo T047 da propria docstring, corrigido. As demais 7 ocorrencias de DEVELOPMENT-SCHEMA no arquivo sao guardas distintas (branch shape, audit/sequence shape) sem alegacao de alcance a corrigir, ou o proprio comentario T055 que ja documentava a redundancia corretamente."
       }
@@ -72,5 +104,9 @@
   "out_of_scope_confirmed_not_touched": [
     "tests/validate_agent_orchestration_contract.py:1574-1578 (docstring + recibo de reversao forjado, e cobertura propria da guarda -- pertencem ao no p15-a, que roda depois de mim)",
     "specs/032-continuity-context/review.md:1284,1288 (citacao historica do achado da R7 -- fora do meu grant)"
+  ],
+  "completed": [
+    "T058",
+    "T059"
   ]
 }
