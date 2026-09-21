@@ -891,3 +891,64 @@ R4-4 e R4-5 seguem **não verificáveis**, porque nunca foram declarados fechado
 ## Próxima ação
 
 Executar `implement-parallel` na Phase 14 e reconvergir. T054 e T055 tocam o produto; T056 e T057 tocam o teste, e o T057 depende do T055 ter entrado.
+
+---
+
+# Rodada 18 — 2026-09-20, após a Phase 14
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T057), constituição · **Desfecho**: `converged`
+
+Phase 14 entregue pelos nós `p14-a` (`c4d7ea1`) e `p14-b` (`af530ba`) da run `run-0e0e55b9387b153ab355e4ae`, serializados: o segundo depende do primeiro ter entrado.
+
+## Achados do R8
+
+| Achado | Situação | Prova no código integrado |
+|---|---|---|
+| R8-1 — o comentário da tupla estrutural afirmava que a branca nunca é comparada | **fechado** | A frase foi estreitada no lugar: `"stay OUT of it"`, `"comparing the stamped value"`, e uma linha final nomeando `_continuity_refuse_branch_contradiction` e a fonte contra a qual ele compara. Os dois exemplares corretos que já existiam não foram tocados |
+| R8-3 — a recusa por esquema era inalcançável com fase ativa nula | **fechado** | `_continuity_identity` valida o tipo do bloco **antes** de resolver a fase, e levanta a recusa nomeada incondicionalmente. Medido nos dois lados: antes `AttributeError`, depois a recusa |
+| R8-2 — o conserto do R7-2 não fechava o buraco do subcaso que anotava | **fechado** | O subcaso coincidente foi **removido**, junto com o comentário falso. Com dois subcasos, a mutação que antes passava agora falha |
+| n1 — a justificativa do sítio de cunhagem | **fechado** | A alegação de que a branca já fora verificada a montante saiu; a conclusão do T048 permanece, com a razão certa |
+| n2 — asserção trivialmente verdadeira | **fechado** | Movida para dentro da condição |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## A regra que esta fase confirmou
+
+A rodada 17 registrou uma regularidade e a Phase 14 a testou:
+
+> toda vez que a correção de uma cobertura falsa foi escrita sem rodar a mutação que a motivou, ela não fechou o buraco.
+
+Desta vez as mutações foram rodadas **antes** de declarar pronto, e ambas falharam pela asserção certa:
+
+| Mutação | Asserção que falhou |
+|---|---|
+| suprimir a escrita da branca no enxerto de sucessão | `'master' != 'a-branch-nobody-was-on'`, no subcaso contraditório |
+| reverter a validação de tipo no produto | `(2, 'UNEXPECTED-FAILURE') != (2, 'DEVELOPMENT-SCHEMA')` |
+
+A primeira responde à dúvida que a remoção levantava: com dois subcasos em vez de três, **o poder de detecção sobrevive inteiro**. O subcaso removido não estava protegendo nada — era o que absorvia a mutação e a fazia parecer detectada.
+
+A segunda prova que o caso novo mede a guarda nova, e não o caminho antigo que já funcionava. Sem o conserto do produto, o caso com fase ativa nula quebra antes de chegar à recusa nomeada.
+
+## O que a entrega acumulou sobre si mesma
+
+Esta é a oitava rodada de review e a décima oitava de convergência. O que mudou de natureza, e vale registrar antes do fechamento:
+
+- **R1 a R4** acharam defeito de comportamento, incluindo dois Critical de identidade comparada com campos que se movem;
+- **R5 a R7** acharam sobretudo **reincidência**: a mesma regra em cópias, depois a mesma regra reintroduzida por outro caminho;
+- **R8** não achou nenhum defeito de comportamento. Os três Important foram afirmações contradizendo o código, e duas delas eram minhas, escritas no converge da rodada anterior.
+
+A curva é a esperada de uma entrega convergindo, mas o custo foi alto e a causa é nomeável: **três instruções minhas seguidas ancoraram recusas em estado não reavaliável**, e uma quarta declarou fechado um comentário sem verificá-lo.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1496** testes, 0 falhas. O validador de orquestração fechou em **44**, estável — a Phase 14 removeu um subcaso e não acrescentou caso novo.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R9.
