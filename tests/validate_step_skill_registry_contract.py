@@ -1314,6 +1314,9 @@ class Hygiene(Base):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         }
         expected_handlers = {
+            # Governance recovery may CAS-update only the work-item digest in
+            # an existing activation; it cannot resolve or alter step skills.
+            "constitution-reseal": "constitution_reseal_command",
             "gauntlet-init": "gauntlet_init_command",
             "gauntlet-status": "gauntlet_status_command",
             "gauntlet-run": "gauntlet_run_command",
@@ -1411,6 +1414,7 @@ class Hygiene(Base):
         # is what this set exists to prevent. It refuses before reading
         # anything when the step's execution class forbids a leader receipt.
         permitted_loaders = {
+            "reconcile_resealed_activation",
             "gauntlet_init_command",
             "gauntlet_activation_projection",
             "gauntlet_run_admission",

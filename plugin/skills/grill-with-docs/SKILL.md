@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v6.0.3
+# Grill with Docs v6.0.12
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -177,6 +177,8 @@ Se a Constituição estiver ausente antes de `init`, trate como bootstrap penden
 5. aceite somente `PASS` ou `NOT-APPLICABLE`, ambos com evidência e justificativa.
 
 Cobertura ausente/duplicada, status desconhecido, `PENDING`, `UNMAPPED`, `BLOCKED`, `VIOLATION`, placeholder, ambiguidade ou hash stale terminam em `BLOCKED-CONSTITUTION` (exit `3`). Se a Constituição aparecer ou mudar, revalide todo o work item. Não há waiver constitucional.
+
+Uma alteração aprovada é re-selada pelo líder atual, sempre preview-first: `constitution-reseal ROOT --work-id ID --context-id CTX --epoch N --session-ref REF --human-evidence EVIDENCE`, seguido de `--apply --expected-sha256 HASH`. O apply preserva o selo anterior em `constitution_reseals`, atualiza check/estado como um único bundle e reconcilia por CAS a activation. Se o contexto já tiver activation write-once, retorna `continuity_required=true`; crie contexto sucessor pelo protocolo normal, sem reescrever o contexto antigo.
 
 ## Entrevista incremental
 

@@ -648,6 +648,22 @@ def validate_constitution_check(root: Path, files: dict[str, bytes], recorded: d
     return {"state": "present", "sha256": current["sha256"], "clauses": len(expected)}
 
 
+def constitution_reseal_check(info: dict[str, Any], clauses: list[dict[str, str]], evidence: str) -> bytes:
+    payload = {
+        "constitution_state": "present",
+        "constitution_sha256": info["sha256"],
+        "clauses": [{
+            "id": clause["id"], "heading": clause["heading"], "status": "PASS",
+            "evidence": [evidence], "justification": "approved after reviewing the amended constitution",
+        } for clause in clauses],
+    }
+    return (
+        "# Constitution Check\n\n" + CHECK_START + "\n```json\n"
+        + json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2)
+        + "\n```\n" + CHECK_END + "\n"
+    ).encode("utf-8")
+
+
 def workflow_info(root: Path) -> dict[str, Any]:
     path = root / "WORKFLOW.md"
     if not path.exists():
@@ -1045,6 +1061,29 @@ def write_bundle_staging(root: Path, work_id: str, metadata: dict[str, Any], fil
             (json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
         )
         return staging
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+
+def replace_work_item_bundle(root: Path, target: Path, metadata: dict[str, Any], files: dict[str, bytes]) -> None:
+    """Publish a complete replacement and restore the old bundle on failure."""
+    parent = target.parent
+    staging = write_bundle_staging(root, target.name, metadata, files)
+    backup = parent / f".{target.name}-backup-{uuid.uuid4().hex}"
+    try:
+        rename_child(parent, target, backup)
+        try:
+            rename_child(parent, staging, target)
+            read_local_bundle(root, target)
+        except Exception:
+            failed = parent / f".{target.name}-failed-{uuid.uuid4().hex}"
+            if target.exists():
+                rename_child(parent, target, failed)
+            rename_child(parent, backup, target)
+            shutil.rmtree(failed, ignore_errors=True)
+            raise
+        shutil.rmtree(backup, ignore_errors=True)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
@@ -1632,6 +1671,19 @@ def _require_current_leader(root: Path, work_id: str, context: dict[str, Any], s
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "current leader changed")
 
 
+def _require_released_leader(root: Path, work_id: str, context: dict[str, Any], session_ref: str) -> dict[str, Any]:
+    runtime = grill_core_module("agent_runtime")
+    try:
+        observed = _leader_boundary(root, context["runtime"], session_ref, work_id).observe_released(
+            allow_unarchived_stopped=True)
+    except runtime.RuntimeError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-RELEASE-UNPROVEN", str(exc)) from exc
+    if (context["leader"].get("session_ref") != observed["source_ref"]
+            or context["leader"].get("incarnation") != observed["incarnation"]):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-RELEASE-UNPROVEN", "released leader changed")
+    return observed
+
+
 def _orchestration_inputs(root: Path, work_id: str, runtime: str, session_ref: str | None,
                           scope_files: list[str], readiness: dict[str, Any] | None = None) -> tuple[Any, dict[str, Any]]:
     item = resolve_development_item(root, work_id)
@@ -1705,11 +1757,21 @@ def _adoption_conflict(root: Path, work_id: str, inputs: dict[str, Any], policy_
     existing = existing_snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
     if not isinstance(existing, dict):
         return existing_snapshot, None
-    if existing.get("origin") != inputs["origin"] or existing.get("policy_sha256") != policy_sha256:
+    if existing.get("policy_sha256") != policy_sha256:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
     current = existing.get("contexts", {}).get(existing.get("current_context_id"))
     if current is not None and not _same_observed_leader(current, incoming):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "existing context has different runtime or session")
+    # Merge note (main 6.0.11): a changed origin is no longer refused outright.
+    # The apply closure below refreshes `presentation` in place when a current
+    # context exists and the declared scope is unchanged, so mirroring the
+    # refusal here means mirroring that exception too -- otherwise the preview
+    # is stricter than the apply, which is the inversion this helper exists to
+    # prevent. The order matches the apply: policy digest, then leader fence,
+    # then origin.
+    if existing.get("origin") != inputs["origin"] and (
+            current is None or existing.get("scope_files") != inputs["scope_files"]):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
     return existing_snapshot, existing
 
 
@@ -1748,11 +1810,16 @@ def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any
                 inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
                 adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), context_id=context_id))
         item = block["work_items"][args.work_id]
-        if item["origin"] != inputs["origin"] or item["policy_sha256"] != policy_sha256:
+        if item["policy_sha256"] != policy_sha256:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
         current = item.get("contexts", {}).get(item.get("current_context_id"))
         if current is not None and not _same_observed_leader(current, incoming):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "existing context has different runtime or session")
+        if item["origin"] != inputs["origin"]:
+            if current is None or item["scope_files"] != inputs["scope_files"]:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
+            current["presentation"] = inputs["presentation"]
+            return document
         if current is not None:
             current["presentation"] = inputs["presentation"]
         if item["scope_files"] != inputs["scope_files"]:
@@ -1858,16 +1925,11 @@ def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: 
         if contract.checkpoint_content_sha256(content) != existing.get("result_sha256"):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CONTENT-INVALID", args.operation_id)
         return {"verdict": "REUSED", "work_id": args.work_id, **content["result"], "store_revision": snapshot.revision}
+    accepted_campaign = _checkpoint_campaign(item, context, state, args.work_id)
     state_after = (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
     relative_state = state_path.relative_to(root).as_posix()
     checkpoint_id = "cp-" + store.jcs_sha256({"store_origin": request["store_origin"], "work_id": args.work_id, "operation_id": args.operation_id})
     cleanup_obligations, preserved_resources = _cleanup_checkpoint_projection(root, args.work_id)
-    accepted_campaign = context["campaign"]
-    development_campaign = state.get("development", {}).get("attestation_campaign")
-    if accepted_campaign is None and isinstance(development_campaign, dict):
-        accepted_campaign = development_campaign
-    elif accepted_campaign is not None and isinstance(development_campaign, dict) and accepted_campaign != development_campaign:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CAMPAIGN-DIVERGENT", args.work_id)
     checkpoint = {
         "schema": contract.CHECKPOINT_SCHEMA_V2, "checkpoint_id": checkpoint_id, "context_id": context_id,
         "previous_checkpoint_id": item.get("checkpoint_head"), "worktree_identity": context.get("worktree_identity", {}),
@@ -1930,6 +1992,37 @@ def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: 
     except store.StoreError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
     return {"verdict": "UPDATED", "work_id": args.work_id, **result, "store_revision": committed.revision}
+
+
+def _checkpoint_campaign(item: dict[str, Any], context: dict[str, Any],
+                         state: dict[str, Any], work_id: str) -> dict[str, Any] | None:
+    """Advance development state only across validated continuity bridges."""
+    accepted = context["campaign"]
+    development = state.get("development", {})
+    current = development.get("attestation_campaign") if isinstance(development, dict) else None
+    if accepted is None and isinstance(current, dict):
+        return current
+    if accepted is None or not isinstance(current, dict) or accepted == current:
+        return accepted
+    cursor = context
+    visited: set[str] = set()
+    while isinstance(cursor, dict) and cursor.get("campaign") != current:
+        continuity_ref = cursor.get("continuity_ref")
+        if not isinstance(continuity_ref, str) or continuity_ref in visited:
+            break
+        visited.add(continuity_ref)
+        operation = item.get("operations", {}).get(continuity_ref, {})
+        bridge = operation.get("intended_after", {}).get("campaign_bridge") if isinstance(operation, dict) else None
+        if not isinstance(bridge, dict) or bridge.get("to_campaign") != cursor.get("campaign"):
+            break
+        if bridge.get("from_campaign") == current:
+            development["attestation_campaign"] = copy.deepcopy(accepted)
+            return accepted
+        predecessor = item.get("contexts", {}).get(cursor.get("predecessor_context_id"))
+        if not isinstance(predecessor, dict) or predecessor.get("campaign") != bridge.get("from_campaign"):
+            break
+        cursor = predecessor
+    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CHECKPOINT-CAMPAIGN-DIVERGENT", work_id)
 
 
 def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -2041,6 +2134,124 @@ def hotfix_go_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         output = ((exc.stdout or "") if isinstance(exc.stdout, str) else "")[:4096]
         return {"verdict": "NO-GO", "code": "CORRECTION-TEST-TIMEOUT", "output": output}, EXIT_NO_GO
     return {"verdict": "HOTFIX-GO", "code": "HOTFIX-GO", "work_id": args.work_id, "test": {"returncode": 0, "output": output}}, EXIT_OK
+
+
+def reconcile_resealed_activation(root: Path, bundle: ItemBundle, args: argparse.Namespace) -> dict[str, bool]:
+    """Project the bundle reseal into Gauntlet; bound contexts remain write-once."""
+    history = bundle.metadata.get("constitution_reseals")
+    if not isinstance(history, list) or not history:
+        return {"activation_reconciled": False, "continuity_required": False}
+    latest = history[-1]
+    check = bundle.files.get("CONSTITUTION-CHECK.md")
+    current = bundle.metadata["immutable"].get("constitution")
+    if (not isinstance(latest, dict) or latest.get("to") != current or check is None
+            or latest.get("check_sha256") != hash_bytes(check)):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONSTITUTION-RESEAL-SCHEMA", args.work_id)
+    raw = bundle.files["WORK-ITEM.json"]
+    document_sha256 = hash_bytes(raw)
+    gauntlet = grill_core_module("gauntlet")
+    work_item_v3 = grill_core_module("work_item_v3")
+    try:
+        previous, activation, config_changed = gauntlet.reseal_work_item_activation(
+            root=root, work_id=args.work_id, document_sha256=document_sha256, work_item_v3=work_item_v3)
+    except gauntlet.GauntletError as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+    store = grill_core_module("gauntlet_runs").store
+    snapshot = store.read_snapshot(root, required=False)
+    block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+    orchestrated = block.get("work_items", {}).get(args.work_id) if isinstance(block, dict) else None
+    if not isinstance(orchestrated, dict):
+        return {"activation_reconciled": config_changed, "continuity_required": False}
+    contract = grill_core_module("agent_orchestration")
+    context = orchestrated.get("contexts", {}).get(args.context_id)
+    try:
+        contract.require_authority(orchestrated, args.context_id, args.epoch, args.session_ref)
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+    if isinstance(context, dict) and context.get("activation") is None and activation is None:
+        return {"activation_reconciled": config_changed, "continuity_required": False}
+    if not isinstance(context, dict) or not isinstance(context.get("activation"), dict) or activation is None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-STALE", "resealed activation is unavailable")
+    bound_sha256 = context["activation"].get("work_item", {}).get("document_sha256")
+    if bound_sha256 == document_sha256:
+        return {"activation_reconciled": config_changed, "continuity_required": False}
+    if previous != document_sha256 and bound_sha256 != previous:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "IDENTITY-STALE", "activation changed during reseal")
+    return {"activation_reconciled": config_changed, "continuity_required": True}
+
+
+def constitution_reseal_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Rebind a stale work item to the current Constitution under the leader fence."""
+    root = project_root(args.root)
+    if not isinstance(args.human_evidence, str) or not args.human_evidence.strip():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONSTITUTION-EVIDENCE-REQUIRED", "--human-evidence is required")
+    item = root / ".grill" / "work-items" / args.work_id
+    lock = acquire_lock(root, args.work_id, item) if args.apply else None
+    try:
+        bundle = read_local_bundle(root, item)
+        immutable = validate_metadata(bundle.metadata, args.work_id)
+        previous_check = bundle.files.get("CONSTITUTION-CHECK.md")
+        if previous_check is None:
+            raise CliFailure(EXIT_CONSTITUTION, "BLOCKED-CONSTITUTION", "CHECK-MISSING", "CONSTITUTION-CHECK.md")
+        current, _text, clauses = constitution_info(root)
+        if current.get("state") != "present":
+            raise CliFailure(EXIT_CONSTITUTION, "BLOCKED-CONSTITUTION", "CONSTITUTION-NOT-PRESENT", args.work_id)
+        recorded = immutable.get("constitution", {})
+        if recorded.get("state") == current["state"] and recorded.get("sha256") == current["sha256"]:
+            constitutional = validate_constitution_check(root, bundle.files, recorded)
+            activation_status = reconcile_resealed_activation(root, bundle, args)
+            return {"verdict": "REUSED", "code": "CONSTITUTION-ALREADY-SEALED", "work_id": args.work_id,
+                    "constitutional": constitutional, **activation_status}, EXIT_OK
+        check = constitution_reseal_check(current, clauses, args.human_evidence.strip())
+        request = {
+            "work_id": args.work_id, "bundle_fingerprint": bundle.fingerprint,
+            "from": recorded, "to": current, "check_sha256": hash_bytes(check),
+            "human_evidence": args.human_evidence.strip(), "context_id": args.context_id,
+            "epoch": args.epoch, "session_ref": args.session_ref,
+        }
+        expected = hash_bytes(canonical(request))
+        if not args.apply:
+            return {"verdict": "PREVIEW", "code": "CONSTITUTION-RESEAL-READY", "work_id": args.work_id,
+                    "from_sha256": recorded.get("sha256"), "to_sha256": current["sha256"],
+                    "expected_sha256": expected}, EXIT_OK
+        if args.expected_sha256 != expected:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONSTITUTION-RESEAL-STALE", "reseal inputs changed")
+        files = {path: data for path, data in bundle.files.items() if path != "WORK-ITEM.json"}
+        state_raw = files.get("state.json")
+        try:
+            state = json.loads(state_raw.decode("utf-8")) if state_raw is not None else None
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STATE-SCHEMA", args.work_id) from exc
+        if not isinstance(state, dict):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STATE-SCHEMA", args.work_id)
+        state["constitution"] = current
+        files["state.json"] = (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+        files["CONSTITUTION-CHECK.md"] = check
+        metadata = copy.deepcopy(bundle.metadata)
+        previous_immutable_sha256 = metadata["immutable_sha256"]
+        metadata["immutable"]["constitution"] = current
+        metadata["immutable_sha256"] = hash_bytes(canonical(metadata["immutable"]))
+        history = metadata.setdefault("constitution_reseals", [])
+        if not isinstance(history, list):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONSTITUTION-RESEAL-SCHEMA", args.work_id)
+        history.append({
+            "schema": "grill-constitution-reseal/v1", "from": recorded, "to": current,
+            "previous_immutable_sha256": previous_immutable_sha256,
+            "immutable_sha256": metadata["immutable_sha256"],
+            "previous_check_sha256": hash_bytes(previous_check),
+            "check_sha256": hash_bytes(check), "human_evidence": args.human_evidence.strip(),
+            "context_id": args.context_id, "epoch": args.epoch, "session_ref": args.session_ref,
+        })
+        validate_metadata(metadata, args.work_id)
+        validate_constitution_check(root, {**files, "WORK-ITEM.json": b""}, metadata["immutable"]["constitution"])
+        replace_work_item_bundle(root, item, metadata, files)
+        activation_status = reconcile_resealed_activation(root, read_local_bundle(root, item), args)
+        return {"verdict": "APPLIED", "code": "CONSTITUTION-RESEALED", "work_id": args.work_id,
+                "from_sha256": recorded.get("sha256"), "to_sha256": current["sha256"],
+                "expected_sha256": expected, **activation_status}, EXIT_OK
+    finally:
+        if lock is not None:
+            shutil.rmtree(lock, ignore_errors=True)
 
 
 def audit_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -3207,9 +3418,11 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
                                        selected_epoch if selected_epoch is not None else context["epoch"], session_ref)
         except contract.OrchestrationError as exc:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
-        # Cleanup requires a current leader, independently of presentation.
+        # Cleanup and constitutional recovery require the current observed
+        # leader, but must remain usable when presentation itself is stale.
         cleanup = handler.__name__ == "gauntlet_cleanup_command"
-        if cleanup:
+        administrative_recovery = cleanup or handler.__name__ == "constitution_reseal_command"
+        if administrative_recovery:
             readiness = None
         else:
             try:
@@ -3220,7 +3433,7 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "runtime changed without continuity")
             readiness = _session_readiness(root, context["runtime"], session_ref, work_id=args.work_id)
         _require_current_leader(root, args.work_id, context, session_ref, readiness)
-        if not cleanup:
+        if not administrative_recovery:
             if any(context["presentation"].get(key) != readiness["presentation"].get(key)
                    for key in ("session_identity", "config_fingerprint", "scope", "policy_sha256", "gwd_skill_sha256")):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STYLE-SCOPE-CONFLICT", "presentation configuration changed; bootstrap again")
@@ -3242,6 +3455,9 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
         except store.StoreError as exc:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
     return wrapped
+
+
+constitution_reseal_command = _gauntlet_authorized(constitution_reseal_command)
 
 
 @_gauntlet_authorized
@@ -3363,11 +3579,18 @@ def _continuity_refuse_branch_contradiction(state: Any, identity: dict[str, str]
                          f"work item is bound to {sealed}")
 
 
-def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_id: str) -> tuple[list[str], list[str]]:
+def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_id: str,
+                           quiet_activity_ids: set[str] | None = None) -> tuple[list[str], list[str]]:
     """Only explicit terminal observations are quiet; lease expiry and silence are ignored."""
+    quiet_activity_ids = quiet_activity_ids or set()
     active, unknown = [], []
     for activity_id, activity in item.get("activities", {}).items():
-        if activity.get("state") in {"BOOTSTRAPPING", "VERIFIED", "DISPATCHED", "RESULT_RECORDED"}:
+        resource = item.get("resources", {}).get(activity.get("session_resource_id"))
+        result_session_closed = (activity.get("state") == "RESULT_RECORDED"
+            and isinstance(resource, dict) and resource.get("state") == "CLOSED"
+            and resource.get("result_acceptance_ref") == activity.get("result_ref"))
+        if (activity.get("state") in {"BOOTSTRAPPING", "VERIFIED", "DISPATCHED", "RESULT_RECORDED"}
+                and activity_id not in quiet_activity_ids and not result_session_closed):
             active.append("activity:" + activity_id)
     for resource_id, resource in item.get("resources", {}).items():
         if resource.get("kind") == "session" and resource.get("state") == "UNKNOWN":
@@ -3375,6 +3598,75 @@ def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_
     runs = document.get("work_items", {}).get(work_id, {}).get("gauntlet", {}).get("runs", {})
     worker_active, worker_unknown = grill_core_module("gauntlet_runs").continuity_worker_quiescence(runs)
     return sorted(active + worker_active), sorted(unknown + worker_unknown)
+
+
+def _released_activity_sessions(root: Path, item: dict[str, Any], work_id: str) -> dict[str, tuple[str, dict[str, Any]]]:
+    """Return pending result sessions whose exact Orca release archive is current."""
+    runtime = grill_core_module("agent_runtime")
+    released: dict[str, tuple[str, dict[str, Any]]] = {}
+    for activity_id, activity in item.get("activities", {}).items():
+        resource_id = activity.get("session_resource_id")
+        resource = item.get("resources", {}).get(resource_id)
+        identity = resource.get("identity", {}) if isinstance(resource, dict) else {}
+        dispatch = identity.get("owner_dispatch")
+        if (activity.get("state") != "RESULT_RECORDED" or activity.get("activity_type") != "author"
+                or not isinstance(resource_id, str)
+                or resource.get("state") not in {"CLOSE_PENDING", "CLOSED"}
+                or resource.get("kind") != "session" or resource.get("activity_id") != activity_id
+                or not isinstance(dispatch, str)):
+            continue
+        try:
+            observed = _leader_boundary(root, identity.get("provider"), "orca:" + dispatch, work_id).observe_released()
+        except (runtime.RuntimeError, TypeError):
+            continue
+        observed_identity = {key: observed.get(key) for key in (
+            "provider", "adapter", "host", "runtime_instance", "handle", "incarnation",
+            "owner_dispatch", "task_id", "dispatch_incarnation", "worktree_id")}
+        if identity == observed_identity:
+            released[activity_id] = (resource_id, observed)
+    return released
+
+
+def _transferred_activity_sessions(item: dict[str, Any]) -> dict[str, tuple[str, str, dict[str, str]]]:
+    """Find abandoned dispatches whose exact terminal was closed by an accepted retry."""
+    physical = ("provider", "adapter", "host", "runtime_instance", "handle", "incarnation",
+                "dispatch_incarnation", "worktree_id")
+    recovered: dict[str, tuple[str, str, dict[str, str]]] = {}
+    activities, resources = item.get("activities", {}), item.get("resources", {})
+    for activity_id, activity in activities.items():
+        resource_id = activity.get("session_resource_id")
+        resource = resources.get(resource_id)
+        if (activity.get("state") != "DISPATCHED" or not isinstance(resource_id, str)
+                or not isinstance(resource, dict) or resource.get("kind") != "session"
+                or resource.get("state") != "REGISTERED" or resource.get("activity_id") != activity_id):
+            continue
+        identity = resource.get("identity", {})
+        matches = []
+        for successor_id, successor in activities.items():
+            successor_resource = resources.get(successor.get("session_resource_id"))
+            if (successor_id == activity_id or successor.get("state") != "ACCEPTED"
+                    or successor.get("context_id") != activity.get("context_id")
+                    or successor.get("activity_type") != activity.get("activity_type")
+                    or successor.get("step_id") != activity.get("step_id")
+                    or successor.get("author_activity_ids") != activity.get("author_activity_ids")
+                    or not isinstance(successor_resource, dict) or successor_resource.get("state") != "CLOSED"
+                    or successor_resource.get("activity_id") != successor_id
+                    or successor_resource.get("result_acceptance_ref") != successor.get("acceptance_ref")):
+                continue
+            successor_identity = successor_resource.get("identity", {})
+            if (any(identity.get(key) != successor_identity.get(key) for key in physical)
+                    or identity.get("owner_dispatch") == successor_identity.get("owner_dispatch")
+                    or resource.get("creation_observation", {}).get("collected_at", "")
+                       >= successor_resource.get("creation_observation", {}).get("collected_at", "")):
+                continue
+            observation_ref = successor_resource.get("last_observation")
+            receipts = [receipt for receipt in successor_resource.get("evidence_manifest", {}).get("receipts", [])
+                        if receipt.get("ref") == observation_ref]
+            if len(receipts) == 1:
+                matches.append((resource_id, successor_id, copy.deepcopy(receipts[0])))
+        if len(matches) == 1:
+            recovered[activity_id] = matches[0]
+    return recovered
 
 
 def _continuity_operation(item: dict[str, Any], context_id: str, to_runtime: str) -> tuple[str, dict[str, Any]] | None:
@@ -3465,12 +3757,20 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
             or context.get("epoch") != args.epoch or context.get("leader", {}).get("session_ref") != args.session_ref
             or context.get("state") not in {"ACTIVE", "QUIESCING"}):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
-    _require_current_leader(root, args.work_id, context, args.session_ref)
+    released = _require_released_leader(root, args.work_id, context, args.session_ref) if args.released_source else None
+    if released is None:
+        _require_current_leader(root, args.work_id, context, args.session_ref)
+    released_sessions = _released_activity_sessions(root, item, args.work_id) if released is not None else {}
+    transferred_sessions = _transferred_activity_sessions(item) if released is not None else {}
     state_path, state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)
     identity = _continuity_identity(root, args.work_id, state)
     sealed = context.get("worktree_identity")
     # An absent stamp is stamped below for the first time; a present one is
-    # judged on the structural tuple only, like the takeover.
+    # judged on the structural tuple only, like the takeover. Merge note (main
+    # 6.0.11): the incoming side compared the whole identity mapping, which is
+    # the J1/H1 defect this delivery closed -- `phase` and `branch` move in
+    # normal life and no verb re-stamps them. The structural comparison is
+    # kept; only the released-leader logic is taken from the incoming side.
     if sealed is not None and not _continuity_identity_matches(sealed, identity):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "worktree identity changed")
     _continuity_refuse_branch_contradiction(state, identity, args.work_id)
@@ -3523,7 +3823,8 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
         checkpoint_id = operation.get("expected_before", {}).get("checkpoint_id")
         if not isinstance(checkpoint_id, str):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", operation_id)
-    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
+    quiet_sessions = set(released_sessions) | set(transferred_sessions)
+    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id, quiet_sessions)
     began_active = context["state"] == "ACTIVE"
     def mutate(document: dict[str, Any]) -> dict[str, Any]:
         target = document["agent_orchestration"]["work_items"][args.work_id]
@@ -3537,6 +3838,38 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
             target["checkpoints"][source_checkpoint] = copy.deepcopy(initial_checkpoint)
             target["checkpoint_head"] = source_checkpoint
         target["operations"].setdefault(operation_id, copy.deepcopy(operation))
+        for activity_id, (resource_id, observation) in released_sessions.items():
+            activity = target["activities"].get(activity_id)
+            resource = target["resources"].get(resource_id)
+            if (not isinstance(activity, dict) or activity.get("state") != "RESULT_RECORDED"
+                    or not isinstance(resource, dict) or resource.get("identity") != item["resources"][resource_id]["identity"]
+                    or resource.get("state") not in {"CLOSE_PENDING", "CLOSED"}):
+                raise store.StoreError(store.STATE_DIVERGENCE, "released activity session changed")
+            if resource["state"] == "CLOSE_PENDING":
+                release_ref = observation["source_ref"] + ":release"
+                receipt = {"ref": release_ref, "sha256": observation["source_sha256"]}
+                if receipt not in resource["evidence_manifest"]["receipts"]:
+                    resource["evidence_manifest"]["receipts"].append(receipt)
+                resource.update({"state": "CLOSED", "last_observation": release_ref,
+                                 "result_acceptance_ref": activity["result_ref"]})
+                activity.update({"released_at": observation["source_ref"],
+                                 "accepted_by_context": source["context_id"],
+                                 "acceptance_ref": activity["result_ref"],
+                                 "review_verdict": "APPROVED", "state": "ACCEPTED"})
+        for activity_id, (resource_id, successor_id, receipt) in transferred_sessions.items():
+            activity = target["activities"].get(activity_id)
+            resource = target["resources"].get(resource_id)
+            successor = target["activities"].get(successor_id)
+            if (not isinstance(activity, dict) or activity.get("state") != "DISPATCHED"
+                    or not isinstance(resource, dict) or resource.get("state") != "REGISTERED"
+                    or not isinstance(successor, dict) or successor.get("state") != "ACCEPTED"):
+                raise store.StoreError(store.STATE_DIVERGENCE, "transferred activity session changed")
+            if receipt not in resource["evidence_manifest"]["receipts"]:
+                resource["evidence_manifest"]["receipts"].append(copy.deepcopy(receipt))
+            resource.update({"state": "PRESERVED", "last_observation": receipt["ref"],
+                             "preservation_reasons": ["RESULT_NOT_DURABLE"], "operation_id": operation_id})
+            activity.update({"state": "FAILED", "diagnostic_ref":
+                             f"orca:{resource['identity']['owner_dispatch']}:superseded-by:{successor_id}"})
         source.setdefault("worktree_identity", copy.deepcopy(identity))
         if source["campaign"] is None and operation["intended_after"]["campaign_bridge"] is not None:
             source["campaign"] = copy.deepcopy(operation["intended_after"]["campaign_bridge"]["from_campaign"])
@@ -3550,6 +3883,8 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
                     identity=identity, store_revision=document["revision"] + 1, journal_anchor=document["journal_head"])
                 target["checkpoints"][checkpoint_id] = checkpoint; target["checkpoint_head"] = checkpoint_id
             target["operations"][operation_id]["state"] = "APPLIED"
+            if released is not None:
+                target["operations"][operation_id]["observation_ref"] = released["source_ref"]
         return document
     try:
         committed = store.transact(root, mutate)
@@ -4191,14 +4526,9 @@ def gauntlet_partition_brief_command(args: argparse.Namespace) -> tuple[dict[str
         phase_match = re.match(r"^p(\d+)-", args.node_id)
         if phase_match is None:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "v2 node has no phase identity")
-        runs = grill_core_module("gauntlet_runs")
-        try:
-            guard = runs.task_phase_barrier(dag, report, target_phase=int(phase_match.group(1)),
-                                            dag_content_sha256=hash_bytes(safe_read_regular_fd(root, root / args.dag)))
-        except runs.GauntletRunError as error:
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
-        if guard["pending"]:
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", ",".join(guard["pending"]))
+        # This command only renders a read-only brief.  The mutable scheduler
+        # entrances enforce the phase barrier against current accepted-task
+        # receipts before a wave or worker can exist.
         results = node["result_files"]
         lines = [
             f"You are worker {args.node_id} of feature {dag.get('feature')}.", "",
@@ -4519,15 +4849,50 @@ def _require_scheduler_task_phase(root: Path, gauntlet_runs: Any,
             if phase not in targets:
                 targets.append(phase)
         legacy = False
+        accepted_tasks = _scheduler_accepted_tasks(root, args.work_id, dag, dag_sha256)
     for target_phase in targets:
         try:
             guard = gauntlet_runs.task_phase_barrier(
                 dag, report, target_phase=target_phase, dag_content_sha256=dag_sha256, legacy=legacy,
+                accepted_tasks=None if legacy else accepted_tasks,
             )
         except gauntlet_runs.GauntletRunError as error:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
         if guard["pending"]:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", ",".join(guard["pending"]))
+
+
+def _scheduler_accepted_tasks(root: Path, work_id: str, dag: Mapping[str, Any],
+                              dag_sha256: str) -> dict[str, Any]:
+    """Project accepted task activities without rewriting the sealed DAG."""
+    store = grill_core_module("store")
+    snapshot = store.read_snapshot(root)
+    item = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
+    if not isinstance(item, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "orchestration item is absent")
+    context_id = item.get("current_context_id")
+    semantic = dag.get("tasks_semantic_sha256")
+    accepted = dict(dag.get("accepted_tasks") or {})
+    for activity_id, activity in item.get("activities", {}).items():
+        if not isinstance(activity, dict) or activity.get("state") != "ACCEPTED":
+            continue
+        binding = activity.get("task_binding")
+        if (activity.get("step_id") != "implement-parallel" or activity.get("context_id") != context_id
+                or activity.get("accepted_by_context") != context_id or not isinstance(binding, dict)
+                or binding.get("tasks_semantic_sha256") != semantic
+                or binding.get("dag_content_sha256") != dag_sha256):
+            continue
+        task_id = binding.get("task_id")
+        if not isinstance(task_id, str):
+            continue
+        receipt = {"state": "ACCEPTED", "task_binding": binding,
+                   "activity_id": activity_id, "acceptance_ref": activity.get("acceptance_ref")}
+        previous = accepted.get(task_id)
+        if previous is not None and (previous.get("state"), previous.get("task_binding")) != (
+                receipt["state"], receipt["task_binding"]):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-RESULT-DIVERGENT", task_id)
+        accepted[task_id] = receipt
+    return accepted
 
 
 def gauntlet_dag_validate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -5454,7 +5819,7 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     input_divergent = existing is not None and existing.get("input_sha256") != current_input_sha256
     if existing is None or (input_divergent and not (args.phase == "accept"
                                                       and args.kind == "reviewer"
-                                                      and existing.get("state") == "DISPATCHED")):
+                                                      and existing.get("state") in {"DISPATCHED", "RESULT_RECORDED"})):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-INPUT-DIVERGENT", args.activity_id)
     if args.phase == "dispatch":
         if args.kind != "deterministic_check" and not args.observation:
@@ -5512,11 +5877,13 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
 
     if args.phase != "accept":
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ACTIVITY-PHASE", args.phase)
-    if existing.get("state") != "DISPATCHED":
+    if existing.get("state") not in {"DISPATCHED", "RESULT_RECORDED"}:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
     if not args.result and not args.diagnostic:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-REQUIRED", args.activity_id)
     if args.diagnostic and not args.result:
+        if existing.get("state") != "DISPATCHED":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
         diagnostic = _checkpoint_ref(root, args.diagnostic)
         assert diagnostic is not None
         failed = copy.deepcopy(existing); failed.update({"diagnostic_ref": diagnostic["ref"], "state": "FAILED"})
@@ -5527,21 +5894,29 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     result = _checkpoint_ref(root, args.result)
     assert result is not None
     output = {"files": [], "return_ref": result, "effect_ref": None}
-    try:
-        recorded = contract.record_activity_result(existing, result_ref=result["ref"], result_sha256=result["sha256"],
-                                                   output_manifest=output, diagnostic_ref=None)
-    except contract.OrchestrationError as exc:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-INVALID", str(exc)) from exc
-    def record(document: dict[str, Any]) -> dict[str, Any]:
-        updated = _replace_activity(document, args.work_id, args.activity_id, existing, recorded)
-        if recorded["activity_type"] != "deterministic_check":
-            resource_id = recorded["session_resource_id"]
-            resource = updated["agent_orchestration"]["work_items"][args.work_id]["resources"].get(resource_id)
-            if not isinstance(resource, dict) or resource.get("state") != "REGISTERED":
-                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
-            resource["state"] = "CLOSE_PENDING"
-        return updated
-    committed = store.transact(root, record)
+    if existing["state"] == "DISPATCHED":
+        try:
+            recorded = contract.record_activity_result(existing, result_ref=result["ref"], result_sha256=result["sha256"],
+                                                       output_manifest=output, diagnostic_ref=None)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-INVALID", str(exc)) from exc
+        def record(document: dict[str, Any]) -> dict[str, Any]:
+            updated = _replace_activity(document, args.work_id, args.activity_id, existing, recorded)
+            if recorded["activity_type"] != "deterministic_check":
+                resource_id = recorded["session_resource_id"]
+                resource = updated["agent_orchestration"]["work_items"][args.work_id]["resources"].get(resource_id)
+                if not isinstance(resource, dict) or resource.get("state") != "REGISTERED":
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
+                resource["state"] = "CLOSE_PENDING"
+            return updated
+        committed = store.transact(root, record)
+        recorded_revision = committed.revision
+    else:
+        recorded = existing
+        if (recorded.get("result_ref") != result["ref"] or recorded.get("result_sha256") != result["sha256"]
+                or recorded.get("output_manifest") != output or recorded.get("diagnostic_ref") is not None):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-RESULT-INVALID", args.activity_id)
+        recorded_revision = snapshot.revision
     if args.kind == "deterministic_check":
         snapshot = store.read_snapshot(root); item, bound = current(snapshot.document)
         recorded = item["activities"][args.activity_id]
@@ -5557,7 +5932,7 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
                 "store_revision": committed.revision}, EXIT_OK
     if not args.observation:
         return {"verdict": "RESULT-RECORDED", "activity_id": args.activity_id,
-                "store_revision": committed.revision}, EXIT_OK
+                "store_revision": recorded_revision}, EXIT_OK
     observation, _observation_ref = _activity_json(root, args.observation, "SPECIALIST-CAPABILITY-UNPROVEN")
     snapshot = store.read_snapshot(root); item, bound = current(snapshot.document)
     recorded = item["activities"][args.activity_id]
@@ -6302,6 +6677,15 @@ def build_parser() -> JsonParser:
     audit_parser.add_argument("--work-id")
     audit_parser.add_argument("--artifact-root")
     audit_parser.add_argument("--project-root")
+    reseal_parser = subparsers.add_parser("constitution-reseal")
+    reseal_parser.add_argument("root")
+    reseal_parser.add_argument("--work-id", required=True)
+    reseal_parser.add_argument("--context-id", required=True)
+    reseal_parser.add_argument("--epoch", type=int, required=True)
+    reseal_parser.add_argument("--session-ref", required=True)
+    reseal_parser.add_argument("--human-evidence", required=True)
+    reseal_parser.add_argument("--apply", action="store_true")
+    reseal_parser.add_argument("--expected-sha256")
     reconcile_parser = subparsers.add_parser("reconcile")
     reconcile_parser.add_argument("root")
     reconcile_parser.add_argument("--source-root", action="append", default=[])
@@ -6528,6 +6912,7 @@ def build_parser() -> JsonParser:
     prepare_switch_parser.add_argument("--epoch", type=int, required=True)
     prepare_switch_parser.add_argument("--session-ref", required=True)
     prepare_switch_parser.add_argument("--to-runtime", choices=("claude", "codex"), required=True)
+    prepare_switch_parser.add_argument("--released-source", action="store_true")
     context_takeover_parser = subparsers.add_parser("gauntlet-context-takeover")
     context_takeover_parser.add_argument("root")
     context_takeover_parser.add_argument("--work-id", required=True)
@@ -6594,6 +6979,7 @@ def main(argv: list[str] | None = None) -> int:
         handlers = {
             "init": init_command,
             "audit": audit_command,
+            "constitution-reseal": constitution_reseal_command,
             "reconcile": reconcile_command,
             "migrate": migrate_command,
             "migrate-v3": migrate_v3_command,

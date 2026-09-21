@@ -66,7 +66,7 @@ CONFIG_RELATIVE = ".grill/gauntlet.yaml"
 # transitions below still enter through the CLI.
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
-from grill_core import store
+from grill_core import gauntlet, store, work_item_v3
 
 ADAPTER = "claude-code-skill/v1"
 # Read from the SSOT for the active frontier. Restating the floors here is how
@@ -561,6 +561,26 @@ class GauntletInitContract(unittest.TestCase):
                 "trusted_asset_document_sha256": sha256_bytes(trusted_bytes),
             },
         )
+
+    def test_authorized_reseal_updates_only_work_item_identity_and_is_idempotent(self) -> None:
+        self.activate(2)
+        before = self.read_config()["activations"][WORK_ID]
+        item = self.root / ".grill/work-items" / WORK_ID / "WORK-ITEM.json"
+        metadata = strict_json_bytes(item.read_bytes(), source=str(item))
+        metadata["constitution_reseals"] = [{"schema": "grill-constitution-reseal/v1"}]
+        item.write_text(json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        digest = sha256_bytes(item.read_bytes())
+        previous, activation, changed = gauntlet.reseal_work_item_activation(
+            root=self.root, work_id=WORK_ID, document_sha256=digest, work_item_v3=work_item_v3)
+        self.assertTrue(changed)
+        self.assertEqual(previous, before["work_item"]["document_sha256"])
+        self.assertEqual(activation, {**before, "work_item": {"document_sha256": digest}})
+        previous, activation, changed = gauntlet.reseal_work_item_activation(
+            root=self.root, work_id=WORK_ID, document_sha256=digest, work_item_v3=work_item_v3)
+        self.assertFalse(changed)
+        self.assertEqual((previous, activation), (digest, self.read_config()["activations"][WORK_ID]))
+        process, payload = self.control("gauntlet-status")
+        self.assert_status_projection(process, payload, "ACTIVATED")
 
     def test_trust_swap_between_capture_and_resolver_uses_one_authorized_snapshot(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temporary:

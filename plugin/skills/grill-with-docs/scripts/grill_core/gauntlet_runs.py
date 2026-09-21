@@ -820,7 +820,8 @@ def validate_execution_dag(root: str | Path, work_id: str, run_id: str, dag_path
 
 
 def task_phase_barrier(dag: Mapping[str, Any] | None, report: Mapping[str, Any] | None, *, target_phase: int,
-                       dag_content_sha256: str, legacy: bool = False) -> dict[str, Any]:
+                       dag_content_sha256: str, legacy: bool = False,
+                       accepted_tasks: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Return the v2 task receipts still required before a later phase can run.
 
     The scheduler owns worker waves; this helper owns the complementary fact
@@ -835,7 +836,7 @@ def task_phase_barrier(dag: Mapping[str, Any] | None, report: Mapping[str, Any] 
             or type(target_phase) is not int or target_phase < 1 or not _hex64(dag_content_sha256)):
         _fail("TASK-PHASE-PENDING", "task phase barrier inputs are invalid")
     semantic = dag.get("tasks_semantic_sha256")
-    accepted = dag.get("accepted_tasks")
+    accepted = accepted_tasks if accepted_tasks is not None else dag.get("accepted_tasks")
     if not _hex64(semantic) or not isinstance(accepted, Mapping):
         _fail("TASK-PHASE-PENDING", "task phase barrier lacks accepted-task records")
     pending: list[str] = []

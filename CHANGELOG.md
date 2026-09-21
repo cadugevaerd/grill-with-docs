@@ -1,11 +1,48 @@
 # Changelog
 
-## 6.0.3
+## 6.0.12
 
 - Fix: o ciclo de vida do contexto de orquestração ganha transição de saída. Até a 6.0.2 um work item cujo líder encerrava a sessão ficava permanentemente inalcançável: `_bind_orchestration` só aceitava continuidade com observação de líder idêntica e `ACTIVE`, e a recusa `CONTEXT-FENCED` persistia mesmo com o líder anterior `RELEASED` ou o contexto inteiro encerrado — não havia verbo algum que mudasse o vínculo. O verbo novo `gauntlet-context-takeover` é o ato explícito de tomada, autorizado **somente** por observação de dispatch terminal do líder anterior: status fora de `dispatched`/`running`, `capabilityRevokedAt` não nulo, ou liveness `exited` vinda de `agent_status`. Sem `--apply` ele executa todas as verificações e devolve `TAKEOVER-PREVIEW` com o hash das entradas relidas, ou exatamente a recusa que o apply devolveria, sem escrever byte algum. As recusas são distintas e fail-closed: `TAKEOVER-LEADER-ACTIVE` (líder ainda vivo), `TAKEOVER-EVIDENCE-UNPROVEN` (observação ausente, ilegível, não correlacionada ao dispatch pedido ou com liveness `unverifiable`), `TAKEOVER-NOT-OBSERVABLE` (líder registrado não é um dispatch observável), `TAKEOVER-WORK-ACTIVE` (trabalho de especialista em voo), `TAKEOVER-INPUTS-STALE` (hash divergente) e `TAKEOVER-REUSED` (repetição idêntica já aplicada, sem reobservar). A mutação usa o mesmo compare-and-swap por revisão do store, então duas tomadas concorrentes sobre a mesma revisão terminam com uma aceita e a outra recusada por estado alterado. Aplicada a tomada, o contexto anterior passa a encerrado e o sucessor nasce na época seguinte carregando o bloco de sucessão — contexto e sessão de origem, motivo, referência e digest da observação usada como prova, e o instante —, enquanto `development`, campanha, resultados aceitos e escopo declarado permanecem byte a byte iguais.
 - Fix: `gauntlet-prepare-switch` deixa de recusar `CONTINUITY-CHECKPOINT-MISSING` quando o work item ainda não tem checkpoint corrente conhecido. Como `checkpoint_head` só era escrito ao confirmar uma etapa, o caminho ordenado de troca não existia antes da primeira etapa confirmada; agora o checkpoint inicial é emitido a partir do estado corrente, e esse ponto é retomável de verdade. A recusa continua firme para checkpoint declarado porém desconhecido.
 - Fix: a prévia de `gauntlet-orchestration-adopt` passa a executar a mesma verificação de contexto que só rodava no caminho de aplicação. Antes a prévia montava o payload sem verificá-la, prometia `PREVIEW` e o apply recusava com `CONTEXT-FENCED` — prévia e aplicação agora concordam no veredito, e a prévia segue sem escrever nada.
 - Os campos do checkpoint de continuidade foram renomeados numa versão nova do schema, ao lado da atual: `workflow_sha256` passa a `context_inputs_sha256` e `constitution_sha256` a `origin_metadata_sha256`, nomes que dizem o que o campo de fato carrega. A validação escolhe o conjunto de chaves pelo valor de `schema` no próprio documento e aceita as duas versões sem tentar uma e depois a outra; um checkpoint da versão anterior continua legível e utilizável, sem reescrita.
+- Integra a `main` em 6.0.11. O conflito de `gauntlet-prepare-switch` foi resolvido mantendo a comparação **estrutural** de identidade de worktree desta entrega — o lado entrante comparava o mapeamento inteiro, que é o defeito J1/H1 fechado aqui, porque `phase` e `branch` se movem na vida normal e nenhum verbo os re-carimba — e tomando do lado entrante a lógica de líder liberado (`--released-source`).
+
+## 6.0.11
+
+- Fix: `gauntlet-prepare-switch --released-source` recupera um líder concluído cujo terminal foi reutilizado por outro Dispatch antes do cleanup. A prova exige uma única cadeia de ownership com `originDispatchId` exato, mesmo terminal/worktree/runtime/incarnation, source settled e revogado, owner final liberado com transcript capturado e liveness `exited`; atividade especialista continua sem herdar a exceção.
+
+## 6.0.10
+
+- Fix: `constitution-reseal` permite ao líder atual revalidar uma Constituição alterada sem recriar o work item nem editar o selo manualmente. O fluxo exige preview/apply, `expected_sha256`, fence de contexto/epoch/session e evidência humana; publica `WORK-ITEM.json`, `state.json` e `CONSTITUTION-CHECK.md` como um bundle recuperável, preserva o selo anterior, reconcilia por CAS a activation e exige continuidade sucessora quando o contexto ativo já tem activation write-once, preservando aceites sem reescrever história.
+
+## 6.0.9
+
+- Fix: `gauntlet-prepare-switch --released-source` recupera um líder cujo processo foi parado e liberado pelo Orca sem archive somente quando dispatch, capability revogada, terminal, incarnation, worktree, liveness e recurso liberado formam um fence exato. A exceção não vale para resultados de atividades, que continuam exigindo transcript capturado antes de fechar `CLOSE_PENDING` ou aceitar qualquer evidência.
+
+## 6.0.8
+
+- Fix: o primeiro checkpoint após `gauntlet-resume` promove a `attestation_campaign` do estado de desenvolvimento somente quando o `campaign_bridge` validado da operação de continuidade liga exatamente a geração anterior à campanha do contexto sucessor. Divergência sem bridge exato continua bloqueada por `CHECKPOINT-CAMPAIGN-DIVERGENT`.
+
+## 6.0.7
+
+- Fix: `gauntlet-orchestration-adopt` pode atualizar somente a apresentação do mesmo contexto `ACTIVE` quando a origem histórica já mudou, desde que líder observado, policy e scope permaneçam idênticos. Mudança de líder, policy ou scope continua recusada; o comando não reescreve a origem congelada nem o restante do work item.
+
+## 6.0.6
+
+- Fix: o fingerprint de apresentação ignora `plugin_listing.source_ref`, metadado histórico que contém o ID volátil do evento. Repetir a mesma listagem nativa não simula mais mudança de configuração nem invalida a leitura integral feita após compactação; versão, instalação e os demais eixos semânticos continuam participando do fingerprint.
+
+## 6.0.5
+
+- Fix: a verificação compartilhada de quiescência, inclusive em `gauntlet-resume`, reconhece `RESULT_RECORDED` como tentativa pendente não ativa quando sua sessão correlacionada já está `CLOSED` e vinculada ao mesmo resultado durável. Em 6.0.4 o prepare fechava corretamente o recurso, mas o resume voltava a bloquear a mesma atividade.
+
+## 6.0.4
+
+- Fix: a recuperação `--released-source` também reconcilia sessões especialistas `CLOSE_PENDING` de atividades `RESULT_RECORDED` quando o release arquivado do dispatch exato comprova identidade, settlement e fechamento. A atividade e seu resultado permanecem pendentes no checkpoint, sem aceitação ou reexecução; somente o recurso de sessão passa a `CLOSED`, removendo o bloqueio permanente de quiescência.
+
+## 6.0.3
+
+- Fix: `gauntlet-prepare-switch --released-source` recupera uma troca quando o líder de origem já foi encerrado pelo Orca. A prova exige o dispatch exato concluído e revogado, worker settled, terminal desconectado e não gravável, mesma worktree/incarnation, recurso liberado e transcript arquivado; silêncio, lease expiry e evidência parcial continuam recusados. O fluxo comum permanece inalterado e a recuperação conserva as transições persistidas `ACTIVE → QUIESCING → RELEASED`.
 
 ## 6.0.2
 

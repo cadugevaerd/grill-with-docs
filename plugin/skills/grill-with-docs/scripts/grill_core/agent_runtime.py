@@ -70,6 +70,10 @@ def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def _dispatch_matches_outcome(dispatch: dict[str, Any], outcome: Any) -> bool:
+    return dispatch.get("status") == {"succeeded": "completed", "failed": "failed"}.get(outcome)
+
+
 def validate_impeccable_observation(value: Any) -> dict[str, Any]:
     """Accept a closed observation of an already-resolved Impeccable invocation.
 
@@ -531,6 +535,12 @@ def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]
     return evidence
 
 
+def _presentation_config_fingerprint(source_identity: str, axes: dict[str, Any]) -> str:
+    """Fingerprint configuration, not volatile observation-history metadata."""
+    semantic = {key: value for key, value in axes.items() if key != "plugin_listing"}
+    return _sha256(json.dumps({"source": source_identity, "axes": semantic}, sort_keys=True).encode())
+
+
 def _load_request_command(command: list[str], observed: dict[str, Any], request: dict[str, Any]) -> bool:
     script = str(Path(__file__).resolve().parents[1] / "grill_workspace.py")
     if len(command) < 5 or command[:3] != [sys.executable, "-B", script] or command[4] != request["scope"].get("root"):
@@ -813,6 +823,126 @@ class LeaderBoundary:
         observed["source_sha256"] = _sha256(json.dumps(observed, sort_keys=True).encode())
         return validate_observation(observed)
 
+    def observe_released(self, *, allow_unarchived_stopped: bool = False) -> dict[str, Any]:
+        """Verify an exact Orca release; worker results still require an archive."""
+        if not isinstance(self.session_ref, str) or not re.fullmatch(r"orca:ctx[-_][A-Za-z0-9_-]+", self.session_ref):
+            _fail("LEADER-ADAPTER-UNSUPPORTED")
+        dispatch_id = self.session_ref.removeprefix("orca:")
+        show = _object(self.read(["orchestration", "worker-show", "--dispatch", dispatch_id, "--json"]), "Orca worker-show")
+        dispatch = _mapping(show.get("dispatch"), "dispatch")
+        worker = _mapping(show.get("worker"), "worker")
+        terminal = _mapping(show.get("terminal"), "released terminal")
+        resource_value = show.get("terminalResource")
+        if resource_value is None and allow_unarchived_stopped:
+            run_id = _string(dispatch.get("runId"), "run")
+            fleet = _object(self.read(["orchestration", "worker-list", "--run", run_id,
+                                       "--include-remote", "--json"]), "Orca worker-list")
+            page = _mapping(fleet.get("page"), "worker page")
+            if page.get("hasMore") is not False:
+                _fail("LEADER-RELEASE-UNPROVEN")
+            candidates = [entry for entry in fleet.get("workers", []) if isinstance(entry, dict)
+                          and isinstance(entry.get("resource"), dict)
+                          and entry["resource"].get("originDispatchId") == dispatch_id]
+            if len(candidates) != 1:
+                _fail("LEADER-RELEASE-UNPROVEN")
+            transferred = candidates[0]
+            resource = transferred["resource"]
+            source_projection = _mapping(show.get("projection"), "projection")
+            transferred_projection = _mapping(transferred.get("projection"), "transferred projection")
+            transferred_projected_resource = _mapping(transferred_projection.get("resource"),
+                                                        "transferred projected resource")
+            archive = _mapping(resource.get("archive"), "release archive")
+            source_outcome = worker.get("state")
+            if (worker.get("stage") != "settled" or source_outcome not in ("succeeded", "failed")
+                    or not _dispatch_matches_outcome(dispatch, source_outcome)
+                    or not isinstance(dispatch.get("completedAt"), str)
+                    or not isinstance(dispatch.get("capabilityRevokedAt"), str)
+                    or terminal.get("worktreePath") != str(self.root) or terminal.get("orphaned") is not False
+                    or terminal.get("connected") is not False or terminal.get("writable") is not False
+                    or _mapping(show.get("observation"), "observation") != {"status": "exited", "exactWorker": True}
+                    or transferred.get("dispatchId") != resource.get("ownerDispatchId")
+                    or resource.get("ownerDispatchId") == dispatch_id
+                    or transferred.get("agentTerminalHandle") != worker.get("agentTerminalHandle")
+                    or resource.get("terminalHandle") != terminal.get("handle")
+                    or resource.get("worktreeId") != terminal.get("worktreeId")
+                    or resource.get("endpointIncarnation") != dispatch.get("processIncarnation")
+                    or resource.get("endpointId") != worker.get("runtimeEpoch")
+                    or resource.get("ownershipState") != "released" or resource.get("releaseState") != "released"
+                    or not isinstance(resource.get("releaseCompletedAt"), str) or resource.get("releaseError") is not None
+                    or archive != {"source": "transcript", "status": "captured"}
+                    or transferred_projection.get("liveness") != {"verdict": "exited", "source": "resource_release"}
+                    or any(transferred_projected_resource.get(key) != "released"
+                           for key in ("state", "releaseState", "terminalState"))):
+                _fail("LEADER-RELEASE-UNPROVEN")
+            launch = _mapping(_mapping(worker.get("startOptions"), "startOptions").get("launch"), "launch")
+            effective = _mapping(launch.get("effective"), "effective")
+            incarnation = _string(terminal.get("incarnationId"), "incarnation")
+            process = _string(dispatch.get("processIncarnation"), "dispatch incarnation")
+            if (process != _string(terminal.get("ptyId"), "pty") + ":" + incarnation
+                    or effective.get("agent") != self.runtime):
+                _fail("LEADER-RELEASE-UNPROVEN")
+            released = {"source_ref": self.session_ref, "provider": self.runtime, "adapter": "orca",
+                        "host": _same("host", terminal.get("executionHostId"),
+                                      _mapping(dispatch.get("hostScope"), "host").get("hostId")),
+                        "incarnation": incarnation, "dispatch_incarnation": process,
+                        "owner_dispatch": dispatch_id, "handle": _same("released terminal", terminal.get("handle"),
+                            worker.get("agentTerminalHandle"), resource.get("terminalHandle")),
+                        "worktree_id": _same("worktree", terminal.get("worktreeId"), worker.get("worktreeId"),
+                            resource.get("worktreeId"), _mapping(source_projection.get("workspace"), "workspace").get("id")),
+                        "runtime_instance": worker["runtimeEpoch"],
+                        "task_id": _same("task", dispatch.get("taskId"),
+                                         source_projection.get("taskId")),
+                        "outcome": source_outcome, "release_proof": "ownership-transfer",
+                        "release_completed_at": resource["releaseCompletedAt"]}
+            released["source_sha256"] = _sha256(json.dumps(released, sort_keys=True).encode())
+            return released
+        resource = _mapping(resource_value, "terminal resource")
+        projection = _mapping(show.get("projection"), "projection")
+        projected_resource = _mapping(projection.get("resource"), "projected resource")
+        observation = _mapping(show.get("observation"), "observation")
+        launch = _mapping(_mapping(worker.get("startOptions"), "startOptions").get("launch"), "launch")
+        effective = _mapping(launch.get("effective"), "effective")
+        archive = _mapping(resource.get("archive"), "release archive")
+        _same("dispatch", dispatch_id, dispatch.get("id"), worker.get("dispatchId"),
+              resource.get("originDispatchId"), resource.get("ownerDispatchId"), projected_resource.get("ownerDispatchId"))
+        handle = _same("released terminal", terminal.get("handle"), worker.get("agentTerminalHandle"), resource.get("terminalHandle"))
+        worktree = _same("worktree", terminal.get("worktreeId"), worker.get("worktreeId"),
+                         resource.get("worktreeId"), _mapping(projection.get("workspace"), "workspace").get("id"))
+        incarnation = _string(terminal.get("incarnationId"), "incarnation")
+        process = _same("dispatch incarnation", dispatch.get("processIncarnation"), resource.get("endpointIncarnation"))
+        if process != _string(terminal.get("ptyId"), "pty") + ":" + incarnation:
+            _fail("LEADER-RELEASE-UNPROVEN")
+        archived = (worker.get("stage") == "settled" and worker.get("state") in ("succeeded", "failed")
+                    and _dispatch_matches_outcome(dispatch, worker.get("state"))
+                    and projection.get("outcome") == worker.get("state")
+                    and archive.get("source") == "transcript" and archive.get("status") == "captured")
+        fenced_stop = (allow_unarchived_stopped and worker.get("state") == "stopped"
+                       and worker.get("stage") == "process_stopped" and dispatch.get("status") == "failed"
+                       and projection.get("outcome") == "failed"
+                       and archive.get("source") is None and archive.get("status") == "unavailable")
+        outcome = worker.get("state") if archived else "failed"
+        if (terminal.get("worktreePath") != str(self.root) or terminal.get("orphaned") is not False
+                or terminal.get("connected") is not False or terminal.get("writable") is not False
+                or observation.get("status") != "exited" or observation.get("exactWorker") is not True
+                or not (archived or fenced_stop) or not isinstance(dispatch.get("completedAt"), str)
+                or not isinstance(dispatch.get("capabilityRevokedAt"), str)
+                or _mapping(projection.get("liveness"), "liveness") != {"verdict": "exited", "source": "resource_release"}
+                or any(projected_resource.get(key) != "released" for key in ("state", "releaseState", "terminalState"))
+                or resource.get("ownershipState") != "released" or resource.get("releaseState") != "released"
+                or not isinstance(resource.get("releaseCompletedAt"), str) or resource.get("releaseError") is not None
+                or effective.get("agent") != self.runtime):
+            _fail("LEADER-RELEASE-UNPROVEN")
+        released = {"source_ref": self.session_ref, "provider": self.runtime, "adapter": "orca",
+                    "host": _same("host", terminal.get("executionHostId"), _mapping(dispatch.get("hostScope"), "host").get("hostId")),
+                    "incarnation": incarnation, "dispatch_incarnation": process,
+                    "owner_dispatch": dispatch_id, "handle": handle, "worktree_id": worktree,
+                    "runtime_instance": _same("runtime instance", worker.get("runtimeEpoch"), resource.get("endpointId")),
+                    "task_id": _same("task", dispatch.get("taskId"), projection.get("taskId")),
+                    "outcome": outcome, "release_proof": "archive" if archived else "resource-fence",
+                    "release_completed_at": resource["releaseCompletedAt"]}
+        released["source_sha256"] = _sha256(json.dumps(released, sort_keys=True).encode())
+        return released
+
     def transcript(self, observed: dict[str, Any]) -> dict[str, Any]:
         raw = self.read(["orchestration", "worker-read", "--dispatch", observed["owner_dispatch"],
                          "--source", "transcript", "--limit", "1000", "--json"])
@@ -883,7 +1013,7 @@ def project_leader_presentation(value: Any, *, policy: dict[str, Any], policy_sh
     transcript = value.transcript(observed)
     axes = value.presentation_probe(observed, transcript)
     configuration = _axis(axes.get("configuration"), states={"observed", "undetermined"}, default="undetermined")
-    fingerprint = (_sha256(json.dumps({"source": transcript["sourceIdentity"], "axes": axes}, sort_keys=True).encode())
+    fingerprint = (_presentation_config_fingerprint(transcript["sourceIdentity"], axes)
                    if configuration["state"] == "observed" else "unobserved")
     kwargs = dict(policy=policy, policy_sha256=policy_sha256, gwd_skill_sha256=gwd_skill_sha256,
         runtime=runtime, session_identity=leader_session_identity(observed), scope=scope,
@@ -981,7 +1111,8 @@ def _orca_observation(source_ref: str, launch_raw: bytes, show_raw: bytes) -> di
     if projection_host is not None:
         _same("host", host, _mapping(projection_host, "projection host").get("id"))
     closed = (resource.get("releaseState") == "released" and isinstance(liveness, dict)
-              and worker.get("agentWait", object()) is not None and dispatch.get("status") == "completed"
+              and worker.get("agentWait", object()) is not None
+              and _dispatch_matches_outcome(dispatch, worker.get("state"))
               and worker.get("stage") == "settled" and worker.get("state") in {"succeeded", "failed"}
               and liveness.get("verdict") == "exited" and liveness.get("source") == "resource_release"
               and _mapping(projection.get("resource"), "release resource").get("releaseState") == "released"
