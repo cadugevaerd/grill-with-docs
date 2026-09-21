@@ -269,6 +269,16 @@ class AgentOrchestrationContract(unittest.TestCase):
 
     def test_native_exec_result_variable_wrapper(self):
         core = grill_workspace.grill_core_module("agent_runtime")
+        observed = {"provider": "codex", "source_ref": "orca:ctx_leader"}
+        request = {"scope": {"root": "/repo", "work_id": "work-x"}}
+        enter = [sys.executable, "-B", str(Path(grill_workspace.__file__).resolve()), "gauntlet-step-enter", "/repo",
+                 "--work-id", "work-x", "--context-id", "ctx-0123456789abcdef01234567", "--epoch", "10",
+                 "--session-ref", "orca:ctx_leader", "--step", "implement-parallel"]
+        self.assertTrue(core._load_request_command(enter, observed, request))
+        for index, value in ((8, "bad"), (10, "0"), (14, "unknown")):
+            altered = list(enter)
+            altered[index] = value
+            self.assertFalse(core._load_request_command(altered, observed, request))
         literal = '{cmd:"/usr/bin/true",workdir:"/tmp",yield_time_ms:30000,max_output_tokens:12000}'
         wrapper = "const r = await tools.exec_command(" + literal + "); text(JSON.stringify(r));"
         call = {"type": "tool-call", "name": "exec", "input": wrapper}

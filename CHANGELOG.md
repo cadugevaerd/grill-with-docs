@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.13
+
+- Fix: `gauntlet-step-enter` pode emitir e comprovar diretamente o `load_request` obrigatório após compactação, sem depender de um comando de retomada já consumido; contexto, época e passo são validados antes de aceitar a leitura integral.
+
 ## 6.0.12
 
 - Fix: a prova `ownership-transfer` lê a projeção compacta real de `worker-list`: `projection.resource.state` mais `terminalState` no topo, mantendo o recurso detalhado como autoridade de ownership/release/archive. A 6.0.11 exigia campos que somente `worker-show` expõe e recusava a cadeia válida.
