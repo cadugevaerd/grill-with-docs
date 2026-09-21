@@ -1076,3 +1076,79 @@ Todas as mutações desta fase foram medidas antes de a tarefa ser declarada pro
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R10.
+
+---
+
+# Rodada 21 — 2026-09-21, após integrar a `main`
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T063), constituição · **Desfecho**: `converged`
+
+Esta rodada não consome review. Ela existe porque a árvore mudou por **integração**, não por implementação: a `main` avançou sete commits durante a entrega, e os merges `43f8cd3` e `dba49b2` trouxeram 6.0.11 e 6.0.12 para esta branch. O fingerprint mudou, então converge, verify e review precisam ser reexecutados sobre a base nova.
+
+## Por que a integração não podia esperar pelo `ship`
+
+A `main` publicou 6.0.11 enquanto esta branch estava em 6.0.3. O gate de bump exige versão acima da publicada, então a entrega **já não podia fechar** sem integrar. Não era escolha de conveniência.
+
+O momento foi o correto pelo aprendizado do projeto: a run `run-4fa3f407` estava `COMPLETE` e a árvore limpa. Integrar com run aberta derruba a run, porque o digest de configuração cobre o `gauntlet.yaml` inteiro.
+
+## Dois conflitos semânticos, e o que eles ensinam
+
+O `git` resolveu sozinho a maior parte. O que ele **não** resolve é contradição de intenção entre dois lados que, isolados, estão ambos corretos.
+
+### O que quase entrou em silêncio
+
+No `prepare-switch`, o lado entrante comparava o **mapeamento de identidade inteiro**:
+
+```python
+if context.get("worktree_identity") not in (None, identity):
+```
+
+Isso é o defeito **J1/H1**, CRITICAL, que a rodada 5 desta entrega fechou removendo `phase` e `branch` do conjunto comparado — porque os dois se movem na vida normal e nenhum verbo os re-carimba. A `main` nunca recebeu o conserto, já que os seis commits nasceram em paralelo.
+
+Aceitar o lado entrante teria reintroduzido o Critical **sem conflito visível e sem teste reprovando**, porque a `main` não tem os casos que o cobrem.
+
+Resolvido mantendo a comparação estrutural e tomando do lado entrante apenas a lógica de líder liberado. A justificativa ficou no código, para que o próximo leitor não "conserte" de volta — que é exatamente como o R7-1 nasceu.
+
+### O que só existia na soma
+
+Este é o mais instrutivo da entrega. Nenhum dos dois lados estava errado:
+
+- a 6.0.3 fez a prévia de `orchestration-adopt` rodar a mesma verificação do apply, **para que prévia e aplicação nunca discordassem**;
+- a `main` afrouxou o apply: origem alterada com contexto corrente e escopo igual passa, atualizando a apresentação.
+
+Somados, a prévia ficou **mais estrita que o apply** — a inversão exata que a nossa mudança existia para impedir. O defeito não estava em nenhum dos lados; nasceu da junção.
+
+Foi pego por um **teste da `main` rodando sobre código desta branch**, no primeiro `run_validators` pós-merge. Auto-merge limpo não é evidência de compatibilidade semântica, e esta é a prova cara disso.
+
+## Invariantes da 032 conferidos na árvore mesclada
+
+| Invariante | Estado |
+|---|---|
+| Tupla estrutural única, sem `phase` nem `branch` | uma definição, dois usos |
+| Nada compara identidade inteira para recusar | zero ocorrências |
+| Comparação de branca congelada do R7-1 | zero ocorrências |
+| Alegação falsa do R9-1 | zero ocorrências em fonte |
+| Ponto único renomeado | 7 usos |
+| Casos novos da Phase 15 | ambos vivos |
+
+Nenhum achado: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1505** testes, 0 falhas. A contagem subiu de 1498 para 1505 com os casos que a `main` trouxe; o validador de orquestração foi de 46 a **51**.
+
+Versão em **6.0.13** nos oito pontos, acima da 6.0.12 publicada. `distribution: OK`.
+
+## Registro de contexto
+
+Há **outra sessão trabalhando neste mesmo repositório**, com a suíte completa em execução durante esta integração, e é a origem dos sete commits. Os arquivos que ela toca são os mesmos da 032. Enquanto isso durar, cada fechamento desta entrega corre risco de nova divergência, e a integração final no `ship` precisará ser refeita contra a `main` daquele momento.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.13 sem publicar
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R10, sobre a base mesclada.
