@@ -1254,3 +1254,131 @@ Nenhum conflito descoberto. 6.0.3 sem publicar, `main` em 6.0.2, sem novo bump e
 **REQUEST CHANGES**: consertar os três Important, rodar `/speckit.converge`, depois verify e review de novo.
 
 Os três são pequenos — uma edição de comentário, uma remoção de subcaso e uma validação de tipo — e nenhum muda comportamento observável salvo o R8-3, que troca falha genérica por recusa nomeada. Recomendo tratar junto os Minor n1 e n2, de uma linha cada. n3, n4 e n5 ficam como débito registrado.
+
+---
+
+# R9 — 2026-09-21, após a Phase 14
+
+## Review Report
+
+**Verdict: REQUEST CHANGES** — 0 Critical, 3 Important, 4 Minor
+
+Source fingerprint: tree `558640a87ac05d5e827ab2d0c3ff4ebc348729a12bc59dadad3ed78951958a18` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `e80b7eb29b7dfcc0cca450d8f46674bf9a2cdfca7b83f4e4a71dc3c0931db301` — casa com o converge rodada 18 e o verify rodada 9.
+
+Dois revisores read-only. O coordenador reproduziu independentemente as duas mutações centrais.
+
+## O que esta rodada diz, e não é sobre a entrega
+
+A Phase 14 existiu **principalmente para consertar afirmações falsas**. O R9 achou que ela consertou **uma de três cópias** da principal, e que o conserto de uma guarda deixou outra guarda morta com um recibo de reversão falsificado no teste.
+
+Nenhum achado é defeito de comportamento. Todos são o mesmo padrão, e ele agora tem oito rodadas de evidência: **esta entrega não erra escrevendo código, erra escrevendo o que o código faz.**
+
+## Important
+
+### R9-1 — A afirmação que causou o Critical do R7 sobrevive em duas outras cópias
+
+`plugin/skills/grill-with-docs/scripts/grill_workspace.py:6128-6133` e `tests/validate_agent_orchestration_contract.py:1574-1578`
+
+O T054 corrigiu o comentário do sítio de confirmação de etapa, que passou a dizer, corretamente:
+
+> There is no upstream proof that the live branch is the one the context ran on: `branch` was pulled out of the structural tuple in T035, and two branches inside the same worktree look identical on project/path/git_common_dir alone.
+
+Seis linhas adiante, o gêmeo do `phase-turn` **continua** dizendo o oposto:
+
+> takeover and continuity-resume already refuse structural divergence before mutating -- so the live branch is trustworthy on its own.
+
+E a docstring do caso de cunhagem repete a mesma alegação quase palavra por palavra. Uma varredura confirma que são as duas únicas cópias restantes.
+
+É falso pelo motivo já estabelecido: `branch` saiu da tupla estrutural, então os guardas estruturais não provam nada sobre branca — e nenhum deles roda no caminho da virada de fase.
+
+**Este é o texto que produziu o Critical do R7.** A instrução do T054 dizia "o comentário do sítio de cunhagem", no singular, e não mandou varrer por cópias. É **a sexta instrução minha** desta família, e a segunda em que a regra certa já estava escrita e não foi aplicada onde importava.
+
+**Conserto**: replicar o texto corrigido nas duas cópias.
+
+Contra FR-010.
+
+### R9-2 — O T055 matou a guarda que o T047 criou, e o teste carrega um recibo de reversão falsificado
+
+`plugin/skills/grill-with-docs/scripts/grill_workspace.py:3352-3354` e `tests/validate_agent_orchestration_contract.py:1450-1462`
+
+Com a validação de tipo subindo para `_continuity_identity`, e como os três chamadores passam **o mesmo** `state` e chamam a derivação antes, a guarda `DEVELOPMENT-SCHEMA` dentro de `_continuity_refuse_branch_contradiction` tornou-se **inalcançável por qualquer caminho de CLI**.
+
+Confirmado por mutação, reproduzida pelo coordenador de forma independente: trocando o `raise` por atribuição silenciosa, **os 44 testes passam**.
+
+Pior é o que a docstring do caso afirma:
+
+> Verified by reversion: replacing the `raise` with `development = {}` makes this case return PREVIEW/exit 0 instead of refusing.
+
+Isso **não acontece mais**: o caso continua recusando, porque a recusa vem de outro ponto. É um recibo de reversão que já não descreve o sistema — a forma mais perigosa de afirmação falsa, porque parece prova.
+
+E há ironia registrável: o caso do T053 foi escrito precisamente porque aquela guarda *"had no case proving it there"*. O T057, que eu pedi para tornar a guarda alcançável, devolveu-a a esse estado e ainda a tornou inalcançável.
+
+**Conserto — recomendo manter a guarda, não apagá-la.** As duas opções são legítimas, e a escolha é doutrinária:
+
+- apagar é o menor diff e elimina código morto;
+- **manter** é o que a doutrina deste projeto exige: a função declara `state: Any`, o projeto é fail-closed, e apagar cria armadilha para um quarto chamador futuro que não passe pela derivação.
+
+Validação em fronteira de confiança é justamente a categoria que não se simplifica por economia. Então: manter, **dizer na docstring que hoje ela é defesa em profundidade inalcançável pelos três verbos**, e dar-lhe cobertura própria com um caso que a chame diretamente. E repontar a docstring do T053 para nomear a guarda que ela de fato exercita, com um recibo de reversão verdadeiro — que o revisor já mediu: `(2, 'UNEXPECTED-FAILURE')`, `AttributeError`.
+
+Contra FR-010 e FR-011.
+
+### R9-3 — A cláusula que preserva "ausência é estado legítimo" não tem teste nenhum
+
+`plugin/skills/grill-with-docs/scripts/grill_workspace.py:3298`
+
+```python
+if development is not None and not isinstance(development, dict):
+```
+
+Trocando por `if not isinstance(development, dict):` — isto é, transformando **ausência** em recusa — a suíte inteira fica verde.
+
+O runtime está **correto**: bloco ausente ou nulo segue para `"unassigned"`, idêntico ao comportamento anterior. O defeito é de cobertura: a única linha que separa "ausência legítima" de "ausência recusada" não é protegida por nada, e a fase que introduziu a guarda não a cobriu.
+
+Isso importa porque ausência de bloco de desenvolvimento é estado real — não hipótese. Uma regressão aqui recusaria work items legítimos, e nada avisaria.
+
+**Conserto**: um subcaso com o bloco removido e fase ativa nula, afirmando que o verbo segue, com o digest do armazenamento inalterado como já se faz ali.
+
+Contra FR-011.
+
+## Minor
+
+| # | Local | Achado |
+|---|---|---|
+| p1 | `tests/…:1443-1444` e `:1613` | As duas asserções de desigualdade são **tautológicas**: comparam um literal fixo com a branca da fixture. Neutralizar ambas para `pass` deixa os 44 testes verdes. Não são nocivas — são sanidade de fixture, e a asserção com valor real é o readback ao lado. O defeito é a **afirmação**: o commit e o sidecar do nó dizem que a mudança as tornou não-triviais, e não tornou |
+| p2 | `tests/…:1603` | Ternário morto: nenhum subcaso carrega o rótulo que o seleciona desde a remoção do T056. Colapsar |
+| p3 | `tests/…:1575-1577` | A docstring ainda anuncia três casos de carimbo — "absent, agreeing, or contradicting" — quando o do meio foi removido de propósito |
+| p4 | `grill_workspace.py:3286-3299` | A recusa de HEAD solto precede a guarda de esquema, então HEAD solto com bloco malformado sai com o código de divergência, não o de esquema. Não é incorreto; é arbitrário e não testado. Registro, sem ação |
+
+## Runtime Correctness
+
+**Sem achado Critical ou Important.** As verificações voltaram limpas:
+
+- a guarda nova está antes de todo acesso que assume mapping, e o único acesso vem depois dela;
+- bloco **ausente** segue funcionando de forma idêntica ao anterior;
+- nenhum outro caminho do CLI passou a receber recusa que antes não recebia. O único delta observável é fase ativa falsy com bloco não-mapping: antes falha genérica, agora recusa nomeada — que é exatamente o conserto pedido;
+- os irmãos que leem o bloco sem passar pela derivação já têm proteção própria, por recusa nomeada ou `isinstance` explícito;
+- **ganho não declarado**: a guarda nova também blindou um segundo sítio que tinha a mesma forma de falha, no emissor do checkpoint inicial. O nó não reportou isso.
+
+## Test Quality
+
+O T055 é **genuinamente exercitado**: revertendo a guarda, o caso falha com `(2, 'UNEXPECTED-FAILURE') != (2, 'DEVELOPMENT-SCHEMA')`.
+
+Os dois sítios de cunhagem **seguem cobertos** com o subcaso removido — cada subcaso restante roda confirmação de etapa **e** virada de fase, com as asserções intactas. A simplificação não deixou asserção vazia; deixou tautológica, que é diferente e está no p1.
+
+Nada sobrou testando comportamento que não existe mais.
+
+## Regressão R1–R8
+
+**Nenhuma regressão.** Verificado por dois revisores: a tupla estrutural segue com definição e consumidor únicos aplicados nos três verbos; a comparação de branca congelada do R7-1 segue removida; os achados de R3 a R6 e os do R8 seguem fechados.
+
+## Constitution References
+
+Nenhum conflito descoberto. 6.0.3 sem publicar, `main` em 6.0.2, sem novo bump exigido.
+
+## Final Recommendation
+
+**REQUEST CHANGES**: consertar os três Important, rodar `/speckit.converge`, depois verify e review de novo.
+
+Recomendo tratar junto os Minor p1, p2 e p3, que são uma linha cada e todos da mesma família de afirmação desatualizada. p4 fica como registro.
+
+**Observação de método, que vale mais que os achados**: o R9 não achou nenhum defeito de comportamento, pela segunda rodada seguida. O que ele achou foi que a fase dedicada a consertar afirmações falsas corrigiu uma de três cópias, e que o conserto de uma guarda produziu um recibo falsificado. Antes da próxima fase, a instrução precisa parar de nomear **o** ponto e passar a exigir a varredura — porque em todas as vezes em que isso falhou, a cópia esquecida estava a menos de dez linhas da corrigida.
