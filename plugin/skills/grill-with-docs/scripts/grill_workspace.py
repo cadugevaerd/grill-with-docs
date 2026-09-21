@@ -1798,8 +1798,18 @@ def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any
     store = grill_core_module("store")
     if isinstance(existing, dict):
         current = existing.get("contexts", {}).get(existing.get("current_context_id"))
-        if (existing.get("scope_files") == inputs["scope_files"] and current is not None
-                and current.get("presentation") == inputs["presentation"]):
+        # T064/FR-010: origin equality must gate REUSED, matching the apply
+        # closure's precedence below. _adoption_conflict already guarantees
+        # policy_sha256 equality and leader-fence agreement unconditionally
+        # before this point -- neither has the origin-changed exception, so
+        # both always raise on mismatch regardless of scope/current. Origin
+        # is the one check _adoption_conflict now lets through when a changed
+        # origin comes with an existing context and unchanged scope (main
+        # 6.0.11 loosening), so it is the only one this shortcut must repeat:
+        # otherwise that exact input reads as an identical repeat here while
+        # the apply closure below still treats it as a live origin change.
+        if (existing.get("origin") == inputs["origin"] and existing.get("scope_files") == inputs["scope_files"]
+                and current is not None and current.get("presentation") == inputs["presentation"]):
             return {"verdict": "REUSED", "work_id": args.work_id, "context_id": existing["current_context_id"],
                     "expected_sha256": expected, "store_revision": existing_snapshot.revision}, EXIT_OK
     store.bootstrap(root)
