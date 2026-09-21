@@ -1124,7 +1124,7 @@ Foi pego por um **teste da `main` rodando sobre código desta branch**, no prime
 
 | Invariante | Estado |
 |---|---|
-| Tupla estrutural única, sem `phase` nem `branch` | uma definição, dois usos |
+| Tupla estrutural única, sem `phase` nem `branch` | uma definição, um uso; o comparador tem quatro call sites em três verbos (corrigido na rodada 22 — ver q2 do R10) |
 | Nada compara identidade inteira para recusar | zero ocorrências |
 | Comparação de branca congelada do R7-1 | zero ocorrências |
 | Alegação falsa do R9-1 | zero ocorrências em fonte |
@@ -1152,3 +1152,71 @@ Há **outra sessão trabalhando neste mesmo repositório**, com a suíte complet
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R10, sobre a base mesclada.
+
+---
+
+# Rodada 22 — 2026-09-21, consumindo o review R10
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T063), constituição, `review.md` seção R10 · **Desfecho**: `tasks_appended` — cinco tarefas em `## Phase 16: Convergence`
+
+O R10 devolveu REQUEST CHANGES com **zero Critical** pela terceira rodada seguida, 5 Important e 4 Minor.
+
+| Achado | Gap | Severidade | Origem | Tarefa |
+|---|---|---|---|---|
+| R10-1 — o atalho de reuso perdeu a checagem de origem na junção | contradicts | Important | FR-010 | T064 |
+| R10-2 — a seção da 6.0.12 sumiu do CHANGELOG, e ela já shipou | contradicts | Important | cláusula `Release obrigatória por versão` | T065 |
+| R10-3 — o invariante do T006 não tem teste no caminho que o merge mexeu | missing | Important | FR-011 | T066 |
+| R10-4, R10-5 — as duas metades do R6-2 sem prova | missing | Important | FR-011 | T067 |
+| q1 | missing | Minor | FR-011 | T068 |
+| q2, q3, q4 | — | Minor | — | q2 corrigido abaixo; q3 e q4 como débito |
+
+## A integração não regrediu nada, e isso foi medido
+
+Sete das dez mutações morreram como deviam, incluindo a que reintroduz o J1/H1: acrescentar `phase` e `branch` à tupla derruba cinco testes. **O conserto crítico desta entrega está protegido por prova, não por comentário** — o que importa porque o lado entrante oferecia exatamente essa reintrodução.
+
+Para cada mutação sobrevivente, o auditor **repetiu a medição na árvore pré-integração** e demonstrou que já sobrevivia. É a diferença entre afirmar "não houve regressão" e provar.
+
+Nada se perdeu do lado entrante: dois dos três arquivos que fizeram auto-merge têm diff **zero** contra a `main`, e o arquivo de teste recebeu 285 inserções com **zero deleções**.
+
+## Os dois defeitos que eu introduzi
+
+Nenhum dos cinco Important é regressão da `main`. Dois são meus, cometidos ao resolver os merges:
+
+**R10-1** é o segundo defeito de junção desta integração. O primeiro a suíte pegou; este **nenhum teste pega**, porque o estado em disco não muda — só o veredito diverge, e `REUSED` passa a afirmar "repetição idêntica" sobre entrada cuja origem mudou. A mecânica é idêntica à do primeiro: o T006 retirou uma checagem porque outro ponto a cobria, e o merge afrouxou exatamente esse outro ponto.
+
+**R10-2** é erro de resolução: renomeei a seção da 6.0.12 em vez de preservá-la. Aquela versão tem tag e Release, e a cláusula constitucional faz do CHANGELOG registro público — perder a seção faz um item já entregue reaparecer como novidade.
+
+## Os três achados de cobertura são uma classe, não três itens
+
+R10-3, R10-4 e R10-5 têm a mesma forma: **um conserto entrou e a prova não**.
+
+R10-4 e R10-5 são literalmente as duas metades que o R6-2 mandou acrescentar. O conserto entrou na Phase 11; trocar qualquer uma das duas chamadas por continuação deixa os 51 testes verdes até hoje.
+
+R10-3 é o mesmo, na camada do invariante: o T006 estabeleceu que prévia e apply nunca discordam, e a única paridade testada é de outra recusa. Foi essa ausência que permitiu ao merge inverter o invariante sem aviso — e a suíte só reprovou porque um caso **da `main`** exercitava o caminho.
+
+A lição operacional, que esta entrega já vinha aprendendo: **conserto sem mutação medida não está fechado**. A Phase 15 adotou isso para casos novos; falta aplicar retroativamente aos consertos que entraram antes da regra.
+
+## Correção imediata do q2
+
+A tabela de invariantes da rodada 21 dizia "uma definição, **dois usos**". O correto: a tupla tem **um** uso, e o comparador tem **quatro** call sites em três verbos. Afirmação minha, mais forte que o fato — a mesma família que esta entrega passou dez rodadas combatendo, cometida no documento que a combate.
+
+## Fragilidade de processo, registrada e sem tarefa
+
+**O conserto do J1/H1 não está na `main`.** Toda integração futura reoferece a linha do lado entrante, e o comentário que explica por que recusá-la existe só nesta branch. A proteção real são os dois testes que derrubam a reintrodução — e eles também só existem aqui. **A blindagem só nasce quando esta entrega chegar à `main`.**
+
+## Nota metodológica adotada
+
+Rodar mutações reusando o mesmo diretório de cópia produziu falha constante num teste que a mutação não tocava. Em cópia limpa o efeito some: era poluição entre execuções.
+
+A instrução de "provar por mutação" desta entrega passa a exigir **uma cópia nova por mutação**, e isso entra nos briefs da Phase 16.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — uma citada por achado (`Release obrigatória por versão`); 6.0.13 sem publicar
+- Achados: missing 3 · partial 0 · contradicts 2 · unrequested 0
+- Tarefas acrescentadas: 5 (T064–T068), nenhuma CRITICAL
+
+## Próxima ação
+
+Executar `implement-parallel` na Phase 16 e reconvergir. T064 e T065 tocam produto e documentação; T066, T067 e T068 tocam o mesmo arquivo de teste.
