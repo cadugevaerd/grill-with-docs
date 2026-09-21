@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.14
+
+- Preserva aceitações de tarefas vinculadas ao DAG através da linhagem canônica de contextos após continuity switch, sem aceitar atividades de contextos irmãos.
+
 ## 6.0.13
 
 - Fix: `gauntlet-step-enter` pode emitir e comprovar diretamente o `load_request` obrigatório após compactação, sem depender de um comando de retomada já consumido; contexto, época e passo são validados antes de aceitar a leitura integral.
