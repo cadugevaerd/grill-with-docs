@@ -30,7 +30,7 @@
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
       "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a",
       "tasks": "se-a7ab93f07b33ace8bcb5b3a0a2f7be0fd89990622ade7c18c5a4a96caf8d11ab",
-      "verify": "se-810375eb33827740fe6272ffc50852e53c3ce628c3486f35f2a8471447812512"
+      "verify": "se-14e92d8fe34e78c8a29e13bd18dcbe5e2e89ca349cc573fecde4be4d6d7e48f0"
     },
     "attested_outputs": {
       "analyze": {
@@ -82,9 +82,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:3fd644fd069804af83c2afb4e32a58814ae8c0c39ddf7466082303258439294e",
+        "output_sha256": "sha256:ad0944f5b1f76f733093f3a2c593635030f7ff272c2e2eeba46be2d249cdf760",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-8.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-9.terminal.json",
         "step_id": "verify"
       }
     },
@@ -827,11 +827,26 @@
         "state": "complete",
         "step": "converge",
         "supersedes": ".grill/attestations/032-converge-r10.json"
+      },
+      {
+        "chain_stale": [
+          "implement-parallel"
+        ],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/verify.md",
+            "sha256": "ad0944f5b1f76f733093f3a2c593635030f7ff272c2e2eeba46be2d249cdf760"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "rodada 9 apos a Phase 14: PASS",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/032-verify-r8.json"
       }
     ],
     "chain_stale": [
-      "implement-parallel",
-      "verify"
+      "implement-parallel"
     ],
     "current_step": "review",
     "execution_branch": "cadugevaerd/feat-new-subagents",
@@ -1282,6 +1297,18 @@
           "step_execution_id": "se-9d531bbc3c468a93a94777ce0f13bed3652990c900a9035c3c800e231287f4a4",
           "step_id": "verify",
           "superseded_by_step_execution_id": "se-810375eb33827740fe6272ffc50852e53c3ce628c3486f35f2a8471447812512"
+        },
+        {
+          "attempt_id": "verify-8",
+          "attestation": ".grill/attestations/032-verify-r8.json",
+          "execution_round": 8,
+          "output_sha256": "sha256:3fd644fd069804af83c2afb4e32a58814ae8c0c39ddf7466082303258439294e",
+          "provenance": "current-generation",
+          "reason": "rodada 9 apos a Phase 14: PASS",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-8.terminal.json",
+          "step_execution_id": "se-810375eb33827740fe6272ffc50852e53c3ce628c3486f35f2a8471447812512",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-14e92d8fe34e78c8a29e13bd18dcbe5e2e89ca349cc573fecde4be4d6d7e48f0"
         }
       ]
     },
