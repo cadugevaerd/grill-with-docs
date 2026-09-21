@@ -1082,6 +1082,49 @@ class AgentOrchestrationContract(unittest.TestCase):
             self.assertEqual(grill_workspace._continuity_quiescence(
                 store.read_snapshot(root).document, saved, "work-x"), ([], []))
 
+    def test_released_leader_accepts_an_exact_finalized_ownership_transfer(self):
+        core = grill_workspace.grill_core_module("agent_runtime")
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            adapter, show, transcript = orchestration_fixture.boundary(
+                grill_workspace, root, "codex", orchestration_fixture.SESSION, "work-x")
+            result = show["result"]
+            result["dispatch"].update(runId="run-1", status="completed",
+                                      capabilityRevokedAt="2026-01-01T00:00:00Z",
+                                      completedAt="2026-01-01T00:00:00Z")
+            result["worker"].update(state="succeeded", stage="settled")
+            result["terminal"].update(connected=False, writable=False)
+            result["projection"].update(outcome="succeeded", workspace={"id": "worktree-fixture"},
+                                        liveness={"verdict": "unverifiable", "reason": "missing_status"},
+                                        resource={"state": "absent", "reason": "not_materialized"})
+            result["observation"].update(status="exited")
+            result["terminalResource"] = None
+            released_resource = {
+                "ownershipState": "released", "releaseState": "released",
+                "originDispatchId": "ctx-fixture", "ownerDispatchId": "ctx-next",
+                "terminalHandle": "term-fixture", "worktreeId": "worktree-fixture",
+                "endpointId": "runtime-fixture", "endpointIncarnation": "pty-fixture:inc-fixture",
+                "releaseCompletedAt": "2026-01-01T00:00:01Z", "releaseError": None,
+                "archive": {"source": "transcript", "status": "captured"},
+            }
+            fleet = {"ok": True, "result": {"workers": [{
+                "dispatchId": "ctx-next", "agentTerminalHandle": "term-fixture",
+                "resource": released_resource,
+                "projection": {"liveness": {"verdict": "exited", "source": "resource_release"},
+                               "resource": {"state": "released", "releaseState": "released",
+                                            "terminalState": "released"}},
+            }], "page": {"hasMore": False}}}
+            adapter.read = lambda argv: orchestration_fixture.pack(
+                show if argv[1] == "worker-show" else fleet if argv[1] == "worker-list" else transcript)
+            with self.assertRaisesRegex(core.RuntimeError, "terminal resource"):
+                adapter.observe_released()
+            recovered = adapter.observe_released(allow_unarchived_stopped=True)
+            self.assertEqual((recovered["outcome"], recovered["release_proof"]),
+                             ("succeeded", "ownership-transfer"))
+            released_resource["archive"]["status"] = "missing"
+            with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                adapter.observe_released(allow_unarchived_stopped=True)
+
     def test_public_continuity_resume_observes_destination_before_commit(self):
         import validate_orchestrator_store_contract as seed
         store = grill_workspace.grill_core_module("store")

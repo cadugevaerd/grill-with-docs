@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.11
+
+- Fix: `gauntlet-prepare-switch --released-source` recupera um líder concluído cujo terminal foi reutilizado por outro Dispatch antes do cleanup. A prova exige uma única cadeia de ownership com `originDispatchId` exato, mesmo terminal/worktree/runtime/incarnation, source settled e revogado, owner final liberado com transcript capturado e liveness `exited`; atividade especialista continua sem herdar a exceção.
+
 ## 6.0.10
 
 - Fix: `constitution-reseal` permite ao líder atual revalidar uma Constituição alterada sem recriar o work item nem editar o selo manualmente. O fluxo exige preview/apply, `expected_sha256`, fence de contexto/epoch/session e evidência humana; publica `WORK-ITEM.json`, `state.json` e `CONSTITUTION-CHECK.md` como um bundle recuperável, preserva o selo anterior, reconcilia por CAS a activation e exige continuidade sucessora quando o contexto ativo já tem activation write-once, preservando aceites sem reescrever história.
