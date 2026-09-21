@@ -1826,6 +1826,24 @@ class AgentOrchestrationContract(unittest.TestCase):
             self.assertEqual((status["state"], agent_orchestration.visual_gate_state({}, status, decision=None)),
                              ("NOT_APPLICABLE", "NOT_APPLICABLE"))
 
+    def test_partition_revision_uses_the_next_complete_pair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            self.assertEqual(
+                grill_workspace._next_partition_revision(directory, "demo"),
+                ("specs/demo/execution-dag.r2.json", "specs/demo/partition-report.r2.json"),
+            )
+            for revision in (2, 3):
+                (directory / f"execution-dag.r{revision}.json").write_text("{}\n")
+                (directory / f"partition-report.r{revision}.json").write_text("{}\n")
+            self.assertEqual(
+                grill_workspace._next_partition_revision(directory, "demo"),
+                ("specs/demo/execution-dag.r4.json", "specs/demo/partition-report.r4.json"),
+            )
+            (directory / "execution-dag.r4.json").write_text("{}\n")
+            with self.assertRaisesRegex(grill_workspace.CliFailure, "PARTITION-REVISION-INCOMPLETE"):
+                grill_workspace._next_partition_revision(directory, "demo")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.15
+
+- Permite revisões sucessoras imutáveis de `partition`: após `r2`, seleciona o próximo par completo `rN` e recusa revisões parciais sem sobrescrever evidência selada.
+
 ## 6.0.14
 
 - Preserva aceitações de tarefas vinculadas ao DAG através da linhagem canônica de contextos após continuity switch, sem aceitar atividades de contextos irmãos.

@@ -3959,6 +3959,23 @@ def _feature_paths(root: Path, feature: str) -> tuple[Path, str, str]:
     return directory, f"specs/{feature}/execution-dag.json", f"specs/{feature}/partition-report.json"
 
 
+def _next_partition_revision(directory: Path, feature: str) -> tuple[str, str]:
+    """Return the first unused, complete rN partition pair."""
+    revision = 2
+    while True:
+        dag = directory / f"execution-dag.r{revision}.json"
+        report = directory / f"partition-report.r{revision}.json"
+        dag_exists = dag.exists() or dag.is_symlink()
+        report_exists = report.exists() or report.is_symlink()
+        if dag_exists != report_exists:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PARTITION-REVISION-INCOMPLETE",
+                             f"partition revision r{revision} is incomplete")
+        if not dag_exists:
+            prefix = f"specs/{feature}"
+            return f"{prefix}/{dag.name}", f"{prefix}/{report.name}"
+        revision += 1
+
+
 @_gauntlet_authorized
 def partition_emit_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """WORKFLOW v4 `partition`: derive the Execution DAG from tasks.md.
@@ -3979,10 +3996,9 @@ def partition_emit_command(args: argparse.Namespace) -> tuple[dict[str, Any], in
     text = safe_read_regular_fd(root, tasks_path).decode("utf-8", errors="replace")
     adopted = partition.TASK_FILES_MARKER in text
     if adopted:
-        # A v1 DAG is evidence, never an input to overwrite.  A new task
-        # revision receives its own explicit r2 pair.
-        dag_ref = f"specs/{args.feature}/execution-dag.r2.json"
-        report_ref = f"specs/{args.feature}/partition-report.r2.json"
+        # Every sealed DAG is evidence, never an input to overwrite. A changed
+        # task source receives the next explicit revision pair.
+        dag_ref, report_ref = _next_partition_revision(directory, args.feature)
     try:
         dag, report = (partition.partition_task_files(text, feature=args.feature, groups=args.groups, root=root)
                        if adopted else partition.partition(
