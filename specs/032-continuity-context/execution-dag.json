@@ -382,6 +382,57 @@
       "id": "p15-b",
       "parallel": true,
       "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p15-a",
+        "p15-b"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p16-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p16-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p15-a",
+        "p15-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p16-b.tasks.json"
+      ],
+      "id": "p16-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p16-a",
+        "p16-b"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p16-serial.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_checkpoint_contract.py",
+        "tests/validate_distribution.py",
+        "tests/validate_orchestrator_store_contract.py"
+      ],
+      "id": "p16-serial",
+      "parallel": false,
+      "tier": "medium"
     }
   ],
   "schema": "grill-gauntlet-execution-dag/v1"
