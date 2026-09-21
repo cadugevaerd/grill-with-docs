@@ -356,6 +356,32 @@
       "id": "p14-b",
       "parallel": true,
       "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p14-a",
+        "p14-b"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p15-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p15-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p14-a",
+        "p14-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p15-b.tasks.json"
+      ],
+      "id": "p15-b",
+      "parallel": true,
+      "tier": "medium"
     }
   ],
   "schema": "grill-gauntlet-execution-dag/v1"
