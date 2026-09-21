@@ -1109,10 +1109,10 @@ class AgentOrchestrationContract(unittest.TestCase):
             }
             fleet = {"ok": True, "result": {"workers": [{
                 "dispatchId": "ctx-next", "agentTerminalHandle": "term-fixture",
+                "workerState": "failed", "dispatchStatus": "failed", "terminalState": "released",
                 "resource": released_resource,
                 "projection": {"liveness": {"verdict": "exited", "source": "resource_release"},
-                               "resource": {"state": "released", "releaseState": "released",
-                                            "terminalState": "released"}},
+                               "resource": {"state": "released"}},
             }], "page": {"hasMore": False}}}
             adapter.read = lambda argv: orchestration_fixture.pack(
                 show if argv[1] == "worker-show" else fleet if argv[1] == "worker-list" else transcript)

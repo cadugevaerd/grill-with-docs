@@ -870,9 +870,11 @@ class LeaderBoundary:
                     or resource.get("ownershipState") != "released" or resource.get("releaseState") != "released"
                     or not isinstance(resource.get("releaseCompletedAt"), str) or resource.get("releaseError") is not None
                     or archive != {"source": "transcript", "status": "captured"}
+                    or transferred.get("workerState") not in ("succeeded", "failed")
+                    or transferred.get("dispatchStatus") not in ("completed", "failed")
+                    or transferred.get("terminalState") != "released"
                     or transferred_projection.get("liveness") != {"verdict": "exited", "source": "resource_release"}
-                    or any(transferred_projected_resource.get(key) != "released"
-                           for key in ("state", "releaseState", "terminalState"))):
+                    or transferred_projected_resource.get("state") != "released"):
                 _fail("LEADER-RELEASE-UNPROVEN")
             launch = _mapping(_mapping(worker.get("startOptions"), "startOptions").get("launch"), "launch")
             effective = _mapping(launch.get("effective"), "effective")

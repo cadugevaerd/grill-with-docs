@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.12
+
+- Fix: a prova `ownership-transfer` lê a projeção compacta real de `worker-list`: `projection.resource.state` mais `terminalState` no topo, mantendo o recurso detalhado como autoridade de ownership/release/archive. A 6.0.11 exigia campos que somente `worker-show` expõe e recusava a cadeia válida.
+
 ## 6.0.11
 
 - Fix: `gauntlet-prepare-switch --released-source` recupera um líder concluído cujo terminal foi reutilizado por outro Dispatch antes do cleanup. A prova exige uma única cadeia de ownership com `originDispatchId` exato, mesmo terminal/worktree/runtime/incarnation, source settled e revogado, owner final liberado com transcript capturado e liveness `exited`; atividade especialista continua sem herdar a exceção.
