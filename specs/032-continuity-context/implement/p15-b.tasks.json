@@ -1,0 +1,76 @@
+{
+  "worker_id": "p15-b",
+  "work_id": "fix-continuity-context-2babd3080cc84b59a4404d6514f948c2",
+  "run_id": "run-4fa3f4073acd833ce55a6a0e",
+  "wave_id": "wave-0014",
+  "tasks": [
+    {
+      "id": "T058",
+      "status": "completed",
+      "file": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+      "summary": "Substituido o comentario falso do sitio de cunhagem da virada de fase (linhas ~6128-6133) que afirmava 'takeover and continuity-resume already refuse structural divergence before mutating -- so the live branch is trustworthy on its own'. Texto novo adapta o comentario ja correto do sitio irmao (confirmacao de etapa, linhas ~5960-5975): nao ha prova upstream de que a branca viva e a que o contexto rodou -- 'branch' saiu da tupla estrutural em T035, e duas branches no mesmo worktree sao identicas em project/path/git_common_dir. O guarda real e `_continuity_refuse_branch_contradiction`, que so dispara quando `execution_branch` esta setado.",
+      "scan": {
+        "method": "grep -rn recursivo no repo (excluindo .git) por: 'trustworthy on its own', 'already refuse structural divergence', 'no upstream proof' / 'upstream proof', 'upstream guards', 'before mutating', 'refuse structural divergence'",
+        "occurrences_found": [
+          {
+            "file": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+            "lines": "5970-5975",
+            "site": "confirmacao de etapa (stage-checkpoint mint)",
+            "status": "ja correta (corrigida em fase anterior) -- nao editada, e o texto-fonte usado para adaptar T058",
+            "action": "nenhuma (fonte de verdade, apenas leitura)"
+          },
+          {
+            "file": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+            "lines": "6132-6133",
+            "site": "virada de fase (phase-turn mint)",
+            "status": "falsa -- era o alvo do T058",
+            "action": "corrigida nesta tarefa"
+          },
+          {
+            "file": "tests/validate_agent_orchestration_contract.py",
+            "lines": "1574-1578",
+            "site": "docstring de caso de teste da retomada (continuity-resume)",
+            "status": "falsa -- confirmada existente, cópia conhecida citada no brief",
+            "action": "NAO EDITADA -- fora do meu grant (arquivo pertence ao no p15-a, que roda depois de mim). Fica registrada aqui para o merge/leader saber que ainda existe e e tarefa do p15-a (o brief da feature ja aponta isso para T060)."
+          },
+          {
+            "file": "specs/032-continuity-context/review.md",
+            "lines": "1284,1288",
+            "site": "citacao (blockquote) do achado critico da R7 de review, reproduzindo o comentario falso original como evidencia do achado",
+            "status": "falsa no texto citado, mas e citacao historica de review, nao codigo",
+            "action": "NAO EDITADA -- fora do meu grant (nao esta em plugin/skills/grill-with-docs/scripts/grill_workspace.py nem no meu sidecar). E' registro de auditoria passada; alterar romperia a evidencia do achado. Reportado aqui para o leader avaliar se algum node ou o leader deve tratar."
+          }
+        ],
+        "conclusion": "3 copias totais da alegacao falsa no repo. 1 corrigida por T058 (meu grant). 1 e do no p15-a (tests/validate_agent_orchestration_contract.py:1574-1578), fora do meu grant, nao tocada. 1 e citacao em review.md (evidencia historica do achado da R7), fora do meu grant, nao tocada."
+      }
+    },
+    {
+      "id": "T059",
+      "status": "completed",
+      "file": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+      "summary": "Reescrito o paragrafo T047 da docstring de `_continuity_refuse_branch_contradiction` (linhas ~3334-3337 antes da edicao) para deixar de anunciar a guarda DEVELOPMENT-SCHEMA interna (linha ~3354) como a guarda efetiva. Texto novo declara: desde T055, essa guarda e defesa em profundidade -- os tres verbos de continuidade derivam `identity` via `_continuity_identity` primeiro, sobre o mesmo `state`, que ja recusa bloco `development` malformado antes desta funcao rodar; nenhum caminho de CLI alcanca este raise hoje; mantida para chamador futuro que monte `identity` sem passar por `_continuity_identity`. Guarda NAO removida (doutrina fail-closed preservada, conforme instrucao).",
+      "scan": {
+        "method": "grep -n DEVELOPMENT-SCHEMA no arquivo inteiro + leitura de contexto de cada ocorrencia para achar outras afirmacoes sobre alcance/efetividade dessa guarda especifica",
+        "occurrences_checked": [
+          {"lines": "3289-3296", "site": "comentario T055 dentro de _continuity_identity", "finding": "ja correto -- ja documenta que o guarda de _continuity_refuse_branch_contradiction roda DEPOIS desta funcao nos tres verbos; nenhuma edicao necessaria"},
+          {"lines": "3299", "site": "raise dentro de _continuity_identity", "finding": "e o raise efetivo hoje; sem comentario de alcance a corrigir"},
+          {"lines": "3334-3337 (antes)/3334-3341 (depois)", "site": "docstring T047 de _continuity_refuse_branch_contradiction", "finding": "alvo do T059 -- corrigido"},
+          {"lines": "3354", "site": "raise redundante dentro de _continuity_refuse_branch_contradiction", "finding": "guarda mantida, nao removida, conforme instrucao doutrinaria"},
+          {"lines": "5915", "site": "comando nao-continuidade (step-confirmation mint), validacao de forma da trilha/audit", "finding": "guarda distinta, sem relacao com o alcance da guarda do T059; nenhuma alegacao falsa"},
+          {"lines": "5978", "site": "confirmacao de etapa -- elif de tipo invalido de existing_branch", "finding": "guarda distinta (branch, nao development); sem alegacao falsa"},
+          {"lines": "6097", "site": "virada de fase -- REASON-REQUIRED, nao relacionado", "finding": "sem relacao"},
+          {"lines": "6142", "site": "virada de fase -- elif de tipo invalido de previous_execution_branch", "finding": "guarda distinta (branch, nao development); sem alegacao falsa"}
+        ],
+        "conclusion": "Unica alegacao falsa sobre o alcance da guarda DEVELOPMENT-SCHEMA de _continuity_refuse_branch_contradiction era o paragrafo T047 da propria docstring, corrigido. As demais 7 ocorrencias de DEVELOPMENT-SCHEMA no arquivo sao guardas distintas (branch shape, audit/sequence shape) sem alegacao de alcance a corrigir, ou o proprio comentario T055 que ja documentava a redundancia corretamente."
+      }
+    }
+  ],
+  "verification": {
+    "py_compile": "OK (plugin/skills/grill-with-docs/scripts/grill_workspace.py)",
+    "validate_agent_orchestration_contract": "44 tests, OK, sem regressao apos T058 e T059 (docs/comentarios apenas)"
+  },
+  "out_of_scope_confirmed_not_touched": [
+    "tests/validate_agent_orchestration_contract.py:1574-1578 (docstring + recibo de reversao forjado, e cobertura propria da guarda -- pertencem ao no p15-a, que roda depois de mim)",
+    "specs/032-continuity-context/review.md:1284,1288 (citacao historica do achado da R7 -- fora do meu grant)"
+  ]
+}

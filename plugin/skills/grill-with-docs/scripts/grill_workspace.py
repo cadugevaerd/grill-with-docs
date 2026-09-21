@@ -3332,9 +3332,14 @@ def _continuity_refuse_branch_contradiction(state: Any, identity: dict[str, str]
     before mutating, so the single point is called by all three verbs.
 
     T047: also guards `development`'s own schema -- DEVELOPMENT-SCHEMA when the
-    block is present but not a mapping -- before reading `execution_branch`;
-    the step-confirmation command already used that same named code for the
-    identical case.
+    block is present but not a mapping -- before reading `execution_branch`.
+    Since T055, that is defense in depth, not the effective guard: all three
+    continuity verbs derive `identity` via `_continuity_identity` first, on
+    this same `state`, and it already refuses a malformed `development` block
+    before this function ever runs. No CLI path reaches this raise today. It
+    stays -- the signature accepts a value of any type, the project is
+    fail-closed -- for a future caller that builds `identity` without going
+    through `_continuity_identity`.
 
     T052: an absent or empty sealed branch passes in silence, on purpose --
     nothing bound yet is not a contradiction -- so this only refuses an actual
@@ -6128,9 +6133,16 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             # T048: no comparison against the context's worktree-identity stamp
             # here either, for the same reason as the step-confirmation mint:
             # the stamp is never re-written, this very binding is cleared on
-            # every phase turn by design (see below), and takeover and
-            # continuity-resume already refuse structural divergence before
-            # mutating -- so the live branch is trustworthy on its own.
+            # every phase turn by design (see below). The real guard against a
+            # stale binding is `_continuity_refuse_branch_contradiction`, and it
+            # only fires once `execution_branch` is set -- exactly the case
+            # `previous_execution_branch is _MISSING or None` excludes. There is
+            # no upstream proof that the live branch is the one the context ran
+            # on: `branch` was pulled out of the structural tuple in T035, and
+            # two branches inside the same worktree look identical on
+            # project/path/git_common_dir alone. This just records the current
+            # branch as the first binding for the new phase; it does not verify
+            # one.
         elif not isinstance(previous_execution_branch, str) or not previous_execution_branch:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         else:
