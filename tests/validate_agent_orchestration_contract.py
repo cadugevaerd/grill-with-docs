@@ -1398,6 +1398,11 @@ class AgentOrchestrationContract(unittest.TestCase):
                 stored["development"]["execution_branch"] = bound or live_branch
                 state_path.write_text(json.dumps(stored), encoding="utf-8")
                 if bound is not None:
+                    # T063: fixture sanity, not coverage -- `bound` is the fixed
+                    # literal below ("a-branch-nobody-was-on"), never derived
+                    # from `live_branch`, so this only guards against the
+                    # fixture's init branch colliding with the literal. The
+                    # real assertion is the readback further down.
                     self.assertNotEqual(bound, live_branch)
                 state = grill_workspace.read_development_state(root,
                     grill_workspace.resolve_development_item(root, "work-x"), "work-x")[1]
@@ -1448,17 +1453,22 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
 
     def test_continuity_resume_refuses_a_malformed_development_block(self):
-        """T053: `_continuity_refuse_branch_contradiction` guards `development`'s
-        own schema before reading `execution_branch` (T047) -- DEVELOPMENT-SCHEMA
-        when the block is present but not a mapping. The step-confirmation and
-        phase-turn commands raise the same named code for the identical shape,
-        but only on their own local `state.json` read; the schema guard inside
-        this shared comparison is reachable through `continuity-resume` too,
-        and had no case proving it there. Swapping that branch for a silent
-        `development = {}` would pass every other test in this file.
+        """T055/T060: `_continuity_identity` validates `development`'s own
+        shape unconditionally, before any continuity verb reads
+        `execution_branch` -- DEVELOPMENT-SCHEMA when the block is present
+        but not a mapping. The step-confirmation and phase-turn commands
+        raise the same named code for the identical shape, but only on
+        their own local `state.json` read; this guard is reachable through
+        `continuity-resume` too, and had no case proving it there.
+        `_continuity_refuse_branch_contradiction` carries the same-named
+        guard, but it is defense in depth today: no CLI path reaches it,
+        because `_continuity_identity` runs first in all three verbs and
+        already refuses this shape.
 
-        Verified by reversion: replacing the `raise` with `development = {}`
-        makes this case return PREVIEW/exit 0 instead of refusing.
+        Verified by reversion: removing the guard from `_continuity_identity`
+        does not let this case proceed -- measured result is
+        (2, "UNEXPECTED-FAILURE") with an AttributeError, because nothing
+        downstream still names DEVELOPMENT-SCHEMA for this shape.
         """
         import validate_orchestrator_store_contract as seed
         store_module = grill_workspace.grill_core_module("store")
@@ -1508,6 +1518,86 @@ class AgentOrchestrationContract(unittest.TestCase):
                  mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
                 code, blocked = self.run_cli(*argv)
             self.assertEqual((code, blocked.get("code")), (2, "DEVELOPMENT-SCHEMA"), blocked)
+            self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
+
+    def test_continuity_refuse_branch_contradiction_guards_malformed_development_directly(self):
+        """T061: `_continuity_refuse_branch_contradiction`'s own DEVELOPMENT-SCHEMA
+        guard (T047) is defense in depth today -- `_continuity_identity` (T055)
+        already refuses the same shape first, in all three continuity verbs, so
+        no CLI path reaches this one (see T059/T060). It still needs its own
+        coverage: nothing else in this file calls the function directly, and
+        swapping its guard for silent continuation leaves the whole suite green.
+
+        Verified by mutation: replacing the `raise` with `pass` makes this case
+        fail -- the call returns `None` instead of refusing.
+        """
+        with self.assertRaises(grill_workspace.CliFailure) as blocked:
+            grill_workspace._continuity_refuse_branch_contradiction(
+                {"development": "not-a-mapping"}, {}, "work-x")
+        self.assertEqual(blocked.exception.code, "DEVELOPMENT-SCHEMA")
+
+    def test_continuity_resume_tolerates_an_absent_development_block(self):
+        """T062: `_continuity_identity`'s DEVELOPMENT-SCHEMA guard only fires
+        when `development` is present and the wrong type -- `development is
+        not None and not isinstance(development, dict)`. Absence is a
+        legitimate state, not a hypothesis: it is the terminal-milestone
+        shape `audit_decisions.py` requires (`active_phase` null), and the
+        `is not None` half of the clause is what lets a work item in that
+        shape resume at all. Untested until now: tightening the clause to
+        `not isinstance(development, dict)`, which refuses absence too,
+        leaves the whole suite green.
+
+        Verified by mutation: that tightened clause makes this case refuse
+        DEVELOPMENT-SCHEMA/exit 2 instead of proceeding.
+        """
+        import validate_orchestrator_store_contract as seed
+        store_module = grill_workspace.grill_core_module("store")
+        runtime, session = "claude", "orca:ctx-destination"
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            with mock.patch.object(grill_workspace, "_initialize_orchestration", return_value={}):
+                code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                    "--work-id", "work-x", "--runtime", "codex",
+                    "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, payload)
+            state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
+            state = grill_workspace.read_development_state(root,
+                grill_workspace.resolve_development_item(root, "work-x"), "work-x")[1]
+            sealed = grill_workspace._continuity_identity(root, "work-x", state)
+            context = seed.ORCHESTRATION_CONTEXT(state="RELEASED", leader_state="RELEASED")
+            context.update(runtime="codex", adapter="codex", worktree_identity=sealed)
+            checkpoint = seed.ORCHESTRATION_CHECKPOINT()
+            checkpoint.update(worktree_identity=sealed, accepted_outputs={"specify": {"output_sha256": "a" * 64}})
+            checkpoint["checkpoint_sha256"] = store_module.jcs_sha256(
+                {k: v for k, v in checkpoint.items() if k != "checkpoint_sha256"})
+            operation = seed.ORCHESTRATION_OPERATION()
+            operation.update(kind="continuity-switch", state="APPLIED",
+                             expected_before={"checkpoint_id": "checkpoint-1"},
+                             intended_after={"to_runtime": runtime, "campaign_bridge": None})
+            item = seed.ORCHESTRATION_ITEM({"ctx-1": context}, {"op-1": operation})
+            item["policy_ref"] = "assets/agent-orchestration.v1.json"
+            item["policy_sha256"] = context["policy_sha256"] = grill_workspace.hash_bytes(
+                (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes())
+            item.update(checkpoints={"checkpoint-1": checkpoint}, checkpoint_head="checkpoint-1")
+            store_module.bootstrap(root)
+            store_module.transact(root, lambda doc: {**doc, "agent_orchestration": {
+                "schema": "grill-agent-orchestration/v1", "work_items": {"work-x": item}}})
+            stored = json.loads(state_path.read_text(encoding="utf-8"))
+            stored["active_phase"] = None
+            del stored["development"]
+            state_path.write_text(json.dumps(stored), encoding="utf-8")
+            argv = ("gauntlet-resume", str(root), "--work-id", "work-x", "--checkpoint", "checkpoint-1",
+                    "--runtime", runtime, "--session-ref", session)
+            before = store_module.read_snapshot(root).content_sha256
+            adapter, _show, transcript = orchestration_fixture.boundary(
+                grill_workspace, root, runtime, session, "work-x")
+            transcript["result"]["transcript"]["messages"][0]["blocks"][0]["input"] = {
+                "command": shlex.join([sys.executable, "-B", str(SCRIPTS / "grill_workspace.py"), *argv])}
+            with mock.patch.object(grill_workspace, "_continuity_effective_activation",
+                    return_value={"runtime": {"id": runtime, "adapter": runtime}}), \
+                 mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                code, preview = self.run_cli(*argv)
+            self.assertEqual((code, preview.get("verdict")), (0, "PREVIEW"), preview)
             self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
 
     def _graft_succession(self, root, work_id, branch):
@@ -1571,11 +1661,13 @@ class AgentOrchestrationContract(unittest.TestCase):
         T048 removed the comparison entirely, at both minting sites -- the step
         confirmation and the phase turn, which had no guard of its own before
         R6 added one. The criterion is now just: no bound branch yet, mint the
-        live one. What the identity stamp claims -- absent, agreeing, or
-        contradicting -- no longer matters, because the upstream guards
-        (takeover and continuity-resume) already refuse structural divergence
-        before mutating, so by the time minting runs the live branch is
-        trustworthy on its own.
+        live one. What the identity stamp claims -- absent or contradicting,
+        the two subcases this case still covers -- no longer matters: there
+        is no upstream proof that the live branch is the one the context ran
+        on. `branch` was pulled out of the structural tuple in T035, and two
+        branches inside the same worktree look identical on
+        project/path/git_common_dir alone. Minting just records the current
+        branch as the binding; it does not verify one.
 
         Covers the sequence that motivated the removal end to end: succession,
         then the step confirmation, then the phase turn -- the dead end R6
@@ -1600,7 +1692,11 @@ class AgentOrchestrationContract(unittest.TestCase):
                 live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
                                              check=True, capture_output=True, text=True).stdout.strip()
                 if stamp is not None:
-                    sealed_value = live_branch if stamp == "live" else stamp
+                    # T063: no subcase loads "live" any more -- the "agreeing"
+                    # situation was removed on purpose (only "no stamp" and
+                    # "stamp contradicts" remain above), so the selector this
+                    # ternary switched on is dead. `stamp` is the value.
+                    sealed_value = stamp
                     self._graft_succession(root, "work-x", sealed_value)
                     # Assert the value the graft actually sealed -- not a
                     # value standing in for the subcase's own label -- so a
@@ -1610,6 +1706,10 @@ class AgentOrchestrationContract(unittest.TestCase):
                     item = document["agent_orchestration"]["work_items"]["work-x"]
                     context = item["contexts"][item["current_context_id"]]
                     self.assertEqual(context["worktree_identity"]["branch"], sealed_value)
+                    # Fixture sanity, not coverage -- `sealed_value` here is
+                    # the fixed literal "a-branch-nobody-was-on", never
+                    # derived from `live_branch`. The real assertion is the
+                    # readback above.
                     self.assertNotEqual(sealed_value, live_branch)
 
                 # The step confirmation, which is where the backfill lives.
