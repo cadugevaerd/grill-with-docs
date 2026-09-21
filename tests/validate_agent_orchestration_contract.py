@@ -1750,11 +1750,91 @@ class AgentOrchestrationContract(unittest.TestCase):
 
         Verified by mutation: replacing the `raise` with `pass` makes this case
         fail -- the call returns `None` instead of refusing.
+
+        T068: `_continuity_identity_matches`'s own fail-closed branch (a
+        present-but-non-mapping stamp never matches) has no direct case
+        either -- inverting it makes a non-mapping stamp match in all three
+        comparators (prepare-switch, resume, takeover). Verified by mutation:
+        flipping that `return False` to `return True` makes this line fail.
         """
         with self.assertRaises(grill_workspace.CliFailure) as blocked:
             grill_workspace._continuity_refuse_branch_contradiction(
                 {"development": "not-a-mapping"}, {}, "work-x")
         self.assertEqual(blocked.exception.code, "DEVELOPMENT-SCHEMA")
+        self.assertFalse(grill_workspace._continuity_identity_matches("not-a-mapping", {}))
+
+    def test_prepare_switch_and_takeover_compare_the_bound_execution_branch(self):
+        """T067/R10: the sixth review round (R6-T045) made
+        `_continuity_refuse_branch_contradiction` the single point every
+        continuity verb calls so a sealed/live execution-branch contradiction
+        is named *before* anything mutates -- prepare-switch creates the
+        operation and releases the leader, and takeover re-stamps the
+        identity, before either one is done checking. Neither call site
+        (grill_workspace.py, `gauntlet_prepare_switch_command` and
+        `gauntlet_context_takeover_command`) had a case: swapping either call
+        for `pass` leaves the whole 51-test suite green.
+
+        Each half seeds `development.execution_branch` (the work item's own
+        sealed SSOT) to a branch that is not the live one and requires the
+        named refusal, with the store digest unchanged -- proving the
+        refusal happens before any write, which is the entire point of the
+        finding.
+
+        Verified by mutation: commenting out either
+        `_continuity_refuse_branch_contradiction(...)` call (prepare-switch
+        or takeover) makes its half proceed to SWITCH-PREPARED/QUIESCING or
+        TAKEOVER-APPLIED instead of refusing, and the store digest changes.
+        """
+        bound = "a-branch-nobody-was-on"
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                         check=True, capture_output=True, text=True).stdout.strip()
+            self.assertNotEqual(bound, live_branch)
+
+            def bind_to(work_id):
+                state_path = root / ".grill" / "work-items" / work_id / "state.json"
+                stored = json.loads(state_path.read_text(encoding="utf-8"))
+                stored["development"]["execution_branch"] = bound
+                state_path.write_text(json.dumps(stored), encoding="utf-8")
+
+            # -- prepare-switch half. --
+            code, created = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                "--work-id", "work-switch", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            switch_context_id = store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-switch"]["current_context_id"]
+            bind_to("work-switch")
+            before = store.read_snapshot(root).content_sha256
+            code, blocked = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-switch",
+                "--session-ref", orchestration_fixture.SESSION, "--context-id", switch_context_id,
+                "--epoch", "1", "--to-runtime", "claude")
+            self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-STATE-DIVERGENCE"), blocked)
+            self.assertIn(bound, blocked.get("error", ""))
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            # -- takeover half. --
+            code, created = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                "--work-id", "work-takeover", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            bind_to("work-takeover")
+            before = store.read_snapshot(root).content_sha256
+            old_dispatch = orchestration_fixture.SESSION.removeprefix("orca:")
+            raw = takeover_show(old_dispatch, status="completed")
+            real_run = subprocess.run
+            def guarded(cmd, **kwargs):
+                if isinstance(cmd, list) and "worker-show" in cmd:
+                    return subprocess.CompletedProcess(cmd, 0, stdout=raw)
+                return real_run(cmd, **kwargs)
+            with mock.patch.dict(os.environ, {"ORCA_TERMINAL_HANDLE": "term-fixture"}), \
+                 mock.patch.object(subprocess, "run", side_effect=guarded):
+                code, blocked = self.run_cli("gauntlet-context-takeover", str(root), "--work-id", "work-takeover",
+                    "--session-ref", "orca:ctx-new-takeover")
+            self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-STATE-DIVERGENCE"), blocked)
+            self.assertIn(bound, blocked.get("error", ""))
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
 
     def test_continuity_resume_tolerates_an_absent_development_block(self):
         """T062: `_continuity_identity`'s DEVELOPMENT-SCHEMA guard only fires
@@ -2438,6 +2518,57 @@ class AgentOrchestrationContract(unittest.TestCase):
                 code, fenced = self.run_cli(*other, *tail)
                 self.assertEqual((code, fenced.get("code")), (2, "CONTEXT-FENCED"), fenced)
             self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+    def test_orchestration_adopt_preview_matches_apply_when_origin_changed(self):
+        """T066/FR-011: `_adoption_conflict` (grill_workspace.py) mirrors the
+        apply closure's origin-changed branch so the preview raises the same
+        refusal the apply would -- but the only existing preview/apply parity
+        case (test_orchestration_adopt_preview_matches_apply_when_context_fenced,
+        above) covers CONTEXT-FENCED only. The origin-changed invariant this
+        delivery built was proven only by eyeballing the two branches stay in
+        lockstep, never by a test: that is exactly what let a main-branch
+        merge loosen `_adoption_conflict` without either the preview or the
+        suite noticing, and the suite only caught it because a case coming
+        from main happened to exercise this path (converge round 21).
+
+        Both sides of the branch: origin changed together with a changed
+        scope (or no current context) refuses identically on preview and
+        apply; origin changed with the scope unchanged and a current context
+        accepts on both, with the very same context_id.
+
+        Verified by mutation: deleting the origin-changed `raise` in
+        `_adoption_conflict` (grill_workspace.py ~1772) makes the "both
+        refuse" half fail -- preview returns PREVIEW/exit 0 where apply still
+        refuses ORCHESTRATION-POLICY-STALE.
+        """
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            code, created = self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x",
+                "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            args = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex",
+                    "--session-ref", orchestration_fixture.SESSION, "--scope-file", "src/a.py")
+            code, preview = self.run_cli(*args)
+            self.assertEqual(code, 0, preview)
+            code, adopted = self.run_cli(*args, "--apply", "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, adopted.get("verdict")), (0, "ORCHESTRATION-ADOPTED"), adopted)
+            changed_origin = {**preview["origin"], "state_sha256": "f" * 64}
+            # -- both refuse: origin changed AND scope also changed. --
+            before = store.read_snapshot(root).content_sha256
+            refused = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex",
+                       "--session-ref", orchestration_fixture.SESSION, "--scope-file", "src/b.py")
+            with mock.patch.object(grill_workspace, "_orchestration_origin", return_value=changed_origin):
+                for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                    code, blocked = self.run_cli(*refused, *tail)
+                    self.assertEqual((code, blocked.get("code")), (2, "ORCHESTRATION-POLICY-STALE"), blocked)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+            # -- both accept: origin changed, scope unchanged, current context exists. --
+            with mock.patch.object(grill_workspace, "_orchestration_origin", return_value=changed_origin):
+                code, refresh = self.run_cli(*args)
+                self.assertEqual((code, refresh.get("verdict")), (0, "PREVIEW"), refresh)
+                code, refreshed = self.run_cli(*args, "--apply", "--expected-sha256", refresh["expected_sha256"])
+            self.assertEqual((code, refreshed.get("verdict"), refreshed.get("context_id")),
+                             (0, "ORCHESTRATION-ADOPTED", adopted["context_id"]), refreshed)
 
     def boundary(self, probe=None, after=None, release=None, adapter="orca", capabilities=None, calls=None):
         probe = probe or native_sources()
