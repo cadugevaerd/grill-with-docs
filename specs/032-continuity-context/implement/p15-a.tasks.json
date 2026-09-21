@@ -1,0 +1,67 @@
+{
+  "worker_id": "p15-a",
+  "work_id": "fix-continuity-context-2babd3080cc84b59a4404d6514f948c2",
+  "run_id": "run-4fa3f4073acd833ce55a6a0e",
+  "wave_id": "wave-0015",
+  "method_note": "Toda mutacao medida em copia fora da arvore (/tmp/p15a-mut, rsync completo da worktree via cp -r), nunca no worktree real. Copia resetada (rm -rf + cp -r) antes de cada mutacao isolada para nao acumular mutacoes cruzadas.",
+  "tasks": [
+    {
+      "id": "T060",
+      "status": "completed",
+      "file": "tests/validate_agent_orchestration_contract.py",
+      "summary": "Reescrita a docstring de test_continuity_resume_refuses_a_malformed_development_block (linhas ~1450-1465 antes da edicao). O recibo antigo afirmava que reverter 'o raise' fazia o caso voltar PREVIEW/exit 0 -- falso desde T055: a recusa hoje vem de _continuity_identity (guarda em grill_workspace.py:3298-3299), que roda antes de _continuity_refuse_branch_contradiction em todos os tres verbos de continuidade e ja recusa o mesmo shape. Docstring nova nomeia _continuity_identity como a guarda de fato exercitada e registra o recibo medido da reversao correta.",
+      "mutation": {
+        "target": "guarda em _continuity_identity (grill_workspace.py, bloco 'development = state.get(\"development\"); if development is not None and not isinstance(development, dict): raise CliFailure(...)')",
+        "change": "removido o if/raise, mantendo so a atribuicao de development e a linha de phase",
+        "measured_baseline": "OK (1 test, exit 0)",
+        "measured_after_mutation": "FAIL -- AssertionError: Tuples differ: (2, 'UNEXPECTED-FAILURE') != (2, 'DEVELOPMENT-SCHEMA'); payload {'code': 'UNEXPECTED-FAILURE', 'error': 'AttributeError', 'verdict': 'BLOCKED'}",
+        "assertion_that_failed": "self.assertEqual((code, blocked.get(\"code\")), (2, \"DEVELOPMENT-SCHEMA\"), blocked)",
+        "conclusion": "recibo novo da docstring bate exatamente com o resultado medido: (2, 'UNEXPECTED-FAILURE') / AttributeError, nao PREVIEW/exit 0"
+      }
+    },
+    {
+      "id": "T061",
+      "status": "completed",
+      "file": "tests/validate_agent_orchestration_contract.py",
+      "summary": "Tres correcoes: (1) caso novo test_continuity_refuse_branch_contradiction_guards_malformed_development_directly, chamando _continuity_refuse_branch_contradiction diretamente em processo com development de tipo errado, afirmando DEVELOPMENT-SCHEMA -- cobertura propria da guarda do ponto unico, hoje inalcancavel por CLI (T059 ja documentou isso, mas nunca teve caso proprio). (2) docstring de test_execution_branch_minting_ignores_the_identity_stamp (caso de cunhagem) corrigida: parava de anunciar tres situacoes de carimbo ('absent, agreeing, or contradicting') quando o for-loop so cobre duas ('no stamp' e 'stamp contradicts') -- a situacao 'agreeing'/'live' foi removida de proposito. (3) mesma docstring: substituida a alegacao falsa 'upstream guards already refuse structural divergence before mutating, so by the time minting runs the live branch is trustworthy on its own' pelo texto correto, adaptado do comentario ja corrigido pelo p15-b em grill_workspace.py (~5966-5980 e ~6133-6145): nao ha prova upstream de que a branca viva e a que o contexto rodou -- branch saiu da tupla estrutural em T035.",
+      "mutation": {
+        "target": "guarda DEVELOPMENT-SCHEMA dentro de _continuity_refuse_branch_contradiction (grill_workspace.py:3358-3359)",
+        "change": "raise trocado por pass, e sealed passou a ler development.get(...) so quando development e dict (para nao quebrar por outro motivo antes de chegar na asserção)",
+        "measured_baseline": "OK (1 test, exit 0)",
+        "measured_after_mutation": "FAIL -- AssertionError: CliFailure not raised",
+        "assertion_that_failed": "with self.assertRaises(grill_workspace.CliFailure) as blocked: ...",
+        "conclusion": "caso novo detecta a neutralizacao da guarda"
+      }
+    },
+    {
+      "id": "T062",
+      "status": "completed",
+      "file": "tests/validate_agent_orchestration_contract.py",
+      "summary": "Caso novo test_continuity_resume_tolerates_an_absent_development_block: state.json sem a chave 'development' (del, nao {}) e active_phase=None (shape de marco terminal exigido por audit_decisions.py), chamando gauntlet-resume e afirmando (0, 'PREVIEW') com o digest do armazenamento inalterado. Cobre a clausula 'development is not None and not isinstance(development, dict)' em _continuity_identity (grill_workspace.py:3298), que preserva ausencia como estado legitimo -- sem teste ate agora.",
+      "mutation": {
+        "target": "clausula em _continuity_identity (grill_workspace.py:3298)",
+        "change": "'if development is not None and not isinstance(development, dict):' apertado para 'if not isinstance(development, dict):' (recusa ausencia tambem)",
+        "measured_baseline": "OK (1 test, exit 0)",
+        "measured_after_mutation": "FAIL -- AssertionError: Tuples differ: (2, 'BLOCKED') != (0, 'PREVIEW'); payload {'code': 'DEVELOPMENT-SCHEMA', 'error': 'work-x', 'verdict': 'BLOCKED'}",
+        "assertion_that_failed": "self.assertEqual((code, preview.get(\"verdict\")), (0, \"PREVIEW\"), preview)",
+        "conclusion": "caso novo detecta a regressao que recusaria work items legitimos sem development ainda"
+      }
+    },
+    {
+      "id": "T063",
+      "status": "completed",
+      "file": "tests/validate_agent_orchestration_contract.py",
+      "summary": "Duas assertNotEqual tautologicas identificadas: linha ~1401 (test_continuity_resume_compares_the_bound_execution_branch, self.assertNotEqual(bound, live_branch)) e linha ~1700 apos as insercoes acima (test_execution_branch_minting_ignores_the_identity_stamp, self.assertNotEqual(sealed_value, live_branch)). Em ambas, o lado esquerdo e o literal fixo 'a-branch-nobody-was-on' da propria parametrizacao do subTest, nunca derivado de live_branch -- neutralizar as duas para pass nao reprova nada. Escolha: MANTIDAS as duas, com comentario no proprio caso declarando que sao sanidade de fixture (o literal nao colide com a branch que o fixture realmente criou), nao cobertura -- a asserção real e o readback ao lado (o state.json apos o comando, ou o context['worktree_identity']['branch'] apos o graft). Corrigido tambem o ternario morto em test_execution_branch_minting_ignores_the_identity_stamp: 'sealed_value = live_branch if stamp == \"live\" else stamp' -- o for-loop so tem ('no stamp', None) e ('stamp contradicts', 'a-branch-nobody-was-on'), nenhum subcaso carrega stamp == 'live' desde a remocao da situacao 'agreeing' (mesma remocao que motivou a correcao da docstring em T061), entao o ramo 'if' nunca executa. Simplificado para 'sealed_value = stamp' (sem mudanca de comportamento: os dois branches do ternario ja produziam o mesmo resultado em todo subcaso existente).",
+      "record_correction_note": "O brief cita 'o registro do no anterior afirma que move-las as tornou nao-triviais, o que nao e verdade'. Esse registro nao esta neste arquivo (grep por 'non-trivial'/'nao-trivial'/'nontrivial' em tests/validate_agent_orchestration_contract.py: 0 ocorrencias) nem em nenhum arquivo do meu grant. Nao encontrei o sidecar ou nota que faz essa afirmacao dentro do escopo que posso escrever (p15-a.tasks.json e o proprio teste); se e um sidecar de fase anterior (fora do meu grant), fica para o leader corrigir ou confirmar removido no merge.",
+      "mutation": "nao aplicavel -- mudanca e apenas comentario/rotulo (marcar como sanidade de fixture) mais remocao de codigo morto sem efeito comportamental; nenhuma asserção nova foi criada e a logica das asserções existentes nao mudou. Confirmado por leitura: 'stamp == \"live\"' e sempre False nos dois subcasos do for-loop (None e 'a-branch-nobody-was-on'), entao 'sealed_value = stamp' produz o mesmo valor que o ternario antigo em toda execucao possivel hoje."
+    }
+  ],
+  "verification": {
+    "python3_-c_py_compile": "OK (tests/validate_agent_orchestration_contract.py importa e roda sem SyntaxError)",
+    "validate_agent_orchestration_contract": "46 tests (44 + 2 novos: T061 e T062), OK, ~21.7s, sem regressao em nenhum caso existente"
+  },
+  "out_of_scope_confirmed_not_touched": [
+    "specs/032-continuity-context/review.md:1284,1288 (citacao historica do achado da R7 -- fora do meu grant, ja flagueado por p15-b)",
+    "plugin/skills/grill-with-docs/scripts/grill_workspace.py (produto) -- ja corrigido por p15-b nesta mesma wave; nao tocado por mim"
+  ]
+}
