@@ -7,8 +7,10 @@
 - Fix: a prévia de `gauntlet-orchestration-adopt` passa a executar a mesma verificação de contexto que só rodava no caminho de aplicação. Antes a prévia montava o payload sem verificá-la, prometia `PREVIEW` e o apply recusava com `CONTEXT-FENCED` — prévia e aplicação agora concordam no veredito, e a prévia segue sem escrever nada.
 - Os campos do checkpoint de continuidade foram renomeados numa versão nova do schema, ao lado da atual: `workflow_sha256` passa a `context_inputs_sha256` e `constitution_sha256` a `origin_metadata_sha256`, nomes que dizem o que o campo de fato carrega. A validação escolhe o conjunto de chaves pelo valor de `schema` no próprio documento e aceita as duas versões sem tentar uma e depois a outra; um checkpoint da versão anterior continua legível e utilizável, sem reescrita.
 - Integra a `main` em 6.0.11. O conflito de `gauntlet-prepare-switch` foi resolvido mantendo a comparação **estrutural** de identidade de worktree desta entrega — o lado entrante comparava o mapeamento inteiro, que é o defeito J1/H1 fechado aqui, porque `phase` e `branch` se movem na vida normal e nenhum verbo os re-carimba — e tomando do lado entrante a lógica de líder liberado (`--released-source`).
-
 - Integra também a `main` em 6.0.12 (`0ca6760`). Sem conflito de código: apenas o CHANGELOG, porque os dois lados haviam numerado 6.0.12. A versão desta entrega sobe para 6.0.13 para ficar acima da publicada.
+
+## 6.0.12
+
 - Fix: a prova `ownership-transfer` lê a projeção compacta real de `worker-list`: `projection.resource.state` mais `terminalState` no topo, mantendo o recurso detalhado como autoridade de ownership/release/archive. A 6.0.11 exigia campos que somente `worker-show` expõe e recusava a cadeia válida.
 
 ## 6.0.11
