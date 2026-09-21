@@ -1135,6 +1135,65 @@ class AgentOrchestrationContract(unittest.TestCase):
             with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
                 adapter.observe_released(allow_unarchived_stopped=True)
 
+    def test_released_leader_accepts_an_exact_live_ownership_transfer(self):
+        core = grill_workspace.grill_core_module("agent_runtime")
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            adapter, show, transcript = orchestration_fixture.boundary(
+                grill_workspace, root, "codex", orchestration_fixture.SESSION, "work-x")
+            result = show["result"]
+            result["dispatch"].update(runId="run-1", status="completed",
+                                      capabilityRevokedAt="2026-01-01T00:00:00Z",
+                                      completedAt="2026-01-01T00:00:00Z")
+            result["worker"].update(state="succeeded", stage="settled")
+            result["terminal"].update(connected=True, writable=True)
+            result["projection"].update(outcome="succeeded", workspace={"id": "worktree-fixture"},
+                                        liveness={"verdict": "unverifiable", "reason": "missing_status"},
+                                        resource={"state": "absent", "reason": "not_materialized"})
+            result["observation"].update(status="live")
+            result["terminalResource"] = None
+            owned_resource = {
+                "ownershipState": "owned", "releaseState": "not_requested",
+                "originDispatchId": "ctx-fixture", "ownerDispatchId": "ctx-next",
+                "terminalHandle": "term-fixture", "worktreeId": "worktree-fixture",
+                "endpointId": "runtime-fixture", "endpointIncarnation": "pty-fixture:inc-fixture",
+                "releaseCompletedAt": None, "releaseError": None,
+                "archive": {"source": None, "status": None},
+            }
+            successor = {
+                "dispatchId": "ctx-next", "agentTerminalHandle": "term-fixture",
+                "workerState": "ready", "dispatchStatus": "dispatched", "terminalState": "active",
+                "resource": owned_resource,
+                "projection": {"provider": {"id": "codex"}, "host": {"id": "host-fixture"},
+                               "workspace": {"id": "worktree-fixture"},
+                               "liveness": {"verdict": "live", "source": "agent_status"},
+                               "resource": {"state": "owned"}},
+            }
+            fleet = {"ok": True, "result": {"workers": [successor], "page": {"hasMore": False}}}
+            adapter.read = lambda argv: orchestration_fixture.pack(
+                show if argv[1] == "worker-show" else fleet if argv[1] == "worker-list" else transcript)
+            recovered = adapter.observe_released(allow_unarchived_stopped=True)
+            self.assertEqual((recovered["outcome"], recovered["release_proof"]),
+                             ("succeeded", "ownership-transfer"))
+            for target, key, value in (
+                    (owned_resource, "endpointId", "other-runtime"),
+                    (fleet["result"]["workers"], None, copy.deepcopy(successor))):
+                original = copy.deepcopy(target) if key is None else target[key]
+                if key is None:
+                    target.append(value)
+                else:
+                    target[key] = value
+                with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                    adapter.observe_released(allow_unarchived_stopped=True)
+                if key is None:
+                    target.pop()
+                else:
+                    target[key] = original
+            result["worker"]["state"] = result["projection"]["outcome"] = "failed"
+            result["dispatch"]["status"] = "failed"
+            with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                adapter.observe_released(allow_unarchived_stopped=True)
+
     def test_public_continuity_resume_observes_destination_before_commit(self):
         import validate_orchestrator_store_contract as seed
         store = grill_workspace.grill_core_module("store")

@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.16
+
+- Fix: `gauntlet-prepare-switch --released-source` aceita a transferência atômica do único recurso terminal exato para um sucessor ativo, sem exigir que o recurso do sucessor já esteja liberado, encerrado ou arquivado; formas ambíguas, divergentes e sem sucesso continuam recusadas.
+
 ## 6.0.15
 
 - Permite revisões sucessoras imutáveis de `partition`: após `r2`, seleciona o próximo par completo `rN` e recusa revisões parciais sem sobrescrever evidência selada.
