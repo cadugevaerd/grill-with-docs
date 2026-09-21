@@ -1,0 +1,62 @@
+{
+  "worker_id": "p16-a",
+  "work_id": "fix-continuity-context-2babd3080cc84b59a4404d6514f948c2",
+  "run_id": "run-07401dfed0e0a820b14f27ec",
+  "wave_id": "wave-0016",
+  "tasks": [
+    {
+      "id": "T066",
+      "status": "completed",
+      "file": "tests/validate_agent_orchestration_contract.py",
+      "summary": "Novo teste test_orchestration_adopt_preview_matches_apply_when_origin_changed, ao lado de test_orchestration_adopt_preview_matches_apply_when_context_fenced. Cobre a paridade preview/apply de orchestration_adopt_command no caminho de origem alterada (_adoption_conflict, grill_workspace.py ~1772, espelha o ramo da closure mutate() em ~1828): (a) origem alterada + scope_files tambem alterado -- ambos recusam ORCHESTRATION-POLICY-STALE, exit 2, mesmo tail () e (--apply, --expected-sha256 0*64), store inalterado; (b) origem alterada + scope_files igual + contexto atual existente -- ambos aceitam, preview PREVIEW e apply ORCHESTRATION-ADOPTED com o mesmo context_id.",
+      "verification": {
+        "mutation": "copia fresca via git archive HEAD em /tmp/mut-t066; substitui o `raise CliFailure(... ORCHESTRATION-POLICY-STALE ...)` de _adoption_conflict (linha 1774) por `pass`.",
+        "assertion_that_failed": "tests/validate_agent_orchestration_contract.py:2563 -- self.assertEqual((code, blocked.get(\"code\")), (2, \"ORCHESTRATION-POLICY-STALE\"), blocked)",
+        "measured_result": "AssertionError: Tuples differ: (0, None) != (2, 'ORCHESTRATION-POLICY-STALE') -- preview mutado devolve PREVIEW/0 (verdict PREVIEW) enquanto o apply, no mesmo cenario, continua recusando -- exatamente a inversao que o achado do R10 descreve."
+      }
+    },
+    {
+      "id": "T067",
+      "status": "completed",
+      "file": "tests/validate_agent_orchestration_contract.py",
+      "summary": "Novo teste test_prepare_switch_and_takeover_compare_the_bound_execution_branch, cobrindo as duas chamadas do ponto unico _continuity_refuse_branch_contradiction em gauntlet_prepare_switch_command (grill_workspace.py:3786) e gauntlet_context_takeover_command (grill_workspace.py:4172). Cada metade semeia development.execution_branch (state.json) numa branca diferente da viva ('a-branch-nobody-was-on') e exige CONTINUITY-STATE-DIVERGENCE com a mensagem citando a branca vinculada, e o digest do armazenamento (content_sha256) inalterado antes/depois -- a recusa acontece antes de qualquer store.transact.",
+      "verification": {
+        "mutation_switch": {
+          "method": "copia fresca via git archive HEAD em /tmp/mut-t067-switch; troca a chamada de _continuity_refuse_branch_contradiction em grill_workspace.py:3786 (dentro de gauntlet_prepare_switch_command) por `pass`.",
+          "assertion_that_failed": "tests/validate_agent_orchestration_contract.py:1813 -- self.assertEqual((code, blocked.get(\"code\")), (2, \"CONTINUITY-STATE-DIVERGENCE\"), blocked)",
+          "measured_result": "AssertionError: (0, None) != (2, 'CONTINUITY-STATE-DIVERGENCE') -- prepare-switch mutado prossegue ate QUIESCING/0 em vez de recusar."
+        },
+        "mutation_takeover": {
+          "method": "copia fresca via git archive HEAD em /tmp/mut-t067-takeover; troca a chamada de _continuity_refuse_branch_contradiction em grill_workspace.py:4172 (dentro de gauntlet_context_takeover_command) por `pass`.",
+          "assertion_that_failed": "tests/validate_agent_orchestration_contract.py:1835 -- self.assertEqual((code, blocked.get(\"code\")), (2, \"CONTINUITY-STATE-DIVERGENCE\"), blocked)",
+          "measured_result": "AssertionError: (0, None) != (2, 'CONTINUITY-STATE-DIVERGENCE') -- takeover mutado prossegue ate TAKEOVER-PREVIEW/0 em vez de recusar."
+        }
+      }
+    },
+    {
+      "id": "T068",
+      "status": "completed",
+      "file": "tests/validate_agent_orchestration_contract.py",
+      "summary": "Uma linha acrescentada ao caso direto que o T061 ja criou (test_continuity_refuse_branch_contradiction_guards_malformed_development_directly): self.assertFalse(grill_workspace._continuity_identity_matches(\"not-a-mapping\", {})). Prova o ramo fail-closed de _continuity_identity_matches (grill_workspace.py:3546-3547) que devolve False para um carimbo presente porem nao-mapeamento -- ramo usado pelos tres comparadores (prepare-switch, resume, takeover).",
+      "verification": {
+        "mutation": "copia fresca via git archive HEAD em /tmp/mut-t068; troca `return False` por `return True` no ramo `if not isinstance(sealed, dict)` de _continuity_identity_matches (grill_workspace.py:3547).",
+        "assertion_that_failed": "tests/validate_agent_orchestration_contract.py:1764 -- self.assertFalse(grill_workspace._continuity_identity_matches(\"not-a-mapping\", {}))",
+        "measured_result": "AssertionError: True is not false"
+      }
+    }
+  ],
+  "out_of_scope_confirmed_not_touched": [
+    "tasks.md (read-only para o worker)",
+    "grill_workspace.py (produto -- nenhum dos tres achados exigiu mudanca de codigo de producao, so prova ausente)",
+    "CHANGELOG.md (T065 -- fora do meu grant, no de outro worker)"
+  ],
+  "verification_suite": {
+    "command": "python3 tests/validate_agent_orchestration_contract.py",
+    "result": "53 tests, OK, ~23s (51 pre-existentes + 2 novos metodos de teste; T068 foi anexado a um metodo ja existente, sem novo metodo)"
+  },
+  "completed": [
+    "T066",
+    "T067",
+    "T068"
+  ]
+}
