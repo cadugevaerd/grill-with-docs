@@ -1382,3 +1382,121 @@ Nenhum conflito descoberto. 6.0.3 sem publicar, `main` em 6.0.2, sem novo bump e
 Recomendo tratar junto os Minor p1, p2 e p3, que são uma linha cada e todos da mesma família de afirmação desatualizada. p4 fica como registro.
 
 **Observação de método, que vale mais que os achados**: o R9 não achou nenhum defeito de comportamento, pela segunda rodada seguida. O que ele achou foi que a fase dedicada a consertar afirmações falsas corrigiu uma de três cópias, e que o conserto de uma guarda produziu um recibo falsificado. Antes da próxima fase, a instrução precisa parar de nomear **o** ponto e passar a exigir a varredura — porque em todas as vezes em que isso falhou, a cópia esquecida estava a menos de dez linhas da corrigida.
+
+---
+
+# R10 — 2026-09-21, sobre a base integrada com a `main`
+
+## Review Report
+
+**Verdict: REQUEST CHANGES** — 0 Critical, 5 Important, 4 Minor
+
+Source fingerprint: tree `872f172172b94aea0409562a9e05f601f552865b907283cc780b188b4580af85` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `c93b998468329cb61546c4dd452596a539be41cebb562413508487f1e30c82c7` — casa com o converge rodada 21 e o verify rodada 10.
+
+Dois auditores read-only. Esta rodada não revisa implementação nova: revisa uma **integração**. A `main` avançou sete commits durante a entrega, de 6.0.2 a 6.0.12, na mesma área da feature.
+
+## O que a integração preservou
+
+**Zero regressões de merge**, e a prova é por medição, não por leitura. O auditor de regressão rodou dez mutações sobre a árvore integrada e, para cada sobrevivente, **repetiu a mutação na árvore pré-integração** para demonstrar que já sobrevivia antes. Nenhum achado fechado entre R1 e R9 reabriu.
+
+Sete mutações morreram como deviam, incluindo a que reintroduz o J1/H1: acrescentar `phase` e `branch` à tupla estrutural derruba cinco testes. **O conserto crítico desta entrega está protegido por prova, não por comentário** — o que importa porque o lado entrante do `prepare-switch` oferecia exatamente essa reintrodução.
+
+Nada se perdeu do lado entrante: `gauntlet.py` e `gauntlet_runs.py` têm diff **zero** contra a `main`, os verbos novos estão presentes e alcançáveis, e o arquivo de teste recebeu 285 inserções com **zero deleções** — nenhum caso da 032 foi removido, renomeado ou teve asserção alterada.
+
+## Important
+
+### R10-1 — O atalho `REUSED` perdeu a checagem de origem na junção
+
+`plugin/skills/grill-with-docs/scripts/grill_workspace.py:1799-1803`
+
+Defeito de junção, do mesmo tipo do que a suíte pegou, mas este **nenhum teste pega**:
+
+- o T006 removeu `origin`, `policy_sha256` e a checagem de líder do gate `REUSED`, porque `_adoption_conflict` passou a cobri-los. Na época, `_adoption_conflict` recusava **toda** origem alterada, então a igualdade de origem ficava implícita;
+- o merge afrouxou `_adoption_conflict` para aceitar origem alterada quando há contexto corrente e escopo igual. **A implicação evaporou.**
+
+Com origem alterada, escopo igual, apresentação igual e mesmo líder, o HEAD devolve `REUSED` sem entrar na mutação; a `main` devolveria `ORCHESTRATION-ADOPTED`. O estado em disco é idêntico nos dois — por isso nenhum teste reprova. O que diverge é o **veredito**: `REUSED` significa "repetição idêntica já aplicada", e a origem não é idêntica.
+
+**Ressalva que reduz o alcance, e o auditor a verificou**: isto **não** quebra a paridade prévia/apply. O gate roda depois de `_adoption_conflict` nos dois caminhos, então não produz prévia que o apply recusaria. É infidelidade à semântica de `REUSED`, não inversão do invariante do T006.
+
+**Conserto**: repor a igualdade de origem no gate, alinhando à precedência do apply.
+
+Contra FR-010.
+
+### R10-2 — A seção 6.0.12 do CHANGELOG desapareceu, e ela já shipou
+
+`CHANGELOG.md:3`
+
+Minha resolução do segundo merge **renomeou** `## 6.0.12` para `## 6.0.13` em vez de abrir seção nova. A `main` tem a seção, a tag `v6.0.12` existe e tem Release — a cláusula constitucional `Release obrigatória por versão` garante isso.
+
+Consequência: quando esta branch voltar para a `main`, o CHANGELOG não terá entrada alguma para a 6.0.12, e o item `ownership-transfer`, **que shipou naquela versão**, passa a aparecer como novidade da 6.0.13.
+
+É erro meu de resolução, não da `main`, e é de governança: o CHANGELOG é o registro público do que cada versão entregou.
+
+**Conserto**: restaurar `## 6.0.12` com o bullet original e abrir `## 6.0.13` acima, só com os itens desta entrega. Há também uma linha em branco solta no meio da lista.
+
+Contra a cláusula `Release obrigatória por versão`.
+
+### R10-3 — O invariante do T006 não tem teste no caminho que o merge mexeu
+
+`tests/validate_agent_orchestration_contract.py:2419` e `plugin/…/grill_workspace.py:1762-1770`
+
+O T006 estabeleceu que a prévia de `orchestration-adopt` levanta a mesma recusa que o apply. O único teste de paridade cobre **apenas** `CONTEXT-FENCED`. Nenhum teste exercita origem alterada nesse comando, e `ORCHESTRATION-POLICY-STALE` aparece uma única vez em `tests/`, em outro verbo.
+
+Ou seja: o invariante que esta entrega criou está sustentado por **alinhamento manual** entre duas funções, não por prova. Foi essa ausência que permitiu ao merge invertê-lo sem aviso — e a suíte só reprovou porque um teste **da `main`** exercitava o caminho.
+
+Agrava que o comentário que deixei em `_adoption_conflict` é **verdadeiro por acidente**: ele descreve o ramo do apply que atualiza a apresentação, e esse ramo é inalcançável quando a apresentação já é igual, porque o `REUSED` retorna antes. Escrevi olhando para a mutação sem olhar as quatro linhas acima dela.
+
+**Conserto**: um caso de paridade para o caminho de origem, exercitando prévia e apply na mesma entrada e exigindo o mesmo veredito.
+
+Contra FR-011.
+
+### R10-4 e R10-5 — As duas metades que o R6-2 mandou acrescentar não têm prova
+
+`plugin/skills/grill-with-docs/scripts/grill_workspace.py:3776` (prepare-switch) e `:4162` (takeover)
+
+Provado por mutação: trocar a chamada do ponto único por `pass` em **qualquer** dos dois deixa os 51 testes verdes.
+
+Estas são exatamente as metades que o R6-2 mandou acrescentar, com o argumento de que a preparação de troca *"cria a operação, grava o ponto de retomada e libera o líder antes de qualquer checagem"*. O conserto entrou; a prova, não.
+
+Cenário de falha, no verbo de preparação: work item vinculado a `A`, árvore em `B` — a troca cria a operação, grava o ponto de retomada e **libera o líder** sem recusar. A divergência só aparece na retomada, com o contexto já solto. É literalmente o defeito que o R6-2 descreveu.
+
+**São pré-existentes, não da integração**, e o auditor provou isso rodando a mesma mutação na árvore pré-merge: também sobrevivia.
+
+**Conserto**: um subcaso irmão em cada um dos dois métodos, semeando o vínculo numa branca diferente da viva e exigindo a recusa com digest do armazenamento inalterado.
+
+Contra FR-011.
+
+## Minor
+
+| # | Local | Achado |
+|---|---|---|
+| q1 | `grill_workspace.py:3536-3537` | O fail-closed de carimbo malformado não tem prova: trocar `return False` por `return True` no ramo de não-mapping deixa os 51 verdes, e um `worktree_identity` presente porém não-mapping passa a ser **aceito** nos três comparadores. Estreito, porque o esquema do store normalmente impede, mas é guarda de fronteira sem teste. Uma linha no caso direto que o T061 já criou resolve |
+| q2 | `converge.md` rodada 21 | A tabela de invariantes diz "uma definição, **dois usos**". A tupla tem **um** uso; o comparador tem **quatro** call sites em três verbos. Afirmação minha, mais forte que o fato — a mesma família que esta entrega passou dez rodadas combatendo |
+| q3 | `grill_core/agent_runtime.py:1178` | O predicado da 032 classifica como terminal **qualquer** estado fora de `dispatched`/`running` — inclusive um hipotético `queued`, que seria líder que nem começou, e a tomada seria autorizada. Pré-existente da R1, não do merge; os quatro estados que a `main` conhece não o exercitam. Nada o guarda, nem teste nem comentário |
+| q4 | `CHANGELOG.md:9` | Linha em branco solta no meio da lista, resíduo da resolução |
+
+## Fragilidade de processo, que não é achado de código
+
+**O conserto do J1/H1 não está na `main`.** Toda integração futura vai reoferecer a linha do lado entrante, e o comentário que explica por que recusá-la existe **só nesta branch** — quem resolver o conflito a partir da `main` não o vê.
+
+A proteção real não é o comentário: são os dois testes que derrubam a reintrodução. Eles também só existem aqui. **A blindagem só nasce quando esta entrega chegar à `main`**, e até lá cada integração depende de alguém lembrar.
+
+## Nota metodológica do auditor, que vale preservar
+
+Rodar dez mutações reusando o mesmo diretório de cópia fez um teste falhar em **todas** as rodadas, inclusive nas que não o tocavam. Em cópia limpa por mutação o efeito some: era poluição entre execuções, não defeito do teste.
+
+Registro porque quase produziu um falso positivo, e porque a instrução de "provar por mutação" que esta entrega adotou precisa dizer **uma cópia nova por mutação**.
+
+## Constitution References
+
+`Release obrigatória por versão` — citada pelo R10-2: a 6.0.12 tem tag e Release, e o CHANGELOG mesclado precisa preservar a seção dela.
+
+## Final Recommendation
+
+**REQUEST CHANGES**: consertar os cinco Important, rodar `/speckit.converge`, depois verify e review de novo.
+
+Três observações sobre a natureza desta rodada:
+
+1. **Nenhum achado é regressão da integração.** R10-1 e R10-2 são defeitos que **eu** introduzi ao resolver os merges; R10-3, R10-4 e R10-5 são lacunas de cobertura pré-existentes que a integração apenas tornou visíveis ao trazer testes que exercitam caminhos vizinhos.
+2. **O merge produziu dois defeitos de junção, não um.** O primeiro a suíte pegou; o segundo nenhum teste pega, porque o estado em disco não muda. É o argumento mais forte desta entrega a favor de auditar merge com o rigor de código novo.
+3. **Os três achados de cobertura têm a mesma forma**: um conserto entrou e a prova não. R10-4 e R10-5 são literalmente as metades do R6-2. Vale tratar como classe, não como três itens.
