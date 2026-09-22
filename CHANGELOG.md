@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.19
+
+- Fix: a continuidade ignora estados internos históricos de um run terminal `BLOCKED` por `gauntlet-run-abandon`; runs não abandonados continuam bloqueando enquanto houver worker não terminal.
+
 ## 6.0.18
 
 - Fix: `gauntlet-run-abandon` pode remover o único trabalho stale que impede um contexto `QUIESCING` de concluir a continuidade, somente quando o líder de origem exato está comprovadamente liberado e a autorização humana referencia o run; os demais comandos continuam exigindo líder `ACTIVE`.

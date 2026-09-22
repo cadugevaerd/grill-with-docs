@@ -509,6 +509,8 @@ def continuity_worker_quiescence(runs: Mapping[str, Any]) -> tuple[list[str], li
         if not isinstance(run, Mapping):
             unknown.append(f"run:{run_id}")
             continue
+        if run.get("state") == "BLOCKED":
+            continue
         for worker_id, worker in run.get("workers", {}).items():
             state = worker.get("state") if isinstance(worker, Mapping) else None
             if state in store.NON_TERMINAL_WORKER_STATES:

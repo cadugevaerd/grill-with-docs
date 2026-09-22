@@ -984,6 +984,11 @@ class AgentOrchestrationContract(unittest.TestCase):
             {"activities": {}, "resources": {}}, "work-x")
         self.assertEqual(active, ["worker:run-1:w"]); self.assertEqual(unknown, [])
         active, unknown = grill_workspace._continuity_quiescence(
+            {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"state": "BLOCKED", "workers": {
+                "w": {"state": "PREPARED", "lease": {"expires_at": "2000-01-01T00:00:00Z"}}}}}}}}},
+            {"activities": {}, "resources": {}}, "work-x")
+        self.assertEqual(active, []); self.assertEqual(unknown, [])
+        active, unknown = grill_workspace._continuity_quiescence(
             {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"workers": {"w": {"state": "ORPHANED"}}}}}}}},
             {"activities": {}, "resources": {}}, "work-x")
         self.assertEqual(active, []); self.assertEqual(unknown, ["worker:run-1:w"])
