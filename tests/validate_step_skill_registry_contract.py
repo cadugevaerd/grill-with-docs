@@ -1349,6 +1349,7 @@ class Hygiene(Base):
             # admission instead of the current activation -- it still belongs
             # to the same closed coordinator-only surface.
             "gauntlet-run-abandon": "gauntlet_run_abandon_command",
+            "gauntlet-tasks-import": "gauntlet_tasks_import_command",
         }
 
         parser_commands = {

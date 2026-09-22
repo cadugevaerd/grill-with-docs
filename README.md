@@ -1,10 +1,12 @@
 # grill-with-docs
 
-**v6.0.19 · MIT**
+**v6.0.20 · MIT**
 
 Plugin de planejamento arquitetural e entrega **Delivery First**: entrevista decisões, mantém work items isolados, valida a Constituição e produz evidência auditável. O plugin é plan-only para feature/fix (`PLAN_ONLY_STOP`); hotfix/incident segue uma faixa rápida, explícita e fail-closed (`HOTFIX-GO`). Auditoria e reconciliação não substituem o ship externo.
 
 Compatível com Codex e Claude Code. Repositório público canônico: [cadugevaerd/grill-with-docs](https://github.com/cadugevaerd/grill-with-docs).
+
+Resultados integrados de runs históricos podem ser importados em um successor admitido pelo comando `gauntlet-tasks-import`, com `--source-task TASK=RUN` repetido, preview e apply por hash. O [protocolo](plugin/skills/grill-with-docs/references/session-protocol.md#migração-de-orquestração-e-rollout-600) descreve a verificação dos receipts, CAS e retomada sem reexecutar tasks.
 
 ## Instalação no Codex
 

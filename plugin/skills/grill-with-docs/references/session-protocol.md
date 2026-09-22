@@ -1,4 +1,4 @@
-# Protocolo de sessão v6.0.19
+# Protocolo de sessão v6.0.20
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -93,6 +93,21 @@ Um run `BLOCKED` por `gauntlet-run-abandon` é terminal e seus estados internos 
 `gauntlet-orchestration-adopt ROOT --work-id ID --runtime codex|claude --session-ref REF [--scope-file PATH ...]` apresenta origem, escopo e hash esperado; aplicar somente após conferência com `--apply --expected-sha256 HASH`. `--scope-file` repete por arquivo, sem glob ou ampliação implícita de grant. Tasks antigas exigem proposta completa de autor xhigh revisada por high, consumida por `task-files-migrate` com preview e hashes correntes; não converter a prosa heurística em autorização.
 
 Um DAG referenciado por run é selado, inclusive COMPLETE/BLOCKED: não sobrescrever bytes, report ou receipts. A continuação do trabalho restante seleciona explicitamente revisão/run sucessora; importa aceites comprovados e conserva referências históricas, sem workers terminais inventados. Leitura/auditoria e cleanup protegido de legado não autorizam nova execução sem adoção. Falta de parâmetro, observação ou caminho exigido pelo contrato no binário/adapter selecionado deve ser diagnosticada antes do trabalho; não contornar o gate.
+
+Para resultados de workers distribuídos entre runs históricos do mesmo work item, use a operação pública abaixo. O successor deve estar admitido pela activation corrente, sem workers ou waves reais. Declare todas as tasks de cada nó; cada nó vem de um único source run e todos os sources devem fixar o mesmo DAG v2. O import é único e imutável por successor: reúna o conjunto completo no preview.
+
+```text
+python3 -B .../grill_workspace.py gauntlet-tasks-import ROOT --work-id ID \
+  --run-id SUCCESSOR --dag specs/FEATURE/execution-dag.r3.json \
+  --source-task T007=SOURCE_A --source-task T008=SOURCE_A --source-task T009=SOURCE_B \
+  --session-ref SESSION
+```
+
+Inspecione `import.tasks`, `source_proofs`, `result_commit`, `receipt_sha256` e `expected_sha256`; aplique os mesmos argumentos com `--apply --expected-sha256 HASH`. O preview não escreve. O apply revalida sob CAS e usa a transação recuperável do Store para registrar o aceite e seu receipt `gauntlet.tasks.imported`. Retry conserva argumentos/hash: após aceite retorna `REUSED`; interrupção anterior ao evento pode retornar `APPLIED` com o mesmo receipt. O mesmo apply recupera somente sua própria transação pendente, inclusive quando o journal já avançou e o snapshot ainda não foi publicado, reobservando a autoridade do líder antes do recovery. `TASK-IMPORT-CAS-CONFLICT` exige novo preview; `TASK-IMPORT-DIVERGENT`, `TASK-RESULT-DIVERGENT`, `DAG-CONTENT-MISMATCH`, `TASKS-SOURCE-STALE` ou `TASK-IMPORT-EVIDENCE-MISSING` exigem corrigir a evidência, nunca editar Store/receipts para liberar o gate.
+
+Cada task fixa task/nó/fase/fingerprint, os hashes canônico e de bytes do DAG, source run, tentativa da linhagem, caminho/hash do sidecar e receipts positivos de término/convergência/cleanup do worker e da wave. Os sidecars devem coincidir com os bytes já commitados no HEAD capturado pelo preview; receipts antigos não selavam esses hashes, então o novo receipt sela essa associação estrutural, sem alegar prova criptográfica de execução. Cleanup deve estar `CLEANED`, wave `COMPLETE` e convergida; grant divergente, tentativa supersedida, nó parcial ou resultado não integrado recusam. Nenhum DAG, sidecar, source run ou receipt histórico é reescrito, nenhum worker/wave fictício é criado e nenhum recurso é despachado.
+
+Depois do import, `gauntlet-tasks-reconcile --run-id SUCCESSOR --dag DAG` reconhece os source runs aceitos; `--apply` marca somente checkboxes. A barreira de fase e a prontidão/convergência dos nós leem o mesmo import com revalidação de receipts e hashes. Tasks read-only/deferred continuam exigindo seus aceites próprios. Um nó importado recusa novo despacho com `TASK-ALREADY-IMPORTED`; se todos os nós foram importados, o successor fica `COMPLETE`. Mudança posterior de evidência bloqueia o consumo em vez de reaproveitar aceite stale.
 
 A campanha que constrói a candidata continua usando o bundle histórico preservado, seu CLI absoluto e onze entrypoints pinados; revalidar o manifest ao retomar/trocar sessão. Ensaiar 6.0.0 em outro projeto/sessão. Só depois do ship encerrado adotar explicitamente o work item histórico COMPLETE para importar referências/inventário sem reabrir etapas ou reatestar o passado. Não alterar Constituição, WORKFLOW, ESSENTIAL, tabelas, classes worker-required ou registries/catálogos v3/v4 nesta transição.
 

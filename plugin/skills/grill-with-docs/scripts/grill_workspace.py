@@ -3321,6 +3321,8 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
             snapshot = None
             if store.store_exists(root):
                 with store.orchestrator_lock(store.store_paths(root)):
+                    if handler.__name__ == "gauntlet_tasks_import_command" and args.apply:
+                        _recover_task_import(root, args, store)
                     snapshot = store.read_snapshot(root, required=False)
         except store.StoreError as exc:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
@@ -3328,7 +3330,7 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
         item = block.get("work_items", {}).get(args.work_id) if isinstance(block, dict) else None
         if item is None:
             return handler(args)
-        if handler.__name__ in {"partition_emit_command", "gauntlet_tasks_reconcile_command"} and not args.apply:
+        if handler.__name__ in {"partition_emit_command", "gauntlet_tasks_reconcile_command", "gauntlet_tasks_import_command"} and not args.apply:
             return handler(args)
         context_id = item.get("current_context_id")
         context = item.get("contexts", {}).get(context_id)
@@ -3393,6 +3395,43 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
         except store.StoreError as exc:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
     return wrapped
+
+
+def _recover_task_import(root: Path, args: argparse.Namespace, store: Any) -> None:
+    """Recover only this previewed import, including journal-before-snapshot faults.
+
+    Called under the Store lock. The raw snapshot is authority only for recovery;
+    the normal anchored read and entry guards still run immediately afterwards.
+    """
+    paths = store.store_paths(root)
+    pending = store._pending_path(paths)
+    if not pending.exists():
+        return
+    intent = store.loads(store._read_regular(pending).decode("utf-8"))
+    if not isinstance(intent, dict) or intent.get("schema") != "grill-transition-wal/v1":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-IMPORT-CAS-CONFLICT", "another operation requires recovery")
+    event, receipt = store._transition_fields(intent.get("event"), intent.get("receipt"))
+    store._bind_receipt_hash(event, receipt)
+    candidate = store._validate_document(intent.get("candidate"), paths.orchestrator)
+    run = candidate.get("work_items", {}).get(args.work_id, {}).get("gauntlet", {}).get("runs", {}).get(args.run_id, {})
+    imported = run.get("task_import", {})
+    if (event.get("event") != "gauntlet.tasks.imported" or event.get("work_id") != args.work_id
+            or event.get("run_id") != args.run_id or event.get("input_sha256") != args.expected_sha256
+            or store.jcs_sha256(imported) != args.expected_sha256 or imported.get("dag_ref") != args.dag
+            or sorted(f"{task}={source}" for task, source in imported.get("source_tasks", {}).items()) != sorted(args.source_task)):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-IMPORT-CAS-CONFLICT", "retry must match the pending import")
+    current = store._snapshot_from(store._read_regular(paths.orchestrator), paths.orchestrator)
+    item = current.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
+    if item is not None:
+        context = item["contexts"][item["current_context_id"]]
+        contract = grill_core_module("agent_orchestration")
+        try:
+            contract.require_authority(item, item["current_context_id"], context["epoch"], args.session_ref)
+        except contract.OrchestrationError as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(error)) from error
+        readiness = _session_readiness(root, context["runtime"], args.session_ref, work_id=args.work_id)
+        _require_current_leader(root, args.work_id, context, args.session_ref, readiness)
+    store._recover_pending_transition_locked(paths, root)
 
 
 constitution_reseal_command = _gauntlet_authorized(constitution_reseal_command)
@@ -4098,6 +4137,27 @@ def gauntlet_partition_brief_command(args: argparse.Namespace) -> tuple[dict[str
 
 
 @_gauntlet_authorized
+def gauntlet_tasks_import_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    root, runs, admission, record = gauntlet_run_admission(args)
+    sources = {}
+    for value in args.source_task:
+        task, separator, source = value.partition("=")
+        if not separator or not task or not source or task in sources:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--source-task requires unique TASK=RUN entries")
+        sources[task] = source
+    try:
+        execute_floor, markdown_floor = _tier_floors(record)
+        runs.validate_execution_dag(root, args.work_id, args.run_id, args.dag, admission,
+            agent_execute_floor=execute_floor, markdown_floor=markdown_floor)
+        return runs.import_task_results(root, args.work_id, args.run_id, args.dag, sources, admission,
+            apply=args.apply, expected_sha256=args.expected_sha256), EXIT_OK
+    except (runs.GauntletRunError, runs.store.StoreError) as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+    except (UnicodeError, ValueError) as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-IMPORT-DIVERGENT", "invalid evidence document") from error
+
+
+@_gauntlet_authorized
 def gauntlet_tasks_reconcile_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     store = grill_core_module("store")
@@ -4136,6 +4196,13 @@ def _gauntlet_tasks_reconcile_locked(args: argparse.Namespace) -> tuple[dict[str
         if dag.get("tasks_semantic_sha256") != semantic:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-SOURCE-STALE", "tasks.md differs from the DAG pin")
         valid = {task.id: task for task in tasks}
+        runs = grill_core_module("gauntlet_runs")
+        try:
+            imported = runs.verified_task_import(root, args.work_id, args.run_id) if args.run_id else None
+        except (runs.GauntletRunError, runs.store.StoreError) as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+        if imported and imported["dag_content_sha256"] != runs.store.jcs_sha256(dag):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DAG-CONTENT-MISMATCH", "reconcile DAG differs from imported DAG")
         completed: set[str] = set()
         missing: list[str] = []
         for node in dag.get("nodes", []):
@@ -4148,13 +4215,13 @@ def _gauntlet_tasks_reconcile_locked(args: argparse.Namespace) -> tuple[dict[str
                     missing.append(str(task_id))
                     continue
                 result = _read_json_document(root, result_path, "TASK-RESULT-MISSING")
-                required = {"schema", "work_id", "scheduler_run_id", "node_id", "task_id", "attempt_id", "status", "diagnostic_ref"}
-                if (set(result) != required or result.get("schema") != "grill-task-result/v1"
-                        or result.get("task_id") != task_id or result.get("node_id") != node.get("id")
-                        or result.get("status") != "completed" or not isinstance(result.get("attempt_id"), str)):
-                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-RESULT-DIVERGENT", f"result does not bind {task_id}")
-                if getattr(args, "run_id", None) and result.get("scheduler_run_id") != args.run_id:
-                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-RESULT-DIVERGENT", f"result run differs for {task_id}")
+                accepted = imported["tasks"].get(task_id) if imported else None
+                expected_run = accepted["source_run_id"] if accepted else args.run_id
+                try:
+                    runs.validate_task_result(result, work_id=args.work_id, task_id=task_id,
+                        node_id=node.get("id"), run_id=expected_run)
+                except runs.GauntletRunError as error:
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
                 completed.add(task_id)
         marked: list[str] = []
         lines = []
@@ -4385,7 +4452,7 @@ def _require_scheduler_task_phase(root: Path, gauntlet_runs: Any,
             if phase not in targets:
                 targets.append(phase)
         legacy = False
-        accepted_tasks = _scheduler_accepted_tasks(root, args.work_id, dag, dag_sha256)
+        accepted_tasks = _scheduler_accepted_tasks(root, args.work_id, dag, dag_sha256, run_id=args.run_id)
     for target_phase in targets:
         try:
             guard = gauntlet_runs.task_phase_barrier(
@@ -4399,7 +4466,7 @@ def _require_scheduler_task_phase(root: Path, gauntlet_runs: Any,
 
 
 def _scheduler_accepted_tasks(root: Path, work_id: str, dag: Mapping[str, Any],
-                              dag_sha256: str) -> dict[str, Any]:
+                              dag_sha256: str, *, run_id: str | None = None) -> dict[str, Any]:
     """Project accepted task activities without rewriting the sealed DAG."""
     store = grill_core_module("store")
     snapshot = store.read_snapshot(root)
@@ -4420,6 +4487,16 @@ def _scheduler_accepted_tasks(root: Path, work_id: str, dag: Mapping[str, Any],
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-PHASE-PENDING", "context lineage is cyclic")
     semantic = dag.get("tasks_semantic_sha256")
     accepted = dict(dag.get("accepted_tasks") or {})
+    if run_id is not None:
+        runs = grill_core_module("gauntlet_runs")
+        try:
+            imported = runs.verified_task_import(root, work_id, run_id)
+        except (runs.GauntletRunError, runs.store.StoreError) as error:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+        if imported:
+            if imported["dag_sha256"] != dag_sha256 or imported["dag_content_sha256"] != store.jcs_sha256(dag):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DAG-CONTENT-MISMATCH", "phase DAG differs from import")
+            accepted.update(imported["tasks"])
     for activity_id, activity in item.get("activities", {}).items():
         if not isinstance(activity, dict) or activity.get("state") != "ACCEPTED":
             continue
@@ -6338,6 +6415,15 @@ def build_parser() -> JsonParser:
     partition_brief_parser.add_argument("--dag", required=True)
     partition_brief_parser.add_argument("--report", required=True)
     partition_brief_parser.add_argument("--node-id", required=True)
+    tasks_import_parser = subparsers.add_parser("gauntlet-tasks-import")
+    tasks_import_parser.add_argument("root")
+    tasks_import_parser.add_argument("--work-id", required=True)
+    tasks_import_parser.add_argument("--run-id", required=True)
+    tasks_import_parser.add_argument("--dag", required=True)
+    tasks_import_parser.add_argument("--source-task", action="append", required=True, metavar="TASK=RUN")
+    tasks_import_parser.add_argument("--apply", action="store_true")
+    tasks_import_parser.add_argument("--expected-sha256")
+    tasks_import_parser.add_argument("--session-ref")
     tasks_reconcile_parser = subparsers.add_parser("gauntlet-tasks-reconcile")
     tasks_reconcile_parser.add_argument("root")
     tasks_reconcile_parser.add_argument("--work-id", required=True)
@@ -6511,6 +6597,7 @@ def main(argv: list[str] | None = None) -> int:
             "partition-emit": partition_emit_command,
             "gauntlet-partition-brief": gauntlet_partition_brief_command,
             "gauntlet-tasks-reconcile": gauntlet_tasks_reconcile_command,
+            "gauntlet-tasks-import": gauntlet_tasks_import_command,
             "task-files-migrate": task_files_migrate_command,
             "gauntlet-dag-validate": gauntlet_dag_validate_command,
             "gauntlet-wave-declare": gauntlet_wave_declare_command,

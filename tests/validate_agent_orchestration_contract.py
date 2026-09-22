@@ -214,6 +214,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                 ("checkpoint", "--step", "specify", "--state", "in-progress"),
                 ("partition-emit", "--feature", "f", "--apply"),
                 ("gauntlet-tasks-reconcile", "--dag", "d", "--apply"),
+                ("gauntlet-tasks-import", "--run-id", "r", "--dag", "d", "--source-task", "T007=run-source", "--apply"),
                 ("task-files-migrate", "--feature", "f", "--proposal", "p"),
                 ("phase-turn",),
             ]

@@ -1,5 +1,10 @@
 # Changelog
 
+## 6.0.20
+
+- Fix: `gauntlet-tasks-import` importa em um successor admitido resultados de múltiplos runs históricos, em preview/apply com CAS, receipt imutável e retry idempotente. Verifica task, nó, fase, fingerprint, DAG, source run, tentativa, bytes integrados do sidecar e receipts positivos de término, convergência e cleanup; divergência ou evidência ausente bloqueia sem reexecutar tasks.
+- Reconcile, barreira de fase e scheduler consomem o mesmo aceite importado, revalidando sua proveniência sem reescrever DAG, sidecars, runs ou receipts históricos e sem criar workers fictícios.
+
 ## 6.0.19
 
 - Fix: a continuidade ignora estados internos históricos de um run terminal `BLOCKED` por `gauntlet-run-abandon`; runs não abandonados continuam bloqueando enquanto houver worker não terminal.
