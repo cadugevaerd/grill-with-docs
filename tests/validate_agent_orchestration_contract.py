@@ -228,6 +228,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                 for command in commands:
                     with self.subTest(command=command[0], case="absent"):
                         self.assertEqual(invoke(command)[1]["code"], "STYLE-LOAD-UNCONFIRMED")
+
             with mock.patch.object(grill_workspace, "_session_readiness", side_effect=AssertionError("cleanup requires style")):
                 code, cleaned = invoke(("gauntlet-cleanup", "--context-id", context_id, "--epoch", "1"))
                 self.assertEqual((code, cleaned["verdict"]), (0, "CLEANED"))
@@ -266,6 +267,35 @@ class AgentOrchestrationContract(unittest.TestCase):
                     self.assertEqual(invoke(commands[0])[1]["code"], "STYLE-SCOPE-CONFLICT" if mutation == "config" else "LEADER-AUTHORITY-UNPROVEN")
                     self.assertEqual(invoke(commands[10])[0], 2)
             self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+    def test_released_quiescing_leader_can_only_enter_run_abandon_recovery(self):
+        temporary, root = self.fixture()
+        context = {
+            "context_id": "ctx-source", "epoch": 7, "runtime": "codex", "state": "QUIESCING",
+            "leader": {"state": "RELEASING", "session_ref": orchestration_fixture.SESSION},
+        }
+        item = {"current_context_id": "ctx-source", "contexts": {"ctx-source": context}}
+        snapshot = SimpleNamespace(document={"agent_orchestration": {"work_items": {"work-x": item}}})
+        args = SimpleNamespace(root=str(root), work_id="work-x", session_ref=orchestration_fixture.SESSION)
+        seen = []
+
+        def gauntlet_run_abandon_command(_args):
+            seen.append(store._ORCHESTRATION_AUTHORITY.get())
+            return {"verdict": "RUN-ABANDONED"}, 0
+
+        wrapped = grill_workspace._gauntlet_authorized(gauntlet_run_abandon_command)
+        native_store = grill_workspace.grill_core_module("gauntlet_runs").store
+        with temporary, mock.patch.object(native_store, "store_exists", return_value=True), \
+             mock.patch.object(native_store, "store_paths", return_value=SimpleNamespace()), \
+             mock.patch.object(native_store, "orchestrator_lock", return_value=contextlib.nullcontext()), \
+             mock.patch.object(native_store, "read_snapshot", return_value=snapshot), \
+             mock.patch.object(grill_workspace, "_require_released_leader", return_value={}) as released:
+            self.assertEqual(wrapped(args), ({"verdict": "RUN-ABANDONED"}, 0))
+            released.assert_called_once_with(root, "work-x", context, orchestration_fixture.SESSION)
+            self.assertEqual(seen, [None])
+            args.session_ref = "orca:ctx-other"
+            with self.assertRaisesRegex(grill_workspace.CliFailure, "work-x"):
+                wrapped(args)
 
     def test_native_exec_result_variable_wrapper(self):
         core = grill_workspace.grill_core_module("agent_runtime")

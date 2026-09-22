@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.18
+
+- Fix: `gauntlet-run-abandon` pode remover o único trabalho stale que impede um contexto `QUIESCING` de concluir a continuidade, somente quando o líder de origem exato está comprovadamente liberado e a autorização humana referencia o run; os demais comandos continuam exigindo líder `ACTIVE`.
+
 ## 6.0.17
 
 - Fix: `gauntlet-prepare-switch --released-source` aceita a cadeia finalizada de ownership transferido quando o Orca já removeu o terminal e retorna `terminal: null`; a prova continua exigindo origem concluída e revogada, recurso único liberado, archive capturado e identidade correlacionada por handle, worktree, runtime e incarnation.

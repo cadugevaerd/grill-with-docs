@@ -3339,6 +3339,18 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
         selected_id, selected_epoch = getattr(args, "context_id", None), getattr(args, "epoch", None)
         if ((selected_id is None) != (selected_epoch is None)):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "incomplete context selectors")
+        # Run abandonment is the one recovery that may remove the active work
+        # preventing a QUIESCING context from becoming RELEASED.  Admit only
+        # the exact former leader after Orca proves its release; the handler
+        # still requires a human authorization scoped to the target run.
+        released_abandon = (handler.__name__ == "gauntlet_run_abandon_command"
+                             and context.get("state") == "QUIESCING"
+                             and context.get("leader", {}).get("state") == "RELEASING")
+        if released_abandon:
+            if (selected_id is not None or session_ref != context.get("leader", {}).get("session_ref")):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
+            _require_released_leader(root, args.work_id, context, session_ref)
+            return handler(args)
         try:
             contract.require_authority(item, selected_id if selected_id is not None else context_id,
                                        selected_epoch if selected_epoch is not None else context["epoch"], session_ref)
