@@ -1037,9 +1037,19 @@ def verified_task_import(root: str | Path, work_id: str, run_id: str,
         _fail("TASK-IMPORT-DIVERGENT", f"invalid import evidence: {exc}")
     if fresh != imported or run.get("dag_content_sha256") != imported["dag_content_sha256"]:
         _fail("TASK-IMPORT-DIVERGENT", "import evidence changed")
+    imported_nodes = set(imported["nodes"])
+    if (any(worker["node_id"] in imported_nodes for worker in run["workers"].values())
+            or any(imported_nodes.intersection(wave["node_ids"]) for wave in run["waves"].values())):
+        _fail("TASK-IMPORT-DIVERGENT", "imported nodes also have local workers or waves")
     receipt, event = _task_import_receipt(work_id, run_id, run, imported)
     _require_receipted_event(root, event, receipt, store.read_events(root))
     return imported
+
+
+def _require_task_import_eligible(run: Mapping[str, Any]) -> None:
+    if (run["state"] != "ADMITTED" or run["workers"] or len(run["waves"]) != 1
+            or not _is_placeholder_wave(run["waves"].get(WAVE_ID))):
+        _fail("TASK-IMPORT-NOT-ELIGIBLE", "successor must be admitted and undispatched")
 
 
 def import_task_results(root: str | Path, work_id: str, run_id: str, dag_ref: str,
@@ -1058,9 +1068,7 @@ def import_task_results(root: str | Path, work_id: str, run_id: str, dag_ref: st
                 _fail("TASK-IMPORT-DIVERGENT", "successor already has a different import")
             imported = previous
         else:
-            if (run["state"] != "ADMITTED" or run["workers"] or len(run["waves"]) != 1
-                    or not _is_placeholder_wave(run["waves"].get(WAVE_ID))):
-                _fail("TASK-IMPORT-NOT-ELIGIBLE", "successor must be admitted and undispatched")
+            _require_task_import_eligible(run)
             imported = _task_import_inputs(root, work_id, run_id, dag_ref, sources,
                 result_commit=_head_commit(root), store_sha256=store.read_snapshot(root).content_sha256)
             _require_dag_pin(run, imported["dag_content_sha256"], expect_placeholder=True)
@@ -1083,6 +1091,7 @@ def import_task_results(root: str | Path, work_id: str, run_id: str, dag_ref: st
             if fresh != imported:
                 _fail("TASK-IMPORT-CAS-CONFLICT", "evidence changed before commit")
             target = document["work_items"][work_id]["gauntlet"]["runs"][run_id]
+            _require_task_import_eligible(target)
             target["dag_content_sha256"] = imported["dag_content_sha256"]
             target["task_import"] = copy.deepcopy(imported)
             dag = store.loads(_task_evidence_bytes(root, dag_ref).decode("utf-8"))
@@ -1317,6 +1326,10 @@ def declare_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, nod
 
     def activate(document_: dict[str, Any]) -> dict[str, Any]:
         candidate_run = document_["work_items"][work_id]["gauntlet"]["runs"][run_id]
+        # Import and local declarations share the Store's transaction lock.
+        for node_id in requested:
+            if node_id in candidate_run.get("task_import", {}).get("nodes", []):
+                _fail("TASK-ALREADY-IMPORTED", f"node was already accepted: {node_id}")
         candidate_waves = candidate_run["waves"]
         if expect_placeholder:
             if candidate_waves.get(target_wave_id, {}).get("state") != "DECLARED":
@@ -1751,6 +1764,9 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
             lease["recovery_count"] = 1
         def declare(document: dict[str, Any]) -> dict[str, Any]:
             candidate = document["work_items"][work_id]["gauntlet"]["runs"][run_id]
+            # Recheck under the Store lock before any worker intent/Git effect.
+            if resolved_node_id in candidate.get("task_import", {}).get("nodes", []):
+                _fail("TASK-ALREADY-IMPORTED", f"node was already accepted: {resolved_node_id}")
             if worker_id in candidate["workers"]:
                 _fail("WORKER-CONFLICT", "worker appeared during declaration")
             candidate["workers"][worker_id] = {

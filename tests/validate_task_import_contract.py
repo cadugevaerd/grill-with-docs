@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Mixed historical runs, real Git/Store receipts, offline public CLI boundary."""
 import contextlib
+import concurrent.futures
 import copy
 import hashlib
 import io
 import json
 import subprocess
 import sys
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -173,6 +175,109 @@ class TaskImportContract(unittest.TestCase):
         path = self.root / self.result('T007')
         path.write_bytes(path.read_bytes() + b' ')
         self.assertEqual(self.command()[1]['code'], 'TASK-RESULT-DIVERGENT')
+
+    def race_import_with_local(self, local_kind, *, import_wins):
+        preview = runs.import_task_results(self.root, WORK, self.target, self.dag_ref, self.sources, self.admission)
+        def importing():
+            return runs.import_task_results(self.root, WORK, self.target, self.dag_ref, self.sources,
+                self.admission, apply=True, expected_sha256=preview['expected_sha256'])
+        def local():
+            if local_kind == 'worker':
+                return runs.prepare_worker(self.root, WORK, self.target, 'p03-a', ['shared.py'],
+                                           self.admission, node_id='p03-a')
+            return runs.declare_wave(self.root, WORK, self.target, self.dag_ref, ['p03-a'],
+                                    self.admission, activation_max_workers=2, **FLOORS)
+        def effects():
+            # The paused import owns a temporary work lock; exclude only its
+            # owner file, retaining WAL/receipts/journal and all Git resources.
+            return ({ref: raw for ref, raw in self.footprint().items() if not ref.endswith('/owner.json')},
+                    self.git('worktree', 'list', '--porcelain'), self.git('for-each-ref', 'refs/heads'))
+        delayed_event = f'gauntlet.{local_kind}.declared' if import_wins else 'gauntlet.tasks.imported'
+        checked, resume = threading.Event(), threading.Event()
+        transact = store.transact_with_event
+        def paused(root, mutate, **kwargs):
+            if kwargs['event']['event'] == delayed_event:
+                checked.set()
+                self.assertTrue(resume.wait(30), 'winner did not finish')
+            return transact(root, mutate, **kwargs)
+        with mock.patch.object(store, 'transact_with_event', side_effect=paused):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                loser = pool.submit(local if import_wins else importing)
+                try:
+                    self.assertTrue(checked.wait(30), 'loser did not reach the precommit boundary')
+                    winner = importing() if import_wins else local()
+                    before = effects()
+                finally:
+                    resume.set()
+                with self.assertRaises(runs.GauntletRunError) as blocked:
+                    loser.result(timeout=30)
+        self.assertEqual(blocked.exception.code, 'TASK-ALREADY-IMPORTED' if import_wins else 'TASK-IMPORT-CAS-CONFLICT')
+        self.assertEqual(effects(), before)
+        run = runs._read_runs(self.root, WORK)[self.target]
+        if import_wins:
+            self.assertEqual(winner['verdict'], 'APPLIED')
+            self.assertEqual(run['workers'], {})
+            self.assertTrue(runs._is_placeholder_wave(run['waves']['wave-0001']))
+            self.assertTrue(runs.verified_task_import(self.root, WORK, self.target))
+        else:
+            self.assertEqual(winner['verdict'], 'WORKER-PREPARED' if local_kind == 'worker' else 'WAVE-DECLARED')
+            self.assertNotIn('task_import', run)
+            self.assertFalse(Path(preview['receipt_ref']).exists())
+            if local_kind == 'worker':
+                self.assertEqual(run['workers']['p03-a']['state'], 'PREPARED')
+            else:
+                self.assertEqual(run['waves']['wave-0001'], {'state': 'ACTIVE', 'node_ids': ['p03-a']})
+
+    def test_import_wins_worker_interleaving_without_local_effects(self):
+        self.race_import_with_local('worker', import_wins=True)
+
+    def test_worker_wins_import_interleaving_without_import_effects(self):
+        self.race_import_with_local('worker', import_wins=False)
+
+    def test_import_wins_wave_interleaving_without_local_effects(self):
+        self.race_import_with_local('wave', import_wins=True)
+
+    def test_wave_wins_import_interleaving_without_import_effects(self):
+        self.race_import_with_local('wave', import_wins=False)
+
+    def test_legacy_local_conflicts_block_import_consumers_without_writes(self):
+        for kind in ('worker', 'wave'):
+            with self.subTest(kind=kind):
+                if kind == 'wave':
+                    self.admission = self.identity('4')
+                    self.target = runs.admit_or_reuse_run(self.root, WORK, self.admission)['run_id']
+                preview, _ = self.apply()
+                lease = runs._new_coordinator_lease(self.target, 'p03-a')
+                def legacy_write(document):
+                    run = document['work_items'][WORK]['gauntlet']['runs'][self.target]
+                    if kind == 'worker':
+                        run['workers']['p03-a'] = dict(state='DECLARED', lease=lease, grant=None,
+                            workspace=None, node_id='p03-a', remediates=None)
+                    else:
+                        run['waves']['wave-0001'] = dict(state='ACTIVE', node_ids=['p03-a'])
+                    return document
+                # Model bytes accepted by 68034c2 using real Store transitions,
+                # bypassing only the repaired writer guards, never the reader.
+                kwargs = dict(name=f'legacy-{kind}-{self.target}', event_name=f'gauntlet.{kind}.declared',
+                              work_id=WORK, run_id=self.target, admission=self.admission)
+                receipt, event = (runs._worker_receipt_event(**kwargs, worker_id='p03-a', lease=lease)
+                                  if kind == 'worker' else runs._receipt_and_event(**kwargs))
+                store.transact_with_event(self.root, legacy_write, event=event, receipt=receipt)
+                before = self.footprint()
+                for consume in (runs.verified_task_import, runs.run_projection):
+                    with self.assertRaises(runs.GauntletRunError) as blocked:
+                        consume(self.root, WORK, self.target)
+                    self.assertEqual(blocked.exception.code, 'TASK-IMPORT-DIVERGENT')
+                for tail, verb in [((), 'gauntlet-tasks-import'),
+                        (('--apply', '--expected-sha256', preview['expected_sha256']), 'gauntlet-tasks-import'),
+                        (('--apply',), 'gauntlet-tasks-reconcile')]:
+                    code, result = self.command(*tail, verb=verb)
+                    self.assertEqual((code, result['code']), (2, 'TASK-IMPORT-DIVERGENT'))
+                with self.assertRaises(runs.GauntletRunError) as blocked:
+                    runs.declare_wave(self.root, WORK, self.target, self.dag_ref, ['p04-a'],
+                                     self.admission, activation_max_workers=2, **FLOORS)
+                self.assertEqual(blocked.exception.code, 'TASK-IMPORT-DIVERGENT')
+                self.assertEqual(self.footprint(), before)
 
     def test_mismatch_tamper_and_missing_evidence_fail_closed(self):
         path = self.root / self.result('T009')

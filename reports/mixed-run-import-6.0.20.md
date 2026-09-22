@@ -36,7 +36,7 @@ Old scheduler receipts did not seal sidecar hashes. The import binds their prove
 
 The selected installed GWD 6.0.19 preflight observed installation, enablement, trust and a full reference read in this dispatch: `work_ready=true`, `use_ready=true`, `functional_verified=false`; full-read event `orca:ctx_9f5f75ce8b95:ctco_01a0caa4-2f7a-7e22-a782-2068ac883e0f`; revalidated after compaction with full-read event `orca:ctx_9f5f75ce8b95:ctco_01a0cac7-ce40-7000-933d-897c107eb786`. No cache, configuration, publication, tag, merge or hermes-k3s state was changed.
 
-## Validation
+## Validation at 68034c2 (before the P1 correction)
 
 - `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/run_validators.py`: exit 0; all 31 validators completed, including 1495 unittest cases across 30 suites and the distribution assertions. One platform skip: `test_reject_symlink_chain_accepts_macos_var_root_alias` because Linux has no `/var -> /private/var` alias.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_task_import_contract.py`: 7 tests passed, covering public mixed-source preview/apply, unchanged history, reconciliation/barrier/readiness, replay after successor progress, CAS, mismatched/tampered/missing evidence, symlinks and interrupted WAL recovery.
@@ -55,12 +55,12 @@ Full-run log SHA-256: `0f9c816b518f9954657d9566911f828e51514cf33dc3054f129248ce2
 - `plugin/.codex-plugin/plugin.json`: `ad934ca65d17252fd8df930e29da7e998d0eaafb747992bd72cf3bbae3894e44`.
 - `plugin/skills/grill-with-docs/SKILL.md`: `9a820008297259b808d6c52ae8fa54bb9e6dacbea9b150aac79bf412e7677ac2`.
 - `plugin/skills/grill-with-docs/references/session-protocol.md`: `88efaefb053e5d07fc21b04015d5df9ba98c49b56e6831708298964baf333ebe`.
-- `plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py`: `e98a6c33ba315b1096ddc00e2afd1d858165b0c873c0a528c5e1baccd503ffaa`.
+- `plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py`: `27afa8e7b9aef8b7382601e6539f41b934a741d8dd0a8f9125ef1345ebc1c38d`.
 - `plugin/skills/grill-with-docs/scripts/grill_core/store.py`: `e17c165dc6f4008058983fd538b46c2873c338bfd624cfa52a52cbcd627fd360`.
 - `plugin/skills/grill-with-docs/scripts/grill_workspace.py`: `77aa14ab70e44bc2610f111a0fa8208e9e47e217cff586df9d2c6232b387a6a4`.
 - `tests/validate_agent_orchestration_contract.py`: `418b7491d4bd7ceab14585e16effc2b7245ce6659bf94825e7d52c70e6442124`.
 - `tests/validate_distribution.py`: `fcd065448071f2f672bdd0efd86d4dbc5d665894e86506d4124eff6d24cedaf6`.
-- `tests/validate_task_import_contract.py`: `8611b60e012ab0026ecd772bc4c727dd9ed3888ebf646a4e1b45f06b8056310c`.
+- `tests/validate_task_import_contract.py`: `1f31a72463aabfa8360aaa38f4134aa86af69c57bd3c4ea54d084f30070afa4b`.
 - `tests/validate_step_skill_registry_contract.py`: `572f996a4beb975187291978100f973e73df7ee75e569bd51371cea78950be60`.
 
 ## Isolated public CLI reproduction
@@ -105,3 +105,23 @@ Git, Store, worker lifecycle and receipts are real in the offline fixture; activ
   "successor_workers": {}
 }
 ```
+
+## P1 correction — transactional exclusion
+
+Follow-up dispatch `ctx_851a3fb22bdc`, task `task_21d2fb7215c2`, on the same branch after `68034c2f1706682c10ee490732f96e958d5d403a`. The independent review in `/tmp/gwd-review-68034c2-report.md` reproduced an import committing after a local writer's preliminary guard but before its declaration transaction. Both operations could report success and leave an imported node with a local worker or wave.
+
+`prepare_worker` now rechecks the resolved node inside its declaration mutator, and `declare_wave` rechecks every requested node inside `activate`. These mutators run under the same existing Store transaction lock as the import, before any receipt, worker intent, grant, worktree or wave is written. If local execution commits first, the import CAS rejects the stale snapshot; the import also rechecks successor eligibility inside its own mutator. No extra lock or Store schema change was introduced.
+
+`verified_task_import` rejects any overlap with local worker node IDs or wave members as `TASK-IMPORT-DIVERGENT`, including persisted conflicting state accepted by the previous implementation. This shared reader protects import retry, reconcile, status and scheduler consumers while allowing local execution of the remaining, disjoint nodes.
+
+Five new tests exercise both deterministic interleavings for import/worker and import/wave, plus legacy worker/wave conflicts. Thread events pause the losing operation immediately before its real Store transaction; the winning operation completes before release. Rejected operations leave durable files, receipts, journal, Git refs and registered worktrees unchanged. Legacy fixtures use real Store transitions and verify refusal by import preview/apply, reconcile apply, status and wave readiness without writes.
+
+Validation of the correction:
+
+- `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_task_import_contract.py`: exit 0, 12 tests, 26.759 s. Log `/tmp/gwd-p1-focused.log`, SHA-256 `0abdff15169d48afa30b464eef32d4974171f592733302419f7f7ad7ebb20391`.
+- Original reproduction `/tmp/gwd-review-68034c2-race.py`: before the fix, exit 0 with `APPLIED` plus `WORKER-PREPARED`; after the fix, expected exit 1 at the new transactional guard with `GauntletRunError: node was already accepted: p03-a` (`TASK-ALREADY-IMPORTED`). The reproduction still asserts the old broken outcome, so its new nonzero exit is expected; the passing regression tests assert the repaired behavior and absence of local effects. Before/after logs: `/tmp/gwd-p1-race-before.log` (`1573951add24bd0b7ccf2f69a8471aa8b77e90daac3d620c5f341534f479d1cb`) and `/tmp/gwd-p1-race-after.log` (`96ccd840ce026079eb0dabbbf22ba29e22106fb95d2b6f5ed5c2cbfab4989b77`).
+- Regression sensitivity against the original `68034c2` module, loaded only into the temporary test process: both import-first races and both legacy conflicts fail with `GauntletRunError not raised`; the two local-first races pass. Five test methods, four expected assertion failures, 8.721 s. Log `/tmp/gwd-p1-regression-original-verified.log`, SHA-256 `d13df77552670ac6766b3c12c517711c592ac1e4ce700b12eebeef7ce982e3e7`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/run_validators.py`: exit 0; all 31 validators completed, 30 unittest suites, 1,500 cases, one Linux platform skip (`test_reject_symlink_chain_accepts_macos_var_root_alias`). Summed unittest runtime: 1,750.657 s. Final log `/tmp/gwd-p1-full.log`, SHA-256 `0e01fdd68ab485c0f6d06dbf3db1a718065f34c1fe77f0db6551703d14dda3eb`.
+- All 58 Python source/test files remained byte-identical throughout the final full run; manifest `/tmp/gwd-p1-source-manifest.json`, SHA-256 `130a30096dfeddd0e68c38c3b21bfdebe07b908cd5431643f480727e38fced23`. All 15 delivered-file hashes above were reverified. `git diff --check` passed before the follow-up commit.
+
+The installed GWD 6.0.19 bootstrap was reobserved for this dispatch: installation, enablement and trust confirmed; approved reference read in full, event `orca:ctx_851a3fb22bdc:ctco_01a0cb0a-da65-7e52-9b47-dc94639d2818`; `work_ready=true`, `use_ready=true`, `functional_verified=false`. Version remains 6.0.20 as requested; existing public documentation and distribution pins are unchanged. Temporary logs and scripts remain outside the worktree; no install, publication, merge, tag, push or hermes-k3s mutation was performed.
