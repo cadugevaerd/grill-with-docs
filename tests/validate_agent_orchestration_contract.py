@@ -1131,6 +1131,15 @@ class AgentOrchestrationContract(unittest.TestCase):
             recovered = adapter.observe_released(allow_unarchived_stopped=True)
             self.assertEqual((recovered["outcome"], recovered["release_proof"]),
                              ("succeeded", "ownership-transfer"))
+            result["terminal"] = None
+            result["observation"] = {"status": "missing", "exactWorker": False}
+            recovered = adapter.observe_released(allow_unarchived_stopped=True)
+            self.assertEqual((recovered["outcome"], recovered["release_proof"]),
+                             ("succeeded", "ownership-transfer"))
+            released_resource["endpointIncarnation"] = "other-process"
+            with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                adapter.observe_released(allow_unarchived_stopped=True)
+            released_resource["endpointIncarnation"] = "pty-fixture:inc-fixture"
             released_resource["archive"]["status"] = "missing"
             with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
                 adapter.observe_released(allow_unarchived_stopped=True)

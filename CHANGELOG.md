@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.17
+
+- Fix: `gauntlet-prepare-switch --released-source` aceita a cadeia finalizada de ownership transferido quando o Orca já removeu o terminal e retorna `terminal: null`; a prova continua exigindo origem concluída e revogada, recurso único liberado, archive capturado e identidade correlacionada por handle, worktree, runtime e incarnation.
+
 ## 6.0.16
 
 - Fix: `gauntlet-prepare-switch --released-source` aceita a transferência atômica do único recurso terminal exato para um sucessor ativo, sem exigir que o recurso do sucessor já esteja liberado, encerrado ou arquivado; formas ambíguas, divergentes e sem sucesso continuam recusadas.
