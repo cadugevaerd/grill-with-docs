@@ -45,7 +45,7 @@ The selected installed GWD 6.0.19 preflight observed installation, enablement, t
 
 Full-run log SHA-256: `0f9c816b518f9954657d9566911f828e51514cf33dc3054f129248ce2811d717`. Frozen source manifest SHA-256: `d6373e266397ac7ec97dbb8b7d06317ea56040ac527b87c58dbdb2b87f16cb6a`. Temporary execution logs and the manifest are removed before commit; the delivered source hashes and fixture receipt hashes below remain in this report.
 
-## Delivered file SHA-256
+## Delivered file SHA-256 at dd8290a (historical)
 
 - `.agents/plugins/marketplace.json`: `5b3342917911703015a2be50862a84e49b4eb2fd713f588640057a7460b31e25`.
 - `.claude-plugin/marketplace.json`: `6f189dabb3786da1680e5eea2fdfe5fa6b674d45a12192f56be2ac6a3773ff4b`.
@@ -125,3 +125,53 @@ Validation of the correction:
 - All 58 Python source/test files remained byte-identical throughout the final full run; manifest `/tmp/gwd-p1-source-manifest.json`, SHA-256 `130a30096dfeddd0e68c38c3b21bfdebe07b908cd5431643f480727e38fced23`. All 15 delivered-file hashes above were reverified. `git diff --check` passed before the follow-up commit.
 
 The installed GWD 6.0.19 bootstrap was reobserved for this dispatch: installation, enablement and trust confirmed; approved reference read in full, event `orca:ctx_851a3fb22bdc:ctco_01a0cb0a-da65-7e52-9b47-dc94639d2818`; `work_ready=true`, `use_ready=true`, `functional_verified=false`. Version remains 6.0.20 as requested; existing public documentation and distribution pins are unchanged. Temporary logs and scripts remain outside the worktree; no install, publication, merge, tag, push or hermes-k3s mutation was performed.
+
+## P2 correction — current run and DAG contract under the Store lock
+
+Follow-up dispatch `ctx_b5c920c63258`, task `task_f9b1674d7a6f`, after `dd8290a817e9030a97bbeff02d829a2e91b5b28e`. The final independent review in `/tmp/gwd-final-review-report.md` reported two additional P2 races. Both original reproductions were read in full and reproduced unchanged before the patch: an alternate-DAG wave became ACTIVE after the import pinned the canonical DAG, and a generic prepare left a DECLARED worker plus receipt/journal changes after a total import completed the run.
+
+The existing `_run_for_worker` guard now also accepts the transaction's current candidate, so both declaration mutators reuse the same admission, run-state and imported-evidence validation before the Store writes its WAL. `activate` rechecks the current DAG pin, rereads the requested DAG's content digest, verifies imported-node exclusion and dependency readiness, requires the unchanged placeholder/wave allocation, and recomputes worker occupancy against the effective cap. The worker declaration rechecks the current run and imported-node exclusion and rejects a pin changed since preparation began. A generic prepare has no DAG argument; a newly pinned DAG therefore requires a fresh invocation of its public guards rather than inheriting the stale unpinned decision.
+
+All original preliminary checks remain, preserving their sequential refusal order. The existing Store lock is reused; the guards do not acquire a work lock or recursively acquire the Store lock, create resources, or persist anything. Public flags, serialized schemas, successful sequential behavior and version 6.0.20 remain unchanged.
+
+Sibling audit: the only local mint paths that can race an undispatched successor import are wave activation and a new worker declaration. `declare_worker` reaches the latter through `prepare_worker`; its active-wave prerequisite also excludes a successful simultaneous import. Remediation, lease repair, preparation/finalization of an existing worker, progress, termination, convergence and cleanup require a preexisting worker or real wave, which already excludes import. Import itself rechecks the snapshot CAS, all source evidence and undispatched eligibility before writes; resume/abandon already recheck their current state inside their mutators. No unrelated scheduler transitions were changed.
+
+Six additional deterministic regressions cover the two P2 cases, the sibling COMPLETE-wave and changed-pin prepare cases, and the stale DAG-content/worker-cap checks in the same wave mutator. The four import races use thread events to pause immediately before the real Store transaction; the two wave-input races inject the competing change at that same boundary. Store persistence, imports, Git worktrees, receipts and journals remain real. The loser must preserve every captured durable byte, Git ref and registered worktree, with no local worker or worktree created by the loser. All six tests fail against the untouched dd8290a source; the original overlap races and nominal mixed-run scenario remain covered.
+
+The adapted P2-A reproduction preserves the public phase check and the original alternate DAG/p03-x interleaving, now requiring `DAG-CONTENT-MISMATCH`, a placeholder wave and byte-identical effects, followed by successful canonical-DAG continuation. The adapted P2-B reproduction preserves the pause in `_new_coordinator_lease` and real completion of T011, now requiring `RUN-NOT-ELIGIBLE`, COMPLETE with no worker and byte-identical effects. These are offline core/adapter fixtures, not live session/admission attestations.
+
+Bootstrap used the installed GWD 6.0.19 without changing any cache/configuration. Installation, enablement and trust were observed separately; the approved reference was read in full and correlated as `orca:ctx_b5c920c63258:ctco_01a0cb4d-0218-7792-813b-56bcb18ee760`. Revalidation recorded `work_ready=true`, `use_ready=true`, `functional_verified=false` in `/tmp/gwd-p2-bootstrap-ready.json`. No publication, installation, merge, tag, push or hermes-k3s mutation was performed.
+
+### P2 validation
+
+The independent dd8290a baseline already completed all 31 validators and 1,500 unittest cases (`/tmp/gwd-final-full.log`). This dispatch also started `python3 tests/run_validators.py` before editing; that redundant run was stopped at the coordinator's explicit request during validator 31 so the post-patch run could start. That interrupted run is not counted as a pass. Its 63 Python files remained unchanged (`/tmp/gwd-p2-baseline-python-before.json` and `/tmp/gwd-p2-baseline-python-after.json`); partial log `/tmp/gwd-p2-baseline-suite.log` is preserved.
+
+- Baseline regression sensitivity: six new tests, six expected assertion failures with the exact checked-in tests against dd8290a; no errors, 12.492 s. The three changed functions were loaded from `git show dd8290a`, with all other definitions checked identical and the real Store identity preserved. `/tmp/gwd-p2-regression-dd8290a-final.log` records the expected RED result, not a passing product test.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/validate_task_import_contract.py`: exit 0, 18 tests, 39.693 s; `/tmp/gwd-p2-focused.log`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -B /tmp/gwd-p2-dag-race.py`: exit 0; `DAG-CONTENT-MISMATCH`, `loser_side_effects=false`, verified import and successful canonical continuation; `/tmp/gwd-p2-dag-race.log`.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -B /tmp/gwd-p2-complete-race.py`: exit 0; `RUN-NOT-ELIGIBLE`, COMPLETE with zero workers and `loser_side_effects=false`; `/tmp/gwd-p2-complete-race.log`.
+- `git diff --check`: exit 0; `/tmp/gwd-p2-diff-check.log`.
+
+Current changed Python source SHA-256:
+
+- `plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py`: `c542da05185ffb7021b2e66354fc5b73a70f81af91e4e7325417b90e2c1ebc8e`.
+- `tests/validate_task_import_contract.py`: `cb7dff3253647a4d329d23f3b1764e23621763a06d30c51653c4d435567d41d6`.
+
+Final complete run: `PYTHONDONTWRITEBYTECODE=1 python3 -B tests/run_validators.py` exited 0, with 31 validators, 30 unittest suites and 1,506 cases. The sole platform skip remains `test_reject_symlink_chain_accepts_macos_var_root_alias` on Linux. Summed unittest runtime was 1,321.899 s; elapsed runtime was 1,324.568 s. Log: `/tmp/gwd-p2-full.log`; structured result: `/tmp/gwd-p2-validation.json`.
+
+All 63 Python files in the worktree (including tracked scaffolding, not only plugin/tests) were hashed before and after the full run. Both manifests are byte-identical: `/tmp/gwd-p2-python-before.json` and `/tmp/gwd-p2-python-after.json`. No Python source changed during validation. The final staged diff passed `git diff --cached --check` before the additional commit; the three changed files are the core module, its existing import validator and this report.
+
+Evidence SHA-256:
+
+- `/tmp/gwd-p2-full.log`: `1e7d479cac22357ee000f6c8dc35de9c959dfdb66e441ecc8e33b07049ffe28a`.
+- `/tmp/gwd-p2-focused.log`: `3ddc5ae3fdec7d4f2388e862931556a93f9d86f17015191d679502acc0db07b7`.
+- `/tmp/gwd-p2-regression-dd8290a-final.log`: `0ad37e531ae0c4c6092e406c4f7a7aa279e1664f4af47681487212a29685cdde`.
+- `/tmp/gwd-p2-dag-race.py`: `bd6f3a76e6dc6e27040e67150b432dce6217263c22fa86beec9c11384741e467`.
+- `/tmp/gwd-p2-dag-race.log`: `54c3acf60c21481f382b8ff124a7b2ad29706a53bd248ff70483b396cc02f7e4`.
+- `/tmp/gwd-p2-complete-race.py`: `9c057241c7dd3183d37ffc49eff8122cee01d7c5af7d58329bced445805703db`.
+- `/tmp/gwd-p2-complete-race.log`: `212eb9052626fe0cc71be557ec4745b1c5acfa9bde7c2e56388393bed337e050`.
+- `/tmp/gwd-p2-python-before.json`: `bd364df831a332367590fc02ad19df3678905780bfc6ab983e29f7e328648692`.
+- `/tmp/gwd-p2-python-after.json`: `bd364df831a332367590fc02ad19df3678905780bfc6ab983e29f7e328648692`.
+- `/tmp/gwd-p2-validation.json`: `bcbd41f6646051a56d62dbb8b36e3c9eece804741ba47ab59d2b8494797840b9`.
+
+The complete evidence hash inventory, including bootstrap and preserved baseline logs, is `/tmp/gwd-p2-artifact-hashes.json`. The implementation and requested validation are complete; independent review of this follow-up remains with the coordinator.

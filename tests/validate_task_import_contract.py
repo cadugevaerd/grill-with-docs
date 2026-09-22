@@ -176,16 +176,17 @@ class TaskImportContract(unittest.TestCase):
         path.write_bytes(path.read_bytes() + b' ')
         self.assertEqual(self.command()[1]['code'], 'TASK-RESULT-DIVERGENT')
 
-    def race_import_with_local(self, local_kind, *, import_wins):
+    def race_import_with_local(self, local_kind, *, import_wins, node_id='p03-a',
+                               dag_ref=None, expected_code=None):
         preview = runs.import_task_results(self.root, WORK, self.target, self.dag_ref, self.sources, self.admission)
         def importing():
             return runs.import_task_results(self.root, WORK, self.target, self.dag_ref, self.sources,
                 self.admission, apply=True, expected_sha256=preview['expected_sha256'])
         def local():
             if local_kind == 'worker':
-                return runs.prepare_worker(self.root, WORK, self.target, 'p03-a', ['shared.py'],
-                                           self.admission, node_id='p03-a')
-            return runs.declare_wave(self.root, WORK, self.target, self.dag_ref, ['p03-a'],
+                return runs.prepare_worker(self.root, WORK, self.target, node_id, ['shared.py'],
+                                           self.admission)
+            return runs.declare_wave(self.root, WORK, self.target, dag_ref or self.dag_ref, [node_id],
                                     self.admission, activation_max_workers=2, **FLOORS)
         def effects():
             # The paused import owns a temporary work lock; exclude only its
@@ -211,12 +212,14 @@ class TaskImportContract(unittest.TestCase):
                     resume.set()
                 with self.assertRaises(runs.GauntletRunError) as blocked:
                     loser.result(timeout=30)
-        self.assertEqual(blocked.exception.code, 'TASK-ALREADY-IMPORTED' if import_wins else 'TASK-IMPORT-CAS-CONFLICT')
+        self.assertEqual(blocked.exception.code, expected_code or (
+            'TASK-ALREADY-IMPORTED' if import_wins else 'TASK-IMPORT-CAS-CONFLICT'))
         self.assertEqual(effects(), before)
         run = runs._read_runs(self.root, WORK)[self.target]
         if import_wins:
             self.assertEqual(winner['verdict'], 'APPLIED')
             self.assertEqual(run['workers'], {})
+            self.assertFalse(runs._workspace_identity(self.root, WORK, self.target, node_id, self.admission)[0].exists())
             self.assertTrue(runs._is_placeholder_wave(run['waves']['wave-0001']))
             self.assertTrue(runs.verified_task_import(self.root, WORK, self.target))
         else:
@@ -239,6 +242,90 @@ class TaskImportContract(unittest.TestCase):
 
     def test_wave_wins_import_interleaving_without_import_effects(self):
         self.race_import_with_local('wave', import_wins=False)
+
+    def alternate_dag(self):
+        other = copy.deepcopy(self.dag)
+        for node in other['nodes']:
+            if node['id'] == 'p03-b':
+                node['id'] = 'p03-x'
+            node['depends_on'] = ['p03-x' if dep == 'p03-b' else dep for dep in node['depends_on']]
+        ref = 'specs/demo/execution-dag.r2.json'
+        self.write(ref, json.dumps(other))
+        self.write('specs/demo/partition-report.r2.json', json.dumps(self.report))
+        return ref
+
+    def complete_import_sources(self):
+        self.apply()
+        source = self.target
+        node = self.dag['nodes'][-1]
+        runs.declare_wave(self.root, WORK, source, self.dag_ref, ['p04-a'], self.admission,
+                          activation_max_workers=2, **FLOORS)
+        runs.declare_worker(self.root, WORK, source, 'p04-a', 'wave-0001', 'medium', node['files'],
+                            self.dag_ref, self.admission, **FLOORS)
+        workspace = runs._workspace_identity(self.root, WORK, source, 'p04-a', self.admission)[0]
+        result = dict(schema='grill-task-result/v1', work_id=WORK, scheduler_run_id=source,
+                      node_id='p04-a', task_id='T011', attempt_id='attempt-1', status='completed', diagnostic_ref=None)
+        path = workspace / self.result('T011')
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(result))
+        subprocess.run(['git', '-C', str(workspace), 'add', '.'], check=True, capture_output=True)
+        subprocess.run(['git', '-C', str(workspace), 'commit', '-qm', 'last result'], check=True, capture_output=True)
+        runs.terminate_worker(self.root, WORK, source, 'p04-a', 'completed', None, self.admission)
+        runs.converge_wave(self.root, WORK, source, self.dag_ref, 'wave-0001', self.admission,
+                          execution_branch=self.git('branch', '--show-current'), **FLOORS)
+        self.sources['T011'] = source
+        self.admission = self.identity('4')
+        self.target = runs.admit_or_reuse_run(self.root, WORK, self.admission)['run_id']
+
+    def test_import_pins_dag_before_alternate_wave_without_local_effects(self):
+        other_ref = self.alternate_dag()
+        self.sources = {task: source for task, source in self.sources.items() if task in ('T007', 'T008')}
+        self.race_import_with_local('wave', import_wins=True, dag_ref=other_ref, node_id='p03-x',
+                                    expected_code='DAG-CONTENT-MISMATCH')
+
+    def test_complete_import_before_generic_prepare_without_local_effects(self):
+        self.complete_import_sources()
+        cli._require_scheduler_task_phase(self.root, runs,
+            SimpleNamespace(work_id=WORK, run_id=self.target), 'generic-worker')
+        self.race_import_with_local('worker', import_wins=True, node_id='generic-worker',
+                                    expected_code='RUN-NOT-ELIGIBLE')
+        self.assertEqual(runs._read_runs(self.root, WORK)[self.target]['state'], 'COMPLETE')
+
+    def test_complete_import_before_alternate_wave_without_local_effects(self):
+        self.complete_import_sources()
+        self.race_import_with_local('wave', import_wins=True, dag_ref=self.alternate_dag(), node_id='p03-x',
+                                    expected_code='RUN-NOT-ELIGIBLE')
+        self.assertEqual(runs._read_runs(self.root, WORK)[self.target]['state'], 'COMPLETE')
+
+    def test_import_pins_dag_before_generic_prepare_without_local_effects(self):
+        self.race_import_with_local('worker', import_wins=True, node_id='generic-worker',
+                                    expected_code='DAG-CONTENT-MISMATCH')
+
+    def wave_after_change(self, change, code):
+        transact = store.transact_with_event
+        before = None
+        def paused(root, mutate, **kwargs):
+            nonlocal before
+            if kwargs['event']['event'] == 'gauntlet.wave.declared':
+                change()
+                before = (self.footprint(), self.git('worktree', 'list', '--porcelain'),
+                          self.git('for-each-ref', 'refs/heads'))
+            return transact(root, mutate, **kwargs)
+        with mock.patch.object(store, 'transact_with_event', side_effect=paused):
+            with self.assertRaises(runs.GauntletRunError) as blocked:
+                runs.declare_wave(self.root, WORK, self.target, self.dag_ref, ['p03-a', 'p03-b'],
+                                  self.admission, activation_max_workers=2, **FLOORS)
+        self.assertEqual(blocked.exception.code, code)
+        self.assertEqual((self.footprint(), self.git('worktree', 'list', '--porcelain'),
+                          self.git('for-each-ref', 'refs/heads')), before)
+
+    def test_wave_rechecks_dag_content_before_commit_without_effects(self):
+        self.wave_after_change(lambda: self.write(self.dag_ref, json.dumps({**self.dag, 'max_workers': 3})),
+                               'DAG-CONTENT-MISMATCH')
+
+    def test_wave_rechecks_current_worker_cap_before_commit_without_effects(self):
+        self.wave_after_change(lambda: runs.prepare_worker(self.root, WORK, self.target,
+            'generic-worker', ['unrelated.py'], self.admission), 'WAVE-CAP-EXCEEDED')
 
     def test_legacy_local_conflicts_block_import_consumers_without_writes(self):
         for kind in ('worker', 'wave'):

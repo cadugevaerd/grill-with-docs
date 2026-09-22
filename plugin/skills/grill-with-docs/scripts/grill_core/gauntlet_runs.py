@@ -1325,17 +1325,30 @@ def declare_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, nod
     )
 
     def activate(document_: dict[str, Any]) -> dict[str, Any]:
-        candidate_run = document_["work_items"][work_id]["gauntlet"]["runs"][run_id]
-        # Import and local declarations share the Store's transaction lock.
+        # Revalidate the current run and the requested DAG before any WAL or effect.
+        candidate_run = _run_for_worker(root, work_id, run_id, identity,
+            run=document_["work_items"][work_id]["gauntlet"]["runs"][run_id])
+        _require_dag_pin(candidate_run, dag_content_sha256, expect_placeholder=expect_placeholder)
+        if store.jcs_sha256(_load_execution_dag(root, dag_path)) != dag_content_sha256:
+            _fail("DAG-CONTENT-MISMATCH", "Execution DAG changed before declaration")
         for node_id in requested:
             if node_id in candidate_run.get("task_import", {}).get("nodes", []):
                 _fail("TASK-ALREADY-IMPORTED", f"node was already accepted: {node_id}")
+            for dep in nodes_by_id[node_id]["depends_on"]:
+                if not _node_ready(candidate_run, dep):
+                    _fail("WAVE-NODE-NOT-READY", f"node dependency is not terminal: {node_id} depends on {dep}")
         candidate_waves = candidate_run["waves"]
         if expect_placeholder:
-            if candidate_waves.get(target_wave_id, {}).get("state") != "DECLARED":
+            if not _is_placeholder_wave(candidate_waves.get(target_wave_id)):
                 _fail("WAVE-CONFLICT", "wave changed before declaration")
         elif target_wave_id in candidate_waves:
             _fail("WAVE-CONFLICT", "wave appeared during declaration")
+        non_terminal = sum(
+            1 for worker in candidate_run.get("workers", {}).values()
+            if isinstance(worker, dict) and worker.get("state") in store.NON_TERMINAL_WORKER_STATES
+        )
+        if non_terminal + len(requested) > effective_cap:
+            _fail("WAVE-CAP-EXCEEDED", "wave would exceed the run's effective concurrent worker cap")
         candidate_waves[target_wave_id] = {"state": "ACTIVE", "node_ids": list(requested)}
         if expect_placeholder and "dag_content_sha256" not in candidate_run:
             candidate_run["dag_content_sha256"] = dag_content_sha256
@@ -1570,12 +1583,15 @@ def _worker_receipt_event(name: str, event_name: str, work_id: str, run_id: str,
 
 
 def _run_for_worker(root: str | Path, work_id: str, run_id: str,
-                    admission: Mapping[str, str], *, purpose: str = "prepare") -> dict[str, Any]:
+                    admission: Mapping[str, str], *, purpose: str = "prepare",
+                    run: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Validate a fresh read, or the current candidate held by a Store mutator."""
     identity = _validate_admission(admission)
     _require_base_commit(root, identity)
     if not RUN_ID_RE.fullmatch(run_id):
         _fail("RUN-NOT-FOUND", "run identifier is invalid")
-    run = _read_runs(root, work_id).get(run_id)
+    if run is None:
+        run = _read_runs(root, work_id).get(run_id)
     if not isinstance(run, dict):
         _fail("RUN-NOT-FOUND", "requested durable run does not exist")
     run_admission = run.get("admission")
@@ -1763,10 +1779,13 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
             # disagrees with `remediates`' presence.
             lease["recovery_count"] = 1
         def declare(document: dict[str, Any]) -> dict[str, Any]:
-            candidate = document["work_items"][work_id]["gauntlet"]["runs"][run_id]
             # Recheck under the Store lock before any worker intent/Git effect.
+            candidate = _run_for_worker(root, work_id, run_id, identity,
+                run=document["work_items"][work_id]["gauntlet"]["runs"][run_id])
             if resolved_node_id in candidate.get("task_import", {}).get("nodes", []):
                 _fail("TASK-ALREADY-IMPORTED", f"node was already accepted: {resolved_node_id}")
+            if candidate.get("dag_content_sha256") != run.get("dag_content_sha256"):
+                _fail("DAG-CONTENT-MISMATCH", "run DAG changed before worker declaration")
             if worker_id in candidate["workers"]:
                 _fail("WORKER-CONFLICT", "worker appeared during declaration")
             candidate["workers"][worker_id] = {
