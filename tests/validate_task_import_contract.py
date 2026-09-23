@@ -291,6 +291,41 @@ class TaskImportContract(unittest.TestCase):
         self.assertEqual(runs.rebase_task_results(self.root, WORK, successor, target_ref, source_run,
             self.dag_ref, ['T007', 'T008', 'T009'], admission,
             source_commit=source_commit)['verdict'], 'REUSED')
+        self.target, self.dag_ref = successor, target_ref
+        for depth in (1, 2):
+            if depth == 2:
+                # A second rebase must still reach the original worker runs.
+                source_run = self.target
+                admission = self.identity('5')
+                self.target = runs.admit_or_reuse_run(self.root, WORK, admission)['run_id']
+                preview = runs.rebase_task_results(self.root, WORK, self.target, target_ref, source_run,
+                    target_ref, ['T007', 'T008', 'T009'], admission, source_commit=self.git('rev-parse', 'HEAD'))
+                runs.rebase_task_results(self.root, WORK, self.target, target_ref, source_run,
+                    target_ref, ['T007', 'T008', 'T009'], admission, source_commit=self.git('rev-parse', 'HEAD'),
+                    apply=True, expected_sha256=preview['expected_sha256'])
+            before = self.footprint()
+            history = copy.deepcopy(runs._read_runs(self.root, WORK))
+            code, reconciled = self.command(verb='gauntlet-tasks-reconcile')
+            self.assertEqual((code, reconciled.get('completed')), (0, ['T007', 'T008', 'T009']), reconciled)
+            self.assertEqual(self.footprint(), before)
+            code, reconciled = self.command('--apply', verb='gauntlet-tasks-reconcile')
+            self.assertEqual((code, reconciled.get('marked')),
+                             (0, ['T007', 'T008', 'T009'] if depth == 1 else []), reconciled)
+            self.assertEqual(runs._read_runs(self.root, WORK), history)
+            self.assertEqual({path: raw for path, raw in self.footprint().items() if path != self.tasks_ref},
+                             {path: raw for path, raw in before.items() if path != self.tasks_ref})
+        # Neither the intermediate run nor an altered committed sidecar is a fallback.
+        path = self.root / self.result('T007')
+        original = path.read_bytes()
+        forged = json.loads(original)
+        forged['scheduler_run_id'] = source_run
+        for raw in (json.dumps(forged).encode(), original + b' '):
+            path.write_bytes(raw)
+            before = self.footprint()
+            code, result = self.command('--apply', verb='gauntlet-tasks-reconcile')
+            self.assertEqual((code, result.get('code')), (2, 'TASK-RESULT-DIVERGENT'), result)
+            self.assertEqual(self.footprint(), before)
+        path.write_bytes(original)
 
     def test_6020_import_projects_canonical_bindings_without_rewriting_receipts(self):
         _, applied = self.apply()

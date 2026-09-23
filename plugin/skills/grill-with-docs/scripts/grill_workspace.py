@@ -4228,6 +4228,13 @@ def _gauntlet_tasks_reconcile_locked(args: argparse.Namespace) -> tuple[dict[str
         runs = grill_core_module("gauntlet_runs")
         try:
             imported = runs.verified_task_import(root, args.work_id, args.run_id) if args.run_id else None
+            original = imported
+            # Rebase receipts name the accepting run; sidecars keep their
+            # original worker run/node. Revalidate each historical import.
+            # ponytail: O(depth^2); project verified origins if chains grow.
+            while original and original["schema"] == "grill-task-import/v2":
+                original = runs.verified_task_import(root, args.work_id, original["source_run_id"],
+                    tasks_commit=original["source_commit"])
         except (runs.GauntletRunError, runs.store.StoreError) as error:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
         if imported and imported["dag_content_sha256"] != runs.store.jcs_sha256(dag):
@@ -4245,10 +4252,15 @@ def _gauntlet_tasks_reconcile_locked(args: argparse.Namespace) -> tuple[dict[str
                     continue
                 result = _read_json_document(root, result_path, "TASK-RESULT-MISSING")
                 accepted = imported["tasks"].get(task_id) if imported else None
+                if accepted:
+                    accepted = original["tasks"].get(task_id) if original else None
+                    if accepted is None:
+                        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-IMPORT-EVIDENCE-MISSING",
+                                         f"original task result acceptance is absent: {task_id}")
                 expected_run = accepted["source_run_id"] if accepted else args.run_id
                 try:
                     runs.validate_task_result(result, work_id=args.work_id, task_id=task_id,
-                        node_id=node.get("id"), run_id=expected_run)
+                        node_id=accepted["node_id"] if accepted else node.get("id"), run_id=expected_run)
                 except runs.GauntletRunError as error:
                     raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
                 completed.add(task_id)

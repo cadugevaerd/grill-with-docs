@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.24
+
+- Fix: `gauntlet-tasks-reconcile` resolve run e nó originais pela cadeia de imports/rebases revalidada, preservando sidecars e receipts históricos; evidência ausente ou divergente continua bloqueada.
+
 ## 6.0.23
 
 - Adiciona `gauntlet-tasks-rebase` para suceder DAGs selados preservando apenas aceites de tarefas individualmente idênticas, com preview/CAS, revalidação histórica e consumo pelo scheduler.
