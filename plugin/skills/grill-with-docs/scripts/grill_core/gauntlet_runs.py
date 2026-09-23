@@ -176,8 +176,9 @@ def _new_run_id(runs: Mapping[str, Any], admission: Mapping[str, str]) -> str:
     return candidate
 
 
-def _read_runs(root: str | Path, work_id: str, *, absent_ok: bool = False) -> dict[str, Any]:
-    snapshot = store.read_snapshot(root)
+def _read_runs(root: str | Path, work_id: str, *, absent_ok: bool = False, snapshot: Any = None) -> dict[str, Any]:
+    if snapshot is None:
+        snapshot = store.read_snapshot(root)
     try:
         item = snapshot.document["work_items"][work_id]
     except (KeyError, TypeError):
@@ -479,11 +480,11 @@ def run_projection(root: str | Path, work_id: str, run_id: str | None = None) ->
     return projection
 
 
-def cleanup_projection(root: str | Path, work_id: str) -> dict[str, list[dict[str, str]]]:
+def cleanup_projection(root: str | Path, work_id: str, *, snapshot: Any = None) -> dict[str, list[dict[str, str]]]:
     """Read the cleanup obligation without probing or changing resources."""
     if not store.store_exists(root):
         return {"cleaned": [], "pending": [], "preserved": []}
-    runs = _read_runs(root, work_id, absent_ok=True)
+    runs = _read_runs(root, work_id, absent_ok=True, snapshot=snapshot)
     result: dict[str, list[dict[str, str]]] = {"cleaned": [], "pending": [], "preserved": []}
     for run_id, run in sorted(runs.items()):
         for worker_id, worker in sorted(run.get("workers", {}).items()):

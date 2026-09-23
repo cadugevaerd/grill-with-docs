@@ -147,6 +147,17 @@ class StatusPublicContract(unittest.TestCase):
         self.assertEqual(code,0,payload)
         self.assertEqual(len(payload["work_items"]),2)
         observed.assert_called_once_with(self.r.resolve())
+    def test_store_snapshot_is_read_once_per_status_not_per_item(self):
+        self.item("work-a"); self.item("work-b")
+        spec=importlib.util.spec_from_file_location("status_snapshot_scope_contract",STATUS)
+        if spec is None or spec.loader is None: self.fail("unable to load status module")
+        module=importlib.util.module_from_spec(spec); sys.modules[spec.name]=module; spec.loader.exec_module(module)
+        store=module.workspace.grill_core_module("store")
+        with mock.patch.object(store,"read_snapshot",wraps=store.read_snapshot) as observed:
+            payload,code=module.build_status(self.r,current_worktree=True)
+        self.assertEqual(code,0,payload)
+        self.assertEqual(len(payload["work_items"]),2)
+        self.assertEqual(observed.call_count,1)
     def _git(self,*args): subprocess.run(["git","-C",str(self.r),*args],check=True,capture_output=True)
     def _terminal(self, wid="work-a"):
         p=self.r/".grill/work-items"/wid/"state.json"; d=json.loads(p.read_text(encoding="utf-8"))

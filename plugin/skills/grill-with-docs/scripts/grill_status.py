@@ -74,6 +74,7 @@ def item_payload(
     *,
     live_state: dict[str, Any],
     local_branches: set[str],
+    store_snapshot: Any = None,
 ) -> dict[str, Any]:
     immutable = workspace.validate_metadata(bundle.metadata, bundle.work_id)
     state = parse_json(bundle, "state.json")
@@ -154,10 +155,9 @@ def item_payload(
         planning=planning, development=development, governance=governance,
         findings=findings, blockers=blocked, sequence=item_sequence,
     )
-    cleanup = workspace.grill_core_module("gauntlet_runs").cleanup_projection(root, bundle.work_id)
+    cleanup = workspace.grill_core_module("gauntlet_runs").cleanup_projection(root, bundle.work_id, snapshot=store_snapshot)
     result = {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": planning, "development": development, "governance": governance, "cleanup": cleanup, "blockers": blocked, "findings": sorted(findings), "closed": closed, "operational_status": operational_status, "pending_reasons": pending_reasons, "next_gate": "BLOCKED" if findings or blocked else (item_sequence[len(completed)] if len(completed) < len(item_sequence) else "complete")}
-    store = workspace.grill_core_module("store")
-    snapshot_store = store.read_snapshot(root, required=False)
+    snapshot_store = store_snapshot
     record = (snapshot_store.document.get("agent_orchestration", {}).get("work_items", {}).get(bundle.work_id)
               if snapshot_store is not None else None)
     if isinstance(record, dict):
@@ -269,6 +269,8 @@ def build_status(root_arg: str | Path, work_id: str | None = None, current_workt
     # has many items in many worker worktrees, making the old O(items) git
     # probing exceed the public entry point's bounded timeout.
     local_branches = set(git(root, "for-each-ref", "--format=%(refname:short)", "refs/heads").splitlines())
+    # One journal validation per run: the Store is per repository, not per item.
+    store_snapshot = workspace.grill_core_module("store").read_snapshot(root, required=False)
     for worktree in worktree_roots(root, current_worktree):
         directory = worktree / ".grill" / "work-items"
         if not directory.exists(): continue
@@ -284,6 +286,7 @@ def build_status(root_arg: str | Path, work_id: str | None = None, current_workt
                 bundle,
                 live_state=live_state,
                 local_branches=local_branches,
+                store_snapshot=store_snapshot,
             )
             value["locations"][0]["current"] = worktree == root
             grouped.setdefault(bundle.work_id, []).append(value)
