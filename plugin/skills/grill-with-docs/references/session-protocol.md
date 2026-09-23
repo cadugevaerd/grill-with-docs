@@ -1,4 +1,4 @@
-# Protocolo de sessão v6.0.16
+# Protocolo de sessão v6.0.25
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -82,7 +82,9 @@ Separar sessão, worktree e branch. Worktree/branch só são removíveis com ide
 
 `gauntlet-prepare-switch ROOT --work-id ID --context-id CTX --epoch N --session-ref REF --to-runtime codex|claude` cerca despachos, reconcilia cleanup e persiste checkpoint. Worker/turno ativo mantém QUIESCING com `CONTINUITY-ACTIVE-WORK`; não matar ou transferir agente para liberar a troca. O destino confirma inatividade da origem pela mesma identidade; lease vencido não é prova.
 
-Se o líder de origem já foi encerrado e liberado pelo Orca antes da preparação, repetir o comando com `--released-source`. A recuperação exige duas chamadas, preservando a transição `ACTIVE → QUIESCING → RELEASED`. Aceita o release arquivado do dispatch exato; uma cadeia única de ownership transferido cuja origem, terminal, incarnation, worktree e runtime coincidem e cujo owner final está liberado, arquivado e `exited`; ou, somente para o líder, o estado estrito `failed/stopped/process_stopped` com capability revogada, terminal desconectado e não gravável, mesma worktree/incarnation e recurso integralmente liberado. Os dois últimos casos registram respectivamente `release_proof=ownership-transfer` e `release_proof=resource-fence`. Silêncio, expiry ou evidência de fencing incompleta recusam `LEADER-RELEASE-UNPROVEN`. Resultados de atividades nunca herdam essas exceções: uma atividade `RESULT_RECORDED` só deixa de impedir a troca quando sua sessão especialista exata possui release com transcript capturado; o recurso `CLOSE_PENDING` é então fechado com receipt correlacionado e levado no checkpoint, sem aceitar nem reexecutar o resultado.
+Se o líder de origem já foi encerrado e liberado pelo Orca antes da preparação, repetir o comando com `--released-source`. A recuperação exige duas chamadas, preservando a transição `ACTIVE → QUIESCING → RELEASED`. Aceita o release arquivado do dispatch exato; uma cadeia única de ownership transferido cuja origem, terminal, incarnation, worktree e runtime coincidem e cujo owner final está liberado, arquivado e `exited`, inclusive quando o Orca já removeu o terminal e retorna `terminal: null`; a transferência atômica do único recurso exato para um sucessor ativo `owned/not_requested/live`, quando a origem está `succeeded/completed`, revogada e sua projeção está `absent/unverifiable`; ou, somente para o líder, o estado estrito `failed/stopped/process_stopped` com capability revogada, terminal desconectado e não gravável, mesma worktree/incarnation e recurso integralmente liberado. Se trabalho stale impedir `QUIESCING → RELEASED`, somente `gauntlet-run-abandon` pode usar essa prova do líder liberado, e ainda exige autorização humana exata para o run; nenhum outro comando herda a exceção. As transferências registram `release_proof=ownership-transfer`; o fence registra `release_proof=resource-fence`. Silêncio, expiry ou evidência incompleta/ambígua recusam `LEADER-RELEASE-UNPROVEN`. Resultados de atividades nunca herdam essas exceções: uma atividade `RESULT_RECORDED` só deixa de impedir a troca quando sua sessão especialista exata possui release com transcript capturado; o recurso `CLOSE_PENDING` é então fechado com receipt correlacionado e levado no checkpoint, sem aceitar nem reexecutar o resultado.
+
+Um run `BLOCKED` por `gauntlet-run-abandon` é terminal e seus estados internos históricos não contam como trabalho ativo na continuidade. Runs não abandonados continuam exigindo observação terminal explícita por worker.
 
 `gauntlet-resume ROOT --work-id ID --runtime codex|claude --checkpoint CHECKPOINT_ID --session-ref TARGET_REF` apresenta preview. Apply exige `--apply --expected-sha256 HASH`, releitura das fontes e CAS de época. Preservar projeto/work_id/worktree/branch, outputs e efeitos aceitos; criar contexto/campanha sucessores ligados aos anteriores, sem mudar admissions/DAG/pins históricos ou zerar remediation. A sessão destino comprova sua própria carga; não herda loaded ou suspensão. Só tentativa interrompida não aceita pode repetir; outcome desconhecido exige reconciliação da mesma operação. Recovery legado por `--run-id` não troca runtime nem substitui essa ponte.
 
@@ -91,6 +93,33 @@ Se o líder de origem já foi encerrado e liberado pelo Orca antes da preparaç�
 `gauntlet-orchestration-adopt ROOT --work-id ID --runtime codex|claude --session-ref REF [--scope-file PATH ...]` apresenta origem, escopo e hash esperado; aplicar somente após conferência com `--apply --expected-sha256 HASH`. `--scope-file` repete por arquivo, sem glob ou ampliação implícita de grant. Tasks antigas exigem proposta completa de autor xhigh revisada por high, consumida por `task-files-migrate` com preview e hashes correntes; não converter a prosa heurística em autorização.
 
 Um DAG referenciado por run é selado, inclusive COMPLETE/BLOCKED: não sobrescrever bytes, report ou receipts. A continuação do trabalho restante seleciona explicitamente revisão/run sucessora; importa aceites comprovados e conserva referências históricas, sem workers terminais inventados. Leitura/auditoria e cleanup protegido de legado não autorizam nova execução sem adoção. Falta de parâmetro, observação ou caminho exigido pelo contrato no binário/adapter selecionado deve ser diagnosticada antes do trabalho; não contornar o gate.
+
+Para resultados de workers distribuídos entre runs históricos do mesmo work item, use a operação pública abaixo. O successor deve estar admitido pela activation corrente, sem workers ou waves reais. Declare todas as tasks de cada nó; cada nó vem de um único source run e todos os sources devem fixar o mesmo DAG v2. O import é único e imutável por successor: reúna o conjunto completo no preview.
+
+```text
+python3 -B .../grill_workspace.py gauntlet-tasks-import ROOT --work-id ID \
+  --run-id SUCCESSOR --dag specs/FEATURE/execution-dag.r3.json \
+  --source-task T007=SOURCE_A --source-task T008=SOURCE_A --source-task T009=SOURCE_B \
+  --session-ref SESSION
+```
+
+Inspecione `import.tasks`, `source_proofs`, `result_commit`, `receipt_sha256` e `expected_sha256`; aplique os mesmos argumentos com `--apply --expected-sha256 HASH`. O preview não escreve. O apply revalida sob CAS e usa a transação recuperável do Store para registrar o aceite e seu receipt `gauntlet.tasks.imported`. Retry conserva argumentos/hash: após aceite retorna `REUSED`; interrupção anterior ao evento pode retornar `APPLIED` com o mesmo receipt. O mesmo apply recupera somente sua própria transação pendente, inclusive quando o journal já avançou e o snapshot ainda não foi publicado, reobservando a autoridade do líder antes do recovery. `TASK-IMPORT-CAS-CONFLICT` exige novo preview; `TASK-IMPORT-DIVERGENT`, `TASK-RESULT-DIVERGENT`, `DAG-CONTENT-MISMATCH`, `TASKS-SOURCE-STALE` ou `TASK-IMPORT-EVIDENCE-MISSING` exigem corrigir a evidência, nunca editar Store/receipts para liberar o gate.
+
+Cada task fixa task/nó/fase/fingerprint, os hashes canônico e de bytes do DAG, source run, tentativa da linhagem, caminho/hash do sidecar e receipts positivos de término/convergência/cleanup do worker e da wave. Os sidecars devem coincidir com os bytes já commitados no HEAD capturado pelo preview; receipts antigos não selavam esses hashes, então o novo receipt sela essa associação estrutural, sem alegar prova criptográfica de execução. Cleanup deve estar `CLEANED`, wave `COMPLETE` e convergida; grant divergente, tentativa supersedida, nó parcial ou resultado não integrado recusam. Nenhum DAG, sidecar, source run ou receipt histórico é reescrito, nenhum worker/wave fictício é criado e nenhum recurso é despachado.
+
+Depois do import, `gauntlet-tasks-reconcile --run-id SUCCESSOR --dag DAG` reconhece os source runs aceitos; `--apply` marca somente checkboxes. A barreira de fase e a prontidão/convergência dos nós leem o mesmo import com revalidação de receipts e hashes. Tasks read-only/deferred continuam exigindo seus aceites próprios. Um nó importado recusa novo despacho com `TASK-ALREADY-IMPORTED`; se todos os nós foram importados, o successor fica `COMPLETE`. Mudança posterior de evidência bloqueia o consumo em vez de reaproveitar aceite stale.
+
+Quando `tasks.md` muda formalmente e `partition-emit` sela uma revisão nova do DAG, não force o import do DAG anterior. Admita um run successor vazio e use preview-first:
+
+```text
+python3 -B .../grill_workspace.py gauntlet-tasks-rebase ROOT --work-id ID \
+  --run-id SUCCESSOR --dag specs/FEATURE/execution-dag.r4.json \
+  --source-run-id SOURCE --source-dag specs/FEATURE/execution-dag.r3.json \
+  --source-commit COMMIT --task T007 --task T008 --task T009 --task T010 \
+  --session-ref SESSION
+```
+
+O apply usa `--apply --expected-sha256 HASH`. Cada tarefa é comparada isoladamente incluindo fase, título e bloco `task/Files/Result` com checkbox normalizado. O source import e atividades aceitas são revalidados no DAG antigo; o destino fixa o DAG novo. Nó parcialmente transportado recusa, tarefa alterada retorna `TASK-REBASE-STALE`, e qualquer mudança posterior em source, commit, DAG, receipt ou Store bloqueia. O run antigo nunca é reescrito ou abandonado pelo comando.
 
 A campanha que constrói a candidata continua usando o bundle histórico preservado, seu CLI absoluto e onze entrypoints pinados; revalidar o manifest ao retomar/trocar sessão. Ensaiar 6.0.0 em outro projeto/sessão. Só depois do ship encerrado adotar explicitamente o work item histórico COMPLETE para importar referências/inventário sem reabrir etapas ou reatestar o passado. Não alterar Constituição, WORKFLOW, ESSENTIAL, tabelas, classes worker-required ou registries/catálogos v3/v4 nesta transição.
 

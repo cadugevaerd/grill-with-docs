@@ -1,11 +1,8 @@
 # Changelog
 
-## 6.0.16
+## 6.0.25
 
 - Fix: `status` deixa de estourar `STATUS-TIMEOUT`. `item_payload` chamava `store.read_snapshot` duas vezes por work item (via `cleanup_projection → _read_runs` e direto), e cada leitura revalida o journal inteiro do Store por repositório (`.git/grill/events.jsonl`). Com 174 bundles em 38 worktrees eram 348 validações idênticas (~161 s) contra o teto de 30 s. Agora `build_status` lê o snapshot uma vez e o injeta em `item_payload`, `cleanup_projection` e `_read_runs` (parâmetro opcional; o default preserva o comportamento anterior). O workspace inteiro cai para ~4 s. O timeout e a validação do Store não mudam; o custo por leitura segue O(journal).
-
-## 6.0.15
-
 - Fix: o ciclo de vida do contexto de orquestração ganha transição de saída. Até a 6.0.2 um work item cujo líder encerrava a sessão ficava permanentemente inalcançável: `_bind_orchestration` só aceitava continuidade com observação de líder idêntica e `ACTIVE`, e a recusa `CONTEXT-FENCED` persistia mesmo com o líder anterior `RELEASED` ou o contexto inteiro encerrado — não havia verbo algum que mudasse o vínculo. O verbo novo `gauntlet-context-takeover` é o ato explícito de tomada, autorizado **somente** por observação de dispatch terminal do líder anterior: status fora de `dispatched`/`running`, `capabilityRevokedAt` não nulo, ou liveness `exited` vinda de `agent_status`. Sem `--apply` ele executa todas as verificações e devolve `TAKEOVER-PREVIEW` com o hash das entradas relidas, ou exatamente a recusa que o apply devolveria, sem escrever byte algum. As recusas são distintas e fail-closed: `TAKEOVER-LEADER-ACTIVE` (líder ainda vivo), `TAKEOVER-EVIDENCE-UNPROVEN` (observação ausente, ilegível, não correlacionada ao dispatch pedido ou com liveness `unverifiable`), `TAKEOVER-NOT-OBSERVABLE` (líder registrado não é um dispatch observável), `TAKEOVER-WORK-ACTIVE` (trabalho de especialista em voo), `TAKEOVER-INPUTS-STALE` (hash divergente) e `TAKEOVER-REUSED` (repetição idêntica já aplicada, sem reobservar). A mutação usa o mesmo compare-and-swap por revisão do store, então duas tomadas concorrentes sobre a mesma revisão terminam com uma aceita e a outra recusada por estado alterado. Aplicada a tomada, o contexto anterior passa a encerrado e o sucessor nasce na época seguinte carregando o bloco de sucessão — contexto e sessão de origem, motivo, referência e digest da observação usada como prova, e o instante —, enquanto `development`, campanha, resultados aceitos e escopo declarado permanecem byte a byte iguais.
 - Fix: `gauntlet-prepare-switch` deixa de recusar `CONTINUITY-CHECKPOINT-MISSING` quando o work item ainda não tem checkpoint corrente conhecido. Como `checkpoint_head` só era escrito ao confirmar uma etapa, o caminho ordenado de troca não existia antes da primeira etapa confirmada; agora o checkpoint inicial é emitido a partir do estado corrente, e esse ponto é retomável de verdade. A recusa continua firme para checkpoint declarado porém desconhecido.
 - Fix: a prévia de `gauntlet-orchestration-adopt` passa a executar a mesma verificação de contexto que só rodava no caminho de aplicação. Antes a prévia montava o payload sem verificá-la, prometia `PREVIEW` e o apply recusava com `CONTEXT-FENCED` — prévia e aplicação agora concordam no veredito, e a prévia segue sem escrever nada.
@@ -13,6 +10,50 @@
 - Integra a `main` em 6.0.11. O conflito de `gauntlet-prepare-switch` foi resolvido mantendo a comparação **estrutural** de identidade de worktree desta entrega — o lado entrante comparava o mapeamento inteiro, que é o defeito J1/H1 fechado aqui, porque `phase` e `branch` se movem na vida normal e nenhum verbo os re-carimba — e tomando do lado entrante a lógica de líder liberado (`--released-source`).
 - Integra também a `main` em 6.0.12 (`0ca6760`). Sem conflito de código: apenas o CHANGELOG, porque os dois lados haviam numerado 6.0.12. A versão desta entrega sobe para 6.0.13 para ficar acima da publicada.
 - Integra a `main` em 6.0.14. Sem conflito de código: `grill_workspace.py` e o contrato de orquestração fizeram auto-merge limpo. Versão sobe para 6.0.15 para ficar acima da publicada.
+- Integra a `main` em 6.0.24 (`d4bf60b`). Conflitos só de versão/documentação e de `tests/validate_agent_orchestration_contract.py`; código de continuidade (`grill_workspace.py`, `agent_runtime.py`, `gauntlet_runs.py`) fez auto-merge. As entradas desta entrega, antes numeradas 6.0.15/6.0.16, passam a 6.0.25 para ficar acima da publicada.
+
+## 6.0.24
+
+- Fix: `gauntlet-tasks-reconcile` resolve run e nó originais pela cadeia de imports/rebases revalidada, preservando sidecars e receipts históricos; evidência ausente ou divergente continua bloqueada.
+
+## 6.0.23
+
+- Adiciona `gauntlet-tasks-rebase` para suceder DAGs selados preservando apenas aceites de tarefas individualmente idênticas, com preview/CAS, revalidação histórica e consumo pelo scheduler.
+
+## 6.0.22
+
+- Fix: o líder canônico ativo pode revalidar apresentação após upgrade de GWD/configuração no mesmo contexto, com nova carga aprovada e CAS, preservando runs, DAG, aceites e histórico.
+- Sessão, runtime, escopo e policy continuam fixos; carga stale, apresentação inválida, autoridade divergente e corrida de contexto falham fechado.
+
+## 6.0.21
+
+- Fix: as barreiras de fase do scheduler usam o hash canônico do conteúdo do DAG, igual ao retornado por `gauntlet-dag-validate` e aos bindings de atividades aceitas; diferenças de formatação não geram `TASK-PHASE-PENDING` falso.
+- Compatibilidade: imports mixed-run 6.0.20 preservam receipts e hashes de bytes, com projeção canônica somente após revalidação integral; conteúdo divergente e evidência alterada continuam bloqueados.
+
+## 6.0.20
+
+- Fix: `gauntlet-tasks-import` importa em um successor admitido resultados de múltiplos runs históricos, em preview/apply com CAS, receipt imutável e retry idempotente. Verifica task, nó, fase, fingerprint, DAG, source run, tentativa, bytes integrados do sidecar e receipts positivos de término, convergência e cleanup; divergência ou evidência ausente bloqueia sem reexecutar tasks.
+- Reconcile, barreira de fase e scheduler consomem o mesmo aceite importado, revalidando sua proveniência sem reescrever DAG, sidecars, runs ou receipts históricos e sem criar workers fictícios.
+
+## 6.0.19
+
+- Fix: a continuidade ignora estados internos históricos de um run terminal `BLOCKED` por `gauntlet-run-abandon`; runs não abandonados continuam bloqueando enquanto houver worker não terminal.
+
+## 6.0.18
+
+- Fix: `gauntlet-run-abandon` pode remover o único trabalho stale que impede um contexto `QUIESCING` de concluir a continuidade, somente quando o líder de origem exato está comprovadamente liberado e a autorização humana referencia o run; os demais comandos continuam exigindo líder `ACTIVE`.
+
+## 6.0.17
+
+- Fix: `gauntlet-prepare-switch --released-source` aceita a cadeia finalizada de ownership transferido quando o Orca já removeu o terminal e retorna `terminal: null`; a prova continua exigindo origem concluída e revogada, recurso único liberado, archive capturado e identidade correlacionada por handle, worktree, runtime e incarnation.
+
+## 6.0.16
+
+- Fix: `gauntlet-prepare-switch --released-source` aceita a transferência atômica do único recurso terminal exato para um sucessor ativo, sem exigir que o recurso do sucessor já esteja liberado, encerrado ou arquivado; formas ambíguas, divergentes e sem sucesso continuam recusadas.
+
+## 6.0.15
+
+- Permite revisões sucessoras imutáveis de `partition`: após `r2`, seleciona o próximo par completo `rN` e recusa revisões parciais sem sobrescrever evidência selada.
 
 ## 6.0.14
 

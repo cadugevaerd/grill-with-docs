@@ -232,6 +232,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                 ("checkpoint", "--step", "specify", "--state", "in-progress"),
                 ("partition-emit", "--feature", "f", "--apply"),
                 ("gauntlet-tasks-reconcile", "--dag", "d", "--apply"),
+                ("gauntlet-tasks-import", "--run-id", "r", "--dag", "d", "--source-task", "T007=run-source", "--apply"),
                 ("task-files-migrate", "--feature", "f", "--proposal", "p"),
                 ("phase-turn",),
             ]
@@ -365,17 +366,39 @@ class AgentOrchestrationContract(unittest.TestCase):
                     show["result"]["terminal"]["incarnationId"] = "new-incarnation"
                 else:
                     transcript["result"]["sourceIdentity"] = "current-config-changed"
-                    policy_raw = (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes()
-                    _, pending = core.project_leader_presentation(adapter, policy=json.loads(policy_raw),
-                        policy_sha256=grill_workspace.hash_bytes(policy_raw),
-                        gwd_skill_sha256=grill_workspace.hash_bytes((grill_workspace.ASSETS.parent / "SKILL.md").read_bytes()),
-                        runtime="codex", scope={"kind": "gwd", "root": str(root), "work_id": "work-x"})
-                    transcript["result"]["transcript"]["messages"][1]["blocks"][0]["output"] = json.dumps(
-                        {"verdict": "BLOCKED", "code": "STYLE-LOAD-UNCONFIRMED", "presentation": pending})
                 with self.subTest(mutation=mutation), mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
-                    self.assertEqual(invoke(commands[0])[1]["code"], "STYLE-SCOPE-CONFLICT" if mutation == "config" else "LEADER-AUTHORITY-UNPROVEN")
+                    self.assertEqual(invoke(commands[0])[1]["code"], "STYLE-LOAD-UNCONFIRMED" if mutation == "config" else "LEADER-AUTHORITY-UNPROVEN")
                     self.assertEqual(invoke(commands[10])[0], 2)
             self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+    def test_released_quiescing_leader_can_only_enter_run_abandon_recovery(self):
+        temporary, root = self.fixture()
+        context = {
+            "context_id": "ctx-source", "epoch": 7, "runtime": "codex", "state": "QUIESCING",
+            "leader": {"state": "RELEASING", "session_ref": orchestration_fixture.SESSION},
+        }
+        item = {"current_context_id": "ctx-source", "contexts": {"ctx-source": context}}
+        snapshot = SimpleNamespace(document={"agent_orchestration": {"work_items": {"work-x": item}}})
+        args = SimpleNamespace(root=str(root), work_id="work-x", session_ref=orchestration_fixture.SESSION)
+        seen = []
+
+        def gauntlet_run_abandon_command(_args):
+            seen.append(store._ORCHESTRATION_AUTHORITY.get())
+            return {"verdict": "RUN-ABANDONED"}, 0
+
+        wrapped = grill_workspace._gauntlet_authorized(gauntlet_run_abandon_command)
+        native_store = grill_workspace.grill_core_module("gauntlet_runs").store
+        with temporary, mock.patch.object(native_store, "store_exists", return_value=True), \
+             mock.patch.object(native_store, "store_paths", return_value=SimpleNamespace()), \
+             mock.patch.object(native_store, "orchestrator_lock", return_value=contextlib.nullcontext()), \
+             mock.patch.object(native_store, "read_snapshot", return_value=snapshot), \
+             mock.patch.object(grill_workspace, "_require_released_leader", return_value={}) as released:
+            self.assertEqual(wrapped(args), ({"verdict": "RUN-ABANDONED"}, 0))
+            released.assert_called_once_with(root, "work-x", context, orchestration_fixture.SESSION)
+            self.assertEqual(seen, [None])
+            args.session_ref = "orca:ctx-other"
+            with self.assertRaisesRegex(grill_workspace.CliFailure, "work-x"):
+                wrapped(args)
 
     def test_native_exec_result_variable_wrapper(self):
         core = grill_workspace.grill_core_module("agent_runtime")
@@ -1149,6 +1172,11 @@ class AgentOrchestrationContract(unittest.TestCase):
             {"activities": {}, "resources": {}}, "work-x")
         self.assertEqual(active, ["worker:run-1:w"]); self.assertEqual(unknown, [])
         active, unknown = grill_workspace._continuity_quiescence(
+            {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"state": "BLOCKED", "workers": {
+                "w": {"state": "PREPARED", "lease": {"expires_at": "2000-01-01T00:00:00Z"}}}}}}}}},
+            {"activities": {}, "resources": {}}, "work-x")
+        self.assertEqual(active, []); self.assertEqual(unknown, [])
+        active, unknown = grill_workspace._continuity_quiescence(
             {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"workers": {"w": {"state": "ORPHANED"}}}}}}}},
             {"activities": {}, "resources": {}}, "work-x")
         self.assertEqual(active, []); self.assertEqual(unknown, ["worker:run-1:w"])
@@ -1326,7 +1354,75 @@ class AgentOrchestrationContract(unittest.TestCase):
             recovered = adapter.observe_released(allow_unarchived_stopped=True)
             self.assertEqual((recovered["outcome"], recovered["release_proof"]),
                              ("succeeded", "ownership-transfer"))
+            result["terminal"] = None
+            result["observation"] = {"status": "missing", "exactWorker": False}
+            recovered = adapter.observe_released(allow_unarchived_stopped=True)
+            self.assertEqual((recovered["outcome"], recovered["release_proof"]),
+                             ("succeeded", "ownership-transfer"))
+            released_resource["endpointIncarnation"] = "other-process"
+            with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                adapter.observe_released(allow_unarchived_stopped=True)
+            released_resource["endpointIncarnation"] = "pty-fixture:inc-fixture"
             released_resource["archive"]["status"] = "missing"
+            with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                adapter.observe_released(allow_unarchived_stopped=True)
+
+    def test_released_leader_accepts_an_exact_live_ownership_transfer(self):
+        core = grill_workspace.grill_core_module("agent_runtime")
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            adapter, show, transcript = orchestration_fixture.boundary(
+                grill_workspace, root, "codex", orchestration_fixture.SESSION, "work-x")
+            result = show["result"]
+            result["dispatch"].update(runId="run-1", status="completed",
+                                      capabilityRevokedAt="2026-01-01T00:00:00Z",
+                                      completedAt="2026-01-01T00:00:00Z")
+            result["worker"].update(state="succeeded", stage="settled")
+            result["terminal"].update(connected=True, writable=True)
+            result["projection"].update(outcome="succeeded", workspace={"id": "worktree-fixture"},
+                                        liveness={"verdict": "unverifiable", "reason": "missing_status"},
+                                        resource={"state": "absent", "reason": "not_materialized"})
+            result["observation"].update(status="live")
+            result["terminalResource"] = None
+            owned_resource = {
+                "ownershipState": "owned", "releaseState": "not_requested",
+                "originDispatchId": "ctx-fixture", "ownerDispatchId": "ctx-next",
+                "terminalHandle": "term-fixture", "worktreeId": "worktree-fixture",
+                "endpointId": "runtime-fixture", "endpointIncarnation": "pty-fixture:inc-fixture",
+                "releaseCompletedAt": None, "releaseError": None,
+                "archive": {"source": None, "status": None},
+            }
+            successor = {
+                "dispatchId": "ctx-next", "agentTerminalHandle": "term-fixture",
+                "workerState": "ready", "dispatchStatus": "dispatched", "terminalState": "active",
+                "resource": owned_resource,
+                "projection": {"provider": {"id": "codex"}, "host": {"id": "host-fixture"},
+                               "workspace": {"id": "worktree-fixture"},
+                               "liveness": {"verdict": "live", "source": "agent_status"},
+                               "resource": {"state": "owned"}},
+            }
+            fleet = {"ok": True, "result": {"workers": [successor], "page": {"hasMore": False}}}
+            adapter.read = lambda argv: orchestration_fixture.pack(
+                show if argv[1] == "worker-show" else fleet if argv[1] == "worker-list" else transcript)
+            recovered = adapter.observe_released(allow_unarchived_stopped=True)
+            self.assertEqual((recovered["outcome"], recovered["release_proof"]),
+                             ("succeeded", "ownership-transfer"))
+            for target, key, value in (
+                    (owned_resource, "endpointId", "other-runtime"),
+                    (fleet["result"]["workers"], None, copy.deepcopy(successor))):
+                original = copy.deepcopy(target) if key is None else target[key]
+                if key is None:
+                    target.append(value)
+                else:
+                    target[key] = value
+                with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                    adapter.observe_released(allow_unarchived_stopped=True)
+                if key is None:
+                    target.pop()
+                else:
+                    target[key] = original
+            result["worker"]["state"] = result["projection"]["outcome"] = "failed"
+            result["dispatch"]["status"] = "failed"
             with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
                 adapter.observe_released(allow_unarchived_stopped=True)
 
@@ -3150,6 +3246,24 @@ class AgentOrchestrationContract(unittest.TestCase):
                 context_id="ctx", activities={}, read_file=lambda _path: b"")
             self.assertEqual((status["state"], agent_orchestration.visual_gate_state({}, status, decision=None)),
                              ("NOT_APPLICABLE", "NOT_APPLICABLE"))
+
+    def test_partition_revision_uses_the_next_complete_pair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            self.assertEqual(
+                grill_workspace._next_partition_revision(directory, "demo"),
+                ("specs/demo/execution-dag.r2.json", "specs/demo/partition-report.r2.json"),
+            )
+            for revision in (2, 3):
+                (directory / f"execution-dag.r{revision}.json").write_text("{}\n")
+                (directory / f"partition-report.r{revision}.json").write_text("{}\n")
+            self.assertEqual(
+                grill_workspace._next_partition_revision(directory, "demo"),
+                ("specs/demo/execution-dag.r4.json", "specs/demo/partition-report.r4.json"),
+            )
+            (directory / "execution-dag.r4.json").write_text("{}\n")
+            with self.assertRaisesRegex(grill_workspace.CliFailure, "PARTITION-REVISION-INCOMPLETE"):
+                grill_workspace._next_partition_revision(directory, "demo")
 
 
 if __name__ == "__main__":

@@ -110,7 +110,7 @@ def command(program, args):
     values = [SESSION if value == "fixture-leader" else str(value) for value in args]
     if Path(program).name != "grill_workspace.py":
         return [sys.executable, "-B", str(program), *values]
-    if values and values[0] in {"init", "checkpoint", "attest", "phase-turn", "partition-emit", "gauntlet-tasks-reconcile", "gauntlet-run", "gauntlet-resume", "gauntlet-cleanup",
+    if values and values[0] in {"init", "checkpoint", "attest", "phase-turn", "partition-emit", "gauntlet-tasks-reconcile", "gauntlet-tasks-rebase", "gauntlet-run", "gauntlet-resume", "gauntlet-cleanup",
             "gauntlet-prepare-worker", "gauntlet-wave-declare", "gauntlet-converge", "gauntlet-run-abandon",
             "gauntlet-worker-declare", "gauntlet-progress-record", "gauntlet-worker-terminal", "gauntlet-remediate"} and "--session-ref" not in values:
         values += ["--session-ref", SESSION]

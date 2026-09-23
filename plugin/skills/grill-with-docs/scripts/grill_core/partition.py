@@ -547,6 +547,19 @@ def tasks_semantic_sha256(text: str, tasks: Iterable[TaskFilesTask] | None = Non
     return hashlib.sha256("".join(lines).encode("utf-8")).hexdigest()
 
 
+def task_semantic_sha256(text: str, task: TaskFilesTask) -> str:
+    """Pin one task block independently so an unrelated DAG edit can succeed it."""
+    lines = text.splitlines(keepends=True)
+    start = task.line_no - 1
+    block = [re.sub(r"^- \[[ xX]\]", "- [ ]", lines[start])]
+    block.append(lines[start + 1])
+    if task.result is not None:
+        block.append(lines[start + 2])
+    payload = {"phase": task.phase, "phase_title": task.phase_title, "block": "".join(block)}
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True,
+                                     separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 def _feature_from_result_hint(text: str) -> str:
     match = re.search(r'"specs/([^/]+)/implement/T\d+\.tasks\.json"', text)
     if not match:
