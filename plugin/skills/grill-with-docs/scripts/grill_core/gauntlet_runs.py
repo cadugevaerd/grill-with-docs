@@ -1043,7 +1043,8 @@ def verified_task_import(root: str | Path, work_id: str, run_id: str,
         try:
             fresh = _task_rebase_inputs(root, work_id, run_id, imported["dag_ref"],
                 imported["source_run_id"], imported["source_dag_ref"], list(imported["tasks"]),
-                source_commit=imported["source_commit"], store_sha256=imported["store_sha256"])
+                source_commit=imported["source_commit"], store_sha256=imported["store_sha256"],
+                target_commit=tasks_commit)
         except (KeyError, TypeError, ValueError) as exc:
             _fail("TASK-IMPORT-DIVERGENT", f"invalid rebase evidence: {exc}")
         if fresh != imported or run.get("dag_content_sha256") != imported["dag_content_sha256"]:
@@ -1176,7 +1177,8 @@ def _accepted_source_tasks(root: str | Path, work_id: str, source_run_id: str,
 
 def _task_rebase_inputs(root: str | Path, work_id: str, run_id: str, target_dag_ref: str,
                         source_run_id: str, source_dag_ref: str, task_ids: list[str], *,
-                        source_commit: str, store_sha256: str) -> dict[str, Any]:
+                        source_commit: str, store_sha256: str,
+                        target_commit: str | None = None) -> dict[str, Any]:
     """Build a proof-preserving cross-DAG import for unchanged task blocks."""
     from grill_core import partition
     target_raw = _task_evidence_bytes(root, target_dag_ref)
@@ -1200,9 +1202,15 @@ def _task_rebase_inputs(root: str | Path, work_id: str, run_id: str, target_dag_
                          capture_output=True, check=False)
     if old.returncode:
         _fail("TASK-IMPORT-EVIDENCE-MISSING", "source tasks commit is unavailable")
+    new = (subprocess.run(["git", "-C", str(root), "show", f"{target_commit}:{tasks_ref}"],
+                          capture_output=True, check=False)
+           if target_commit else None)
+    if new is not None and new.returncode:
+        _fail("TASK-IMPORT-EVIDENCE-MISSING", "target tasks commit is unavailable")
     try:
         old_text = old.stdout.decode("utf-8")
-        new_text = _task_evidence_bytes(root, tasks_ref).decode("utf-8")
+        new_text = ((new.stdout if new is not None else _task_evidence_bytes(root, tasks_ref))
+                    .decode("utf-8"))
         old_tasks = {task.id: task for task in partition.parse_task_files(old_text, feature=target_dag["feature"], root=root)}
         new_tasks = {task.id: task for task in partition.parse_task_files(new_text, feature=target_dag["feature"], root=root)}
     except (UnicodeError, partition.PartitionError) as exc:

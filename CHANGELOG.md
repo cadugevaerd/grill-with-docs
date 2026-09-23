@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.25
+
+- Fix: revalida imports v2 históricos contra o `tasks.md` do commit intermediário, permitindo rebases encadeados quando o DAG atual já avançou.
+
 ## 6.0.24
 
 - Fix: `gauntlet-tasks-reconcile` resolve run e nó originais pela cadeia de imports/rebases revalidada, preservando sidecars e receipts históricos; evidência ausente ou divergente continua bloqueada.
