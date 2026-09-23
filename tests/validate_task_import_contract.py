@@ -264,6 +264,34 @@ class TaskImportContract(unittest.TestCase):
         self.assertEqual((code, reconciled.get('marked')), (0, ['T007', 'T008', 'T009']), reconciled)
         self.assertEqual(self.command('--apply', '--expected-sha256', preview['expected_sha256'])[1]['verdict'], 'REUSED')
 
+    def test_cross_dag_rebase_preserves_only_unchanged_accepted_tasks(self):
+        self.apply()
+        source_run, source_commit = self.target, self.git('rev-parse', 'HEAD')
+        text = (self.root / self.tasks_ref).read_text()
+        text += (f'## Phase 5: New work\n- [ ] T012 New\n'
+                 f'  Files: ["new.py", "{self.result("T012")}"]\n'
+                 f'  Result: "{self.result("T012")}"\n')
+        self.write(self.tasks_ref, text)
+        target_dag, _ = partition.partition_task_files(text, feature='demo', groups=2, root=self.root)
+        target_ref = 'specs/demo/execution-dag.r4.json'
+        self.write(target_ref, json.dumps(target_dag))
+        self.git('add', '.')
+        self.git('commit', '-qm', 'successor dag')
+        admission = self.identity('4')
+        successor = runs.admit_or_reuse_run(self.root, WORK, admission)['run_id']
+        preview = runs.rebase_task_results(self.root, WORK, successor, target_ref, source_run,
+            self.dag_ref, ['T007', 'T008', 'T009'], admission, source_commit=source_commit)
+        applied = runs.rebase_task_results(self.root, WORK, successor, target_ref, source_run,
+            self.dag_ref, ['T007', 'T008', 'T009'], admission, source_commit=source_commit,
+            apply=True, expected_sha256=preview['expected_sha256'])
+        self.assertEqual(applied['verdict'], 'APPLIED')
+        verified = runs.verified_task_import(self.root, WORK, successor)
+        self.assertEqual(set(verified['tasks']), {'T007', 'T008', 'T009'})
+        self.assertEqual(set(verified['nodes']), {'p03-a', 'p03-b'})
+        self.assertEqual(runs.rebase_task_results(self.root, WORK, successor, target_ref, source_run,
+            self.dag_ref, ['T007', 'T008', 'T009'], admission,
+            source_commit=source_commit)['verdict'], 'REUSED')
+
     def test_6020_import_projects_canonical_bindings_without_rewriting_receipts(self):
         _, applied = self.apply()
         imported = copy.deepcopy(applied['import'])

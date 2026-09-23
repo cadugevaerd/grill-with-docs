@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v6.0.22
+# Grill with Docs v6.0.23
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -51,6 +51,8 @@ Em frontend, plan inclui Impeccable observado, HTML autocontido, capturas PNG e 
 Tasks novas seguem `<!-- grill-task-files:v1 -->`: `Files:` array JSON imediatamente após cada tarefa; `Result:` explícito por tarefa despachável também declarado em Files. Raiz, arquivo novo e prefixo `./` são válidos; texto com barras não concede escrita. Sem grant parcial, glob, traversal, symlink, escopo fora da entrega ou sidecar implícito. `Files: []` é read-only; reserva de evidência torna a tarefa inteira deferred ao líder. Em cada fase, convergir workers e aceitar read-only/deferred na ordem declarada antes da próxima; aceites positivos vinculam task/fase/fingerprint/DAG. Última fase pendente bloqueia fechamento. `PARTITION-NO-WORKERS` exige parar antes de admissão, DAG-VALID e checkpoint, sem worker fictício.
 
 Resultados já integrados de múltiplos runs podem entrar em um successor admitido e ainda sem despacho por `gauntlet-tasks-import --run-id SUCCESSOR --dag DAG --source-task TASK=SOURCE_RUN` repetido. Use preview e `--apply --expected-sha256 HASH`, importando nós completos do mesmo DAG v2 com tentativa, sidecar commitado e receipts positivos de término/convergência/cleanup. Reconcile e scheduler consomem o receipt sem reexecutar tasks nem editar a história; veja o contrato e as recusas no [protocolo de sessão](references/session-protocol.md).
+
+Se uma correção formal produzir novo DAG, use `gauntlet-tasks-rebase` num successor admitido e ainda sem despacho. Ele revalida o source run/DAG, o commit histórico de `tasks.md`, receipts importados/atividades aceitas e o fingerprint individual de cada `--task`; transporta apenas nós completos e aceita tarefa read-only/deferred individual. `TASK-REBASE-STALE` exige reexecutar a tarefa alterada, nunca copiar o aceite.
 
 Novos trabalhos exigem o contrato integral como obrigação normativa; isso não descreve a garantia atual de init/adopt. Legado precisa adoção/migração explícita antes de executar no novo binário; não reescrever DAG selado nem reinterpretar tasks históricas. O ciclo que produz 6.0.0 conserva bundle/CLI absoluto e pins históricos até ship; ensaios usam projeto isolado. Só depois adotar explicitamente o work item COMPLETE, importando referências e inventário sem repetir etapas. Publicação continua pelo ciclo/gates canônicos, nunca por esta entrada plan-only.
 

@@ -1350,6 +1350,7 @@ class Hygiene(Base):
             # to the same closed coordinator-only surface.
             "gauntlet-run-abandon": "gauntlet_run_abandon_command",
             "gauntlet-tasks-import": "gauntlet_tasks_import_command",
+            "gauntlet-tasks-rebase": "gauntlet_tasks_rebase_command",
         }
 
         parser_commands = {

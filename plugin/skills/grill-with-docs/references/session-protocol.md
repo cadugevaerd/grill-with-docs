@@ -1,4 +1,4 @@
-# Protocolo de sessão v6.0.22
+# Protocolo de sessão v6.0.23
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -108,6 +108,18 @@ Inspecione `import.tasks`, `source_proofs`, `result_commit`, `receipt_sha256` e 
 Cada task fixa task/nó/fase/fingerprint, os hashes canônico e de bytes do DAG, source run, tentativa da linhagem, caminho/hash do sidecar e receipts positivos de término/convergência/cleanup do worker e da wave. Os sidecars devem coincidir com os bytes já commitados no HEAD capturado pelo preview; receipts antigos não selavam esses hashes, então o novo receipt sela essa associação estrutural, sem alegar prova criptográfica de execução. Cleanup deve estar `CLEANED`, wave `COMPLETE` e convergida; grant divergente, tentativa supersedida, nó parcial ou resultado não integrado recusam. Nenhum DAG, sidecar, source run ou receipt histórico é reescrito, nenhum worker/wave fictício é criado e nenhum recurso é despachado.
 
 Depois do import, `gauntlet-tasks-reconcile --run-id SUCCESSOR --dag DAG` reconhece os source runs aceitos; `--apply` marca somente checkboxes. A barreira de fase e a prontidão/convergência dos nós leem o mesmo import com revalidação de receipts e hashes. Tasks read-only/deferred continuam exigindo seus aceites próprios. Um nó importado recusa novo despacho com `TASK-ALREADY-IMPORTED`; se todos os nós foram importados, o successor fica `COMPLETE`. Mudança posterior de evidência bloqueia o consumo em vez de reaproveitar aceite stale.
+
+Quando `tasks.md` muda formalmente e `partition-emit` sela uma revisão nova do DAG, não force o import do DAG anterior. Admita um run successor vazio e use preview-first:
+
+```text
+python3 -B .../grill_workspace.py gauntlet-tasks-rebase ROOT --work-id ID \
+  --run-id SUCCESSOR --dag specs/FEATURE/execution-dag.r4.json \
+  --source-run-id SOURCE --source-dag specs/FEATURE/execution-dag.r3.json \
+  --source-commit COMMIT --task T007 --task T008 --task T009 --task T010 \
+  --session-ref SESSION
+```
+
+O apply usa `--apply --expected-sha256 HASH`. Cada tarefa é comparada isoladamente incluindo fase, título e bloco `task/Files/Result` com checkbox normalizado. O source import e atividades aceitas são revalidados no DAG antigo; o destino fixa o DAG novo. Nó parcialmente transportado recusa, tarefa alterada retorna `TASK-REBASE-STALE`, e qualquer mudança posterior em source, commit, DAG, receipt ou Store bloqueia. O run antigo nunca é reescrito ou abandonado pelo comando.
 
 A campanha que constrói a candidata continua usando o bundle histórico preservado, seu CLI absoluto e onze entrypoints pinados; revalidar o manifest ao retomar/trocar sessão. Ensaiar 6.0.0 em outro projeto/sessão. Só depois do ship encerrado adotar explicitamente o work item histórico COMPLETE para importar referências/inventário sem reabrir etapas ou reatestar o passado. Não alterar Constituição, WORKFLOW, ESSENTIAL, tabelas, classes worker-required ou registries/catálogos v3/v4 nesta transição.
 

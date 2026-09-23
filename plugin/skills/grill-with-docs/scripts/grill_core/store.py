@@ -899,10 +899,38 @@ def _validate_gauntlet_block(value: Any, work_id: str) -> None:
         # the CLI boundary by attestation._validate_human_authorization.
         if "abandon_authorization" in run and not isinstance(run["abandon_authorization"], dict): _invalid(f"invalid gauntlet abandon_authorization: {run_id}")
         if "task_import" in run:
-            imported = _closed_object(run["task_import"], {"schema", "work_id", "run_id", "dag_ref", "dag_sha256",
-                "dag_content_sha256", "tasks_semantic_sha256", "source_tasks", "result_commit", "store_sha256",
-                "tasks", "nodes", "source_proofs"}, f"gauntlet task_import {run_id}")
-            if (imported.get("schema") != "grill-task-import/v1"
+            imported_raw = run["task_import"]
+            if isinstance(imported_raw, dict) and imported_raw.get("schema") == "grill-task-import/v2":
+                imported = _closed_object(imported_raw, {"schema", "work_id", "run_id", "dag_ref", "dag_sha256",
+                    "dag_content_sha256", "tasks_semantic_sha256", "source_run_id", "source_dag_ref",
+                    "source_dag_sha256", "source_dag_content_sha256", "source_commit", "store_sha256",
+                    "tasks", "nodes"}, f"gauntlet task_import {run_id}")
+                if (imported.get("work_id") != work_id or imported.get("run_id") != run_id
+                        or imported.get("source_run_id") == run_id
+                        or imported.get("dag_content_sha256") != run.get("dag_content_sha256")
+                        or not isinstance(imported.get("tasks"), dict) or not imported["tasks"]
+                        or not isinstance(imported.get("nodes"), list)
+                        or any(not isinstance(node, str) or not SAFE_NAME_RE.fullmatch(node) for node in imported["nodes"])
+                        or len(set(imported["nodes"])) != len(imported["nodes"])):
+                    _invalid(f"invalid gauntlet task_import: {run_id}")
+                for ref in ("dag_ref", "source_dag_ref"):
+                    _safe_relative_path(imported[ref], f"task import {ref}")
+                for key in ("dag_sha256", "dag_content_sha256", "tasks_semantic_sha256",
+                            "source_dag_sha256", "source_dag_content_sha256", "store_sha256"):
+                    if not isinstance(imported[key], str) or not HEX64_RE.fullmatch(imported[key]):
+                        _invalid(f"invalid task import digest: {key}")
+                if not isinstance(imported["source_commit"], str) or not HEX40_RE.fullmatch(imported["source_commit"]):
+                    _invalid("invalid task import source commit")
+                for task_id, task in imported["tasks"].items():
+                    if (not isinstance(task_id, str) or not isinstance(task, dict) or task.get("state") != "ACCEPTED"
+                            or task.get("source_run_id") != imported["source_run_id"]
+                            or task.get("node_id") is not None and task.get("node_id") not in imported["nodes"]):
+                        _invalid(f"invalid imported task: {task_id}")
+            else:
+                imported = _closed_object(imported_raw, {"schema", "work_id", "run_id", "dag_ref", "dag_sha256",
+                    "dag_content_sha256", "tasks_semantic_sha256", "source_tasks", "result_commit", "store_sha256",
+                    "tasks", "nodes", "source_proofs"}, f"gauntlet task_import {run_id}")
+                if (imported.get("schema") != "grill-task-import/v1"
                     or imported.get("work_id") != work_id or imported.get("run_id") != run_id
                     or imported.get("dag_content_sha256") != run.get("dag_content_sha256")
                     or not isinstance(imported.get("tasks"), dict) or not imported["tasks"]
@@ -913,19 +941,19 @@ def _validate_gauntlet_block(value: Any, work_id: str) -> None:
                     or any(not isinstance(node, str) or not SAFE_NAME_RE.fullmatch(node) for node in imported["nodes"])
                     or len(set(imported["nodes"])) != len(imported["nodes"])
                     or set(imported["source_proofs"]) != set(imported["nodes"])):
-                _invalid(f"invalid gauntlet task_import: {run_id}")
-            _safe_relative_path(imported["dag_ref"], "task import DAG")
-            for key in ("dag_sha256", "tasks_semantic_sha256", "store_sha256"):
-                if not isinstance(imported[key], str) or not HEX64_RE.fullmatch(imported[key]):
-                    _invalid(f"invalid task import digest: {key}")
-            if not isinstance(imported["result_commit"], str) or not HEX40_RE.fullmatch(imported["result_commit"]):
-                _invalid("invalid task import result commit")
-            for task_id, task in imported["tasks"].items():
-                if (not isinstance(task_id, str) or not isinstance(task, dict) or task.get("state") != "ACCEPTED"
-                        or task.get("node_id") not in imported["nodes"]
-                        or task.get("source_run_id") != imported["source_tasks"][task_id]
-                        or task.get("source_run_id") == run_id):
-                    _invalid(f"invalid imported task: {task_id}")
+                    _invalid(f"invalid gauntlet task_import: {run_id}")
+                _safe_relative_path(imported["dag_ref"], "task import DAG")
+                for key in ("dag_sha256", "tasks_semantic_sha256", "store_sha256"):
+                    if not isinstance(imported[key], str) or not HEX64_RE.fullmatch(imported[key]):
+                        _invalid(f"invalid task import digest: {key}")
+                if not isinstance(imported["result_commit"], str) or not HEX40_RE.fullmatch(imported["result_commit"]):
+                    _invalid("invalid task import result commit")
+                for task_id, task in imported["tasks"].items():
+                    if (not isinstance(task_id, str) or not isinstance(task, dict) or task.get("state") != "ACCEPTED"
+                            or task.get("node_id") not in imported["nodes"]
+                            or task.get("source_run_id") != imported["source_tasks"][task_id]
+                            or task.get("source_run_id") == run_id):
+                        _invalid(f"invalid imported task: {task_id}")
         if not isinstance(run["waves"], dict) or not isinstance(run["workers"], dict): _invalid(f"invalid gauntlet maps: {run_id}")
         for wave_id, wave in run["waves"].items():
             if not isinstance(wave_id, str) or not SAFE_NAME_RE.match(wave_id): _invalid(f"invalid gauntlet wave: {run_id}")

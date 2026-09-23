@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.23
+
+- Adiciona `gauntlet-tasks-rebase` para suceder DAGs selados preservando apenas aceites de tarefas individualmente idênticas, com preview/CAS, revalidação histórica e consumo pelo scheduler.
+
 ## 6.0.22
 
 - Fix: o líder canônico ativo pode revalidar apresentação após upgrade de GWD/configuração no mesmo contexto, com nova carga aprovada e CAS, preservando runs, DAG, aceites e histórico.

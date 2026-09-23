@@ -912,7 +912,7 @@ def _task_import_receipt(work_id: str, run_id: str, run: Mapping[str, Any],
 
 def _task_import_inputs(root: str | Path, work_id: str, run_id: str, dag_ref: str,
                         sources: Mapping[str, str], *, result_commit: str,
-                        store_sha256: str) -> dict[str, Any]:
+                        store_sha256: str, tasks_commit: str | None = None) -> dict[str, Any]:
     # Lazy import avoids partition's own scheduler import during module loading.
     from grill_core import partition
     raw = _task_evidence_bytes(root, dag_ref)
@@ -921,7 +921,15 @@ def _task_import_inputs(root: str | Path, work_id: str, run_id: str, dag_ref: st
     if dag["schema"] != DAG_V2_SCHEMA:
         _fail("TASK-FILES-MIGRATION-REQUIRED", "task import requires a v2 DAG")
     _validate_dag_scope(nodes)
-    text = _task_evidence_bytes(root, f"specs/{dag['feature']}/tasks.md").decode("utf-8")
+    tasks_ref = f"specs/{dag['feature']}/tasks.md"
+    if tasks_commit is None:
+        text = _task_evidence_bytes(root, tasks_ref).decode("utf-8")
+    else:
+        historical = subprocess.run(["git", "-C", str(root), "show", f"{tasks_commit}:{tasks_ref}"],
+                                    capture_output=True, check=False)
+        if historical.returncode:
+            _fail("TASK-IMPORT-EVIDENCE-MISSING", "historical tasks source is unavailable")
+        text = historical.stdout.decode("utf-8")
     try:
         tasks = {task.id: task for task in partition.parse_task_files(text, feature=dag["feature"], root=root)}
         semantic = partition.tasks_semantic_sha256(text, tasks.values())
@@ -1021,7 +1029,8 @@ def _task_import_inputs(root: str | Path, work_id: str, run_id: str, dag_ref: st
 
 
 def verified_task_import(root: str | Path, work_id: str, run_id: str,
-                          run: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
+                          run: Mapping[str, Any] | None = None, *,
+                          tasks_commit: str | None = None) -> dict[str, Any] | None:
     """Revalidate immutable import, original receipts and sidecars on every use."""
     if run is None:
         run = _read_runs(root, work_id).get(run_id)
@@ -1030,9 +1039,26 @@ def verified_task_import(root: str | Path, work_id: str, run_id: str,
     imported = run.get("task_import")
     if imported is None:
         return None
+    if isinstance(imported, Mapping) and imported.get("schema") == "grill-task-import/v2":
+        try:
+            fresh = _task_rebase_inputs(root, work_id, run_id, imported["dag_ref"],
+                imported["source_run_id"], imported["source_dag_ref"], list(imported["tasks"]),
+                source_commit=imported["source_commit"], store_sha256=imported["store_sha256"])
+        except (KeyError, TypeError, ValueError) as exc:
+            _fail("TASK-IMPORT-DIVERGENT", f"invalid rebase evidence: {exc}")
+        if fresh != imported or run.get("dag_content_sha256") != imported["dag_content_sha256"]:
+            _fail("TASK-IMPORT-DIVERGENT", "rebase evidence changed")
+        imported_nodes = set(imported["nodes"])
+        if (any(worker["node_id"] in imported_nodes for worker in run["workers"].values())
+                or any(imported_nodes.intersection(wave["node_ids"]) for wave in run["waves"].values())):
+            _fail("TASK-IMPORT-DIVERGENT", "rebased nodes also have local workers or waves")
+        receipt, event = _task_import_receipt(work_id, run_id, run, dict(imported))
+        _require_receipted_event(root, event, receipt, store.read_events(root))
+        return dict(imported)
     try:
         fresh = _task_import_inputs(root, work_id, run_id, imported["dag_ref"], imported["source_tasks"],
-            result_commit=imported["result_commit"], store_sha256=imported["store_sha256"])
+            result_commit=imported["result_commit"], store_sha256=imported["store_sha256"],
+            tasks_commit=tasks_commit)
     except (KeyError, TypeError, ValueError) as exc:
         _fail("TASK-IMPORT-DIVERGENT", f"invalid import evidence: {exc}")
     if fresh != imported or run.get("dag_content_sha256") != imported["dag_content_sha256"]:
@@ -1097,6 +1123,178 @@ def import_task_results(root: str | Path, work_id: str, run_id: str, dag_ref: st
             dag = store.loads(_task_evidence_bytes(root, dag_ref).decode("utf-8"))
             if set(imported["nodes"]) == {node["id"] for node in dag["nodes"]}:
                 target["state"] = "COMPLETE"
+            return document
+        store.transact_with_event(root, mutate, event=event, receipt=receipt)
+        return {**payload, "verdict": "APPLIED"}
+
+
+def _accepted_source_tasks(root: str | Path, work_id: str, source_run_id: str,
+                           source_dag: Mapping[str, Any], source_digest: str,
+                           source_commit: str) -> dict[str, Any]:
+    """Revalidate accepted worker and leader tasks from one historical DAG."""
+    runs = _read_runs(root, work_id)
+    source_run = runs.get(source_run_id)
+    if not isinstance(source_run, Mapping):
+        _fail("RUN-NOT-FOUND", f"source run is absent: {source_run_id}")
+    _require_dag_pin(source_run, source_digest)
+    accepted = copy.deepcopy(source_dag.get("accepted_tasks") or {})
+    imported = verified_task_import(root, work_id, source_run_id, source_run,
+                                    tasks_commit=source_commit)
+    if imported:
+        accepted.update(imported["tasks"])
+    snapshot = store.read_snapshot(root).document
+    item = snapshot.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
+    if not isinstance(item, Mapping):
+        return accepted
+    contexts = item.get("contexts", {})
+    lineage, cursor = set(), item.get("current_context_id")
+    while isinstance(cursor, str) and cursor not in lineage:
+        context = contexts.get(cursor)
+        if not isinstance(context, Mapping):
+            _fail("TASK-PHASE-PENDING", "context lineage is incomplete")
+        lineage.add(cursor)
+        cursor = context.get("predecessor_context_id")
+    if cursor is not None:
+        _fail("TASK-PHASE-PENDING", "context lineage is cyclic")
+    semantic = source_dag["tasks_semantic_sha256"]
+    for activity_id, activity in item.get("activities", {}).items():
+        if not isinstance(activity, Mapping) or activity.get("state") != "ACCEPTED":
+            continue
+        binding = activity.get("task_binding")
+        context_id = activity.get("context_id")
+        if (activity.get("step_id") != "implement-parallel" or context_id not in lineage
+                or activity.get("accepted_by_context") != context_id or not isinstance(binding, Mapping)
+                or binding.get("tasks_semantic_sha256") != semantic
+                or binding.get("dag_content_sha256") != source_digest):
+            continue
+        task_id = binding.get("task_id")
+        if isinstance(task_id, str):
+            accepted[task_id] = {"state": "ACCEPTED", "task_binding": dict(binding),
+                "activity_id": activity_id, "acceptance_ref": activity.get("acceptance_ref")}
+    return accepted
+
+
+def _task_rebase_inputs(root: str | Path, work_id: str, run_id: str, target_dag_ref: str,
+                        source_run_id: str, source_dag_ref: str, task_ids: list[str], *,
+                        source_commit: str, store_sha256: str) -> dict[str, Any]:
+    """Build a proof-preserving cross-DAG import for unchanged task blocks."""
+    from grill_core import partition
+    target_raw = _task_evidence_bytes(root, target_dag_ref)
+    source_raw = _task_evidence_bytes(root, source_dag_ref)
+    target_dag = store.loads(target_raw.decode("utf-8"))
+    source_dag = store.loads(source_raw.decode("utf-8"))
+    target_nodes = _validate_dag_structure(target_dag)
+    _validate_dag_structure(source_dag)
+    if target_dag.get("schema") != DAG_V2_SCHEMA or source_dag.get("schema") != DAG_V2_SCHEMA:
+        _fail("TASK-FILES-MIGRATION-REQUIRED", "task rebase requires v2 DAGs")
+    if target_dag["feature"] != source_dag["feature"]:
+        _fail("TASK-IMPORT-DIVERGENT", "source and target features differ")
+    target_digest, source_digest = store.jcs_sha256(target_dag), store.jcs_sha256(source_dag)
+    source_accepted = _accepted_source_tasks(root, work_id, source_run_id, source_dag,
+                                             source_digest, source_commit)
+    if (not task_ids or len(set(task_ids)) != len(task_ids)
+            or any(task_id not in source_accepted for task_id in task_ids)):
+        _fail("TASK-IMPORT-DIVERGENT", "rebase tasks must be accepted by the source run")
+    tasks_ref = f"specs/{target_dag['feature']}/tasks.md"
+    old = subprocess.run(["git", "-C", str(root), "show", f"{source_commit}:{tasks_ref}"],
+                         capture_output=True, check=False)
+    if old.returncode:
+        _fail("TASK-IMPORT-EVIDENCE-MISSING", "source tasks commit is unavailable")
+    try:
+        old_text = old.stdout.decode("utf-8")
+        new_text = _task_evidence_bytes(root, tasks_ref).decode("utf-8")
+        old_tasks = {task.id: task for task in partition.parse_task_files(old_text, feature=target_dag["feature"], root=root)}
+        new_tasks = {task.id: task for task in partition.parse_task_files(new_text, feature=target_dag["feature"], root=root)}
+    except (UnicodeError, partition.PartitionError) as exc:
+        _fail("TASK-IMPORT-DIVERGENT", f"task source is invalid: {exc}")
+    if partition.tasks_semantic_sha256(old_text, old_tasks.values()) != source_dag["tasks_semantic_sha256"]:
+        _fail("TASKS-SOURCE-STALE", "source commit differs from the sealed source DAG")
+    if partition.tasks_semantic_sha256(new_text, new_tasks.values()) != target_dag["tasks_semantic_sha256"]:
+        _fail("TASKS-SOURCE-STALE", "tasks.md differs from the target DAG")
+    tasks: dict[str, Any] = {}
+    for task_id in task_ids:
+        if task_id not in old_tasks or task_id not in new_tasks:
+            _fail("TASK-IMPORT-DIVERGENT", f"task is absent from one DAG: {task_id}")
+        old_fp = partition.task_semantic_sha256(old_text, old_tasks[task_id])
+        new_fp = partition.task_semantic_sha256(new_text, new_tasks[task_id])
+        if old_fp != new_fp:
+            _fail("TASK-REBASE-STALE", f"task changed across DAGs: {task_id}")
+        source = source_accepted[task_id]
+        tasks[task_id] = {"state": "ACCEPTED", "node_id": next(
+                (node_id for node_id, node in target_nodes.items() if task_id in node["task_ids"]), None),
+            "source_run_id": source_run_id, "source_task_sha256": old_fp,
+            "source_binding": copy.deepcopy(source.get("task_binding")),
+            "source_activity_id": source.get("activity_id"),
+            "source_acceptance_ref": source.get("acceptance_ref"),
+            "task_binding": {"task_id": task_id, "phase": str(new_tasks[task_id].phase),
+                "tasks_semantic_sha256": target_dag["tasks_semantic_sha256"],
+                "dag_content_sha256": target_digest}}
+        for key in ("worker_id", "wave_id", "attempt_id", "result_ref", "result_sha256"):
+            if key in source:
+                tasks[task_id][key] = source[key]
+    imported_nodes = []
+    for node_id, node in target_nodes.items():
+        overlap = set(node["task_ids"]).intersection(task_ids)
+        if overlap and overlap != set(node["task_ids"]):
+            _fail("TASK-IMPORT-DIVERGENT", f"rebase the complete target node: {node_id}")
+        if overlap:
+            imported_nodes.append(node_id)
+    return {"schema": "grill-task-import/v2", "work_id": work_id, "run_id": run_id,
+        "dag_ref": target_dag_ref, "dag_sha256": hashlib.sha256(target_raw).hexdigest(),
+        "dag_content_sha256": target_digest, "tasks_semantic_sha256": target_dag["tasks_semantic_sha256"],
+        "source_run_id": source_run_id, "source_dag_ref": source_dag_ref,
+        "source_dag_sha256": hashlib.sha256(source_raw).hexdigest(),
+        "source_dag_content_sha256": source_digest, "source_commit": source_commit,
+        "store_sha256": store_sha256, "tasks": tasks, "nodes": sorted(imported_nodes)}
+
+
+def rebase_task_results(root: str | Path, work_id: str, run_id: str, target_dag_ref: str,
+                        source_run_id: str, source_dag_ref: str, task_ids: list[str],
+                        admission: Mapping[str, str], *, source_commit: str,
+                        apply: bool = False, expected_sha256: str | None = None) -> dict[str, Any]:
+    """Import unchanged accepted tasks into an undispatched successor DAG."""
+    import contextlib
+    with store.work_lock(root, work_id) if apply else contextlib.nullcontext():
+        if apply:
+            _require_orchestration_authority(root, work_id, "tasks-rebase")
+            store.recover_pending_transition(root)
+        run = _run_for_worker(root, work_id, run_id, admission, purpose="cleanup")
+        previous = verified_task_import(root, work_id, run_id, run)
+        if previous is not None:
+            if (previous.get("schema") != "grill-task-import/v2" or previous.get("dag_ref") != target_dag_ref
+                    or previous.get("source_run_id") != source_run_id
+                    or previous.get("source_dag_ref") != source_dag_ref
+                    or list(previous.get("tasks", {})) != task_ids):
+                _fail("TASK-IMPORT-DIVERGENT", "successor already has a different import")
+            digest = store.jcs_sha256(previous)
+            receipt, event = _task_import_receipt(work_id, run_id, run, previous)
+            return {"verdict": "REUSED", "work_id": work_id, "run_id": run_id,
+                "expected_sha256": digest, "receipt_sha256": event["receipt_sha256"], "import": previous}
+        _require_task_import_eligible(run)
+        imported = _task_rebase_inputs(root, work_id, run_id, target_dag_ref, source_run_id,
+            source_dag_ref, task_ids, source_commit=source_commit,
+            store_sha256=store.read_snapshot(root).content_sha256)
+        _require_dag_pin(run, imported["dag_content_sha256"], expect_placeholder=True)
+        digest = store.jcs_sha256(imported)
+        receipt, event = _task_import_receipt(work_id, run_id, run, imported)
+        payload = {"verdict": "PREVIEW", "work_id": work_id, "run_id": run_id,
+            "expected_sha256": digest, "receipt_sha256": event["receipt_sha256"], "import": imported}
+        if not apply:
+            return payload
+        if expected_sha256 != digest:
+            _fail("TASK-IMPORT-CAS-CONFLICT", "rebase changed since preview")
+        def mutate(document: dict[str, Any]) -> dict[str, Any]:
+            if document["content_sha256"] != imported["store_sha256"]:
+                _fail("TASK-IMPORT-CAS-CONFLICT", "Store changed since preview")
+            fresh = _task_rebase_inputs(root, work_id, run_id, target_dag_ref, source_run_id,
+                source_dag_ref, task_ids, source_commit=source_commit,
+                store_sha256=document["content_sha256"])
+            if fresh != imported:
+                _fail("TASK-IMPORT-CAS-CONFLICT", "rebase evidence changed before commit")
+            target = document["work_items"][work_id]["gauntlet"]["runs"][run_id]
+            _require_task_import_eligible(target)
+            target["dag_content_sha256"] = imported["dag_content_sha256"]
+            target["task_import"] = copy.deepcopy(imported)
             return document
         store.transact_with_event(root, mutate, event=event, receipt=receipt)
         return {**payload, "verdict": "APPLIED"}

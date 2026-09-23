@@ -4169,6 +4169,24 @@ def gauntlet_tasks_import_command(args: argparse.Namespace) -> tuple[dict[str, A
 
 
 @_gauntlet_authorized
+def gauntlet_tasks_rebase_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Carry unchanged accepted tasks into a newly partitioned successor DAG."""
+    root, runs, admission, record = gauntlet_run_admission(args)
+    try:
+        execute_floor, markdown_floor = _tier_floors(record)
+        runs.validate_execution_dag(root, args.work_id, args.run_id, args.dag, admission,
+            agent_execute_floor=execute_floor, markdown_floor=markdown_floor)
+        return runs.rebase_task_results(root, args.work_id, args.run_id, args.dag,
+            args.source_run_id, args.source_dag, args.task, admission,
+            source_commit=args.source_commit, apply=args.apply,
+            expected_sha256=args.expected_sha256), EXIT_OK
+    except (runs.GauntletRunError, runs.store.StoreError) as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+    except (UnicodeError, ValueError) as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-IMPORT-DIVERGENT", "invalid evidence document") from error
+
+
+@_gauntlet_authorized
 def gauntlet_tasks_reconcile_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     store = grill_core_module("store")
@@ -6439,6 +6457,18 @@ def build_parser() -> JsonParser:
     tasks_import_parser.add_argument("--apply", action="store_true")
     tasks_import_parser.add_argument("--expected-sha256")
     tasks_import_parser.add_argument("--session-ref")
+    tasks_rebase_parser = subparsers.add_parser("gauntlet-tasks-rebase")
+    tasks_rebase_parser.add_argument("root")
+    tasks_rebase_parser.add_argument("--work-id", required=True)
+    tasks_rebase_parser.add_argument("--run-id", required=True)
+    tasks_rebase_parser.add_argument("--dag", required=True)
+    tasks_rebase_parser.add_argument("--source-run-id", required=True)
+    tasks_rebase_parser.add_argument("--source-dag", required=True)
+    tasks_rebase_parser.add_argument("--source-commit", required=True)
+    tasks_rebase_parser.add_argument("--task", action="append", required=True)
+    tasks_rebase_parser.add_argument("--apply", action="store_true")
+    tasks_rebase_parser.add_argument("--expected-sha256")
+    tasks_rebase_parser.add_argument("--session-ref")
     tasks_reconcile_parser = subparsers.add_parser("gauntlet-tasks-reconcile")
     tasks_reconcile_parser.add_argument("root")
     tasks_reconcile_parser.add_argument("--work-id", required=True)
@@ -6613,6 +6643,7 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-partition-brief": gauntlet_partition_brief_command,
             "gauntlet-tasks-reconcile": gauntlet_tasks_reconcile_command,
             "gauntlet-tasks-import": gauntlet_tasks_import_command,
+            "gauntlet-tasks-rebase": gauntlet_tasks_rebase_command,
             "task-files-migrate": task_files_migrate_command,
             "gauntlet-dag-validate": gauntlet_dag_validate_command,
             "gauntlet-wave-declare": gauntlet_wave_declare_command,
