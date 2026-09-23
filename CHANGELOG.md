@@ -1,5 +1,10 @@
 # Changelog
 
+## 6.0.22
+
+- Fix: o líder canônico ativo pode revalidar apresentação após upgrade de GWD/configuração no mesmo contexto, com nova carga aprovada e CAS, preservando runs, DAG, aceites e histórico.
+- Sessão, runtime, escopo e policy continuam fixos; carga stale, apresentação inválida, autoridade divergente e corrida de contexto falham fechado.
+
 ## 6.0.21
 
 - Fix: as barreiras de fase do scheduler usam o hash canônico do conteúdo do DAG, igual ao retornado por `gauntlet-dag-validate` e aos bindings de atividades aceitas; diferenças de formatação não geram `TASK-PHASE-PENDING` falso.

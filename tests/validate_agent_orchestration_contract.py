@@ -257,15 +257,8 @@ class AgentOrchestrationContract(unittest.TestCase):
                     show["result"]["terminal"]["incarnationId"] = "new-incarnation"
                 else:
                     transcript["result"]["sourceIdentity"] = "current-config-changed"
-                    policy_raw = (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes()
-                    _, pending = core.project_leader_presentation(adapter, policy=json.loads(policy_raw),
-                        policy_sha256=grill_workspace.hash_bytes(policy_raw),
-                        gwd_skill_sha256=grill_workspace.hash_bytes((grill_workspace.ASSETS.parent / "SKILL.md").read_bytes()),
-                        runtime="codex", scope={"kind": "gwd", "root": str(root), "work_id": "work-x"})
-                    transcript["result"]["transcript"]["messages"][1]["blocks"][0]["output"] = json.dumps(
-                        {"verdict": "BLOCKED", "code": "STYLE-LOAD-UNCONFIRMED", "presentation": pending})
                 with self.subTest(mutation=mutation), mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
-                    self.assertEqual(invoke(commands[0])[1]["code"], "STYLE-SCOPE-CONFLICT" if mutation == "config" else "LEADER-AUTHORITY-UNPROVEN")
+                    self.assertEqual(invoke(commands[0])[1]["code"], "STYLE-LOAD-UNCONFIRMED" if mutation == "config" else "LEADER-AUTHORITY-UNPROVEN")
                     self.assertEqual(invoke(commands[10])[0], 2)
             self.assertEqual(store.read_snapshot(root).content_sha256, before)
 

@@ -105,6 +105,117 @@ class TaskImportContract(unittest.TestCase):
         self.assertEqual((code, result.get('verdict')), (0, 'APPLIED'), result)
         return preview, result
 
+    def test_same_context_presentation_refresh_preserves_imported_history(self):
+        self.apply()
+        fixture = fixtures.orchestration_fixture
+        contract = cli.grill_core_module('agent_orchestration')
+        with fixture.offline_leader(cli):
+            skill = cli.ASSETS.parent / 'SKILL.md'
+            body = skill.read_text()
+            heading = next(line for line in body.splitlines() if line.startswith('# Grill with Docs v'))
+            skill.write_text(body.replace(heading, '# Grill with Docs v6.0.20'))
+            ready = cli._session_readiness(self.root, 'codex', fixture.SESSION, work_id=WORK)
+            inputs = contract.adoption_inputs(work_id=WORK, runtime='codex', session_ref=fixture.SESSION,
+                session_observation=ready, presentation=ready['presentation'], scope_files=[],
+                origin=dict(state_sha256='1' * 64, metadata_sha256='2' * 64, activation=None,
+                            campaign=None, lifecycle='ACTIVE', worktree=dict(root=str(self.root), branch=self.git('branch', '--show-current'))))
+            item = contract.new_work_item(inputs, policy_ref='assets/agent-orchestration.v1.json',
+                policy_sha256=ready['presentation']['policy_sha256'], adopted_at='2026-09-22T00:00:00Z', context_id='ctx-epoch16')
+            context = item['contexts']['ctx-epoch16']
+            context['epoch'] = context['leader']['epoch'] = context['leader']['fence'] = 16
+            store.transact(self.root, lambda document: cli._bind_orchestration(document, WORK, item))
+            before = store.read_snapshot(self.root)
+            files = self.footprint()
+            events = store.read_events(self.root)
+            skill.write_text(body.replace(heading, '# Grill with Docs v6.0.21'))
+            adapter, show, transcript = fixture.boundary(cli, self.root, 'codex', fixture.SESSION, WORK)
+            probe = adapter.presentation_probe
+            def upgraded_axes(*args):
+                axes = probe(*args)
+                axes['configuration']['source_sha256'] = 'd' * 64
+                return axes
+            adapter.presentation_probe = upgraded_axes
+            args = SimpleNamespace(root=str(self.root), work_id=WORK, context_id='ctx-epoch16',
+                                   epoch=16, session_ref=fixture.SESSION, runtime='codex')
+            entered = []
+            def entry(_args):
+                store.require_orchestration_authority(self.root, WORK, purpose='prepare')
+                entered.append(True)
+                return {'verdict': 'ENTERED'}, 0
+            wrapped = cli._gauntlet_authorized(entry)
+            with mock.patch.object(cli, '_leader_boundary', return_value=adapter):
+                # The old full read cannot authorize the new config/version.
+                with self.assertRaises(cli.CliFailure) as stale:
+                    wrapped(args)
+                self.assertEqual(stale.exception.code, 'STYLE-LOAD-UNCONFIRMED')
+                pending = stale.exception.extra['presentation']
+                messages = transcript['result']['transcript']['messages']
+                messages[1]['blocks'][0]['output'] = json.dumps({'verdict': 'BLOCKED', 'code': 'STYLE-LOAD-UNCONFIRMED', 'presentation': pending})
+                fresh = cli._session_readiness(self.root, 'codex', fixture.SESSION, work_id=WORK)
+                self.assertTrue(fresh['presentation']['use_ready'])
+                for key in ('config_fingerprint', 'gwd_skill_sha256'):
+                    self.assertNotEqual(fresh['presentation'][key], ready['presentation'][key])
+                # Invalid identities/projections never mutate Store or call the handler.
+                for key, value in (('session_identity', 'other-session'), ('runtime', 'claude'),
+                        ('scope', dict(kind='gwd', root=str(self.root), work_id='other-work')),
+                        ('scope', dict(kind='gwd', root='/other', work_id=WORK)),
+                        ('policy_sha256', 'f' * 64), ('work_ready', False), ('use_ready', False),
+                        ('loading', 'stale'), ('trust', 'pending'), ('enablement', 'disabled'),
+                        ('compatibility', 'incompatible')):
+                    invalid = copy.deepcopy(fresh)
+                    invalid['presentation'][key] = value
+                    with self.subTest(key=key, value=value), mock.patch.object(cli, '_session_readiness', return_value=invalid):
+                        with self.assertRaises(cli.CliFailure):
+                            wrapped(args)
+                    self.assertEqual(store.read_snapshot(self.root).content_sha256, before.content_sha256)
+                for key, value in (('session_ref', 'other-session'), ('runtime', 'claude'), ('epoch', 15), ('context_id', 'other-context')):
+                    with self.subTest(argument=key), mock.patch.object(args, key, value):
+                        with self.assertRaises(cli.CliFailure):
+                            wrapped(args)
+                show['result']['dispatch']['capabilityRevokedAt'] = 'revoked'
+                with self.assertRaises(cli.CliFailure):
+                    wrapped(args)
+                show['result']['dispatch']['capabilityRevokedAt'] = None
+                suspended = copy.deepcopy(fresh)
+                suspended['presentation'].update(use_ready=False, application='suspended_by_user',
+                    loading='stale', suspension={'source_ref': 'human:stop'})
+                with mock.patch.object(cli, '_session_readiness', return_value=suspended):
+                    with self.assertRaises(cli.CliFailure) as stopped:
+                        wrapped(args)
+                    self.assertEqual(stopped.exception.code, 'STYLE-LOAD-UNCONFIRMED')
+                def race(mutate_root, mutate):
+                    raced = copy.deepcopy(before.document)
+                    raced['agent_orchestration']['work_items'][WORK]['contexts']['ctx-epoch16']['leader']['incarnation'] = 'raced'
+                    return mutate(raced)
+                with mock.patch.object(store, 'transact', side_effect=race):
+                    with self.assertRaises(cli.CliFailure) as fenced:
+                        wrapped(args)
+                    self.assertEqual(fenced.exception.code, 'CONTEXT-FENCED')
+                self.assertEqual(entered, [])
+                self.assertEqual(self.footprint(), files)
+                self.assertEqual(wrapped(args), ({'verdict': 'ENTERED'}, 0))
+                after = store.read_snapshot(self.root)
+                expected = copy.deepcopy(before.document)
+                expected['agent_orchestration']['work_items'][WORK]['contexts']['ctx-epoch16']['presentation'] = fresh['presentation']
+                for key in ('revision', 'updated_at', 'journal_head', 'content_sha256'):
+                    expected[key] = after.document[key]
+                self.assertEqual(after.document, expected)
+                self.assertEqual(after.revision, before.revision + 1)
+                self.assertEqual(store.read_events(self.root)[:len(events)], events)
+                for path, raw in files.items():
+                    if path not in {str(store.store_paths(self.root).orchestrator.relative_to(self.root)),
+                                    str(store.store_paths(self.root).events.relative_to(self.root)),
+                                    str(store.store_paths(self.root).events_head.relative_to(self.root)),
+                                    str((store.store_paths(self.root).receipts / 'worktree' / f'{WORK}.json').relative_to(self.root))}:
+                        self.assertEqual((self.root / path).read_bytes(), raw, path)
+                stable = self.footprint()
+                self.assertEqual(wrapped(args)[1], 0)
+                code, public = fixtures.AgentOrchestrationContract().run_cli('gauntlet-step-enter', str(self.root),
+                    '--work-id', WORK, '--context-id', 'ctx-epoch16', '--epoch', '16',
+                    '--session-ref', fixture.SESSION, '--step', 'implement-parallel')
+                self.assertEqual((code, public.get('verdict')), (0, 'STEP-ENTERED'), public)
+                self.assertEqual(self.footprint(), stable)
+
     def test_public_mixed_import_reconcile_barrier_scheduler_and_idempotence(self):
         before = self.footprint()
         code, preview = self.command()

@@ -3374,9 +3374,20 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
             readiness = _session_readiness(root, context["runtime"], session_ref, work_id=args.work_id)
         _require_current_leader(root, args.work_id, context, session_ref, readiness)
         if not administrative_recovery:
+            try:
+                contract.require_presentation_work_ready(readiness)
+            except contract.OrchestrationError as exc:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", str(exc), "presentation is not ready") from exc
             if any(context["presentation"].get(key) != readiness["presentation"].get(key)
-                   for key in ("session_identity", "config_fingerprint", "scope", "policy_sha256", "gwd_skill_sha256")):
-                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STYLE-SCOPE-CONFLICT", "presentation configuration changed; bootstrap again")
+                   for key in ("session_identity", "runtime", "scope", "policy_sha256")):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STYLE-SCOPE-CONFLICT", "presentation authority, scope or policy changed")
+            # Configuration/version changes require a fresh full read, not a
+            # new leader context. Keep the existing CAS and append-only Store.
+            if (any(context["presentation"].get(key) != readiness["presentation"].get(key)
+                    for key in ("config_fingerprint", "gwd_skill_sha256"))
+                    and not readiness["presentation"]["use_ready"]):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STYLE-LOAD-UNCONFIRMED", "presentation upgrade requires a fresh full read",
+                                 extra={"presentation": readiness["presentation"]})
             if context["presentation"] != readiness["presentation"]:
                 def refresh(document: dict[str, Any]) -> dict[str, Any]:
                     target = document["agent_orchestration"]["work_items"][args.work_id]
