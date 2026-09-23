@@ -1572,3 +1572,129 @@ O T065 existiu porque uma resolução de merge minha apagou a seção da 6.0.12.
 O ciclo está tecnicamente pronto para `ship`: converge `CONVERGED`, verify `PASS`, suíte em 1508 testes, versão 6.0.15 acima da 6.0.14 publicada, zero commits atrás da `main`.
 
 `ship` exige **autorização humana explícita** (`HOLD-V4-01`), e é ponto de parada obrigatório do `WORKFLOW.md` — a autorização permite invocar, nunca substitui.
+
+# R12 — 2026-09-23, revisão independente após a quarta integração
+
+Revisor: worker Orca `claude-fable-5-1`/`high` (dispatch `ctx_8c5fd0a45053`), sessão distinta do líder e de todos os autores. Fecha as ressalvas r1 (R11 não independente) e r2 (commits entrantes da `main` sem auditoria semântica).
+
+
+Branch `cadugevaerd/feat-new-subagents`, HEAD `9f66346` (6.0.25). Revisor distinto do líder e de todos os autores. Sessão read-only: nenhum arquivo do repositório foi editado; testes, mutações e reprodução rodaram em cópias limpas (`git archive HEAD`) ou em diretórios temporários.
+
+**Verdict: APPROVE** — 0 Critical, 0 Important, 3 Minor (1 novo com reprodução, 1 de interpretação de FR, 1 herdado da R11 e ainda aberto).
+
+Fecha as duas ressalvas da R11: **r1** (esta rodada é independente) e **r2** (`f3ddb3b` e os 12 commits da quarta integração foram auditados semanticamente, seção "Junções auditadas").
+
+## Escopo
+
+1. Revalidação independente das FRs da spec 032 contra o código em `9f66346`: takeover fail-closed, prepare-switch sem checkpoint anterior, paridade prévia/apply do `orchestration-adopt`, schema v2 do checkpoint.
+2. Auditoria semântica das junções entre a 032 e os commits entrantes da `main` (`f3ddb3b` da terceira integração; `b929808..d4bf60b`, 12 commits, da quarta — merge-base real é `f3ddb3b`, não `14245f7`, que é o lado da branch).
+3. Revisão de `54a4131` (snapshot do Store lido uma vez por `build_status`).
+4. Execução: `tests/validate_agent_orchestration_contract.py` (57 testes, OK, 24 s), `tests/validate_status_contract.py` (53 testes, OK, 51 s), suíte completa `tests/run_validators.py` (31 validadores, 1534 testes, 0 falhas, skipped=1), três mutações em cópias limpas (todas mortas) e uma reprodução dirigida do achado m1.
+
+Fora do escopo: os verbos novos de tasks-import/rebase da `main` foram auditados só onde tocam o fluxo de continuidade; não foram revisados como feature própria.
+
+## Findings
+
+### Critical
+
+Nenhum.
+
+### Important
+
+Nenhum.
+
+### Minor
+
+**m1 — Checkpoint inicial do `prepare-switch` grava `store_revision` e `journal_anchor` lidos fora do lock (mesma classe do G2/T017, sem a guarda que o T017 pôs nos irmãos).**
+
+- Local: `plugin/skills/grill-with-docs/scripts/grill_workspace.py:3862-3864` (`_initial_continuity_checkpoint(..., snapshot.revision + 1, snapshot.document["journal_head"])`) e o `mutate` de `gauntlet_prepare_switch_command` (`:3901-3961`), que não tem `if document["revision"] != snapshot.revision: raise STATE_DIVERGENCE`.
+- Contraste, no mesmo arquivo: o checkpoint derivado do caminho RELEASED calcula dentro do lock (`:3955`, `store_revision=document["revision"] + 1, journal_anchor=document["journal_head"]`); `continuity_resume_command` (`:4077`) e `gauntlet_context_takeover_command` (`:4297`) guardam a revisão dentro do `mutate`; `checkpoint_command` passa `expected_store_revision`/`expected_journal_anchor` e o Store recusa divergência (`grill_core/store.py:1943`). Só o caminho T005 ficou sem nada.
+- Evidência (reprodução em diretório temporário, script `scratchpad/repro_t005.py`): `init` de um work item; `store.transact` embrulhado para que outro escritor comprometa uma revisão entre a leitura do `prepare-switch` e o seu lock; resultado:
+
+  ```
+  verdict: QUIESCING
+  revision before read: 2 | revision after commit: 4
+  checkpoint.store_revision: 3 (expected == after.revision = 4)
+  checkpoint.journal_anchor == journal_head at read time: True
+  store_revision honest? False
+  ```
+
+  O checkpoint inicial é selado por digest (`checkpoint_sha256`) e é imutável, então a revisão errada fica permanente e afirma que o ponto de retomada foi comprometido numa revisão que não o contém.
+- Impacto: registro de auditoria, não veredito. Nenhum consumidor do core lê `checkpoint["store_revision"]` ou `journal_anchor` para decidir (verificado por grep em `plugin/skills/grill-with-docs/scripts/`; só validadores de forma). `continuity-resume` usa `snapshot.revision` do próprio momento, não o do checkpoint. Não bloqueia ship.
+- Conserto: uma linha no `mutate` (`if document["revision"] != snapshot.revision: raise store.StoreError(store.STATE_DIVERGENCE, ...)`, como em `:4077`), ou mover a construção do checkpoint inicial para dentro do `mutate` como o `:3955` já faz. Prova: um caso irmão do `work-quiescing-check` com o mesmo `transact` embrulhado, exigindo `store_revision == revisão comprometida`.
+- Nota de procedência: esta janela existe também para a `operation["expected_before"]` do mesmo verbo, mas ali a guarda `checkpoint head appeared during switch preparation` (`:3909`) e o `setdefault` do operation cobrem o que importa.
+
+**m2 — FR-010 ("dizer qual prova faltou"): a recusa `TAKEOVER-EVIDENCE-UNPROVEN` nomeia o dispatch, não a prova.**
+
+- Local: `grill_workspace.py:4157` (`raise CliFailure(..., "TAKEOVER-EVIDENCE-UNPROVEN", old_session_ref)`); `grill_core/agent_runtime.py:1249-1292` colapsa resposta ausente, ilegível, JSON inválido, dispatch não correlacionado e liveness `unverifiable` num único `indeterminate` sem razão.
+- Evidência: o teste `test_context_takeover` (`tests/validate_agent_orchestration_contract.py:2481-2493`) exercita cinco formas inconclusivas e afirma só o código; nenhuma afirma a razão.
+- Leitura: FR-002 exige três códigos distintos (ativo, inconclusivo, não observável) e isso está cumprido. FR-010 pede que a recusa diga *qual* prova faltou; a mensagem diz de quem faltou. É interpretação de spec que R1–R11 aceitaram; registro como Minor porque a mudança é barata (devolver a razão do adapter em `extra`) e não altera contrato. Não bloqueia.
+
+**m3 — Herdado da R11 (q3), ainda aberto: o predicado terminal classifica qualquer status fora de `dispatched`/`running` como encerrado.**
+
+- Local: `grill_core/agent_runtime.py:1287`. Um status futuro como `queued` autorizaria a tomada de um líder que nem começou. Os quatro estados que a `main` conhece não o exercitam; sem teste nem comentário. Pré-existente, não do merge.
+
+### Sem finding, registrado por dever
+
+- `54a4131`: semântica idêntica. `store_paths(root)` resolve pelo `git_common_dir` (`store.py:616-618`) e `worktree_roots` só devolve worktrees com o mesmo common dir (`grill_status.py:250-260`), então o snapshot é o mesmo objeto para todos os itens. `read_snapshot(required=False)` devolve `None` exatamente quando `store_exists` é falso (`store.py:1324-1348`), o que preserva o early-return de `cleanup_projection`; `_read_runs(snapshot=None)` cai no default antigo (`gauntlet_runs.py:179-181`). Única diferença observável: com zero bundles, `status` agora lê o Store uma vez (um Store corrompido apareceria mesmo sem itens); antes não lia. Não é defeito. Teste de regressão exige 1 chamada (`validate_status_contract.py:150-160`).
+- Spec `FR-012` ainda diz "6.0.2 para 6.0.3"; a versão real é 6.0.25 nos oito pontos (quatro manifests, `VERSION` do validador, três headings — conferidos). Prosa desatualizada, contrato correto.
+- Estado do bundle: `.grill/work-items/fix-continuity-context-…/state.json` e `.grill/attestations/032-implement-parallel-r9.json` foram alterados às 18:31:13–19 (antes do primeiro comando desta sessão; não são meus). A r9 marca `chain_stale: [converge, verify]`. Consequência de processo: converge e verify precisam ser re-atestados **antes** de esta review ser selada, ou a review selará sobre cadeia stale.
+
+## Revalidação das FRs (spec 032)
+
+| FR | Onde | Estado | Prova |
+|---|---|---|---|
+| FR-001 tomada só por observação do host | `grill_workspace.py:4149-4157`; oráculo `agent_runtime.py:1249-1292` (status ∉ {dispatched, running}, `capabilityRevokedAt`, liveness `exited`/`agent_status`) | OK | `test_context_takeover` casos `status`/`revoked`/`exited` |
+| FR-002 três recusas distintas | `:4153` NOT-OBSERVABLE, `:4156` LEADER-ACTIVE (status vivo), `:4157` EVIDENCE-UNPROVEN | OK | mesmo teste: ativo; 5 formas inconclusivas; legado não observável; m2 |
+| FR-003 prévia por padrão, hash relido, idempotente | `:4252-4257` preview/`TAKEOVER-INPUTS-STALE`; `:4139-4146` `TAKEOVER-REUSED` sem reobservar | OK | teste: prévia não escreve (sha do store igual); hash `0*64` recusa; replay com transporte proibido |
+| FR-004 sucessão auditável | `operation.intended_after` com reason/from/to/evidence(ref+digest+status+liveness)/taken_at (`:4283-4287`) | OK | teste afirma o bloco persistido, não só a resposta |
+| FR-005 não altera ciclo/campanha/aceites/escopo | sucessor copia activation/campaign/scheduler_runs (`:4308-4320`); item.scope intocado | OK | teste `work-terminal-*` + `gauntlet-step-enter` como sucessor |
+| FR-006 troca antes da 1ª etapa | `:3856-3864` checkpoint inicial v2 quando `checkpoint_head is None`; head declarado-desconhecido ainda recusa (`:3854-3855`) | OK, com m1 | `work-quiescing-check` (`tests:257-300`); `test_prepare_switch_refuses_declared_but_unknown_checkpoint` |
+| FR-007 prévia do adopt = apply | `_adoption_conflict` (`:1748-1776`) espelha a ordem do `mutate` (policy → cerco → origem com a exceção da 6.0.11); atalho `REUSED` repõe só a igualdade de origem (`:1811-1814`) | OK | `test_orchestration_adopt_preview_matches_apply_when_context_fenced` / `..._when_origin_changed` |
+| FR-008 nomes v2 | emissores `:1944` e `:3792` usam `CHECKPOINT_SCHEMA_V2`; validação escolhe chaves pelo `schema` (`agent_orchestration.py:681-684, 687-691`) | OK | `validate_checkpoint_contract.py:131` |
+| FR-009 v1 continua válido sem reescrita | `_continuity_checkpoint` copia o head verbatim (`:3764`), mantendo schema e chaves v1; nenhum caminho migra | OK | fixtures v1 em `validate_orchestrator_store_contract.py:40`, `validate_checkpoint_contract.py:155` |
+| FR-010 dizer qual prova faltou | ver m2 | Parcial (interpretação) | — |
+| FR-011 offline | transporte injetado (`subprocess.run` só para `worker-show`), sem rede | OK | validadores rodados aqui |
+| FR-012 bump nos 8 pontos | 6.0.25 em todos | OK | `validate_distribution.py` |
+
+Invariantes R1–R11 reconferidos no HEAD: tupla estrutural única `("project_id","work_id","du","git_common_dir","real_path")` em `:3603`, sem `phase`/`branch`; comparação de branch só contra `development.execution_branch` (`:3613-3651`), chamada pelos três verbos (`:3848`, `:4034`, `:4234`); fail-closed de carimbo não-mapeamento (`:3606-3610`).
+
+## Junções auditadas
+
+Merge-base `f3ddb3b`. Auto-merge em `grill_workspace.py`, `agent_runtime.py`, `gauntlet_runs.py`; conflito só em `tests/validate_agent_orchestration_contract.py`.
+
+| # | Commit da `main` | Toca | Fluxo da 032 afetado | Análise | Veredito |
+|---|---|---|---|---|---|
+| J1 | `f3ddb3b` preserve task acceptance across continuity | `_scheduler_accepted_tasks` (`:5040-5056`): aceita atividades de qualquer contexto da linhagem `predecessor_context_id`, exigindo `accepted_by_context == activity.context_id` | takeover e resume criam sucessores com `predecessor_context_id` | Invariante vale por construção: aceite normal recusa `CONTEXT-FENCED` se `activity.context_id != context.context_id` (`agent_orchestration.py:966-967`) e grava `accepted_by_context = context.context_id` (`:990`); o caminho released do prepare-switch grava `source["context_id"]`, que é o contexto da própria atividade (`grill_workspace.py:3928`). Único outro escritor não existe (grep). A regra nova é superconjunto estrito da antiga (nada que passava deixou de passar). Lineage cíclica/incompleta recusa `TASK-PHASE-PENDING`. Mutação m3 (`!= context_id`) morta por `test_scheduler_acceptances_survive_continuity_lineage_only` | OK |
+| J2 | `94fabcd` ignore workers from abandoned runs during continuity | `continuity_worker_quiescence` pula `run.state == "BLOCKED"` (`gauntlet_runs.py:517`) | `_continuity_quiescence` é compartilhada por prepare-switch, resume **e takeover** (`:4160-4162`, `TAKEOVER-WORK-ACTIVE`) | A 032 passa a herdar a exceção: workers não-terminais de uma run abandonada não bloqueiam a tomada. Coerente: `BLOCKED` só nasce de `abandon_run` com bundle `human-authorization/v1` (`gauntlet_runs.py:3082-3136`), é absorvente e `_run_for_worker` recusa transições nessa run (`:1802`). Teste unitário da exceção em `tests:1174-1178`; mutação m1 (remover o skip) morta por `test_runtime_continuity` | OK |
+| J3 | `96db0bb` allow scoped abandon while quiescing | `_gauntlet_authorized` admite `gauntlet-run-abandon` com contexto `QUIESCING`/líder `RELEASING`, só para o `session_ref` exato e após `_require_released_leader`, **sem** `store.orchestration_authority` (`:3432-3439`) | takeover aceita contexto `QUIESCING` (`:4137`) e avança `RELEASING→RELEASED` ao superseder (`:4289`, `:4307`) | Sem colisão: depois da tomada o contexto antigo é `SUPERSEDED` e não é mais current, então a porta do abandon-liberado fecha para o líder antigo; o novo líder é `ACTIVE` e usa o caminho normal. O bypass do `orchestration_authority` é deliberado e testado (`tests:374-400`, `seen == [None]`); o cerco do Store é opt-in (`store.py:1108-1114`), o mesmo regime sob o qual takeover e prepare-switch já escrevem | OK |
+| J4 | `e78017e` / `a6008aa` accept live/archived ownership transfer | `LeaderBoundary.observe_released(allow_unarchived_stopped=True)` ganha dois ramos: terminal ausente com resource `released` e archive `captured`; terminal vivo transferido a outro dispatch (`agent_runtime.py:873-957`) | `_require_released_leader` (`:1674-1684`, usa a flag) → prepare-switch `--released-source` (`:3832`) e J3. `_released_activity_sessions` (`:3691`) chama `observe_released()` **sem** a flag → intocada | Duas provas de "líder anterior encerrou" coexistem: `observe_released` (estrita, transferência/arquivo comprovados) para released-source, `observe_predecessor_termination` (status/revogação/liveness) para takeover. Rigor diferente para autorizações de alcance diferente (released-source só reabre o caminho ordenado com o `session_ref` antigo; takeover instala outro condutor). Pré-existente desde a 6.0.11, não é regressão. Testes `tests:1318`, `:1370` | OK (nota de desenho) |
+| J5 | `0dff190` refresh leader presentation after GWD upgrades | `_gauntlet_authorized`: `STYLE-SCOPE-CONFLICT` só para session/runtime/scope/policy; config/gwd mudados exigem `use_ready` senão `STYLE-LOAD-UNCONFIRMED`; refresh via `transact` com guarda `CONTEXT-FENCED` (`:3459-3481`) | sucessor do takeover nasce com `presentation = readiness["presentation"]` (`:4169`, `:4319`); resume idem | Primeiro comando autorizado após a tomada compara contra a mesma leitura → sem refresh espúrio nem `STYLE-SCOPE-CONFLICT`. Coberto end-to-end: takeover seguido de `gauntlet-step-enter` (`tests:2347-2350`) | OK |
+| J6 | `dd8290a` / `68034c2` task import + `_recover_task_import` | `_recover_task_import` (`:3495-3533`) chama `_session_readiness` e `_require_current_leader`; `gauntlet-tasks-import` entra na isenção de preview (`:3417`) | assinaturas de `_session_readiness(root, runtime, session_ref, *, work_id)` e `_require_current_leader(root, work_id, context, session_ref, readiness)` são as que a 032 consome no takeover (`:4169`) | Compatível; a lista de comandos autorizados do teste `tests:232` inclui o verbo novo | OK |
+| J7 | `02db2e6`, `87dcc92`, `d4bf60b` scheduler canônico, rebase, reconcile | `_task_phase_documents` (jcs), `_scheduler_accepted_tasks(run_id=)`, reconcile por linhagem de imports | nenhum ponto de continuidade | Sem sobreposição; suíte verde. Não revisados como feature | n/a |
+| J8 | `b929808` successor DAG revisions | `_next_partition_revision` | nenhum | Sem sobreposição | n/a |
+| J9 | conflito em `tests/validate_agent_orchestration_contract.py` | bloco `work-quiescing-check` da branch mantido (`:257-300`); asserção da `main` (`STYLE-LOAD-UNCONFIRMED` para mutação `config`, `:370`) integrada; testes novos da `main` presentes (`:374`, `:1370`, `:3247+`) | — | Os dois lados estão na árvore; 57 testes | OK |
+| J10 | `54a4131` (branch) × `run_projection`/`verified_task_import` (main) | `_read_runs` ganhou kw-only `snapshot=None` (`gauntlet_runs.py:179`); `cleanup_projection` idem (`:487`) | — | Chamadores da `main` usam o default; semântica idêntica (seção "Sem finding") | OK |
+| J11 | CHANGELOG / versão | 6.0.25 no topo com as entradas da 032 renumeradas; seções 6.0.16–6.0.24 preservadas; 8 pontos de versão | — | Conferido | OK |
+
+Nenhuma junção produziu defeito de semântica. As três mutações que testam a junção crítica (J1, J2) e o cerco C1 do takeover morreram, cada uma numa cópia limpa própria.
+
+## Medições
+
+| O quê | Resultado |
+|---|---|
+| `tests/validate_agent_orchestration_contract.py` | 57 testes, OK |
+| `tests/validate_status_contract.py` | 53 testes, OK |
+| Mutação m1: remover skip de `BLOCKED` em `continuity_worker_quiescence` | 1 falha (`test_runtime_continuity`) |
+| Mutação m2: remover `TAKEOVER-WORK-ACTIVE` do takeover | 2 falhas (`test_context_takeover`, `work-active`, preview e apply) |
+| Mutação m3: lineage `accepted_by_context != context_id` | 1 falha (`test_scheduler_acceptances_survive_continuity_lineage_only`) |
+| Reprodução m1 (race no checkpoint inicial) | `store_revision` 3 gravado; commit real na revisão 4 |
+| Suíte completa `tests/run_validators.py` (árvore `9f66346`, sem mutação) | 31 validadores, 1534 testes, 0 falhas, skipped=1 — confirma o número do commit de merge de forma independente |
+
+## Final Recommendation
+
+**APPROVE.**
+
+- Nenhum achado Critical ou Important. O único achado novo com reprodução (m1) é de fidelidade de registro num campo sem consumidor, com conserto de uma linha e o padrão já presente nos verbos irmãos; pode entrar como follow-up sem reabrir o ciclo.
+- As ressalvas r1 e r2 da R11 estão fechadas por esta rodada.
+- Condição de processo, não de código: a re-atestação r9 de `implement-parallel` (18:31) deixou `converge` e `verify` stale. Re-atestar os dois antes de selar `review`; `ship` continua exigindo autorização humana explícita (`HOLD-V4-01`).

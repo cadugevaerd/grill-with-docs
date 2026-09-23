@@ -53,3 +53,24 @@ Nenhum.
 ### Next Action
 
 PASS: executar `/speckit.verify-review-ship.review`.
+
+# Rodada 12 — 2026-09-23, sobre a quarta integração (HEAD `9f66346`)
+
+| Gate | Comando | Resultado | Evidência | Validador |
+|---|---|---|---|---|
+| Testes | `python3 tests/run_validators.py` | **PASS** | exit 0 — 31 validadores, **1534** testes, 0 falhas (skipped=1) | coordenador |
+| Contrato de distribuição | `python3 tests/validate_distribution.py` | **PASS** | `distribution: OK` — oito pontos em 6.0.25 | coordenador |
+| Bump de versão | comparação com `origin/main` | **PASS** | `main` publicada em 6.0.24, HEAD em **6.0.25**, **0 commits atrás** | coordenador |
+| Espaço em branco | `git diff --check origin/main...HEAD` | **PASS** | limpo | coordenador |
+| Revisão independente | R12 (`claude-fable-5-1`/`high`) | **PASS** | APPROVE, 0 Critical/Important | revisor |
+| Lint / typecheck / format | — | **SKIPPED** | o projeto não declara essas ferramentas | — |
+
+Terceira colisão de versão da entrega: a `main` publicou 6.0.15 a 6.0.24 enquanto esta branch reservava 6.0.15/6.0.16. As entradas desta entrega foram renumeradas para 6.0.25 no merge.
+
+### Failures / Blockers
+
+Nenhum.
+
+### Next Action
+
+PASS: fechar `review` e aguardar autorização humana de `ship`.

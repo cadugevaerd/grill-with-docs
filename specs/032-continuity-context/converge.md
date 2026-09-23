@@ -1274,3 +1274,34 @@ As cinco mutações desta fase foram medidas antes de qualquer tarefa ser declar
 ## Próxima ação
 
 Seguir para `verify` e depois `review` R11.
+
+# Rodada 24 — 2026-09-23, após a quarta integração e o R12
+
+## Entradas consumidas
+
+- Merge `9f66346` da `main` 6.0.24 (`b929808..d4bf60b`, 12 commits em continuidade, run-abandon, tasks-import/rebase, scheduler e apresentação do líder). Código de continuidade em auto-merge; conflito real só em `tests/validate_agent_orchestration_contract.py`, resolvido mantendo o bloco que semeia `work-quiescing-check`.
+- Commit `54a4131` (status: snapshot do Store lido uma vez por `build_status`), fora do escopo funcional da 032 mas na mesma entrega.
+- Review R12 independente: **APPROVE**, 0 Critical, 0 Important, 3 Minor. Fecha as ressalvas r1 e r2 da R11.
+
+## Achados
+
+Nenhum finding bloqueante; nenhuma tarefa acrescentada ao `tasks.md`. Os três Minor do R12 ficam **diferidos**, registrados aqui:
+
+| # | Achado | Decisão |
+|---|---|---|
+| m1 | Checkpoint inicial do `prepare-switch` (T005) grava `store_revision`/`journal_anchor` lidos fora do lock (`grill_workspace.py:3862-3864`) | diferido: campo sem consumidor no core; conserto de uma linha com guarda de revisão no `mutate`, como `:4077` |
+| m2 | `TAKEOVER-EVIDENCE-UNPROVEN` nomeia o dispatch, não a prova faltante (FR-010) | diferido: FR-002 cumprido; devolver a razão do adapter em `extra` não muda contrato |
+| m3 | Predicado terminal trata qualquer status fora de `dispatched`/`running` como encerrado (`agent_runtime.py:1287`) | diferido: herdado da R11 (q3), pré-existente, sem estado da `main` que o exercite |
+
+## Verificação
+
+Suíte na árvore mesclada: 31 validadores, **1534** testes, 0 falhas (skipped=1). R12 matou três mutações em cópias limpas.
+
+## Métricas
+
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+- Status: **CONVERGED**
+
+## Próxima ação
+
+`verify` rodada 12 e fechamento do `review`.
