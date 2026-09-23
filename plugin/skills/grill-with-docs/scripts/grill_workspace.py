@@ -4385,7 +4385,7 @@ def _task_phase_documents(root: Path, gauntlet_runs: Any,
     dag_ref = getattr(args, "dag", None)
     if isinstance(dag_ref, str):
         try:
-            dag, raw = _read_json_document_bytes(root, dag_ref, "DAG-MALFORMED")
+            dag, _ = _read_json_document_bytes(root, dag_ref, "DAG-MALFORMED")
         except CliFailure:
             return {}, {}, "0" * 64
         if dag.get("schema") != gauntlet_runs.DAG_V2_SCHEMA:
@@ -4396,12 +4396,12 @@ def _task_phase_documents(root: Path, gauntlet_runs: Any,
         elif re.fullmatch(r"execution-dag\.r[1-9][0-9]*\.json", name):
             report_ref = str(Path(dag_ref).with_name(name.replace("execution-dag", "partition-report", 1)))
         else:
-            return dag, {}, hash_bytes(raw)
+            return dag, {}, gauntlet_runs.store.jcs_sha256(dag)
         try:
             report, _ = _read_json_document_bytes(root, report_ref, "PARTITION-REPORT-MALFORMED")
         except CliFailure:
             report = {}
-        return dag, report, hash_bytes(raw)
+        return dag, report, gauntlet_runs.store.jcs_sha256(dag)
 
     try:
         run = gauntlet_runs._read_runs(root, args.work_id).get(args.run_id)
@@ -4412,7 +4412,7 @@ def _task_phase_documents(root: Path, gauntlet_runs: Any,
         return None
     for candidate in sorted((root / "specs").glob("*/execution-dag*.json")):
         try:
-            dag, raw = _read_json_document_bytes(root, str(candidate.relative_to(root)), "DAG-MALFORMED")
+            dag, _ = _read_json_document_bytes(root, str(candidate.relative_to(root)), "DAG-MALFORMED")
         except CliFailure:
             continue
         if gauntlet_runs.store.jcs_sha256(dag) != pin:
@@ -4425,7 +4425,7 @@ def _task_phase_documents(root: Path, gauntlet_runs: Any,
             report, _ = _read_json_document_bytes(root, report_ref, "PARTITION-REPORT-MALFORMED")
         except CliFailure:
             report = {}
-        return dag, report, hash_bytes(raw)
+        return dag, report, gauntlet_runs.store.jcs_sha256(dag)
     return {}, {}, "0" * 64
 
 
@@ -4494,9 +4494,13 @@ def _scheduler_accepted_tasks(root: Path, work_id: str, dag: Mapping[str, Any],
         except (runs.GauntletRunError, runs.store.StoreError) as error:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
         if imported:
-            if imported["dag_sha256"] != dag_sha256 or imported["dag_content_sha256"] != store.jcs_sha256(dag):
+            if imported["dag_content_sha256"] != dag_sha256 or dag_sha256 != store.jcs_sha256(dag):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DAG-CONTENT-MISMATCH", "phase DAG differs from import")
-            accepted.update(imported["tasks"])
+            # The verified 6.0.20 receipt binds raw DAG bytes. Preserve it and
+            # project canonical bindings only after its full evidence check.
+            accepted.update({task_id: {**receipt, "task_binding": {
+                **receipt["task_binding"], "dag_content_sha256": dag_sha256}}
+                for task_id, receipt in imported["tasks"].items()})
     for activity_id, activity in item.get("activities", {}).items():
         if not isinstance(activity, dict) or activity.get("state") != "ACCEPTED":
             continue

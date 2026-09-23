@@ -133,7 +133,7 @@ class TaskImportContract(unittest.TestCase):
         document['agent_orchestration'] = {'work_items': {WORK: {'current_context_id': 'ctx',
             'contexts': {'ctx': {'predecessor_context_id': None}}, 'activities': {}}}}
         with mock.patch.object(store, 'read_snapshot', return_value=SimpleNamespace(document=document)):
-            projected = cli._scheduler_accepted_tasks(self.root, WORK, self.dag, applied['import']['dag_sha256'], run_id=self.target)
+            projected = cli._scheduler_accepted_tasks(self.root, WORK, self.dag, applied['import']['dag_content_sha256'], run_id=self.target)
         self.assertEqual(set(projected), set(accepted))
         runs.declare_wave(self.root, WORK, self.target, self.dag_ref, ['p04-a'], self.admission, activation_max_workers=2, **FLOORS)
         self.assertTrue(runs._all_converged(runs._read_runs(self.root, WORK)[self.target], ['p03-a', 'p03-b']))
@@ -152,6 +152,43 @@ class TaskImportContract(unittest.TestCase):
         code, reconciled = self.command('--apply', verb='gauntlet-tasks-reconcile')
         self.assertEqual((code, reconciled.get('marked')), (0, ['T007', 'T008', 'T009']), reconciled)
         self.assertEqual(self.command('--apply', '--expected-sha256', preview['expected_sha256'])[1]['verdict'], 'REUSED')
+
+    def test_6020_import_projects_canonical_bindings_without_rewriting_receipts(self):
+        _, applied = self.apply()
+        imported = copy.deepcopy(applied['import'])
+        canonical = imported['dag_content_sha256']
+        self.assertNotEqual(imported['dag_sha256'], canonical)
+        for receipt in imported['tasks'].values():
+            self.assertEqual(receipt['task_binding']['dag_content_sha256'], imported['dag_sha256'])
+        # A separately formatted copy has the same identity; the original
+        # imported evidence remains byte-fenced by verified_task_import.
+        alternate = 'specs/demo/execution-dag.r3.json'
+        self.write(alternate, json.dumps(self.dag, indent=4, sort_keys=True) + '\n')
+        self.write('specs/demo/partition-report.r3.json', json.dumps(self.report))
+        item = {'current_context_id': 'ctx', 'contexts': {'ctx': {'predecessor_context_id': None}}, 'activities': {}}
+        snapshot = SimpleNamespace(document={'agent_orchestration': {'work_items': {WORK: item}}})
+        real_module = cli.grill_core_module
+        def module(name):
+            return SimpleNamespace(read_snapshot=lambda root: snapshot, jcs_sha256=store.jcs_sha256) if name == 'store' else real_module(name)
+        args = SimpleNamespace(work_id=WORK, run_id=self.target, dag=alternate, node_id=['p04-a'])
+        with mock.patch.object(cli, 'grill_core_module', side_effect=module), \
+             mock.patch.object(cli, 'gauntlet_run_admission', return_value=(self.root, runs, self.admission, {'limits': {'max_workers': 2}})), \
+             mock.patch.object(cli, '_tier_floors', return_value=('medium', 'medium')):
+            before = self.footprint()
+            projected = cli._scheduler_accepted_tasks(self.root, WORK, self.dag, canonical, run_id=self.target)
+            self.assertEqual(self.footprint(), before)
+            self.assertEqual(runs.task_phase_barrier(self.dag, self.report, target_phase=4,
+                dag_content_sha256=canonical, accepted_tasks=projected)['pending'], [])
+            result, code = cli.gauntlet_wave_declare_command.__wrapped__(args)
+            self.assertEqual(code, 0, result)
+            cli._require_scheduler_task_phase(self.root, runs, SimpleNamespace(work_id=WORK, run_id=self.target), ['p04-a'])
+            self.assertEqual(runs.verified_task_import(self.root, WORK, self.target), imported)
+            self.write(self.dag_ref, (self.root / self.dag_ref).read_text() + ' ')
+            before = self.footprint()
+            with self.assertRaises(cli.CliFailure) as failure:
+                cli._scheduler_accepted_tasks(self.root, WORK, self.dag, canonical, run_id=self.target)
+            self.assertEqual(failure.exception.code, 'TASK-IMPORT-DIVERGENT')
+            self.assertEqual(self.footprint(), before)
 
     def test_cas_and_divergent_retry_are_no_write(self):
         preview, _ = self.apply()
@@ -461,6 +498,67 @@ class TaskImportContract(unittest.TestCase):
             path.write_bytes(original_bytes)
             return  # Windows without symlink privilege; other evidence cases still ran.
         self.assertEqual(self.command()[1]['code'], 'TASK-SCOPE-VIOLATION')
+
+
+class CanonicalTaskPhaseContract(unittest.TestCase):
+    def test_canonical_activity_releases_wave_and_formatting_is_irrelevant(self):
+        for scenario in ('original', 'formatted', 'semantic', 'raw_binding'):
+            with self.subTest(scenario=scenario):
+                temporary, root = fixtures.AgentOrchestrationContract().fixture()
+                self.addCleanup(temporary.cleanup)
+                text = ('<!-- grill-task-files:v1 -->\n## Phase 3: Review\n'
+                        '- [ ] T010 Review\n  Files: []\n'
+                        '## Phase 4: Implementation\n- [ ] T011 Implement\n'
+                        '  Files: ["later.py", "specs/demo/implement/T011.tasks.json"]\n'
+                        '  Result: "specs/demo/implement/T011.tasks.json"\n')
+                dag, report = partition.partition_task_files(text, feature='demo', groups=1, root=root)
+                directory = root / 'specs/demo'; directory.mkdir(parents=True)
+                dag_path = directory / 'execution-dag.json'
+                dag_path.write_text(json.dumps(dag))
+                (directory / 'partition-report.json').write_text(json.dumps(report))
+                base = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
+                admission = dict(activation_sha256='a'*64, work_item_sha256='b'*64,
+                                 workflow_sha256='c'*64, config_sha256='d'*64, base_commit=base)
+                run = runs.admit_or_reuse_run(root, 'canonical-phase', admission)['run_id']
+                digest = runs.validate_execution_dag(root, 'canonical-phase', run,
+                    'specs/demo/execution-dag.json', admission, **FLOORS)['dag_content_sha256']
+                activity = dict(state='ACCEPTED', step_id='implement-parallel', context_id='ctx',
+                    accepted_by_context='ctx', acceptance_ref='accepted.json', task_binding=dict(
+                        task_id='T010', phase='3', tasks_semantic_sha256=dag['tasks_semantic_sha256'],
+                        dag_content_sha256=digest))
+                item = dict(current_context_id='ctx', contexts={'ctx': {'predecessor_context_id': None}},
+                            activities={'review': activity})
+                frozen = copy.deepcopy(item)
+                snapshot = SimpleNamespace(document={'agent_orchestration': {'work_items': {'canonical-phase': item}}})
+                real_module = cli.grill_core_module
+                module = lambda name: SimpleNamespace(read_snapshot=lambda root: snapshot, jcs_sha256=store.jcs_sha256) if name == 'store' else real_module(name)
+                if scenario == 'formatted':
+                    dag_path.write_text(json.dumps(dag, indent=4, sort_keys=True) + '\n')
+                if scenario == 'semantic':
+                    changed = {**dag, 'max_workers': 2}
+                    dag_path.write_text(json.dumps(changed))
+                if scenario == 'raw_binding':
+                    activity['task_binding']['dag_content_sha256'] = cli.hash_bytes(dag_path.read_bytes())
+                    frozen = copy.deepcopy(item)
+                self.assertNotEqual(digest, cli.hash_bytes(dag_path.read_bytes()))
+                args = SimpleNamespace(work_id='canonical-phase', run_id=run,
+                                       dag='specs/demo/execution-dag.json', node_id=['p04-a'])
+                record = {'limits': {'max_workers': 1}}
+                with mock.patch.object(cli, 'grill_core_module', side_effect=module), \
+                     mock.patch.object(cli, 'gauntlet_run_admission', return_value=(root,runs,admission,record)), \
+                     mock.patch.object(cli, '_tier_floors', return_value=('medium','medium')):
+                    before = copy.deepcopy(store.read_snapshot(root).document)
+                    if scenario in ('semantic', 'raw_binding'):
+                        with self.assertRaises(cli.CliFailure) as failure:
+                            cli.gauntlet_wave_declare_command.__wrapped__(args)
+                        self.assertEqual((failure.exception.code, failure.exception.message), ('TASK-PHASE-PENDING', 'T010'))
+                        self.assertEqual(store.read_snapshot(root).document, before)
+                    else:
+                        result, code = cli.gauntlet_wave_declare_command.__wrapped__(args)
+                        self.assertEqual(code, 0, result)
+                        cli._require_scheduler_task_phase(root, runs,
+                            SimpleNamespace(work_id=args.work_id, run_id=run), ['p04-a'])
+                self.assertEqual(item, frozen)
 
 
 if __name__ == '__main__':

@@ -1,5 +1,10 @@
 # Changelog
 
+## 6.0.21
+
+- Fix: as barreiras de fase do scheduler usam o hash canônico do conteúdo do DAG, igual ao retornado por `gauntlet-dag-validate` e aos bindings de atividades aceitas; diferenças de formatação não geram `TASK-PHASE-PENDING` falso.
+- Compatibilidade: imports mixed-run 6.0.20 preservam receipts e hashes de bytes, com projeção canônica somente após revalidação integral; conteúdo divergente e evidência alterada continuam bloqueados.
+
 ## 6.0.20
 
 - Fix: `gauntlet-tasks-import` importa em um successor admitido resultados de múltiplos runs históricos, em preview/apply com CAS, receipt imutável e retry idempotente. Verifica task, nó, fase, fingerprint, DAG, source run, tentativa, bytes integrados do sidecar e receipts positivos de término, convergência e cleanup; divergência ou evidência ausente bloqueia sem reexecutar tasks.
