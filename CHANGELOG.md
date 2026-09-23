@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.26
+
+- Fix: inclui no rebase tarefas de workers locais `CLEANED` do source run, reutilizando a validação completa de sidecars, receipts, wave e cleanup.
+
 ## 6.0.25
 
 - Fix: revalida imports v2 históricos contra o `tasks.md` do commit intermediário, permitindo rebases encadeados quando o DAG atual já avançou.

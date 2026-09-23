@@ -1131,7 +1131,8 @@ def import_task_results(root: str | Path, work_id: str, run_id: str, dag_ref: st
 
 def _accepted_source_tasks(root: str | Path, work_id: str, source_run_id: str,
                            source_dag: Mapping[str, Any], source_digest: str,
-                           source_commit: str) -> dict[str, Any]:
+                           source_commit: str, *, target_run_id: str,
+                           source_dag_ref: str) -> dict[str, Any]:
     """Revalidate accepted worker and leader tasks from one historical DAG."""
     runs = _read_runs(root, work_id)
     source_run = runs.get(source_run_id)
@@ -1143,6 +1144,18 @@ def _accepted_source_tasks(root: str | Path, work_id: str, source_run_id: str,
                                     tasks_commit=source_commit)
     if imported:
         accepted.update(imported["tasks"])
+    local_sources: dict[str, str] = {}
+    for node in source_dag["nodes"]:
+        task_ids = node["task_ids"]
+        entry = _node_lineage_head_entry(source_run, node["id"])
+        if (entry is not None and entry[1].get("state") == "CLEANED"
+                and not set(task_ids).intersection(accepted)):
+            local_sources.update((task_id, source_run_id) for task_id in task_ids)
+    if local_sources:
+        local = _task_import_inputs(root, work_id, target_run_id, source_dag_ref, local_sources,
+            result_commit=source_commit, store_sha256=store.read_snapshot(root).content_sha256,
+            tasks_commit=source_commit)
+        accepted.update(local["tasks"])
     snapshot = store.read_snapshot(root).document
     item = snapshot.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
     if not isinstance(item, Mapping):
@@ -1193,7 +1206,7 @@ def _task_rebase_inputs(root: str | Path, work_id: str, run_id: str, target_dag_
         _fail("TASK-IMPORT-DIVERGENT", "source and target features differ")
     target_digest, source_digest = store.jcs_sha256(target_dag), store.jcs_sha256(source_dag)
     source_accepted = _accepted_source_tasks(root, work_id, source_run_id, source_dag,
-                                             source_digest, source_commit)
+        source_digest, source_commit, target_run_id=run_id, source_dag_ref=source_dag_ref)
     if (not task_ids or len(set(task_ids)) != len(task_ids)
             or any(task_id not in source_accepted for task_id in task_ids)):
         _fail("TASK-IMPORT-DIVERGENT", "rebase tasks must be accepted by the source run")
