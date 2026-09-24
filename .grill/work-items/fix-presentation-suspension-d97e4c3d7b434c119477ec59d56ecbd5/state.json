@@ -51,6 +51,13 @@
         "reason": "spec r2 apos revisao independente (ctx_bb9b9de2ada8) com C1/I1-I4/M1-M9 aplicados",
         "state": "complete",
         "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "plan: autor fable xhigh via Orca, invocacao /speckit-plan",
+        "state": "in-progress",
+        "step": "plan"
       }
     ],
     "current_step": "plan",
@@ -76,7 +83,7 @@
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
-      "plan": "pending",
+      "plan": "in-progress",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
