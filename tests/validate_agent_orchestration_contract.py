@@ -2042,6 +2042,29 @@ class AgentOrchestrationContract(unittest.TestCase):
 
         store_module.transact(root, apply)
 
+    def test_first_campaign_is_born_in_a_pre_campaign_successor(self):
+        """A takeover before any campaign leaves campaign_bridge null; the first
+        checkpoint then stamps the successor's campaign. That must validate, while
+        a successor of a predecessor that already had a campaign still needs a bridge."""
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                "--work-id", "work-x", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, payload)
+            self._graft_succession(root, "work-x", "main")
+            campaign = {"project_id": "sha256:" + "1" * 64, "run_id": "leader-work-x", "runtime": "codex",
+                        "adapter": "codex", "registry_sha256": "sha256:" + "2" * 64,
+                        "recovery_generation_id": "rg-" + "3" * 64, "plan_revision": 1}
+            block = copy.deepcopy(store.read_snapshot(root).document["agent_orchestration"])
+            item = block["work_items"]["work-x"]
+            item["contexts"]["ctx-successor"]["campaign"] = copy.deepcopy(campaign)
+            agent_orchestration.validate_block(block)
+            predecessor = item["contexts"]["ctx-successor"]["predecessor_context_id"]
+            item["contexts"][predecessor]["campaign"] = copy.deepcopy(campaign)
+            with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "no campaign bridge"):
+                agent_orchestration.validate_block(block)
+
     def _finish_phase(self, state_path, *, unbind):
         """Complete every step of the matrix so `phase-turn` is admissible,
         optionally clearing the binding to reach the turn's own minting branch."""
