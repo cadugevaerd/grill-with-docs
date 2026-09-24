@@ -1044,7 +1044,8 @@ def verified_task_import(root: str | Path, work_id: str, run_id: str,
         try:
             fresh = _task_rebase_inputs(root, work_id, run_id, imported["dag_ref"],
                 imported["source_run_id"], imported["source_dag_ref"], list(imported["tasks"]),
-                source_commit=imported["source_commit"], store_sha256=imported["store_sha256"])
+                source_commit=imported["source_commit"], store_sha256=imported["store_sha256"],
+                target_commit=tasks_commit)
         except (KeyError, TypeError, ValueError) as exc:
             _fail("TASK-IMPORT-DIVERGENT", f"invalid rebase evidence: {exc}")
         if fresh != imported or run.get("dag_content_sha256") != imported["dag_content_sha256"]:
@@ -1131,7 +1132,8 @@ def import_task_results(root: str | Path, work_id: str, run_id: str, dag_ref: st
 
 def _accepted_source_tasks(root: str | Path, work_id: str, source_run_id: str,
                            source_dag: Mapping[str, Any], source_digest: str,
-                           source_commit: str) -> dict[str, Any]:
+                           source_commit: str, *, target_run_id: str,
+                           source_dag_ref: str, task_ids: set[str]) -> dict[str, Any]:
     """Revalidate accepted worker and leader tasks from one historical DAG."""
     runs = _read_runs(root, work_id)
     source_run = runs.get(source_run_id)
@@ -1143,6 +1145,19 @@ def _accepted_source_tasks(root: str | Path, work_id: str, source_run_id: str,
                                     tasks_commit=source_commit)
     if imported:
         accepted.update(imported["tasks"])
+    local_sources: dict[str, str] = {}
+    for node in source_dag["nodes"]:
+        node_tasks = node["task_ids"]
+        entry = _node_lineage_head_entry(source_run, node["id"])
+        if (entry is not None and entry[1].get("state") == "CLEANED"
+                and set(node_tasks).intersection(task_ids)
+                and not set(node_tasks).intersection(accepted)):
+            local_sources.update((task_id, source_run_id) for task_id in node_tasks)
+    if local_sources:
+        local = _task_import_inputs(root, work_id, target_run_id, source_dag_ref, local_sources,
+            result_commit=source_commit, store_sha256=store.read_snapshot(root).content_sha256,
+            tasks_commit=source_commit)
+        accepted.update(local["tasks"])
     snapshot = store.read_snapshot(root).document
     item = snapshot.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
     if not isinstance(item, Mapping):
@@ -1177,7 +1192,8 @@ def _accepted_source_tasks(root: str | Path, work_id: str, source_run_id: str,
 
 def _task_rebase_inputs(root: str | Path, work_id: str, run_id: str, target_dag_ref: str,
                         source_run_id: str, source_dag_ref: str, task_ids: list[str], *,
-                        source_commit: str, store_sha256: str) -> dict[str, Any]:
+                        source_commit: str, store_sha256: str,
+                        target_commit: str | None = None) -> dict[str, Any]:
     """Build a proof-preserving cross-DAG import for unchanged task blocks."""
     from grill_core import partition
     target_raw = _task_evidence_bytes(root, target_dag_ref)
@@ -1192,7 +1208,8 @@ def _task_rebase_inputs(root: str | Path, work_id: str, run_id: str, target_dag_
         _fail("TASK-IMPORT-DIVERGENT", "source and target features differ")
     target_digest, source_digest = store.jcs_sha256(target_dag), store.jcs_sha256(source_dag)
     source_accepted = _accepted_source_tasks(root, work_id, source_run_id, source_dag,
-                                             source_digest, source_commit)
+        source_digest, source_commit, target_run_id=run_id, source_dag_ref=source_dag_ref,
+        task_ids=set(task_ids))
     if (not task_ids or len(set(task_ids)) != len(task_ids)
             or any(task_id not in source_accepted for task_id in task_ids)):
         _fail("TASK-IMPORT-DIVERGENT", "rebase tasks must be accepted by the source run")
@@ -1201,9 +1218,15 @@ def _task_rebase_inputs(root: str | Path, work_id: str, run_id: str, target_dag_
                          capture_output=True, check=False)
     if old.returncode:
         _fail("TASK-IMPORT-EVIDENCE-MISSING", "source tasks commit is unavailable")
+    new = (subprocess.run(["git", "-C", str(root), "show", f"{target_commit}:{tasks_ref}"],
+                          capture_output=True, check=False)
+           if target_commit else None)
+    if new is not None and new.returncode:
+        _fail("TASK-IMPORT-EVIDENCE-MISSING", "target tasks commit is unavailable")
     try:
         old_text = old.stdout.decode("utf-8")
-        new_text = _task_evidence_bytes(root, tasks_ref).decode("utf-8")
+        new_text = ((new.stdout if new is not None else _task_evidence_bytes(root, tasks_ref))
+                    .decode("utf-8"))
         old_tasks = {task.id: task for task in partition.parse_task_files(old_text, feature=target_dag["feature"], root=root)}
         new_tasks = {task.id: task for task in partition.parse_task_files(new_text, feature=target_dag["feature"], root=root)}
     except (UnicodeError, partition.PartitionError) as exc:

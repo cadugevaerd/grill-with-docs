@@ -294,15 +294,26 @@ class TaskImportContract(unittest.TestCase):
         self.target, self.dag_ref = successor, target_ref
         for depth in (1, 2):
             if depth == 2:
-                # A second rebase must still reach the original worker runs.
                 source_run = self.target
+                source_commit = self.git('rev-parse', 'HEAD')
+                text = (self.root / self.tasks_ref).read_text()
+                text += (f'## Phase 6: Later work\n- [ ] T013 Later\n'
+                         f'  Files: ["later.py", "{self.result("T013")}"]\n'
+                         f'  Result: "{self.result("T013")}"\n')
+                self.write(self.tasks_ref, text)
+                target_dag, _ = partition.partition_task_files(text, feature='demo', groups=2, root=self.root)
+                target_ref = 'specs/demo/execution-dag.r5.json'
+                self.write(target_ref, json.dumps(target_dag))
+                self.git('add', '.')
+                self.git('commit', '-qm', 'later successor dag')
                 admission = self.identity('5')
                 self.target = runs.admit_or_reuse_run(self.root, WORK, admission)['run_id']
                 preview = runs.rebase_task_results(self.root, WORK, self.target, target_ref, source_run,
-                    target_ref, ['T007', 'T008', 'T009'], admission, source_commit=self.git('rev-parse', 'HEAD'))
+                    self.dag_ref, ['T007', 'T008', 'T009'], admission, source_commit=source_commit)
                 runs.rebase_task_results(self.root, WORK, self.target, target_ref, source_run,
-                    target_ref, ['T007', 'T008', 'T009'], admission, source_commit=self.git('rev-parse', 'HEAD'),
+                    self.dag_ref, ['T007', 'T008', 'T009'], admission, source_commit=source_commit,
                     apply=True, expected_sha256=preview['expected_sha256'])
+                self.dag_ref = target_ref
             before = self.footprint()
             history = copy.deepcopy(runs._read_runs(self.root, WORK))
             code, reconciled = self.command(verb='gauntlet-tasks-reconcile')
@@ -326,6 +337,45 @@ class TaskImportContract(unittest.TestCase):
             self.assertEqual((code, result.get('code')), (2, 'TASK-RESULT-DIVERGENT'), result)
             self.assertEqual(self.footprint(), before)
         path.write_bytes(original)
+
+    def test_cross_dag_rebase_accepts_cleaned_source_workers(self):
+        source_run, source_commit = self.source_runs[0], self.git('rev-parse', 'HEAD')
+        text = (self.root / self.tasks_ref).read_text()
+        text += (f'## Phase 5: New work\n- [ ] T012 New\n'
+                 f'  Files: ["new.py", "{self.result("T012")}"]\n'
+                 f'  Result: "{self.result("T012")}"\n')
+        self.write(self.tasks_ref, text)
+        target_dag, _ = partition.partition_task_files(text, feature='demo', groups=2, root=self.root)
+        target_ref = 'specs/demo/execution-dag.r4.json'
+        self.write(target_ref, json.dumps(target_dag))
+        self.git('add', '.')
+        self.git('commit', '-qm', 'successor for local workers')
+        admission = self.identity('4')
+        successor = runs.admit_or_reuse_run(self.root, WORK, admission)['run_id']
+        preview = runs.rebase_task_results(self.root, WORK, successor, target_ref, source_run,
+            self.dag_ref, ['T007', 'T008'], admission, source_commit=source_commit)
+        self.assertEqual(set(preview['import']['tasks']), {'T007', 'T008'})
+        applied = runs.rebase_task_results(self.root, WORK, successor, target_ref, source_run,
+            self.dag_ref, ['T007', 'T008'], admission, source_commit=source_commit,
+            apply=True, expected_sha256=preview['expected_sha256'])
+        self.assertEqual(applied['verdict'], 'APPLIED')
+
+    def test_nested_rebase_ignores_unrequested_local_worker_sidecars(self):
+        self.complete_import_sources()
+        source_run, source_commit = self.sources['T011'], self.git('rev-parse', 'HEAD')
+        text = (self.root / self.tasks_ref).read_text()
+        text += (f'## Phase 5: New work\n- [ ] T012 New\n'
+                 f'  Files: ["new.py", "{self.result("T012")}"]\n'
+                 f'  Result: "{self.result("T012")}"\n')
+        self.write(self.tasks_ref, text)
+        target_dag, _ = partition.partition_task_files(text, feature='demo', groups=2, root=self.root)
+        target_ref = 'specs/demo/execution-dag.r4.json'
+        self.write(target_ref, json.dumps(target_dag))
+        unrelated = self.root / self.result('T011')
+        unrelated.write_bytes(unrelated.read_bytes() + b' ')
+        preview = runs.rebase_task_results(self.root, WORK, self.target, target_ref, source_run,
+            self.dag_ref, ['T007', 'T008', 'T009'], self.admission, source_commit=source_commit)
+        self.assertEqual(set(preview['import']['tasks']), {'T007', 'T008', 'T009'})
 
     def test_6020_import_projects_canonical_bindings_without_rewriting_receipts(self):
         _, applied = self.apply()

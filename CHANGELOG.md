@@ -1,6 +1,6 @@
 # Changelog
 
-## 6.0.25
+## 6.0.28
 
 - Fix: `status` deixa de estourar `STATUS-TIMEOUT`. `item_payload` chamava `store.read_snapshot` duas vezes por work item (via `cleanup_projection → _read_runs` e direto), e cada leitura revalida o journal inteiro do Store por repositório (`.git/grill/events.jsonl`). Com 174 bundles em 38 worktrees eram 348 validações idênticas (~161 s) contra o teto de 30 s. Agora `build_status` lê o snapshot uma vez e o injeta em `item_payload`, `cleanup_projection` e `_read_runs` (parâmetro opcional; o default preserva o comportamento anterior). O workspace inteiro cai para ~4 s. O timeout e a validação do Store não mudam; o custo por leitura segue O(journal).
 - Fix: o ciclo de vida do contexto de orquestração ganha transição de saída. Até a 6.0.2 um work item cujo líder encerrava a sessão ficava permanentemente inalcançável: `_bind_orchestration` só aceitava continuidade com observação de líder idêntica e `ACTIVE`, e a recusa `CONTEXT-FENCED` persistia mesmo com o líder anterior `RELEASED` ou o contexto inteiro encerrado — não havia verbo algum que mudasse o vínculo. O verbo novo `gauntlet-context-takeover` é o ato explícito de tomada, autorizado **somente** por observação de dispatch terminal do líder anterior: status fora de `dispatched`/`running`, `capabilityRevokedAt` não nulo, ou liveness `exited` vinda de `agent_status`. Sem `--apply` ele executa todas as verificações e devolve `TAKEOVER-PREVIEW` com o hash das entradas relidas, ou exatamente a recusa que o apply devolveria, sem escrever byte algum. As recusas são distintas e fail-closed: `TAKEOVER-LEADER-ACTIVE` (líder ainda vivo), `TAKEOVER-EVIDENCE-UNPROVEN` (observação ausente, ilegível, não correlacionada ao dispatch pedido ou com liveness `unverifiable`), `TAKEOVER-NOT-OBSERVABLE` (líder registrado não é um dispatch observável), `TAKEOVER-WORK-ACTIVE` (trabalho de especialista em voo), `TAKEOVER-INPUTS-STALE` (hash divergente) e `TAKEOVER-REUSED` (repetição idêntica já aplicada, sem reobservar). A mutação usa o mesmo compare-and-swap por revisão do store, então duas tomadas concorrentes sobre a mesma revisão terminam com uma aceita e a outra recusada por estado alterado. Aplicada a tomada, o contexto anterior passa a encerrado e o sucessor nasce na época seguinte carregando o bloco de sucessão — contexto e sessão de origem, motivo, referência e digest da observação usada como prova, e o instante —, enquanto `development`, campanha, resultados aceitos e escopo declarado permanecem byte a byte iguais.
@@ -11,6 +11,19 @@
 - Integra também a `main` em 6.0.12 (`0ca6760`). Sem conflito de código: apenas o CHANGELOG, porque os dois lados haviam numerado 6.0.12. A versão desta entrega sobe para 6.0.13 para ficar acima da publicada.
 - Integra a `main` em 6.0.14. Sem conflito de código: `grill_workspace.py` e o contrato de orquestração fizeram auto-merge limpo. Versão sobe para 6.0.15 para ficar acima da publicada.
 - Integra a `main` em 6.0.24 (`d4bf60b`). Conflitos só de versão/documentação e de `tests/validate_agent_orchestration_contract.py`; código de continuidade (`grill_workspace.py`, `agent_runtime.py`, `gauntlet_runs.py`) fez auto-merge. As entradas desta entrega, antes numeradas 6.0.15/6.0.16, passam a 6.0.25 para ficar acima da publicada.
+- Integra a `main` em 6.0.27 (`657e2ba`, rebase aninhado em `gauntlet_runs.py` e contrato de import). Sem conflito de código. As entradas desta entrega passam a 6.0.28, porque a `main` publicou 6.0.25 a 6.0.27 durante o ship.
+
+## 6.0.27
+
+- Fix: limita a revalidação de workers locais do run ancestral aos nós solicitados pelo rebase, sem confundir sidecars de execução posterior com evidência importada.
+
+## 6.0.26
+
+- Fix: inclui no rebase tarefas de workers locais `CLEANED` do source run, reutilizando a validação completa de sidecars, receipts, wave e cleanup.
+
+## 6.0.25
+
+- Fix: revalida imports v2 históricos contra o `tasks.md` do commit intermediário, permitindo rebases encadeados quando o DAG atual já avançou.
 
 ## 6.0.24
 
