@@ -390,7 +390,15 @@ def _document_version(workflow_text: str) -> str:
         if "grill-with-docs-workflow:" in line:
             marker = line.split("grill-with-docs-workflow:", 1)[1].split("-->", 1)[0].strip()
             break
-    return marker if marker in WORKFLOW_STEPS_BY_VERSION else WORKFLOW_VERSION
+    if marker is not None:
+        if marker not in WORKFLOW_STEPS_BY_VERSION:
+            raise _fail("WORKFLOW-VERSION-UNKNOWN", marker)
+        return marker
+    references = [version for version, filename in workflow_versions.REGISTRY_FILENAME_BY_VERSION.items()
+                  if filename in workflow_text]
+    if len(references) == 1:
+        return references[0]
+    raise _fail("WORKFLOW_INCOMPATIBLE", "unmarked workflow requires one versioned registry reference")
 
 
 def _validate_worker_count(value: Any) -> int:

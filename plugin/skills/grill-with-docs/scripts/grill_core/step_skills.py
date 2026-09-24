@@ -708,6 +708,7 @@ def _resolve_workflow_skill(
     trusted_catalogs_bytes: bytes | None = None,
     pinned_resolution: Mapping[str, Any] | None = None,
     resolver_version: str = RESOLVER_VERSION,
+    registry_snapshot: tuple[dict[str, Any], str] | None = None,
 ) -> dict[str, Any]:
     """Resolve one Spec Kit step to its canonical skill for ``runtime``.
 
@@ -730,7 +731,7 @@ def _resolve_workflow_skill(
     with ``BLOCKED_CAPABILITY`` or ``STALE_SKILL_RESOLUTION`` otherwise. It never
     returns a DIRECT / EMULATED / BEST_EFFORT fallback.
     """
-    document, actual = load_registry() if registry is None else parse_and_hash_registry(registry)
+    document, actual = registry_snapshot if registry_snapshot is not None else (load_registry() if registry is None else parse_and_hash_registry(registry))
     _text(registry_sha256_expected, SHA256_RE, "INVALID_DIGEST", field="registry_sha256")
     if actual != registry_sha256_expected:
         raise _stale("REGISTRY_SHA256_MISMATCH", expected=registry_sha256_expected, actual=actual)
@@ -851,9 +852,12 @@ def resolve_workflow_skill(
     resolver_version: str = RESOLVER_VERSION,
 ) -> dict[str, Any]:
     """Resolve one skill against a trust asset path, never caller trust data."""
-    trusted = load_trusted_catalogs(
-        None if trusted_catalogs_path is None else Path(trusted_catalogs_path)
-    )
+    if catalog is None:
+        raise _blocked("CATALOG_ABSENT")
+    snapshot = load_registry() if registry is None else parse_and_hash_registry(registry)
+    if trusted_catalogs_path is None:
+        trusted_catalogs_path = TRUSTED_CATALOGS_PATH.parent / workflow_versions.TRUSTED_CATALOGS_FILENAME_BY_VERSION[snapshot[0]["workflow_version"]]
+    trusted = load_trusted_catalogs(Path(trusted_catalogs_path))
     return _resolve_workflow_skill(
         step_id,
         runtime,
@@ -863,6 +867,7 @@ def resolve_workflow_skill(
         trusted_catalogs=trusted,
         pinned_resolution=pinned_resolution,
         resolver_version=resolver_version,
+        registry_snapshot=snapshot,
     )
 
 
@@ -878,9 +883,12 @@ def resolve_shipped_workflow_skills(
     """Resolve a batch using one shipped trust-asset snapshot.
 
     ``trusted_catalogs_path`` selects which version's snapshot to trust; it
-    defaults to the active version's. A caller activating a v3 workflow must
-    pass v3's, or it would judge v3's catalogue against v4's trust pin.
+    defaults to the supplied registry's version. Registry validation is shared
+    within this call only; no evidence survives into the next operation.
     """
+    snapshot = parse_and_hash_registry(registry)
+    if trusted_catalogs_path is None:
+        trusted_catalogs_path = TRUSTED_CATALOGS_PATH.parent / workflow_versions.TRUSTED_CATALOGS_FILENAME_BY_VERSION[snapshot[0]["workflow_version"]]
     trusted_bytes, trusted = _load_trusted_catalogs_snapshot(trusted_catalogs_path)
     return [
         _resolve_workflow_skill(
@@ -890,6 +898,7 @@ def resolve_shipped_workflow_skills(
             registry=registry,
             catalog=catalog,
             trusted_catalogs=trusted,
+            registry_snapshot=snapshot,
         )
         for step_id in step_ids
     ], trusted_bytes
@@ -1041,6 +1050,13 @@ def _anchor_resolution_to_registry(
     covers every field in the document at once, including any not yet named
     here.
     """
+    if registry is None:
+        # Immutable historical receipts select only a shipped asset by its exact pin.
+        matches = [raw for path in REGISTRY_PATH_BY_VERSION.values()
+                   for raw in (path.read_bytes(),) if registry_sha256(raw) == resolution.get("registry_sha256")]
+        if len(matches) != 1:
+            raise _unattested("RESOLUTION_REGISTRY_MISMATCH", actual=resolution.get("registry_sha256"))
+        registry = matches[0]
     document, actual = load_registry() if registry is None else parse_and_hash_registry(registry)
     if resolution.get("registry_sha256") != actual:
         raise _unattested(

@@ -52,6 +52,20 @@ SEQUENCE_V4 = (
     "ship",
 )
 
+SEQUENCE_V5 = (
+    "specify",
+    "plan",
+    "checklist",
+    "tasks",
+    "analyze",
+    "partition",
+    "implement-parallel",
+    "converge",
+    "verify",
+    "review",
+    "ship",
+)
+
 #: Provenance only. Not the source of ``SEQUENCE_V4`` -- see module docstring.
 STEP_RENAMES_V3_TO_V4 = {
     "agent-assign": "partition",
@@ -92,11 +106,26 @@ TIER_POLICY_V4 = {
     "ship": "large",
 }
 
+TIER_POLICY_V5 = {
+    "specify": "large",
+    "plan": "large",
+    "checklist": "small",
+    "tasks": "medium",
+    "analyze": "large",
+    "partition": "medium",
+    "implement-parallel": "medium",
+    "converge": "medium",
+    "verify": "medium",
+    "review": "large",
+    "ship": "large",
+}
+
 #: The step whose floor governs the workers dispatched under it. Read through
 #: this map instead of indexing a tier policy with a hard-coded step id --
 #: ``grill_workspace._tier_floors`` used to do the latter and raised KeyError
 #: with rc=1 and an empty stdout, which collides with the NO-GO exit code.
 EXECUTOR_STEP_BY_VERSION = {
+    "v5": "implement-parallel",
     "v3": "agent-execute",
     "v4": "implement-parallel",
 }
@@ -140,7 +169,22 @@ EXECUTION_CLASS_V4 = {
     "ship": "leader-allowed",
 }
 
+EXECUTION_CLASS_V5 = {
+    "specify": "leader-allowed",
+    "plan": "leader-allowed",
+    "checklist": "leader-allowed",
+    "tasks": "leader-allowed",
+    "analyze": "leader-allowed",
+    "partition": "leader-allowed",
+    "implement-parallel": "worker-required",
+    "converge": "leader-allowed",
+    "verify": "leader-allowed",
+    "review": "leader-allowed",
+    "ship": "leader-allowed",
+}
+
 EXECUTION_CLASS_BY_VERSION = {
+    "v5": EXECUTION_CLASS_V5,
     "v3": EXECUTION_CLASS_V3,
     "v4": EXECUTION_CLASS_V4,
 }
@@ -156,11 +200,13 @@ LEADER_WAVE_INDEX = 0
 
 
 SEQUENCE_BY_VERSION = {
+    "v5": SEQUENCE_V5,
     "v3": SEQUENCE_V3,
     "v4": SEQUENCE_V4,
 }
 
 TIER_POLICY_BY_VERSION = {
+    "v5": TIER_POLICY_V5,
     "v3": TIER_POLICY_V3,
     "v4": TIER_POLICY_V4,
 }
@@ -171,6 +217,7 @@ TIER_POLICY_BY_VERSION = {
 #: and repointing it in place would turn all of them into
 #: REGISTRY-PIN-DIVERGENT with no preview and no migration path.
 REGISTRY_FILENAME_BY_VERSION = {
+    "v5": "workflow-step-skills.v5.json",
     "v3": "workflow-step-skills.json",
     "v4": "workflow-step-skills.v4.json",
 }
@@ -181,6 +228,7 @@ REGISTRY_FILENAME_BY_VERSION = {
 #: pins the v3 catalogue by digest, and editing it in place would make every v3
 #: consumer read an UNTRUSTED_CATALOG overnight.
 CATALOG_FILENAME_BY_VERSION = {
+    "v5": "grill-v5-local-skills.catalog.json",
     "v3": "claude-code-local-skills.catalog.json",
     "v4": "grill-v4-local-skills.catalog.json",
 }
@@ -190,6 +238,7 @@ CATALOG_FILENAME_BY_VERSION = {
 # identity.  New activation code uses this table and therefore never falls
 # across runtimes when the selected harness is absent.
 CATALOG_FILENAME_BY_VERSION_RUNTIME = {
+    "v5": {"claude": "grill-v5-local-skills.catalog.json", "codex": "codex-v5-local-skills.catalog.json"},
     "v3": {
         "claude": "claude-code-local-skills.catalog.json",
     },
@@ -200,11 +249,13 @@ CATALOG_FILENAME_BY_VERSION_RUNTIME = {
 }
 
 CATALOG_ID_BY_VERSION = {
+    "v5": "grill-v5-local-skills",
     "v3": "claude-code-local-skills",
     "v4": "grill-v4-local-skills",
 }
 
 CATALOG_ID_BY_VERSION_RUNTIME = {
+    "v5": {"claude": "grill-v5-local-skills", "codex": "codex-v5-local-skills"},
     "v3": {
         "claude": "claude-code-local-skills",
     },
@@ -215,11 +266,13 @@ CATALOG_ID_BY_VERSION_RUNTIME = {
 }
 
 TRUSTED_CATALOGS_FILENAME_BY_VERSION = {
+    "v5": "workflow-trusted-catalogs.v5.json",
     "v3": "workflow-trusted-catalogs.json",
     "v4": "workflow-trusted-catalogs.v4.json",
 }
 
 TEMPLATE_FILENAME_BY_VERSION = {
+    "v5": "WORKFLOW.v5.template.md",
     "v2": "WORKFLOW.template.md",
     "v3": "WORKFLOW.v3.template.md",
     "v4": "WORKFLOW.v4.template.md",
@@ -229,6 +282,7 @@ TEMPLATE_FILENAME_BY_VERSION = {
 #: an explicit ``workflow_version`` so a renamed sequence stops being reported
 #: as a generic DEVELOPMENT-SCHEMA failure.
 DEVELOPMENT_SCHEMA_BY_VERSION = {
+    "v5": "grill-development/v2",
     "v3": "grill-development/v1",
     "v4": "grill-development/v2",
 }
@@ -237,7 +291,7 @@ DEVELOPMENT_SCHEMA_BY_VERSION = {
 #: execution surface until the gate moved to the v4 frontier; v2 never was.
 #: Shrinking this tuple is a deprecation, not a cleanup: it removes a
 #: capability a consumer had.
-EXECUTABLE_VERSIONS = ("v4",)
+EXECUTABLE_VERSIONS = ("v4", "v5")
 
 #: Workflow versions the runtime must still be able to *read*. Executing and
 #: knowing how to read are different powers and this module keeps them apart:
@@ -247,11 +301,11 @@ EXECUTABLE_VERSIONS = ("v4",)
 #: EXECUTABLE_VERSIONS -- dropping a key here would raise KeyError on a receipt
 #: this build did not mint, instead of returning a verdict about it.
 #: Invariant, tested: set(EXECUTABLE_VERSIONS) <= set(KNOWN_VERSIONS).
-KNOWN_VERSIONS = ("v3", "v4")
+KNOWN_VERSIONS = ("v3", "v4", "v5")
 
 #: The version this build executes. Kept distinct from KNOWN_VERSIONS so the
 #: gate has one obvious source and cannot drift from the tables.
-ACTIVE_VERSION = "v4"
+ACTIVE_VERSION = "v5"
 
 #: ``state.json`` development schema -> the workflow version it speaks, or None
 #: when the document declares its own. Frozen literal, never the inverse of
@@ -271,3 +325,10 @@ ACTIVE_DEVELOPMENT_SCHEMA = "grill-development/v2"
 #: receipt after this build ships still has to recognise ``agent-execute`` as a
 #: canonical step id -- it was one, under the version that minted the receipt.
 ALL_STEPS = tuple(sorted(set(SEQUENCE_V3) | set(SEQUENCE_V4)))
+
+# Policy selection follows the work item, not the installed build.
+ORCHESTRATION_POLICY_BY_VERSION = {
+    "v3": "agent-orchestration.v1.json",
+    "v4": "agent-orchestration.v1.json",
+    "v5": "agent-orchestration.v2.json",
+}

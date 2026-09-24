@@ -377,15 +377,16 @@ class RealCorpus(unittest.TestCase):
                 placed = [tid for node in report["nodes"] for tid in node["task_ids"]]
                 self.assertEqual(len(placed), report["dispatchable_tasks"])
                 self.assertEqual(len(set(placed)), len(placed))
-                accounted = set(placed) | set(report["deferred_to_leader"])
+                accounted = set(placed) | set(report["deferred_to_leader"]) | set(report.get("read_only_tasks", [])) | set(report.get("accepted_tasks", []))
                 self.assertEqual(len(accounted), report["tasks"])
 
     def test_parallel_siblings_never_share_a_file_anywhere_in_the_corpus(self) -> None:
         for feature, dag, report in self.corpus():
             files = {node["id"]: set(node["files"]) for node in dag["nodes"]}
+            parallel = {node["id"]: node["parallel"] for node in dag["nodes"]}
             by_phase: dict[int, list[str]] = {}
             for node in report["nodes"]:
-                if node["parallel"]:
+                if parallel[node["id"]]:
                     by_phase.setdefault(node["phase"], []).append(node["id"])
             for phase, ids in by_phase.items():
                 for left in range(len(ids)):

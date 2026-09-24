@@ -716,6 +716,8 @@ def state_template(root: Path, work_id: str, constitution: dict[str, Any], workf
                    goal: dict[str, Any] | None = None) -> bytes:
     value = json.loads((ASSETS / "state.template.json").read_text(encoding="utf-8"))
     value["work_id"] = work_id
+    if _workflow_module(root).VERSION == "v5":
+        value["development"]["workflow_version"] = "v5"
     value["constitution"] = constitution
     # "schema", not "version": the value is this block's own frozen shape tag and
     # has never tracked the WORKFLOW.md document version -- that one lives in
@@ -1270,6 +1272,59 @@ def backlog_is_bound(report: dict[str, Any]) -> bool:
     return (report.get("backlog") or {}).get("status") == "BOUND"
 
 
+def _workflow_module(root: Path) -> Any:
+    """Dispatch by the document being used, never by the installed default."""
+    legacy = grill_core_module("workflow_v4")
+    try:
+        _, _, text = legacy.load_workflow(root)
+    except legacy.Failure:
+        return legacy
+    if legacy.marker_version(text) == "v5" or (legacy.marker_version(text) is None and "workflow-step-skills.v5.json" in text):
+        return grill_core_module("workflow_v5")
+    return legacy
+
+
+def _policy_path(root: Path, work_id: str | None = None, item: dict[str, Any] | None = None) -> Path:
+    """An adopted item's pinned policy takes precedence over fresh defaults."""
+    versions = grill_core_module("workflow_versions")
+    if item is None and work_id is not None:
+        snapshot = grill_core_module("store").read_snapshot(root, required=False)
+        if snapshot is not None:
+            item = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
+    if item is not None:
+        allowed = {"assets/" + name for name in versions.ORCHESTRATION_POLICY_BY_VERSION.values()}
+        if item.get("policy_ref") not in allowed:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", str(work_id))
+        path = ASSETS / item["policy_ref"].removeprefix("assets/")
+        if hash_bytes(path.read_bytes()) != item.get("policy_sha256"):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", str(work_id))
+        return path
+    workflow = root / "WORKFLOW.md"
+    version = versions.ACTIVE_VERSION
+    if workflow.exists():
+        version = _workflow_module(root).VERSION
+    return ASSETS / versions.ORCHESTRATION_POLICY_BY_VERSION[version]
+
+
+def _step_assessment(root: Path, work_id: str, step_id: str, policy: dict[str, Any]) -> dict[str, Any] | None:
+    if policy.get("policy_version") != "2":
+        return None
+    reference = f".grill/work-items/{work_id}/step-inputs/{step_id}.json"
+    contract = grill_core_module("agent_orchestration")
+    try:
+        raw = safe_read_regular_fd(root, root / reference)
+        value = grill_core_module("store").loads(raw.decode("utf-8"))
+        contract.validate_step_assessment(value, policy, step_id)
+        for file in value["files"]:
+            if hash_bytes(safe_read_regular_fd(root, root / file["path"])) != file["sha256"]:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-STALE", file["path"])
+    except CliFailure:
+        raise
+    except (OSError, ValueError, grill_core_module("store").StoreError) as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-INVALID", reference) from exc
+    return value
+
+
 def _coordinator_response(runtime: str) -> dict[str, Any]:
     """Report the policy recommendation without touching the active model."""
     contract = grill_core_module("agent_orchestration")
@@ -1612,7 +1667,7 @@ def _takeover_observation(root: Path, runtime: str, session_ref: str) -> tuple[d
 def _session_readiness(root: Path, runtime: str, session_ref: str | None, *,
                        work_id: str | None) -> dict[str, Any]:
     """Read one adapter observation and derive presentation at the CLI boundary."""
-    policy_path = ASSETS / "agent-orchestration.v1.json"
+    policy_path = _policy_path(root, work_id)
     policy_raw = policy_path.read_bytes()
     gwd_raw = (ASSETS.parent / "SKILL.md").read_bytes()
     agent_runtime = grill_core_module("agent_runtime")
@@ -1704,9 +1759,9 @@ def _initialize_orchestration(root: Path, work_id: str, runtime: str, session_re
     """New init persists its observed session when supplied; it never invents one."""
     contract, inputs = _orchestration_inputs(root, work_id, runtime, session_ref, [], readiness)
     store = grill_core_module("store")
-    policy = ASSETS / "agent-orchestration.v1.json"
+    policy = _policy_path(root, work_id)
     policy_bytes = policy.read_bytes()
-    policy_ref = "assets/agent-orchestration.v1.json"
+    policy_ref = "assets/" + policy.name
     policy_sha256 = hash_bytes(policy_bytes)
     store.bootstrap(root)
     try:
@@ -1779,9 +1834,9 @@ def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any
     root = project_root(args.root)
     contract, inputs = _orchestration_inputs(root, args.work_id, args.runtime, args.session_ref, args.scope_file or [])
     expected = contract.adoption_sha256(inputs)
-    policy = ASSETS / "agent-orchestration.v1.json"
+    policy = _policy_path(root, args.work_id)
     policy_bytes = policy.read_bytes()
-    policy_ref, policy_sha256 = "assets/agent-orchestration.v1.json", hash_bytes(policy_bytes)
+    policy_ref, policy_sha256 = "assets/" + policy.name, hash_bytes(policy_bytes)
     context_id = f"ctx-{expected[:12]}"
     candidate = contract.new_work_item(inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
         adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), context_id=context_id)
@@ -3059,7 +3114,7 @@ def migrate_v3_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     rebind_workflow = bool(getattr(args, "rebind_workflow", False))
     workflow_sha256: str | None = None
     if rebind_workflow:
-        workflow_gate = grill_core_module("workflow_v4")
+        workflow_gate = _workflow_module(root)
         try:
             _, workflow_bytes, workflow_text = workflow_gate.load_workflow(root)
             gate = workflow_gate.execution_gate(workflow_text)
@@ -3154,7 +3209,7 @@ def gauntlet_init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int
     root = project_root(args.root)
     resolve_development_item(root, args.work_id)
     gauntlet = grill_core_module("gauntlet")
-    workflow_gate = grill_core_module("workflow_v4")
+    workflow_gate = _workflow_module(root)
     work_item_v3 = grill_core_module("work_item_v3")
     step_skills = grill_core_module("step_skills")
     config_lock: Any | None = None
@@ -3241,7 +3296,7 @@ def gauntlet_activation_projection(args: argparse.Namespace) -> tuple[Path, str,
     # be safely projected. An unloadable core is therefore a top-level public
     # failure, never a synthetic STATUS response.
     gauntlet = grill_core_module("gauntlet")
-    workflow_gate = grill_core_module("workflow_v4")
+    workflow_gate = _workflow_module(root)
     work_item_v3 = grill_core_module("work_item_v3")
     step_skills = grill_core_module("step_skills")
     item_fd: int | None = None
@@ -3324,7 +3379,7 @@ def gauntlet_run_admission(args: argparse.Namespace) -> tuple[Path, Any, dict[st
     root = project_root(args.root)
     resolve_gauntlet_subject(root, args.work_id)
     gauntlet = grill_core_module("gauntlet")
-    workflow_gate = grill_core_module("workflow_v4")
+    workflow_gate = _workflow_module(root)
     work_item_v3 = grill_core_module("work_item_v3")
     step_skills = grill_core_module("step_skills")
     gauntlet_runs = grill_core_module("gauntlet_runs")
@@ -3988,7 +4043,7 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
 def _continuity_effective_activation(root: Path, work_id: str, runtime: str) -> dict[str, Any]:
     """Prove the destination runtime while retaining the source scheduler pins."""
     gauntlet = grill_core_module("gauntlet")
-    workflow_gate = grill_core_module("workflow_v4")
+    workflow_gate = _workflow_module(root)
     work_item_v3 = grill_core_module("work_item_v3")
     step_skills = grill_core_module("step_skills")
     item_fd = config_fd = None
@@ -4707,7 +4762,7 @@ def gauntlet_prepare_worker_command(args: argparse.Namespace) -> tuple[dict[str,
 
 #: Which step's floor governs the workers dispatched under it, per workflow
 #: version. Kept beside the sequence tables it belongs to.
-EXECUTOR_STEP_BY_VERSION = {"v3": "agent-execute", "v4": "implement-parallel"}
+EXECUTOR_STEP_BY_VERSION = _workflow_versions.EXECUTOR_STEP_BY_VERSION
 
 
 def _tier_floors(record: dict[str, Any]) -> tuple[str, str]:
@@ -4782,15 +4837,18 @@ def partition_emit_command(args: argparse.Namespace) -> tuple[dict[str, Any], in
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASKS-ABSENT", f"specs/{args.feature}/tasks.md does not exist")
     text = safe_read_regular_fd(root, tasks_path).decode("utf-8", errors="replace")
     adopted = partition.TASK_FILES_MARKER in text
+    groups = args.groups
+    if groups is None:
+        groups = json.loads(_policy_path(root, args.work_id).read_bytes()).get("partition_groups", 3)
     if adopted:
         # Every sealed DAG is evidence, never an input to overwrite. A changed
         # task source receives the next explicit revision pair.
         dag_ref, report_ref = _next_partition_revision(directory, args.feature)
     try:
-        dag, report = (partition.partition_task_files(text, feature=args.feature, groups=args.groups, root=root)
+        dag, report = (partition.partition_task_files(text, feature=args.feature, groups=groups, root=root)
                        if adopted else partition.partition(
                            text, feature=args.feature, sidecar_dir=f"specs/{args.feature}/implement",
-                           groups=args.groups,
+                           groups=groups,
                        ))
     except partition.PartitionError as error:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message,
@@ -5525,7 +5583,9 @@ def checkpoint_attestation_required(root: Path) -> bool:
         # checkpoint path -- the quiet downgrade this function exists to prevent.
         # A markerless human equivalent is placed by which frontier it satisfies.
         marker = workflow_v4.marker_version(text)
-        if marker == "v4" or (marker is None and workflow_v4.compatible_v4(text)):
+        if marker == "v5" or (marker is None and "workflow-step-skills.v5.json" in text):
+            gate_module = grill_core_module("workflow_v5")
+        elif marker == "v4" or (marker is None and workflow_v4.compatible_v4(text)):
             gate_module = workflow_v4
         elif marker == "v3" or (marker is None and workflow_v3.compatible_v3(text)):
             gate_module = workflow_v3
@@ -5599,6 +5659,17 @@ def require_converged_runs(root: Path, work_id: str) -> None:
         )
 
 
+def _v5_input_fingerprint(root: Path, work_id: str, step_id: str, head: str, artifact_sha256: str) -> str:
+    policy = json.loads(_policy_path(root, work_id).read_bytes())
+    assessment = _step_assessment(root, work_id, step_id, policy)
+    contract = grill_core_module("agent_orchestration")
+    digest = contract.validate_step_assessment(assessment, policy, step_id)
+    return "sha256:" + grill_core_module("store").jcs_sha256({
+        "work_id": work_id, "step": step_id, "head": head,
+        "artifact_sha256": artifact_sha256, "assessment_sha256": digest,
+    })
+
+
 def verify_checkpoint_attestation(
     root: Path,
     development: dict[str, Any],
@@ -5657,6 +5728,11 @@ def verify_checkpoint_attestation(
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.reason) from exc
     except store.StoreError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", translate_v3_code(exc.code), exc.message) from exc
+    if development.get("workflow_version") == "v5":
+        expected = _v5_input_fingerprint(root, work_id, step_id,
+            bundle["dispatch_intent"]["worktree_head"], bundle["step_output"]["output_sha256"])
+        if bundle["step_output"]["input_fingerprint"] != expected:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-STALE", step_id)
     # The execution id travels with the verdict because the state has to record
     # it: the pair (artefact digest, receipt ref) does not pin *which execution*
     # produced the accepted receipt, and a later supersession needs exactly that.
@@ -5828,13 +5904,7 @@ def _activity_policy(root: Path, work_id: str, context_id: str, epoch: int,
         contract.require_presentation_work_ready(context)
     except contract.OrchestrationError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", str(exc), "presentation is not ready") from exc
-    policy_path = ASSETS / "agent-orchestration.v1.json"
-    try:
-        policy = json.loads(policy_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", work_id) from exc
-    if item.get("policy_ref") != "assets/agent-orchestration.v1.json" or item.get("policy_sha256") != hash_bytes(policy_path.read_bytes()):
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", work_id)
+    _policy_path(root, work_id, item)
     return store, contract, snapshot.document, item, context
 
 
@@ -5973,9 +6043,10 @@ def _activity_descriptors(policy: dict[str, Any]) -> tuple[dict[str, Any], dict[
     references = policy.get("references")
     if not isinstance(references, dict):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "references")
+    protocol_name = "agent-orchestration.v2.md" if policy.get("policy_version") == "2" else "agent-orchestration.md"
     targets = {
-        "protocol": (Path(__file__).resolve().parent.parent / "references" / "agent-orchestration.md",
-                     "plugin/skills/grill-with-docs/references/agent-orchestration.md"),
+        "protocol": (Path(__file__).resolve().parent.parent / "references" / protocol_name,
+                     "plugin/skills/grill-with-docs/references/" + protocol_name),
         "task_files_template": (ASSETS / "task-files.v1.template.md",
                                 "plugin/skills/grill-with-docs/assets/task-files.v1.template.md"),
     }
@@ -6007,18 +6078,19 @@ def _step_activity_coverage(root: Path, work_id: str, step_id: str) -> dict[str,
     context = item.get("contexts", {}).get(context_id)
     if not isinstance(context, dict):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", work_id)
-    if not item.get("scope_files"):
+    policy_path = _policy_path(root, work_id, item)
+    policy = json.loads(policy_path.read_bytes())
+    if not item.get("scope_files") and policy.get("policy_version") != "2":
         return None
-    policy_path = ASSETS / "agent-orchestration.v1.json"
-    if item.get("policy_sha256") != hash_bytes(policy_path.read_bytes()):
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", work_id)
+    assessment = _step_assessment(root, work_id, step_id, policy)
     try:
-        policy = json.loads(policy_path.read_text(encoding="utf-8"))
         return contract.require_activity_coverage(
             item, policy, context_id=context_id, step_id=step_id,
-            new_how=step_id == "specify", frontend=step_id == "plan",
+            new_how=step_id == "specify" if assessment is None else assessment["new_how"],
+            frontend=step_id == "plan" if assessment is None else "frontend" in assessment["risks"],
+            assessment=assessment,
         )
-    except (json.JSONDecodeError, contract.OrchestrationError) as exc:
+    except contract.OrchestrationError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", str(exc)) from exc
 
 
@@ -6032,12 +6104,13 @@ def gauntlet_step_enter_command(args: argparse.Namespace) -> tuple[dict[str, Any
         _require_visual_gate(root, args.work_id)
     _store, contract, _document, _item, context = _activity_policy(
         root, args.work_id, args.context_id, args.epoch, args.session_ref)
-    policy_path = ASSETS / "agent-orchestration.v1.json"
-    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    policy_path = _policy_path(root, args.work_id, _item)
+    policy = json.loads(policy_path.read_bytes())
+    assessment = _step_assessment(root, args.work_id, args.step, policy)
     supplement, task_template = _activity_descriptors(policy)
     versions = grill_core_module("workflow_versions")
     step_skills = grill_core_module("step_skills")
-    workflow_version = versions.ACTIVE_VERSION
+    workflow_version = "v5" if policy.get("policy_version") == "2" else "v4"
     try:
         registry = (ASSETS / versions.REGISTRY_FILENAME_BY_VERSION[workflow_version]).read_bytes()
         catalog = (ASSETS / versions.CATALOG_FILENAME_BY_VERSION_RUNTIME[workflow_version][context["runtime"]]).read_bytes()
@@ -6052,7 +6125,7 @@ def gauntlet_step_enter_command(args: argparse.Namespace) -> tuple[dict[str, Any
         invocation = contract.invocation_context(
             policy=policy, policy_sha256=hash_bytes(policy_path.read_bytes()), context=context,
             step_id=args.step, canonical_entrypoint=resolutions[0], supplement=supplement,
-            task_template=task_template, new_how=bool(args.new_how), frontend=bool(args.frontend),
+            task_template=task_template, new_how=bool(args.new_how), frontend=bool(args.frontend), assessment=assessment,
         )
     except contract.OrchestrationError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", str(exc)) from exc
@@ -6169,6 +6242,11 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     store, contract, _document, _item, context = _activity_policy(
         root, args.work_id, args.context_id, args.epoch, args.session_ref)
     manifest, _manifest_ref = _activity_json(root, args.input_manifest, "INPUT-MANIFEST-INVALID")
+    if scope == "cycle":
+        policy = json.loads(_policy_path(root, args.work_id, _item).read_bytes())
+        assessment = _step_assessment(root, args.work_id, step_id, policy)
+        if assessment is not None and manifest.get("assessment_sha256") != contract.validate_step_assessment(assessment, policy, step_id):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-DIVERGENT", args.activity_id)
     try:
         current_input_sha256 = contract.activity_input_sha256(manifest)
     except contract.OrchestrationError as exc:
@@ -6182,6 +6260,15 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
             bound = contract.require_authority(item, args.context_id, args.epoch, args.session_ref)
         except contract.OrchestrationError as exc:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", str(exc)) from exc
+        if scope == "cycle" and policy.get("policy_version") == "2":
+            fresh = _step_assessment(root, args.work_id, step_id, policy)
+            if contract.validate_step_assessment(fresh, policy, step_id) != manifest.get("assessment_sha256"):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-DIVERGENT", args.activity_id)
+            if args.kind == "reviewer" and step_id == "review":
+                try:
+                    contract.require_final_review_authors(item, manifest["author_activity_ids"])
+                except contract.OrchestrationError as exc:
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "REVIEWER-NOT-INDEPENDENT", args.activity_id) from exc
         return item, bound
 
     snapshot = store.read_snapshot(root)
@@ -6439,7 +6526,7 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
 
     project_id = store.project_identity(root)["project_id"]
 
-    if workflow_version == "v4":
+    if workflow_version in {"v4", "v5"}:
         config_fd: int | None = None
         try:
             config_fd = gauntlet.open_config_directory(root)
@@ -6498,7 +6585,7 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                          str(error), extra={"work_id": args.work_id, "step": args.step}) from error
     resolution = resolutions[0]
 
-    if workflow_version == "v4":
+    if workflow_version in {"v4", "v5"}:
         activation_identity = {
             "work_item": {
                 "document_sha256": hashlib.sha256(
@@ -6626,7 +6713,9 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         artefact_sha256=artefact_sha256,
         logical_plan_sha256=jcs(identity),
         executable_plan_sha256=jcs({**identity, "artifact": args.artifact}),
-        input_fingerprint=jcs({**identity, "artifact_sha256": artefact_sha256}),
+        input_fingerprint=(_v5_input_fingerprint(root, args.work_id, args.step, head, artefact_sha256)
+                           if development.get("workflow_version") == "v5"
+                           else jcs({**identity, "artifact_sha256": artefact_sha256})),
         dependency_outputs=dependency_outputs,
         catalog=catalog,
         execution_round=execution_round,
@@ -6684,7 +6773,8 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-INITIALIZATION-UNSAFE", args.work_id)
             if args.from_step is None or not args.evidence or not args.reason.strip():
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-INITIALIZATION-REQUIRES-DECISION-EVIDENCE", args.work_id)
-            development = {"schema":ACTIVE_DEVELOPMENT_SCHEMA, "workflow_version":ACTIVE_WORKFLOW_VERSION,
+            version = _workflow_module(root).VERSION
+            development = {"schema":ACTIVE_DEVELOPMENT_SCHEMA, "workflow_version":version,
                            "sequence":SEQUENCE[:], "current_step":args.step,
                            "steps":{step:"pending" for step in SEQUENCE}, "renamed_from":{}, "audit":[]}
             state["development"] = development
@@ -7215,7 +7305,7 @@ def build_parser() -> JsonParser:
     partition_emit_parser.add_argument("root")
     partition_emit_parser.add_argument("--work-id", required=True)
     partition_emit_parser.add_argument("--feature", required=True)
-    partition_emit_parser.add_argument("--groups", type=int, default=3)
+    partition_emit_parser.add_argument("--groups", type=int, default=None)
     partition_emit_parser.add_argument("--apply", action="store_true")
     partition_emit_parser.add_argument("--session-ref")
     partition_brief_parser = subparsers.add_parser("gauntlet-partition-brief")

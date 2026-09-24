@@ -67,7 +67,7 @@ class Phase:
 #: purpose -- ``ensure_workflow.REGISTRY`` documents the same choice: this
 #: module must not acquire a load-time dependency on grill_core to read a
 #: document.
-ACCEPTED_WORKFLOW_MARKERS = ("v2", "v3", "v4")
+ACCEPTED_WORKFLOW_MARKERS = ("v2", "v3", "v4", "v5")
 #: The canonical step order per marker, frozen locally for the same reason.
 WORKFLOW_SEQUENCE_BY_MARKER = {
     "v2": ("specify", "plan", "checklist", "tasks", "analyze", "agent-assign",
@@ -75,6 +75,8 @@ WORKFLOW_SEQUENCE_BY_MARKER = {
     "v3": ("specify", "plan", "checklist", "tasks", "analyze", "agent-assign",
            "agent-execute", "converge", "verify", "review", "ship"),
     "v4": ("specify", "plan", "checklist", "tasks", "analyze", "partition",
+           "implement-parallel", "converge", "verify", "review", "ship"),
+    "v5": ("specify", "plan", "checklist", "tasks", "analyze", "partition",
            "implement-parallel", "converge", "verify", "review", "ship"),
 }
 
@@ -316,6 +318,47 @@ def validate_decomposition(root: Path, roadmap: Path | None, plan: Path | None, 
             if not how or not how.group(1).strip(): findings.append(f"PLAN-CONTEXT {phase}: HOW vazio")
 
 
+def question_batch_findings(records: list[dict], dq_ids: set[str]) -> list[str]:
+    """v5 batches keep one log transition per answered DQ, including partial replies."""
+    findings: list[str] = []
+    batches: dict[tuple[str, str], tuple[str, ...]] = {}
+    answered: set[tuple[tuple[str, str], str]] = set()
+    singles: dict[str, int] = {}
+    for record in records:
+        questions = record.get("batch_questions")
+        run = record.get("question_run", "legacy")
+        if not isinstance(run, str) or not run.strip():
+            findings.append("ROUND-LOG: sessão de perguntas inválida")
+            continue
+        if questions is None:
+            singles[run] = singles.get(run, 0) + int("question_id" in record)
+            continue
+        batch = record.get("batch")
+        if ("question_run" not in record or not isinstance(batch, str) or not batch.strip() or not isinstance(questions, list)
+                or not 1 <= len(questions) <= 3
+                or any(not isinstance(q, str) or q not in dq_ids for q in questions)):
+            findings.append("ROUND-LOG: lote inválido")
+            continue
+        if len(set(questions)) != len(questions) or record.get("question_id") not in questions:
+            findings.append("ROUND-LOG: perguntas divergentes no lote")
+            continue
+        batch = (run, batch)
+        declared = tuple(questions)
+        if batch in batches and batches[batch] != declared:
+            findings.append("ROUND-LOG: lote alterado")
+        batches[batch] = declared
+        key = (batch, record["question_id"])
+        if key in answered:
+            findings.append("ROUND-LOG: resposta duplicada no lote")
+        answered.add(key)
+    counts = dict(singles)
+    for (run, _batch), questions in batches.items():
+        counts[run] = counts.get(run, 0) + len(questions)
+    if any(count > 25 for count in counts.values()):
+        findings.append("ROUND-LOG: limite de 25 perguntas materiais excedido")
+    return findings
+
+
 def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[str], list[str], str | None, Path | None, bool]:
     root = root_arg.resolve()
     project_root = (project_root_arg or root_arg).resolve()
@@ -356,9 +399,11 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
     # Presence and path safety of the local template are mandatory; its placeholders are expected.
     _ = constitution_template
 
+    workflow_version = None
     if workflow and workflow.is_file():
         text = workflow.read_text(encoding="utf-8")
         markers = re.findall(r"grill-with-docs-workflow:(v\d+)", text)
+        workflow_version = markers[0] if len(markers) == 1 else None
         # Exactly one marker stays the invariant this line always protected: a
         # document declaring two managed versions is ambiguous about which
         # contract it is. Which one it declares is now open, because v2, v3 and
@@ -654,6 +699,7 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
 
     if round_log and round_log.is_file():
         previous = 0
+        batch_records: list[dict] = []
         seen_rounds: set[str] = set()
         modern_round_schema_seen = False
         for line_number, line in enumerate(round_log.read_text(encoding="utf-8").splitlines(), 1):
@@ -664,6 +710,10 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
             except json.JSONDecodeError:
                 findings.append(f"ROUND-LOG linha {line_number}: JSON inválido")
                 continue
+            if not isinstance(record, dict):
+                findings.append(f"ROUND-LOG linha {line_number}: objeto JSON obrigatório")
+                continue
+            batch_records.append(record)
             round_id = str(record.get("round_id", ""))
             match = ROUND_ID.fullmatch(round_id)
             if not match:
@@ -702,6 +752,9 @@ def audit(root_arg: Path, project_root_arg: Path | None = None) -> tuple[list[st
                     findings.append(f"ROUND-LOG linha {line_number}: legado após schema moderno")
                 elif not LEGACY_ROUND_FIELDS.issubset(record):
                     findings.append(f"ROUND-LOG linha {line_number}: legado incompleto")
+
+    if workflow_version == "v5" and round_log and round_log.is_file():
+        findings.extend(question_batch_findings(batch_records, set(dq_ids)))
 
     ready = [phase_id for phase_id in execution_order if phases.get(phase_id) and phases[phase_id].state == "ready-for-specify"]
     incomplete = [phase_id for phase_id in execution_order if phases.get(phase_id) and phases[phase_id].state not in {"complete", "superseded"}]

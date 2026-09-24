@@ -236,7 +236,9 @@ def _task_binding(value: Any, label: str, *, nullable: bool = False) -> None:
 
 
 def _input_manifest(value: Any) -> None:
-    value = _object(value, {"files", "required_activity_ids", "author_activity_ids", "task_binding", "human_authorization"}, set(), "input manifest")
+    value = _object(value, {"files", "required_activity_ids", "author_activity_ids", "task_binding", "human_authorization"}, {"assessment_sha256"}, "input manifest")
+    if "assessment_sha256" in value:
+        _digest(value["assessment_sha256"], "assessment sha256")
     if not isinstance(value["files"], list):
         _fail("invalid input manifest files")
     paths = []
@@ -359,9 +361,33 @@ def verify_specialist(activity: Mapping[str, Any], observation: Mapping[str, Any
     return observed
 
 
+def validate_step_assessment(value: Any, policy: Mapping[str, Any], step_id: str) -> str:
+    """Validate declared risk and bind it to exact inputs; no NLP classification."""
+    value = _object(value, {"schema", "step", "new_how", "risks", "justification", "files"}, set(), "step assessment")
+    if value["schema"] != "grill-step-assessment/v1" or value["step"] != step_id or type(value["new_how"]) is not bool:
+        _fail("STEP-ASSESSMENT-INVALID")
+    if not isinstance(value["justification"], str) or not value["justification"].strip():
+        _fail("STEP-ASSESSMENT-INVALID")
+    risks = value["risks"]
+    if (not isinstance(risks, list) or any(not isinstance(risk, str) or risk not in policy["review_risks"] for risk in risks)
+            or len(set(risks)) != len(risks)):
+        _fail("STEP-ASSESSMENT-INVALID")
+    if not isinstance(value["files"], list) or not value["files"]:
+        _fail("STEP-ASSESSMENT-INVALID")
+    paths = []
+    for file in value["files"]:
+        file = _object(file, {"path", "sha256"}, set(), "assessment file")
+        _safe_path(file["path"])
+        _digest(file["sha256"], "assessment file sha256")
+        paths.append(file["path"])
+    if len(set(paths)) != len(paths):
+        _fail("STEP-ASSESSMENT-INVALID")
+    return _manifest_sha256(value)
+
+
 def activity_requirements(policy: Mapping[str, Any], *, step_id: str | None,
                           activity_scope: str, new_how: bool = False,
-                          frontend: bool = False) -> tuple[str, ...]:
+                          frontend: bool = False, assessment: Mapping[str, Any] | None = None) -> tuple[str, ...]:
     """Return policy roles; a delivered context is intentionally not proof."""
     if activity_scope == "interview":
         interview = policy.get("interview") if isinstance(policy, Mapping) else None
@@ -371,6 +397,20 @@ def activity_requirements(policy: Mapping[str, Any], *, step_id: str | None,
         if not isinstance(roles, list) or any(role not in {"author", "reviewer"} for role in roles):
             _fail("ACTIVITY-REQUIRED")
         return tuple(roles)
+    if policy.get("policy_version") == "2":
+        if assessment is None:
+            _fail("STEP-ASSESSMENT-REQUIRED")
+        validate_step_assessment(assessment, policy, step_id)
+        if new_how and not assessment["new_how"] or frontend and "frontend" not in assessment["risks"]:
+            _fail("STEP-ASSESSMENT-DIVERGENT")
+        roles = set()
+        if step_id in {"plan", "review"} or assessment["risks"]:
+            roles.add("reviewer")
+        if step_id == "plan" or assessment["new_how"]:
+            roles.add("author")
+        if step_id not in policy.get("activity_matrix", {}):
+            _fail("ACTIVITY-REQUIRED")
+        return tuple(sorted(roles))
     matrix = policy.get("activity_matrix") if isinstance(policy, Mapping) else None
     entry = matrix.get(step_id) if isinstance(matrix, Mapping) else None
     if not isinstance(entry, Mapping):
@@ -451,13 +491,22 @@ def require_reviewer_independence(activity: Mapping[str, Any], observation: Mapp
             _fail("REVIEWER-NOT-INDEPENDENT")
 
 
+def require_final_review_authors(item: Mapping[str, Any], author_ids: list[str]) -> None:
+    authors = {key for key, candidate in item.get("activities", {}).items()
+               if candidate.get("activity_type") == "author" and candidate.get("state") == "ACCEPTED"}
+    if not authors.issubset(set(author_ids)):
+        _fail("REVIEWER-NOT-INDEPENDENT")
+
+
 def activity_coverage(item: Mapping[str, Any], policy: Mapping[str, Any], *, context_id: str,
                       step_id: str | None, activity_scope: str = "cycle",
-                      new_how: bool = False, frontend: bool = False) -> dict[str, Any]:
+                      new_how: bool = False, frontend: bool = False,
+                      assessment: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Prove accepted activities, never merely that their context was sent."""
     required = activity_requirements(policy, step_id=step_id, activity_scope=activity_scope,
-                                     new_how=new_how, frontend=frontend)
+                                     new_how=new_how, frontend=frontend, assessment=assessment)
     accepted: dict[str, list[str]] = {role: [] for role in required}
+    assessment_sha256 = _manifest_sha256(dict(assessment)) if assessment is not None else None
     changes_required: list[str] = []
     stale: list[str] = []
     for activity_id, activity in item.get("activities", {}).items():
@@ -465,6 +514,8 @@ def activity_coverage(item: Mapping[str, Any], policy: Mapping[str, Any], *, con
             continue
         if (activity.get("context_id") != context_id or activity.get("activity_scope") != activity_scope
                 or activity.get("step_id") != step_id or activity.get("activity_type") not in accepted):
+            continue
+        if assessment_sha256 is not None and activity.get("input_manifest", {}).get("assessment_sha256") != assessment_sha256:
             continue
         if activity["activity_type"] == "reviewer":
             verdict = activity.get("review_verdict")
@@ -477,6 +528,8 @@ def activity_coverage(item: Mapping[str, Any], policy: Mapping[str, Any], *, con
             if verdict != "APPROVED":
                 continue
             try:
+                if assessment is not None and step_id == "review":
+                    require_final_review_authors(item, activity.get("author_activity_ids", []))
                 _reviewer_authors(activity, item.get("activities", {}), require_accepted=True)
             except OrchestrationError:
                 continue
@@ -488,9 +541,10 @@ def activity_coverage(item: Mapping[str, Any], policy: Mapping[str, Any], *, con
 
 def require_activity_coverage(item: Mapping[str, Any], policy: Mapping[str, Any], *, context_id: str,
                               step_id: str | None, activity_scope: str = "cycle",
-                              new_how: bool = False, frontend: bool = False) -> dict[str, Any]:
+                              new_how: bool = False, frontend: bool = False,
+                      assessment: Mapping[str, Any] | None = None) -> dict[str, Any]:
     coverage = activity_coverage(item, policy, context_id=context_id, step_id=step_id,
-                                 activity_scope=activity_scope, new_how=new_how, frontend=frontend)
+                                 activity_scope=activity_scope, new_how=new_how, frontend=frontend, assessment=assessment)
     if coverage["missing"]:
         _fail("ACTIVITY-REQUIRED: " + ", ".join(coverage["missing"]))
     return coverage
@@ -500,13 +554,13 @@ def invocation_context(*, policy: Mapping[str, Any], policy_sha256: str,
                        context: Mapping[str, Any], step_id: str,
                        canonical_entrypoint: Mapping[str, Any], supplement: Mapping[str, Any],
                        task_template: Mapping[str, Any], new_how: bool = False,
-                       frontend: bool = False) -> dict[str, Any]:
+                       frontend: bool = False, assessment: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Return hashed supplements alongside, never instead of, the entrypoint."""
     _digest(policy_sha256, "policy sha256")
     if not isinstance(canonical_entrypoint, Mapping) or not isinstance(supplement, Mapping) or not isinstance(task_template, Mapping):
         _fail("INVALID-INVOCATION-CONTEXT")
     requirements = activity_requirements(policy, step_id=step_id, activity_scope="cycle",
-                                         new_how=new_how, frontend=frontend)
+                                         new_how=new_how, frontend=frontend, assessment=assessment)
     presentation = require_presentation_work_ready(context)
     return {
         "schema": _ACTIVITY_CONTEXT_SCHEMA,
@@ -518,6 +572,7 @@ def invocation_context(*, policy: Mapping[str, Any], policy_sha256: str,
         "supplement": copy.deepcopy(dict(supplement)),
         "task_template": copy.deepcopy(dict(task_template)),
         "required_activities": list(requirements),
+        **({"assessment": copy.deepcopy(dict(assessment)), "assessment_sha256": _manifest_sha256(dict(assessment))} if assessment is not None else {}),
         "presentation": copy.deepcopy(presentation),
         "limitation": "context-delivery-is-not-skill-invocation",
     }

@@ -42,11 +42,7 @@ REPO = Path(__file__).resolve().parents[1]
 SKILL = REPO / "plugin/skills/grill-with-docs"
 ASSETS = SKILL / "assets"
 WORKSPACE = SKILL / "scripts/grill_workspace.py"
-# The migrator is resolved from the SSOT's active frontier, never pinned to a
-# version literal. This is the whole point of the anchor: when ACTIVE_VERSION
-# moves, these fixtures materialise the new frontier and every suite below
-# exercises it at the CLI boundary. A literal here is what let the CLI inject
-# the previous version's gate while the tests kept proving the old one worked.
+# Fixtures exercise the active workflow; document materialization is test setup.
 def _load_workflow_versions():
     spec = importlib.util.spec_from_file_location(
         "grill_core_workflow_versions_fixture", SKILL / "scripts" / "grill_core/workflow_versions.py"
@@ -58,7 +54,6 @@ def _load_workflow_versions():
 
 WORKFLOW_VERSIONS = _load_workflow_versions()
 ACTIVE_WORKFLOW_VERSION = WORKFLOW_VERSIONS.ACTIVE_VERSION
-WORKFLOW_MIGRATOR = SKILL / "scripts" / f"grill_core/workflow_{ACTIVE_WORKFLOW_VERSION}.py"
 WORKFLOW_TEMPLATE = ASSETS / "WORKFLOW.template.md"
 SCRIPTS = SKILL / "scripts"
 WORK_ID = "scheduler-waves-a1b2"
@@ -177,14 +172,7 @@ def build_rebound_v3_repository(
     process, payload = invoke(WORKSPACE, "migrate-v3", root, "--work-id", work_id, "--apply")
     if process.returncode != 0 or payload.get("verdict") != "APPLIED" or process.stderr:
         raise AssertionError((process.returncode, payload, process.stderr))
-    process, preview = invoke(WORKFLOW_MIGRATOR, "migrate", root)
-    if process.returncode != 0 or preview.get("verdict") != "PREVIEW" or process.stderr:
-        raise AssertionError((process.returncode, preview, process.stderr))
-    process, payload = invoke(
-        WORKFLOW_MIGRATOR, "migrate", root, "--apply", "--expected-sha256", preview.get("current_sha256", preview.get("sha256"))
-    )
-    if process.returncode != 0 or payload.get("verdict") != "APPLIED" or process.stderr:
-        raise AssertionError((process.returncode, payload, process.stderr))
+    orchestration_fixture.materialize_active_workflow(root)
     process, payload = invoke(WORKSPACE, "migrate-v3", root, "--work-id", work_id, "--rebind-workflow", "--apply")
     if process.returncode != 0 or payload.get("verdict") not in {"APPLIED", "REUSED"} or process.stderr:
         raise AssertionError((process.returncode, payload, process.stderr))

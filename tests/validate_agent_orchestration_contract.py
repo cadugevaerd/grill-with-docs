@@ -990,6 +990,8 @@ class AgentOrchestrationContract(unittest.TestCase):
         temp = tempfile.TemporaryDirectory(); root = Path(temp.name).resolve()
         for args in (("init",), ("config", "user.email", "test@example.invalid"), ("config", "user.name", "Test")):
             subprocess.run(["git", "-C", str(root), *args], check=True, stdout=subprocess.DEVNULL)
+        # These scenarios exercise the historical v1 orchestration contract.
+        (root / "WORKFLOW.md").write_bytes(grill_workspace.grill_core_module("workflow_v4").render_v4())
         (root / "README.md").write_text("fixture\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(root), "add", "README.md"], check=True)
         subprocess.run(["git", "-C", str(root), "commit", "-m", "fixture"], check=True, stdout=subprocess.DEVNULL)

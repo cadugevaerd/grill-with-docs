@@ -490,8 +490,9 @@ def _orca_presentation_axes(observed: dict[str, Any], transcript: dict[str, Any]
     """
     evidence: dict[str, Any] = {"installation": {}, "enablement": {}, "trust": {}}
     evidence.update(_runtime_config_axes(observed))
+    plugin_command = [shutil.which(observed["provider"]), "plugin", "list", "--json"]
     for call, event_id, output in _tool_results(transcript):
-        if _tool_command(call) != [shutil.which(observed["provider"]), "plugin", "list", "--json"]:
+        if _tool_command(call) != plugin_command:
             continue
         evidence["installation"] = {}
         evidence.pop("plugin_listing", None)
@@ -1078,6 +1079,7 @@ def _full_read(observed: dict[str, Any], transcript: dict[str, Any], request: di
                                    for block in message.get("blocks") or [])), default=-1)
     transcript = {**transcript, "messages": messages[last_compaction + 1:]}
     requested = False
+    cat_command = [shutil.which("cat"), "--", request["skill_ref"]]
     for call, event_id, output in _tool_results(transcript):
         command = _tool_command(call)
         # The native tool result must contain this exact core-issued request.
@@ -1090,7 +1092,7 @@ def _full_read(observed: dict[str, Any], transcript: dict[str, Any], request: di
             requested = (isinstance(presentation, dict) and presentation.get("load_request") == request
                          and payload.get("verdict") == "BLOCKED" and payload.get("code") == "STYLE-LOAD-UNCONFIRMED")
             continue
-        if not requested or command != [shutil.which("cat"), "--", request["skill_ref"]] or not isinstance(output, str) or not isinstance(event_id, str):
+        if not requested or command != cat_command or not isinstance(output, str) or not isinstance(event_id, str):
             continue
         raw = output.encode()
         canonical = raw

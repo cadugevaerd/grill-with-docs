@@ -31,11 +31,7 @@ SKILL = REPO / "plugin/skills/grill-with-docs"
 SCRIPTS = SKILL / "scripts"
 ASSETS = SKILL / "assets"
 WORKSPACE = SCRIPTS / "grill_workspace.py"
-# The migrator is resolved from the SSOT's active frontier, never pinned to a
-# version literal. This is the whole point of the anchor: when ACTIVE_VERSION
-# moves, these fixtures materialise the new frontier and every suite below
-# exercises it at the CLI boundary. A literal here is what let the CLI inject
-# the previous version's gate while the tests kept proving the old one worked.
+# Fixtures exercise the active workflow; document materialization is test setup.
 def _load_workflow_versions():
     spec = importlib.util.spec_from_file_location(
         "grill_core_workflow_versions_fixture", SCRIPTS / "grill_core/workflow_versions.py"
@@ -47,9 +43,8 @@ def _load_workflow_versions():
 
 WORKFLOW_VERSIONS = _load_workflow_versions()
 ACTIVE_WORKFLOW_VERSION = WORKFLOW_VERSIONS.ACTIVE_VERSION
-WORKFLOW_MIGRATOR = SCRIPTS / f"grill_core/workflow_{ACTIVE_WORKFLOW_VERSION}.py"
 WORKFLOW_V2_TEMPLATE = ASSETS / "WORKFLOW.template.md"
-# Assets follow the same anchor as the migrator: each version owns its own
+# Assets follow the active version anchor: each version owns its own
 # registry, catalogue and trust snapshot, and the fixture must read the ones the
 # active frontier actually resolves. Pinning the v3 filenames here is what made
 # these tests keep proving the previous frontier worked.
@@ -221,18 +216,8 @@ def build_v2_repository(root: Path) -> None:
         )
 
 
-def migrate_fixture_workflow(root: Path) -> None:
-    process, preview = invoke(WORKFLOW_MIGRATOR, "migrate", root)
-    require_success(process, preview, "PREVIEW")
-    process, payload = invoke(
-        WORKFLOW_MIGRATOR,
-        "migrate",
-        root,
-        "--apply",
-        "--expected-sha256",
-        preview.get("current_sha256", preview.get("sha256")),
-    )
-    require_success(process, payload, "APPLIED")
+def materialize_fixture_workflow(root: Path) -> None:
+    orchestration_fixture.materialize_active_workflow(root)
 
 
 def build_rebound_v3_repository(root: Path) -> None:
@@ -240,7 +225,7 @@ def build_rebound_v3_repository(root: Path) -> None:
     build_v2_repository(root)
     process, payload = invoke(WORKSPACE, "migrate-v3", root, "--work-id", WORK_ID, "--apply")
     require_success(process, payload, "APPLIED")
-    migrate_fixture_workflow(root)
+    materialize_fixture_workflow(root)
     process, payload = invoke(
         WORKSPACE,
         "migrate-v3",
@@ -265,7 +250,7 @@ def build_rebound_v3_repository(root: Path) -> None:
 
 def build_v2_item_v3_workflow_repository(root: Path) -> None:
     build_v2_repository(root)
-    migrate_fixture_workflow(root)
+    materialize_fixture_workflow(root)
 
 
 def add_rebound_v3_work_item(root: Path, work_id: str) -> None:
@@ -1013,7 +998,7 @@ class GauntletInitContract(unittest.TestCase):
                              (0, "ACTIVATED", "codex"), payload)
             record = self.read_config(codex_root)["activations"][WORK_ID]
             self.assertEqual(record["runtime"], {"id": "codex", "adapter": "codex-skill/v1"})
-            self.assertEqual(record["catalog"]["id"], "codex-v4-local-skills")
+            self.assertEqual(record["catalog"]["id"], f"codex-{ACTIVE_WORKFLOW_VERSION}-local-skills")
 
             hermes_root = self.fresh_copy(parent, "hermes")
             before = file_snapshot(hermes_root)

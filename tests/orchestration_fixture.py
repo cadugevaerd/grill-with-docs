@@ -67,7 +67,7 @@ def boundary(module, root, runtime, session_ref, work_id, *, loaded=True):
         return pack(show if argv[1] == "worker-show" else transcript)
     adapter = core.LeaderBoundary(session_ref, root, runtime, "term-fixture", read,
                                   lambda observed, source: copy.deepcopy(axes))
-    policy_raw = (module.ASSETS / "agent-orchestration.v1.json").read_bytes()
+    policy_raw = module._policy_path(root, work_id).read_bytes()
     _, pending = core.project_leader_presentation(adapter, policy=json.loads(policy_raw),
         policy_sha256=hashlib.sha256(policy_raw).hexdigest(),
         gwd_skill_sha256=hashlib.sha256((module.ASSETS.parent / "SKILL.md").read_bytes()).hexdigest(),
@@ -92,11 +92,11 @@ def offline_leader(module):
         assets = Path(temporary) / "assets"
         shutil.copytree(module.ASSETS, assets)
         shutil.copyfile(module.ASSETS.parent / "SKILL.md", assets.parent / "SKILL.md")
-        policy_path = assets / "agent-orchestration.v1.json"
-        policy = json.loads(policy_path.read_bytes())
-        policy["presentation"]["approved"] = [{"version": "0.3.0", "skill_sha256":
-            "sha256:" + hashlib.sha256(REFERENCE.read_bytes()).hexdigest()}]
-        policy_path.write_bytes(pack(policy))
+        for policy_path in assets.glob("agent-orchestration.v*.json"):
+            policy = json.loads(policy_path.read_bytes())
+            policy["presentation"]["approved"] = [{"version": "0.3.0", "skill_sha256":
+                "sha256:" + hashlib.sha256(REFERENCE.read_bytes()).hexdigest()}]
+            policy_path.write_bytes(pack(policy))
         native_which = shutil.which
         with mock.patch.object(shutil, "which", side_effect=lambda name, *args, **kwargs:
                 (native_which(name, *args, **kwargs) or "/offline/bin/cat") if name == "cat" else native_which(name, *args, **kwargs)), \
@@ -133,3 +133,10 @@ def main():
 if __name__ == "__main__":
     os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     raise SystemExit(main())
+
+
+def materialize_active_workflow(root):
+    """Test setup only: v5 has no consumer migration command."""
+    from grill_core import workflow_v5, workflow_versions
+    assert workflow_versions.ACTIVE_VERSION == workflow_v5.VERSION
+    (root / "WORKFLOW.md").write_bytes(workflow_v5.render_v5())
