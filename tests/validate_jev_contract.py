@@ -79,11 +79,14 @@ class ProviderShape(unittest.TestCase):
         self.assertEqual(confident["model"], "typesafe/jev-1.13-20260917")
         self.assertAlmostEqual(confident["confidence"]["is_bug"], 0.96)
         self.assertAlmostEqual(confident["confidence"]["team"], 0.75)
-        doubtful = jev.interpret("fixture", questions, response, 0.8, [])
-        self.assertEqual(doubtful["decided_by"], "agent")
-        self.assertIsNone(doubtful["result"])
-        self.assertEqual(doubtful["hint"]["team"], "payments")
-        self.assertIs(doubtful["hint"]["is_bug"], True)
+        partial = jev.interpret("fixture", questions, response, 0.8, [])
+        self.assertEqual(partial["decided_by"], "partial")
+        self.assertIsNone(partial["result"])
+        self.assertEqual(partial["decided"], {"is_bug": True, "urgency": 1.99})
+        self.assertEqual(partial["pending"], ["team"])
+        self.assertEqual(partial["hint"], {"team": "payments"})
+        none = jev.interpret("fixture", questions, response, 0.999, [])
+        self.assertEqual((none["decided_by"], none["decided"]), ("agent", {}))
 
     def test_live_probe_response_is_read_like_the_documented_one(self):
         live = json.loads((REPO / "tests/fixtures/jev/live-response.json").read_text(encoding="utf-8"))["response"]
@@ -178,11 +181,22 @@ class KindMapping(unittest.TestCase):
         self.assertEqual(decision["result"], {"new_how": True, "risks": ["security"]})
         self.assertEqual(set(transport.bodies[0]["questions"]), {"new_how", "risk_security", "risk_frontend"})
 
-    def test_one_doubtful_question_hands_the_whole_decision_to_the_agent(self):
+    def test_one_doubtful_question_leaves_only_that_question_to_the_agent(self):
         decision = jev.decide("step-assessment", {"files": {}}, ["security"],
                               FakeTransport(noul=lambda k: 0.6 if k == "new_how" else 0.99))
-        self.assertEqual(decision["decided_by"], "agent")
+        self.assertEqual(decision["decided_by"], "partial")
         self.assertIsNone(decision["result"])
+        self.assertEqual(decision["decided"], {"risk_security": True})
+        self.assertEqual(decision["pending"], ["new_how"])
+
+    def test_one_confident_uncovered_requirement_is_a_no_go_even_when_partial(self):
+        probs = {"req_fr_001": 0.001, "req_fr_002": 0.6}
+        decision = jev.decide("spec-coverage", {}, ["FR-001", "FR-002"], FakeTransport(noul=probs.get))
+        self.assertEqual(decision["decided_by"], "partial")
+        self.assertEqual(decision["result"], {"uncovered": ["FR-001"], "verdict": "NO-GO"})
+        doubtful = jev.decide("spec-coverage", {}, ["FR-001", "FR-002"],
+                              FakeTransport(noul={"req_fr_001": 0.999, "req_fr_002": 0.6}.get))
+        self.assertIsNone(doubtful["result"])
 
     def test_triage_groups_dq_and_coverage(self):
         triage = jev.decide("triage", {}, [], FakeTransport(pick={"route": "bugfix", "severity": "high"}))

@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v8.0.0
+# Grill with Docs v8.1.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -75,7 +75,8 @@ Após auditoria GO e handoff, emitir PLAN_ONLY_STOP e parar; sem implementação
 `grill_workspace.py decide ROOT --kind K --file ...` para `step-assessment`
 (`--work-id --step --apply` grava `step-inputs/<step>.json`), `triage`, `dq-batch`
 (`--context` com `candidates`), `partition-groups` ou `spec-coverage`.
-`decided_by=jev`: use `result` sem deliberar. `decided_by=agent`: decida como antes.
+Cada pergunta é decidida sozinha: use `decided` sem deliberar e responda só as `pending`
+(`decided_by` = `jev`, `partial` ou `agent`). `result` sai completo só com tudo decidido.
 Falha de API é fail-closed (`JEV-UNAVAILABLE`, `OPENROUTER-*`): pare e reporte.
 `spec-coverage` só antecipa NO-GO; nunca dispensa review obrigatório.
 
