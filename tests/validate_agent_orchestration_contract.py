@@ -156,6 +156,93 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertFalse(native["work_ready"])
                 self.assertEqual(show, original_show)
 
+    def test_presentation_control_from_native_session_messages(self):
+        # Every injected message goes through the native normalizer, with record
+        # shapes captured from real Claude Code and Codex sessions (spec 033).
+        core = grill_workspace.grill_core_module("agent_runtime")
+        temp, root = self.fixture()
+
+        def native(runtime, records):
+            if runtime == "codex":
+                records = [{"type": "session_meta", "payload": {"id": "sid"}}] + records
+            return core._native_messages("\n".join(json.dumps(record) for record in records).encode(), runtime, "sid")
+
+        def said(runtime, event_id, *texts, role="user"):
+            if runtime == "claude":
+                content = texts[0] if role == "user" and len(texts) == 1 else [{"type": "text", "text": text} for text in texts]
+                return {"type": role, "uuid": event_id, "message": {"role": role, "content": content}}
+            kind = "input_text" if role == "user" else "output_text"
+            return {"type": "response_item", "payload": {"type": "message", "id": event_id, "role": role,
+                    "content": [{"type": kind, "text": text} for text in texts]}}
+
+        def compaction(runtime, event_id):
+            if runtime == "claude":
+                return {"type": "system", "subtype": "compact_boundary", "uuid": event_id,
+                        "compactMetadata": {"trigger": "manual", "preTokens": 1}}
+            return {"type": "compacted", "payload": {"message": "", "replacement_history": []}}
+
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            policy_raw = (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes()
+            kwargs = {"policy": json.loads(policy_raw), "policy_sha256": grill_workspace.hash_bytes(policy_raw),
+                "gwd_skill_sha256": grill_workspace.hash_bytes((grill_workspace.ASSETS.parent / "SKILL.md").read_bytes()),
+                "scope": {"kind": "gwd", "root": str(root), "work_id": "work-x"}}
+            for runtime in ("codex", "claude"):
+                kwargs["runtime"] = runtime
+                adapter, _, transcript = orchestration_fixture.boundary(
+                    grill_workspace, root, runtime, orchestration_fixture.SESSION, "work-x")
+                messages = transcript["result"]["transcript"]["messages"]
+                read = copy.deepcopy(messages)  # request + full read of the approved reference
+                stop, start = said(runtime, "u-stop", "stop adhd mode"), said(runtime, "u-start", "start adhd mode")
+                if runtime == "claude":
+                    synthetic = [{**said(runtime, "u-meta", "stop adhd mode"), "isMeta": True},
+                                 {**said(runtime, "u-summary", "stop adhd mode"), "isCompactSummary": True}]
+                else:
+                    synthetic = [said(runtime, "u-env", "stop adhd mode", "<environment_context>x</environment_context>"),
+                                 said(runtime, "u-xml", "<hook_prompt>stop adhd mode</hook_prompt>")]
+
+                def project(before, records, after=()):
+                    messages[:] = copy.deepcopy(before) + native(runtime, records) + copy.deepcopy(list(after))
+                    return core.project_leader_presentation(adapter, **kwargs)[1]
+
+                with self.subTest(runtime=runtime, case="stop suspends and survives compaction"):
+                    for records in ([stop], [stop, compaction(runtime, "c-1")]):
+                        suspended = project(read, records)
+                        self.assertEqual((suspended["application"], suspended["loading"], suspended["work_ready"],
+                                          suspended["use_ready"], suspended["load_request"]),
+                                         ("suspended_by_user", "stale", True, False, None))
+                        self.assertTrue(suspended["suspension"]["source_ref"].endswith(":u-stop"))
+                with self.subTest(runtime=runtime, case="start reactivates and needs a later read"):
+                    stale = project(read, [stop, start])
+                    self.assertEqual((stale["application"], stale["use_ready"]), ("active", False))
+                    self.assertIsNotNone(stale["load_request"])
+                    self.assertTrue(project([], [stop, start], read)["use_ready"])
+                    self.assertEqual(project(read, [start, stop])["application"], "suspended_by_user")
+                    self.assertTrue(project(read, [start])["use_ready"])
+                with self.subTest(runtime=runtime, case="compaction without suspension needs a reload"):
+                    compacted = project(read, [compaction(runtime, "c-2")])
+                    self.assertEqual((compacted["application"], compacted["use_ready"]), ("active", False))
+                    self.assertIsNotNone(compacted["load_request"])
+                with self.subTest(runtime=runtime, case="non-user or inexact phrases change nothing"):
+                    for records in ([said(runtime, "a-1", "stop adhd mode", role="assistant")], synthetic[:1], synthetic[1:],
+                                    [said(runtime, "u-2", "stop adhd mode please")], [said(runtime, "u-3", "Stop ADHD mode")]):
+                        unchanged = project(read, records)
+                        self.assertEqual((unchanged["application"], unchanged["use_ready"]), ("active", True), records)
+                    self.assertEqual(project(read, [said(runtime, "u-4", "  stop adhd mode \n")])["application"], "suspended_by_user")
+                with self.subTest(runtime=runtime, case="suspension keeps the other prerequisites"):
+                    probe = adapter.presentation_probe
+                    for axis, field, value in (("enablement", "state", "disabled"), ("installation", "status", "missing"),
+                                               ("trust", "state", "pending")):
+                        def degraded(*args, axis=axis, field=field, value=value):
+                            axes = probe(*args)
+                            axes[axis][field] = value
+                            return axes
+                        adapter.presentation_probe = degraded
+                        blocked = project(read, [stop])
+                        self.assertEqual((blocked["application"], blocked["work_ready"]), ("suspended_by_user", False), axis)
+                    adapter.presentation_probe = probe
+                with self.subTest(runtime=runtime, case="native compaction records normalize to a compaction block"):
+                    self.assertEqual(native(runtime, [compaction(runtime, "c-3")])[-1]["blocks"], [{"type": "compaction"}])
+
     def test_public_init_adopt_refuse_assertions_and_preserve_load_request(self):
         temp, root = self.fixture()
         core = grill_workspace.grill_core_module("agent_runtime")

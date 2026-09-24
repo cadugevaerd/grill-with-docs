@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugin"
-VERSION = "6.0.30"
+VERSION = "6.0.31"
 
 def load(path):
     with path.open(encoding="utf-8") as handle:
@@ -35,6 +35,11 @@ def main():
         headings = [line for line in lines if line.startswith(prefix)]
         assert len(headings) == 1, (path.name, prefix, headings)
         assert headings[0].startswith(f"{prefix}{VERSION}"), (path.name, headings[0])
+    # The published presentation contract names the explicit reactivation (spec 033).
+    # agent-orchestration.md is pinned by hash in the policy, so it is left as is.
+    for path in (PLUGIN / "skills/grill-with-docs/SKILL.md", PLUGIN / "skills/grill-with-docs/references/session-protocol.md",
+                 ROOT / "README.md"):
+        assert "start adhd mode" in path.read_text(encoding="utf-8"), path
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "codex plugin marketplace add ." in readme and "codex plugin add grill-with-docs@grill-with-docs" in readme
     assert "claude plugin marketplace add cadugevaerd/grill-with-docs" in readme and "claude plugin install grill-with-docs@grill-with-docs" in readme

@@ -176,13 +176,6 @@ class TaskImportContract(unittest.TestCase):
                 with self.assertRaises(cli.CliFailure):
                     wrapped(args)
                 show['result']['dispatch']['capabilityRevokedAt'] = None
-                suspended = copy.deepcopy(fresh)
-                suspended['presentation'].update(use_ready=False, application='suspended_by_user',
-                    loading='stale', suspension={'source_ref': 'human:stop'})
-                with mock.patch.object(cli, '_session_readiness', return_value=suspended):
-                    with self.assertRaises(cli.CliFailure) as stopped:
-                        wrapped(args)
-                    self.assertEqual(stopped.exception.code, 'STYLE-LOAD-UNCONFIRMED')
                 def race(mutate_root, mutate):
                     raced = copy.deepcopy(before.document)
                     raced['agent_orchestration']['work_items'][WORK]['contexts']['ctx-epoch16']['leader']['incarnation'] = 'raced'
@@ -215,6 +208,23 @@ class TaskImportContract(unittest.TestCase):
                     '--session-ref', fixture.SESSION, '--step', 'implement-parallel')
                 self.assertEqual((code, public.get('verdict')), (0, 'STEP-ENTERED'), public)
                 self.assertEqual(self.footprint(), stable)
+                # A valid suspension survives a config/version change without a
+                # reload (ADR-0003): the context is refreshed and the handler runs.
+                suspended = copy.deepcopy(fresh)
+                config = 'e' * 64
+                suspended['presentation'].update(use_ready=False, application='suspended_by_user',
+                    loading='stale', config_fingerprint=config, suspension=dict(
+                        command='stop adhd mode', source_ref='orca:stop', source_sha256='a' * 64,
+                        session_identity=fresh['presentation']['session_identity'],
+                        config_fingerprint=config, scope=fresh['presentation']['scope']))
+                prior = store.read_snapshot(self.root)
+                with mock.patch.object(cli, '_session_readiness', return_value=suspended):
+                    self.assertEqual(wrapped(args), ({'verdict': 'ENTERED'}, 0))
+                self.assertEqual(entered, [True, True, True])
+                refreshed = store.read_snapshot(self.root)
+                self.assertEqual(refreshed.document['agent_orchestration']['work_items'][WORK]['contexts']['ctx-epoch16']['presentation'],
+                                 suspended['presentation'])
+                self.assertEqual(refreshed.revision, prior.revision + 1)
 
     def test_public_mixed_import_reconcile_barrier_scheduler_and_idempotence(self):
         before = self.footprint()

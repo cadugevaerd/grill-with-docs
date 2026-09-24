@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v6.0.30
+# Grill with Docs v6.0.31
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -29,7 +29,7 @@ worktree C ──> .grill/work-items/<work-id-C>/ ─┘
 
 Em toda entrada GWD (`iniciar`, `retomar`, reentrada após compactação e sessão de especialista), aplique `i-have-adhd@i-have-adhd` como referência de apresentação **local deste fluxo** antes da primeira resposta de trabalho. Resolva a instalação efetiva do runtime, confirme habilitação e confiança por observações separadas, leia integralmente o `SKILL.md` aprovado indicado pelo `load_request` e registre o evento correlacionado à mesma sessão, configuração e escopo GWD. Não peça ao usuário para invocar a skill upstream, não execute seu hook e não crie flag/configuração global.
 
-Instalado, enabled, saída zero, catálogo, hash impresso ou autorrelato não comprovam `loaded` nem comportamento. Só `work_ready` permite entrada ou despacho: normalmente exige `use_ready`; `stop adhd mode` documentado na mesma sessão/incarnation/escopo mantém apenas `work_ready` após compactação, com `use_ready=false`, sem reinjetar o corpo. Nova sessão, troca de runtime/incarnation e reativação explícita voltam ao padrão ativo e exigem nova leitura. Preserve Ponytail, instruções superiores, conteúdo solicitado, exceções upstream, arquivos/grants e o escopo local; saída do fluxo GWD é `out_of_scope`.
+Instalado, enabled, saída zero, catálogo, hash impresso ou autorrelato não comprovam `loaded` nem comportamento. Só `work_ready` permite entrada ou despacho: normalmente exige `use_ready`; `stop adhd mode`, dito como conteúdo único de uma mensagem de usuário da própria sessão (fonte não-agente: num despacho Orca pode ser o coordenador), suspende a apresentação: mantém apenas `work_ready`, com `use_ready=false` e `loading=stale`, antes e depois de compactação na mesma sessão/incarnation/escopo, sem reinjetar o corpo, inclusive durante upgrade do plugin ou mudança de configuração. Fala do agente, resumo de compactação e mensagem sintética nunca suspendem nem reativam. `start adhd mode`, nas mesmas condições, é a reativação explícita: volta ao padrão ativo e exige nova leitura integral posterior à frase. Nova sessão e troca de runtime/incarnation também voltam ao padrão ativo e exigem nova leitura. Preserve Ponytail, instruções superiores, conteúdo solicitado, exceções upstream, arquivos/grants e o escopo local; saída do fluxo GWD é `out_of_scope`.
 
 ## Orquestração 6.0.0 e papéis
 

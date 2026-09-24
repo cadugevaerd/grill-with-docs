@@ -1,5 +1,12 @@
 # Changelog
 
+## 6.0.31
+
+- Fix: `stop adhd mode` passa a ter efeito no core. Até aqui a projeção de apresentação (`project_leader_presentation`) nunca produzia suspensão, e depois de uma compactação o fluxo exigia a recarga que a própria suspensão proíbe. Agora a última frase de controle dita como conteúdo único de uma mensagem de usuário da própria sessão decide: `stop adhd mode` suspende (`work_ready=true`, `use_ready=false`, `loading=stale`, sem recarga, sobrevivendo a compactação), `start adhd mode` reativa e exige leitura integral posterior à frase. Fala do agente, resumo de compactação e mensagem sintética nunca contam; instalação, compatibilidade, habilitação e confiança continuam exigidas sob suspensão. O registro de suspensão aponta a mensagem de origem e a configuração corrente.
+- Fix: upgrade do plugin ou mudança de configuração durante uma suspensão válida deixa de travar o fluxo. O bloco do gate que exigia releitura era inalcançável para sessão ativa (quem recusa é `_session_readiness`) e foi removido; `STYLE-SCOPE-CONFLICT` segue igual.
+- Contrato publicado (`SKILL.md`, `session-protocol.md`, `README.md`; `agent-orchestration.md` fica intocado porque a policy fixa seu hash) passa a declarar a fonte não-agente da própria sessão e `start adhd mode` como reativação explícita.
+- Integra `f1475f4` (fix-latest-models: primeira campanha em sucessor pré-campanha) para ler o store compartilhado.
+
 ## 6.0.30
 
 - Fix: `gauntlet-context-takeover` herda workers já `PREPARED` depois de comprovar que o líder anterior terminou, eliminando o ciclo em que esses workers bloqueavam a tomada mas somente o líder encerrado podia avançá-los. Outros estados ativos, atividades e observações desconhecidas continuam bloqueando; a lista herdada integra o hash da prévia e os retornos de preview/apply.
