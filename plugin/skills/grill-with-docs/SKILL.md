@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v7.1.0
+# Grill with Docs v8.0.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -67,6 +67,17 @@ mantêm DQs sem resposta pendentes. Registrar transição por DQ, impact scan e 
 Duas rodadas sem progresso, três expansões consecutivas ou 25 perguntas materiais exigem
 checkpoint e SAFETY_STOP. Pausa humana grava PAUSED_USER; contradições são preservadas.
 Após auditoria GO e handoff, emitir PLAN_ONLY_STOP e parar; sem implementação ou ship.
+
+## Decisões tipadas via Jev
+
+`OPENROUTER_API_KEY` é obrigatória: sem ela `init` e `preflight` recusam com
+`OPENROUTER-KEY-REQUIRED`. Antes de decidir em prosa, rode
+`grill_workspace.py decide ROOT --kind K --file ...` para `step-assessment`
+(`--work-id --step --apply` grava `step-inputs/<step>.json`), `triage`, `dq-batch`
+(`--context` com `candidates`), `partition-groups` ou `spec-coverage`.
+`decided_by=jev`: use `result` sem deliberar. `decided_by=agent`: decida como antes.
+Falha de API é fail-closed (`JEV-UNAVAILABLE`, `OPENROUTER-*`): pare e reporte.
+`spec-coverage` só antecipa NO-GO; nunca dispensa review obrigatório.
 
 ## Status humano canônico
 

@@ -21,6 +21,7 @@ A suíte completa roda por `tests/run_validators.py`; conte os validadores pelo 
 ## Restrições do core
 
 - Somente biblioteca padrão, Python >=3.10. Sem dependência externa.
+- Única chamada de rede do core: decisões tipadas no Jev via OpenRouter (`grill_core/jev.py`, desde a 8.0.0). `OPENROUTER_API_KEY` é obrigatória e `init`/`preflight` recusam sem ela (`OPENROUTER-KEY-REQUIRED`); testes usam `Transport` falso e o runner injeta uma chave placeholder.
 - O core **nunca baixa bytes**. Toda instalação é delegada a quem é dono do artefato (`uv`, `specify`, o instalador verificado do plugin `backlog`) e a verificação é por versão resolvida, nunca por hash de tarball.
 - Hooks são read-only e não escrevem nem acessam a rede.
 - Feature e fix são plan-only e terminam em `PLAN_ONLY_STOP`. Só hotfix tem trilha executável, via `HOTFIX-GO`.

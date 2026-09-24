@@ -5,6 +5,7 @@ Instruções para agentes no Codex (e outros harnesses que leem `AGENTS.md`). O 
 ## Antes de tocar código
 
 - Rode `python3 tests/run_validators.py`; a suíte não pode tocar a rede nem exigir `specify`, `node`, `claude` ou `codex` reais.
+- Única chamada de rede do core: decisões tipadas no Jev via OpenRouter (`grill_core/jev.py`); `OPENROUTER_API_KEY` obrigatória, `init`/`preflight` recusam sem ela.
 - Somente biblioteca padrão, Python >= 3.10. O core nunca baixa bytes; instalação é delegada a quem é dono do artefato.
 - Toda alteração em `plugin/**` exige bump SemVer nos oito pontos fixados por `tests/validate_distribution.py` (ver `CLAUDE.md#Distribuição`).
 - Feature e fix são plan-only (`PLAN_ONLY_STOP`); só hotfix tem trilha executável.
