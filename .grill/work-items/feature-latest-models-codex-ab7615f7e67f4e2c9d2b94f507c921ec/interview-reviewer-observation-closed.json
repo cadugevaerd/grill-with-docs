@@ -1,0 +1,22 @@
+{
+  "schema": "grill-agent-observation/v1",
+  "adapter": "orca",
+  "provider": "codex",
+  "handle": "term_1f1590a3-b9ac-4bc9-b348-43ee19e445db",
+  "incarnation": "4d5fcf87-41ee-4991-bf24-a7d65b249530",
+  "dispatch_incarnation": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models@@92fb1acf:4d5fcf87-41ee-4991-bf24-a7d65b249530",
+  "runtime_instance": "a1e53186-1808-4006-af41-a29ec02a0d0c",
+  "host": "local",
+  "owner_dispatch": "ctx_7e26df7716b1",
+  "task_id": "task_df59e0ffba10",
+  "worktree_id": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models",
+  "source_ref": "orca:ctx_7e26df7716b1",
+  "source_sha256": "fe140a677ebdee7db652558205e49f45f42cb5ec56827742b8734e57a3e67e6e",
+  "requested_model": "gpt-6-astra",
+  "requested_effort": "high",
+  "effective_model": "gpt-6-astra",
+  "effective_effort": "high",
+  "resolved_model_id": "gpt-6-astra",
+  "activity": "exited",
+  "close": "closed"
+}

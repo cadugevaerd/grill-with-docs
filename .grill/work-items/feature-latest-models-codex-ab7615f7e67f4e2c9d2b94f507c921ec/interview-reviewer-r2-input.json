@@ -1,0 +1,84 @@
+{
+  "files": [
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/docs/adr/ADR-0001.md",
+      "sha256": "d52fcc97e32192015aef21fef662f12862edcfd942e2341fc88acd2fcf67bd2e",
+      "size": 4232,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/docs/adr/ADR-0002.md",
+      "sha256": "d688e624871463f1ee4fbda6402c3b33dcededebea3b9a53c2a0f6f8d6718142",
+      "size": 3940,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/DECISION-FRONTIER.md",
+      "sha256": "102107e4e50dc95534478358444007874278fb4801f4f17e7bc4327858a1c85d",
+      "size": 1864,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/ROUND-LOG.jsonl",
+      "sha256": "9a8de597ad0bc1de5bf318668a24d93ef0203800e839fca46d2884f321ef9860",
+      "size": 3945,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/ROADMAP.md",
+      "sha256": "515dd7b4bda26c8790459194961e3f7d2f8fa41b25ce2e955e0babd53ae9b609",
+      "size": 1830,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/PLAN-CONTEXT.md",
+      "sha256": "12a77d42be80a76dfb7a38d92254bcbdaf8d56b424616d1aff455ee2a7ce683a",
+      "size": 3936,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/CONTEXT.md",
+      "sha256": "8704d7744affaaa028f8eea04fa0460a82c100056e2697226c660f20c488ff9f",
+      "size": 1729,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/DELIVERY-MAP.md",
+      "sha256": "880746f8d11a82061db456b63c9bb82766f517a0b74ce12d0a1e6c100383fbf2",
+      "size": 1514,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+      "sha256": "bc6ae0e3c765adbdc779ed63db352e47d55c7b384a7aa7528ceb6fdd5eaf1c55",
+      "size": 4772,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/interview-author-result.md",
+      "sha256": "d41bb17dafdfcf323e706e6ab66964a8361566c7efc24c0ea518898ec4244398",
+      "size": 13740,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/interview-reviewer-result.md",
+      "sha256": "4913e56b71661e6c240696ea6d842d00d75089b8ccf3c52020db0eb171b042f1",
+      "size": 7859,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/CONSTITUTION-CHECK.md",
+      "sha256": "02819fda13e10db29c3090433aa68f70041f6f06ea7f12c127e97b3890455db2",
+      "size": 5518,
+      "media_type": "text/plain"
+    }
+  ],
+  "required_activity_ids": [
+    "interview-author-latest-models"
+  ],
+  "author_activity_ids": [
+    "interview-author-latest-models"
+  ],
+  "task_binding": null,
+  "human_authorization": null
+}

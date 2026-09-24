@@ -8,11 +8,12 @@
       "evidence": [
         "../../triage/latest-models-debug.md",
         "docs/adr/ADR-0001.md#Contexto",
-        "ROUND-LOG.jsonl"
+        "ROUND-LOG.jsonl",
+        "CONTEXT.md#Proveniência desta entrevista"
       ],
       "heading": "Evidência antes de afirmação",
       "id": "evid-ncia-antes-de-afirma-o",
-      "justification": "Causa raiz reproduzida por resolve_model (codex small/medium -> gpt-5.6-luna/terra) contra o catalogo local que lista gpt-6-*; 7 launch-verified reais com gpt-5.6-terra. A ausencia de alias no Codex foi verificada por codex debug models e codex debug prompt-input no codex-cli 0.155.1 nesta sessao.",
+      "justification": "O laudo e o ADR-0001 do work item fonte, produzidos em 2026-09-23, registram o binding literal, sete launches gpt-5.6-terra e os comandos codex debug models/prompt-input; a decisão humana foi reconfirmada em 2026-09-24 no ROUND-LOG deste bundle. Esta sessão não repetiu esses comandos.",
       "status": "PASS"
     },
     {
@@ -22,7 +23,7 @@
       ],
       "heading": "Work item isolado e ownership",
       "id": "work-item-isolado-e-ownership",
-      "justification": "Trabalho no bundle proprio feature-latest-models-dbf134a84fc14114a438bddf1da709b6 na branch cadugevaerd/fix-latest-models; nenhum byte escrito em outro work item; triagem em .grill/triage.",
+      "justification": "Bundle próprio feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec na branch cadugevaerd/fix-latest-models; work item Claude antigo somente lido. Triagem existente em .grill/triage.",
       "status": "PASS"
     },
     {
@@ -52,7 +53,7 @@
       ],
       "heading": "Verify/review antes de ship",
       "id": "verify-review-antes-de-ship",
-      "justification": "verify e review pending precedem ship; o handoff carrega suite verde, git diff --check e os sete cenarios offline como criterios de aceite.",
+      "justification": "verify e review pending precedem ship; o handoff carrega suite verde, git diff --check e os oito cenarios offline como criterios de aceite.",
       "status": "PASS"
     },
     {
@@ -76,18 +77,20 @@
       ],
       "heading": "Rastreabilidade",
       "id": "rastreabilidade",
-      "justification": "R-0001..R-0004 ligam DQ-0001..DQ-0004 ao ADR-0001; ROADMAP, PLAN-CONTEXT, DELIVERY-MAP e handoff referenciam ADR-0001 e DU-001 sem BL; a triagem tri-latest-models aponta o laudo.",
+      "justification": "R-0001..R-0005 ligam DQ-0001..DQ-0005 aos ADR-0001/ADR-0002, com reconfirmação humana em 2026-09-24; CONTEXT, ROADMAP, PLAN-CONTEXT, DELIVERY-MAP e handoff referenciam o escopo; tri-latest-models aponta o laudo.",
       "status": "PASS"
     },
     {
       "evidence": [
-        "ROUND-LOG.jsonl",
-        "ausencia de worker-start para este work item"
+        "interview-author-observation-closed.json",
+        "interview-reviewer-observation-closed.json",
+        "interview-author-result.md",
+        "interview-reviewer-result.md"
       ],
       "heading": "Tier de modelo e esforço do worker Orca",
       "id": "tier-de-modelo-e-esfor-o-do-worker-orca",
-      "justification": "Nenhum worker Orca foi despachado por este work item: entrevista, triagem e leitura de codigo correram na sessao lider. A clausula volta a valer no ciclo executor.",
-      "status": "NOT-APPLICABLE"
+      "justification": "Atividades autor e revisor Codex foram despachadas em sessões Orca independentes; observações efetivas gpt-6-astra/xhigh e gpt-6-astra/high e read-back de encerramento foram aceitos pelo core.",
+      "status": "PASS"
     },
     {
       "evidence": [

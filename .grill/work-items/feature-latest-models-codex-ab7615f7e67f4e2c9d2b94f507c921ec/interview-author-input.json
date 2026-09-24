@@ -1,0 +1,41 @@
+{
+  "files": [
+    {
+      "path": ".grill/work-items/feature-latest-models-dbf134a84fc14114a438bddf1da709b6/docs/adr/ADR-0001.md",
+      "sha256": "20ce2b8ef4e37cc0b36a3ab0ab92d4f8f0fa9205cad8a069a672539ee7fa3b76",
+      "size": 4174,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-dbf134a84fc14114a438bddf1da709b6/docs/adr/ADR-0002.md",
+      "sha256": "d688e624871463f1ee4fbda6402c3b33dcededebea3b9a53c2a0f6f8d6718142",
+      "size": 3940,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/work-items/feature-latest-models-dbf134a84fc14114a438bddf1da709b6/ROUND-LOG.jsonl",
+      "sha256": "62f411e8b9d538f5c4c2637355af0d880d829d691ff8ad3e9fed10d8793a6efc",
+      "size": 3187,
+      "media_type": "text/plain"
+    },
+    {
+      "path": ".grill/triage/tri-latest-models.json",
+      "sha256": "33ec396ad35d6166f4563dd14c79cc311f34ff87bd2cc069ea5ef8a238b3a3a2",
+      "size": 458,
+      "media_type": "application/json"
+    },
+    {
+      "path": ".grill/triage/latest-models-debug.md",
+      "sha256": "7ea74f2166f278fb9a3e531490d1981a4496898c96ac88b2913e280cfeea3ac8",
+      "size": 6030,
+      "media_type": "text/plain"
+    }
+  ],
+  "required_activity_ids": [],
+  "author_activity_ids": [],
+  "task_binding": null,
+  "human_authorization": {
+    "ref": ".grill/work-items/feature-latest-models-dbf134a84fc14114a438bddf1da709b6/ROUND-LOG.jsonl",
+    "sha256": "62f411e8b9d538f5c4c2637355af0d880d829d691ff8ad3e9fed10d8793a6efc"
+  }
+}

@@ -11,14 +11,14 @@
 - delivery-units: DU-001
 - development-type: platform-devops
 
-**Resultado observável.** Quando o GWD despacha um worker ou um especialista (autor/revisor) no runtime Codex, o modelo usado é o mais recente listado no catálogo local do Codex para a família daquele tier/papel, sem ninguém editar o plugin quando sai uma geração nova. Com o catálogo atual: tier small → `gpt-6-luna`, tier medium → `gpt-5.6-terra`, tier large → `gpt-6-sol` (bloqueado para worker, como hoje), autor/revisor → `gpt-6-astra`. O modelo efetivamente escolhido fica registrado. No runtime Claude, autor e revisor especialista passam a ser Opus pelo alias `opus` (autor `xhigh`, revisor `high`), que acompanha a geração mais recente; `fable` deixa de ser exigido.
+**Resultado observável.** Quando o GWD despacha um worker ou um especialista (autor/revisor) no runtime Codex, o modelo usado é o slug listado de menor `priority` no catálogo local do Codex para a família daquele tier/papel; uma geração nova só é escolhida quando o catálogo a prefere, sem editar o plugin. Com o catálogo atual: tier small → `gpt-6-luna`, tier medium → `gpt-5.6-terra`, tier large → `gpt-6-sol` (bloqueado para worker, como hoje), autor/revisor → `gpt-6-astra`. O modelo efetivamente escolhido fica registrado. No runtime Claude, autor e revisor especialista passam a ser Opus pelo alias `opus` (autor `xhigh`, revisor `high`), que acompanha a geração mais recente; `fable` deixa de ser exigido.
 
 **Atores.** O líder GWD que declara workers e prepara atividades de especialista; a suíte de validadores offline.
 
 **Cenários.**
-1. Catálogo com `gpt-6-luna` e `gpt-5.6-luna` listados → tier small resolve para `gpt-6-luna` e o registro do worker guarda esse slug.
-2. Catálogo sem nenhuma terra da geração 6 → tier medium resolve para a terra listada mais recente (`gpt-5.6-terra`); quando uma terra mais nova for listada, passa a ela sem mudança no plugin.
-3. Papel autor/revisor Codex → resolve para o astra listado mais recente; a checagem de modelo efetivo do especialista compara com esse slug.
+1. Catálogo com `gpt-6-luna` (`priority=0`) e `gpt-5.6-luna` (`priority=10`) listados → tier small resolve para `gpt-6-luna` e o registro do worker guarda esse slug; com prioridades invertidas, mantém `gpt-5.6-luna` apesar da geração mais nova estar listada.
+2. Catálogo sem terra da geração 6 → tier medium resolve para `gpt-5.6-terra` se ela tiver a menor `priority` entre as terras listadas; uma terra mais nova só a substitui se tiver `priority` menor.
+3. Papel autor/revisor Codex → resolve para o astra listado de menor `priority`; a checagem de modelo efetivo do especialista compara com esse slug.
 4. Catálogo ausente ou ilegível → recusa nomeada `TIER-MODEL-UNRESOLVED` antes de qualquer worktree, lease ou payload, sem usar modelo antigo.
 5. Família sem nenhum slug listado (ex. só oculto) → mesma recusa nomeada.
 6. Tier cuja família é frontier para ator worker → continua `FRONTIER-MODEL-FORBIDDEN`, antes de qualquer efeito.
@@ -28,7 +28,7 @@
 **Escopo excluído.** Tiers Claude e seus aliases; slug fixo de modelo Claude; recomendação textual do líder; configuração global do Codex do usuário (incluindo o `model` do `config.toml`); alias de API `gpt-6`; qualquer acesso à rede; instalar ou atualizar o Codex.
 
 **Critérios de aceite.**
-- Os oito cenários cobertos por validadores offline, com fixture derivada da saída real do catálogo Codex 0.155.1 e sem depender de `codex`, `claude`, `node` ou rede reais.
+- Os oito cenários cobertos por validadores offline, com fixture derivada da saída real do catálogo Codex 0.155.1 e sem depender de `codex`, `claude`, `node` ou rede reais; incluem caso de geração nova listada sem menor `priority`.
 - Nenhum slug de geração fixado no código ou nos validadores como expectativa de despacho; o contrato fixa famílias no Codex e o alias `opus` no par de especialista Claude.
 - Documentação pública (tabela de papéis e texto de autoria técnica) sem `fable` como par exigido.
 - Work items e contextos já selados com a policy de orquestração atual continuam verificáveis.
