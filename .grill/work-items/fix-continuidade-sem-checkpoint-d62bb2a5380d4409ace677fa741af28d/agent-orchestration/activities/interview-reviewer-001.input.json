@@ -1,0 +1,120 @@
+{
+ "files": [
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/CONTEXT.md",
+   "sha256": "2a9da36a0315bb99abcb8b1abff1a087f545de642a3a840ea181544ed8c051ab",
+   "size": 3673,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/docs/adr/ADR-0001.md",
+   "sha256": "7b5202641b791eae61bed7ea0d61a950e02ab7015c0cca1c62992fb7180f59c1",
+   "size": 7768,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/ROADMAP.md",
+   "sha256": "f2cf16bed213705e4a44a243c7eab74617a671bb23dade134d73c1cec000229b",
+   "size": 2736,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+   "sha256": "f0ae2bbb7e1e72e30366dd67aaf9297d26081ea5a9321a46bd457e0c73a947fa",
+   "size": 5426,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/PLAN-CONTEXT.md",
+   "sha256": "8a84f9a72942860910e297acc25bac07f738614806af14cd2f7c8d9577f6c76a",
+   "size": 12399,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/DELIVERY-MAP.md",
+   "sha256": "3307c9e65b8f3a8fcd4e6a54f88057b01a53f436bddd4638f3bf06e4340bb6f9",
+   "size": 1921,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/DECISION-FRONTIER.md",
+   "sha256": "270e6015a045f3315ed544446ef38bc1fdabdbd4381b35d0c6056b9ad316e74f",
+   "size": 10302,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/ROUND-LOG.jsonl",
+   "sha256": "34fb97de0e3ea692fefe3ba422da0c2e4e6ef592b0bc2760cc1db1b0c30798d3",
+   "size": 3469,
+   "media_type": "application/x-ndjson"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/CONSTITUTION-CHECK.md",
+   "sha256": "a6c53666bdd7328a46246cf47c8c92e654110cb89b1d23b8f8d2d2cdaa7ef308",
+   "size": 6315,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/agent-orchestration/activities/interview-author-002.result.md",
+   "sha256": "15a6d78c40e5b413329cc12a6b9734fd4b5bf46db3b23bee892ed0e2ddafb36e",
+   "size": 39205,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/agent-orchestration/activities/interview-author-002.payload.md",
+   "sha256": "f247a77d70063741d608c43752a059ddf3cbf68998dbd6b52d6be235baabf376",
+   "size": 4410,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/agent-orchestration/activities/interview-author-002.payload-addendum.md",
+   "sha256": "1ea5e8ba9f28dc5e692078a46b3413292555d3d05b1c8cf26dc2d496c9de73c3",
+   "size": 2739,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".specify/memory/constitution.md",
+   "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+   "size": 4787,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/references/session-protocol.md",
+   "sha256": "03f59061b8e7c9bbca9516989442fc93d43bf0c1d5f2e8a67edd6120421691fd",
+   "size": 33178,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+   "sha256": "00c1220ff3fd167149134792a16b9e35d0b2349b431f6e75e818bf3c54822389",
+   "size": 421550,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+   "sha256": "753b7be85d0b039e5e304dc941a321ffa7e253982adbb9ba7ae26ef59766b914",
+   "size": 113861,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+   "sha256": "2b5e43c77526423ef3b54bf28e98492fab92a800faf617175c4e2c690afd1bfa",
+   "size": 85382,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+   "sha256": "7d552a787206d184ad9ed15b00fa5dc8739e0b8cf53a617a76ac6684282bc401",
+   "size": 67651,
+   "media_type": "text/x-python"
+  }
+ ],
+ "required_activity_ids": [
+  "interview-author-002"
+ ],
+ "author_activity_ids": [
+  "interview-author-002"
+ ],
+ "task_binding": null,
+ "human_authorization": null
+}

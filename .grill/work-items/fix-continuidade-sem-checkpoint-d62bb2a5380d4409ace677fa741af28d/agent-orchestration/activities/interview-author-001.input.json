@@ -1,0 +1,98 @@
+{
+ "files": [
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/DECISION-FRONTIER.md",
+   "sha256": "f68fab9a6291830132e5998eb6cc8b3c3afef5f478426362347ca43b2c16e123",
+   "size": 6502,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/ROUND-LOG.jsonl",
+   "sha256": "da4288cb07ad21a6d0bed1764ca87f31be998b62d07123461525f9c9d7f55387",
+   "size": 1823,
+   "media_type": "application/x-ndjson"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/ROADMAP.md",
+   "sha256": "9c68e05c6993da8b319d96716b6d9fc90329af9876fdc74699eca4ee8b556734",
+   "size": 1039,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/CONTEXT.md",
+   "sha256": "046a1d433eab29a57783aae06ea414afc271d25bcc7372290ccde7f00fd97ee7",
+   "size": 285,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/PLAN-CONTEXT.md",
+   "sha256": "9f43372c57b4ab07edece509be37d7ea7204ccf5300a984e2cc69a6216d82ded",
+   "size": 409,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/DELIVERY-MAP.md",
+   "sha256": "26ce55d35ddb5c916fb1101e760320e51e5b57b205a924e67cbac6a720808d17",
+   "size": 640,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/DECISION-BACKLOG.md",
+   "sha256": "0ead85c254fb8b2c6a817a2cebaad3594fe88019041c904ec9176af012f806ab",
+   "size": 362,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+   "sha256": "3cfe46ee546a9c46cf78fd7bf59ca897df07d24431a46ab4b61bf147fe919a58",
+   "size": 652,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/CONSTITUTION-CHECK.md",
+   "sha256": "70982f65169d6155e958ce6e8f7479ff88cff948d5f70133ccf1d91354ae7ea2",
+   "size": 2219,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".specify/memory/constitution.md",
+   "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+   "size": 4787,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/references/session-protocol.md",
+   "sha256": "03f59061b8e7c9bbca9516989442fc93d43bf0c1d5f2e8a67edd6120421691fd",
+   "size": 33178,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+   "sha256": "00c1220ff3fd167149134792a16b9e35d0b2349b431f6e75e818bf3c54822389",
+   "size": 421550,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+   "sha256": "2b5e43c77526423ef3b54bf28e98492fab92a800faf617175c4e2c690afd1bfa",
+   "size": 85382,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+   "sha256": "7d552a787206d184ad9ed15b00fa5dc8739e0b8cf53a617a76ac6684282bc401",
+   "size": 67651,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+   "sha256": "753b7be85d0b039e5e304dc941a321ffa7e253982adbb9ba7ae26ef59766b914",
+   "size": 113861,
+   "media_type": "text/x-python"
+  }
+ ],
+ "required_activity_ids": [],
+ "author_activity_ids": [],
+ "task_binding": null,
+ "human_authorization": null
+}
