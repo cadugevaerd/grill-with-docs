@@ -18,6 +18,10 @@ import sys
 import tempfile
 from unittest import mock
 
+# Codex specialists resolve the astra family against the local Codex catalog;
+# tests pin it to a fixture so the result never depends on the host's ~/.codex.
+os.environ["CODEX_HOME"] = str(Path(__file__).resolve().parent / "fixtures/codex-home")
+
 REFERENCE = Path(__file__).parent / "fixtures/orchestration/SKILL.md"
 SESSION = "orca:ctx-fixture"
 

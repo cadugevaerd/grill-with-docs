@@ -21,11 +21,11 @@
     "codex": {
       "resolved": true,
       "adapter": "codex-skill/v1",
-      "selection": "codex -m <model>, model= in config.toml, or [agents] default_subagent_model",
+      "selection": "codex -m <model>; family resolved to the lowest-priority slug in $CODEX_HOME/models_cache.json",
       "tiers": {
-        "small": {"model": "gpt-5.6-luna", "frontier": false},
-        "medium": {"model": "gpt-5.6-terra", "frontier": false},
-        "large": {"model": "gpt-5.6-sol", "frontier": true}
+        "small": {"family": "luna", "frontier": false},
+        "medium": {"family": "terra", "frontier": false},
+        "large": {"family": "sol", "frontier": true}
       }
     },
     "hermes": {

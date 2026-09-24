@@ -54,9 +54,11 @@ _RECOVERY_GENERATION = re.compile(r"^rg-[0-9a-f]{64}$")
 # These are the only pairs that may author or review a technical decision; an
 # unavailable pair blocks instead of falling back to the leader or a frontier
 # worker.
+# Codex names a family, resolved to the newest listed slug at call time
+# (tier_models.resolve_codex_family); Claude's alias already tracks the latest.
 SPECIALIST_PAIRS = {
-    "codex": {"author": ("gpt-6-astra", "xhigh"), "reviewer": ("gpt-6-astra", "high")},
-    "claude": {"author": ("fable", "xhigh"), "reviewer": ("fable", "high")},
+    "codex": {"author": ("family:astra", "xhigh"), "reviewer": ("family:astra", "high")},
+    "claude": {"author": ("opus", "xhigh"), "reviewer": ("opus", "high")},
 }
 _SESSION_IDENTITY_FIELDS = (
     "provider", "adapter", "host", "runtime_instance", "handle", "incarnation",
@@ -280,9 +282,19 @@ def _manifest_sha256(value: dict[str, Any]) -> str:
 def specialist_pair(runtime: str, activity_type: str) -> tuple[str, str]:
     """Return the exact effective pair required for one specialist role."""
     try:
-        return SPECIALIST_PAIRS[runtime][activity_type]
+        model, effort = SPECIALIST_PAIRS[runtime][activity_type]
     except KeyError as exc:
         raise OrchestrationError("SPECIALIST-CAPABILITY-UNPROVEN") from exc
+    if model.startswith("family:"):
+        try:
+            from .tier_models import TierModelError, resolve_codex_family
+        except ImportError:
+            from grill_core.tier_models import TierModelError, resolve_codex_family
+        try:
+            model = resolve_codex_family(model.removeprefix("family:"))
+        except TierModelError as exc:
+            raise OrchestrationError(exc.code) from exc
+    return model, effort
 
 
 def activity_input_sha256(manifest: dict[str, Any]) -> str:
