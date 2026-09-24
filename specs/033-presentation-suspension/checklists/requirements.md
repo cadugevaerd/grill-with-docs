@@ -31,5 +31,5 @@
 
 ## Notes
 
-- Iteração 1 corrigiu uma premissa contraditória sobre comparação da frase (Assumptions). Termos de domínio GWD (sessão, compactação, incarnation, escopo) são linguagem ubíqua do produto, definidos no CONTEXT.md do work item.
+- Iteração 2 aplicou a revisão independente (fable high, `ctx_bb9b9de2ada8`: 1 Critical, 4 Important, 9 Minor). Iteração 1 corrigiu uma premissa contraditória sobre comparação da frase (Assumptions). Termos de domínio GWD (sessão, compactação, incarnation, escopo) são linguagem ubíqua do produto, definidos no CONTEXT.md do work item.
 - Hook obrigatório `before_specify` (`speckit.git.feature`) não executado: criaria branch nova, contra instrução explícita de permanecer em `cadugevaerd/feat-new-subagents`.
