@@ -166,4 +166,16 @@
 - resolution: decisão do coordenador sob o goal (opção A; o humano pode reverter): nesta versão `content_sha256` de `human-authorization/v1` é validado só na forma, como no precedente `gauntlet-run-abandon` fixado pela DQ-0006. O escopo exato `work_id:context_id:activity_id` continua obrigatório. A amarração do conteúdo às observações da prévia fica como endurecimento aditivo em SGD-40, com gatilho.
 - evidence: DQ proposta DQ-P1 de `plan-author-001` (agent-orchestration/activities/plan-author-001.result.md; `specs/034-fence-autorizado-atividade/research.md`, seção "DQs propostas"); FR-003 da spec fala de escopo exato, não de conteúdo; item SGD-40 aberto no backlog `SGD`.
 
+## DQ-0014 — O `gauntlet-cleanup` deve reconhecer o receipt do fence como fechamento comprovado?
+- phase: FASE-001
+- fingerprint: cleanup-recognizes-fence-receipt
+- impact: low
+- state: resolved
+- context-refs: fence autorizado, quiescência
+- artifacts: specs/034-fence-autorizado-atividade/research.md, specs/034-fence-autorizado-atividade/contracts/activity-fence.md
+- depends-on: DQ-0006, DQ-0009
+- final-ref: R-0013
+- resolution: decisão do coordenador sob o goal (opção A; o humano pode reverter): não nesta versão. O plano declara o efeito (na forma com líder vivo, o cleanup reporta o recurso cercado como `SESSION-CLOSE-UNPROVEN` sem bloquear takeover, switch, phase-turn nem ship) e um teste o fixa. O reconhecimento aditivo fica em SGD-41, com o gatilho "líder vivo precisa de `CLEANED` após fence".
+- evidence: DQ proposta DQ-P2 e Finding 3 de `plan-reviewer-001` (agent-orchestration/activities/plan-reviewer-001.result.md); item SGD-41 aberto no backlog `SGD`.
+
 > Estados: open | resolved | deferred | split | blocked | out-of-scope. Não duplique fingerprints abertos.
