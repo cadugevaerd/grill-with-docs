@@ -128,6 +128,18 @@ class CheckpointContract(unittest.TestCase):
  def test_state_symlink_is_blocked_without_external_read(self):
   state=self.r/'.grill/work-items/wx/state.json'; outside=Path(self.t.name)/'external-state'; outside.write_text('TOP-SECRET'); state.unlink(); state.symlink_to(outside)
   p=self.call('specify','in-progress'); self.assertEqual(p.returncode,2); self.assertNotIn('TOP-SECRET',p.stdout); self.assertEqual(outside.read_text(),'TOP-SECRET')
+ def test_checkpoint_emission_uses_v2_schema(self):
+  # T015/FR-008: the checkpoint command must emit CHECKPOINT_SCHEMA_V2 with
+  # the renamed digest fields, not the v1 workflow_sha256/constitution_sha256
+  # names. FR-009 (old checkpoints stay readable) is CommittedCheckpointContract
+  # below, which still builds a v1 document untouched.
+  self.assertEqual(self.call('specify','in-progress').returncode,0)
+  snapshot=store.read_snapshot(self.r); item=snapshot.document['agent_orchestration']['work_items']['wx']
+  checkpoint=item['checkpoints'][item['checkpoint_head']]
+  self.assertEqual(checkpoint['schema'],contract.CHECKPOINT_SCHEMA_V2)
+  self.assertNotIn('workflow_sha256',checkpoint); self.assertNotIn('constitution_sha256',checkpoint)
+  self.assertEqual(checkpoint['context_inputs_sha256'],item['contexts'][item['current_context_id']]['inputs_sha256'])
+  self.assertEqual(checkpoint['origin_metadata_sha256'],item['origin']['metadata_sha256'])
 
 class VisualGateContract(unittest.TestCase):
  def test_visual_gate_requires_current_approval(self):

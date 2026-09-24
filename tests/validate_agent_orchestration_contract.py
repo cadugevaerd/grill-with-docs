@@ -59,6 +59,24 @@ def release_source(dispatch="ctx-1"):
     return pack({"ok": True, "result": {"dispatchId": dispatch, "state": "released", "processAction": "closed_agent_terminal", "archive": {"status": "captured"}}})
 
 
+def takeover_show(dispatch_id, *, status=None, revoked=None, liveness=None):
+    """T007/T014: a worker-show reply for _takeover_observation (grill_workspace.py).
+
+    observe_predecessor_termination (agent_runtime.py) parses this raw response
+    through the enveloped ``{"ok": true, "result": {...}}`` shape every other
+    native worker-show fixture in this file uses (native_show/native_sources).
+    _takeover_observation's own dispatch.status/liveness extraction now reads
+    the same unwrapped ``result`` mapping via agent_runtime._object, so this
+    fixture produces only the real, enveloped shape.
+    """
+    dispatch = {"id": dispatch_id}
+    if status is not None:
+        dispatch["status"] = status
+    dispatch["capabilityRevokedAt"] = revoked
+    payload = {"dispatch": dispatch, "projection": {"liveness": liveness} if liveness is not None else {}}
+    return json.dumps({"ok": True, "result": payload}).encode()
+
+
 class AgentOrchestrationContract(unittest.TestCase):
     def test_current_leader_adapter_and_exact_read_sources(self):
         core = grill_workspace.grill_core_module("agent_runtime")
@@ -229,11 +247,102 @@ class AgentOrchestrationContract(unittest.TestCase):
                 for command in commands:
                     with self.subTest(command=command[0], case="absent"):
                         self.assertEqual(invoke(command)[1]["code"], "STYLE-LOAD-UNCONFIRMED")
-
+            # T005/FR-006: exercised on a disposable, freshly-adopted work item
+            # (created here, before _session_readiness is mocked below, since
+            # init still needs full presentation) so the shared "work-x" context
+            # this test keeps reusing below stays ACTIVE -- gauntlet-prepare-switch
+            # commits a real QUIESCING transition (checkpoint, operation,
+            # worktree_identity) once it succeeds, and the Store's history is
+            # append-only, so that would not be safely reversible in place.
+            code, seeded = self.run_cli("init", str(root), "--work-id", "work-quiescing-check", "--type", "feature",
+                "--slug", "work-quiescing-check", "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION,
+                "--skip-backlog")
+            self.assertEqual(code, 0, seeded)
+            quiescing_context_id = store.read_snapshot(root).document["agent_orchestration"]["work_items"][
+                "work-quiescing-check"]["current_context_id"]
             with mock.patch.object(grill_workspace, "_session_readiness", side_effect=AssertionError("cleanup requires style")):
                 code, cleaned = invoke(("gauntlet-cleanup", "--context-id", context_id, "--epoch", "1"))
                 self.assertEqual((code, cleaned["verdict"]), (0, "CLEANED"))
-                self.assertEqual(invoke(("gauntlet-prepare-switch", "--context-id", context_id, "--epoch", "1", "--to-runtime", "claude"))[1]["code"], "CONTINUITY-CHECKPOINT-MISSING")
+                # A fresh work item has no committed checkpoint yet (checkpoint_head
+                # is None), so this no longer refuses with CONTINUITY-CHECKPOINT-MISSING
+                # -- it succeeds and projects an initial checkpoint from the current
+                # state instead. The refusal still applies to a *declared but
+                # unknown* checkpoint_head (a string that doesn't resolve inside
+                # checkpoints); that branch is covered on its own in
+                # test_prepare_switch_refuses_declared_but_unknown_checkpoint, since
+                # the Store itself refuses to persist a document shaped that way
+                # through any legitimate write (see p02-a's T005 notes).
+                code, prepared = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-quiescing-check",
+                    "--session-ref", orchestration_fixture.SESSION, "--context-id", quiescing_context_id,
+                    "--epoch", "1", "--to-runtime", "claude")
+                self.assertEqual((code, prepared.get("verdict")), (0, "QUIESCING"), prepared)
+                # T021/FR-006: the verdict alone proves nothing -- read the
+                # snapshot back and require the synthesized resume point to be
+                # committed as the head, in the current checkpoint schema, with
+                # no predecessor and both digests taken from their real sources.
+                seeded_item = store.read_snapshot(root).document["agent_orchestration"][
+                    "work_items"]["work-quiescing-check"]
+                head = seeded_item["checkpoint_head"]
+                self.assertIsInstance(head, str)
+                initial = seeded_item["checkpoints"][head]
+                self.assertEqual(initial["schema"], agent_orchestration.CHECKPOINT_SCHEMA_V2)
+                self.assertEqual((initial["checkpoint_id"], initial["context_id"]), (head, quiescing_context_id))
+                self.assertIsNone(initial["previous_checkpoint_id"])
+                self.assertEqual(initial["context_inputs_sha256"],
+                                 seeded_item["contexts"][quiescing_context_id]["inputs_sha256"])
+                self.assertEqual(initial["origin_metadata_sha256"], seeded_item["origin"]["metadata_sha256"])
+                # T033/FR-011: the *projected development state*, which nothing
+                # else asserts. The store contract dropped the equivalent
+                # assertion when T029 stopped importing the CLI emitter, and its
+                # comment claims this case exercises it -- it did not: schema,
+                # identifiers and the two digests say nothing about what the
+                # emitter projected. And validate_block accepts a dict OR a list
+                # in development_sequence, so an emitter regressed to the v1 map
+                # would pass the whole suite. Read the live state back and
+                # require the checkpoint to carry it, in list form.
+                _, live_state = grill_workspace.read_development_state(
+                    root, grill_workspace.resolve_development_item(root, "work-quiescing-check"),
+                    "work-quiescing-check")
+                development = live_state["development"]
+                self.assertIsInstance(initial["development_sequence"], list)
+                self.assertTrue(initial["development_sequence"])
+                self.assertEqual(initial["development_sequence"], development["sequence"])
+                self.assertEqual(initial["current_step"], development.get("current_step"))
+                self.assertEqual(initial["accepted_outputs"], development.get("attested_outputs", {}))
+                self.assertEqual(initial["accepted_executions"], development.get("attested_executions", {}))
+            # -- T037/R4/FR-011: the SECOND emitter of the projected
+            # development state. `checkpoint_command` builds the same block
+            # from the same line, and nothing observed it: regressing only
+            # that emitter back to the v1 map (a dict) left all three
+            # validators green, because validate_block accepts a dict OR a
+            # list in development_sequence. The assertions above are replicated
+            # here against the checkpoint this verb commits, read back from the
+            # store and compared to the live state -- never to literals. --
+            code, confirm_seed = self.run_cli("init", str(root), "--work-id", "work-confirm-projection",
+                "--type", "feature", "--slug", "work-confirm-projection", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, confirm_seed)
+            code, updated = self.run_cli("checkpoint", str(root), "--work-id", "work-confirm-projection",
+                "--step", "specify", "--state", "in-progress", "--operation-id", "op-confirm-projection",
+                "--session-ref", orchestration_fixture.SESSION)
+            self.assertEqual((code, updated.get("verdict")), (0, "UPDATED"), updated)
+            confirm_item = store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-confirm-projection"]
+            confirmed = confirm_item["checkpoints"][confirm_item["checkpoint_head"]]
+            self.assertEqual(confirmed["checkpoint_id"], updated["checkpoint_id"])
+            self.assertEqual(confirmed["schema"], agent_orchestration.CHECKPOINT_SCHEMA_V2)
+            _, confirm_state = grill_workspace.read_development_state(
+                root, grill_workspace.resolve_development_item(root, "work-confirm-projection"),
+                "work-confirm-projection")
+            confirm_development = confirm_state["development"]
+            self.assertIsInstance(confirmed["development_sequence"], list)
+            self.assertTrue(confirmed["development_sequence"])
+            self.assertEqual(confirmed["development_sequence"], confirm_development["sequence"])
+            self.assertEqual(confirmed["current_step"], confirm_development.get("current_step"))
+            self.assertEqual(confirmed["step_states"], confirm_development.get("steps", {}))
+            self.assertEqual(confirmed["accepted_outputs"], confirm_development.get("attested_outputs", {}))
+            self.assertEqual(confirmed["accepted_executions"], confirm_development.get("attested_executions", {}))
+
             def restore(document):
                 document["agent_orchestration"]["work_items"]["work-x"]["contexts"][context_id] = copy.deepcopy(context)
                 return document
@@ -765,6 +874,91 @@ class AgentOrchestrationContract(unittest.TestCase):
                     self.assertEqual((code, payload["verdict"], len(payload["resources"])), (2, "PRESERVED", 2))
                     self.assertEqual(cleanup.call_count, 2)
 
+    def test_cleanup_candidate_guard_and_resources_retained_elsewhere(self):
+        """T032/T031/FR-010/FR-011: the `candidates` guard of gauntlet-cleanup,
+        both sides, plus the successor case it used to deadlock.
+
+        R3-4 verified by execution that replacing the guard with `pass` left the
+        whole suite green: the only RESOURCE-IDENTITY-DIVERGENT exercised today
+        goes through --activity-id and is refused much earlier, by the activity
+        ownership check, so it never reaches the counter. Both sides matter --
+        without the zero-candidate case the guard could be widened back to
+        `selected and not results` without failing anything.
+
+        The third case is R3-3: a resource pinned by a *superseded* predecessor
+        is not a candidate of this selection at all. Counting it made the
+        successor's own cleanup refuse forever (T026 leaves no verb to reconcile
+        it). It must be reported in `retained` and drop the verdict, never
+        refuse the operation.
+        """
+        temporary, root = self.fixture()
+
+        def resource(origin, activity_id, state="REGISTERED"):
+            return {"kind": "session", "activity_id": activity_id, "origin_context_id": origin,
+                    "identity": {"handle": "term-1"}, "state": state, "result_acceptance_ref": None}
+
+        def payload_for(resources, *selector, activities=None):
+            context = {"context_id": "ctx-1", "epoch": 1, "state": "ACTIVE", "scheduler_runs": {},
+                       "leader": {"state": "ACTIVE", "session_ref": "session-1"}}
+            item = {"current_context_id": "ctx-1", "contexts": {"ctx-1": context},
+                    "activities": activities or {}, "resources": resources}
+            snapshot = SimpleNamespace(document={"agent_orchestration": {"work_items": {"wx": item}}})
+            with mock.patch.object(grill_workspace.grill_core_module("gauntlet_runs").store,
+                                   "read_snapshot", return_value=snapshot):
+                return self.run_cli("gauntlet-cleanup", str(root), "--work-id", "wx", "--context-id", "ctx-1",
+                                    "--epoch", "1", "--session-ref", "session-1", *selector)
+
+        with temporary:
+            # (1) Candidates exist and the selection reaches none of them: this
+            # context owns the resource, so it is counted, but it carries no
+            # activity_id and the filter skips it. Falling through to CLEANED
+            # would tell the caller a resource still open in the store had been
+            # closed.
+            code, refused = payload_for({"resource-orphan": resource("ctx-1", None)})
+            self.assertEqual((code, refused.get("code")), (2, "RESOURCE-IDENTITY-DIVERGENT"), refused)
+            # (2) No candidate at all: cleaning a context that owns nothing is a
+            # legitimate no-op, and the verdict stays a success.
+            code, empty = payload_for({})
+            self.assertEqual((code, empty["verdict"], empty["resources"], empty["retained"]), (0, "CLEANED", [], []))
+            # (3) R3-3: the successor of a takeover owns nothing; the open
+            # resource belongs to the SUPERSEDED predecessor and can never be
+            # closed from here. It is reported, not counted -- so no refusal --
+            # and the verdict stops being CLEANED.
+            code, retained = payload_for({"resource-predecessor": resource("ctx-old", "activity-1")})
+            self.assertEqual((code, retained["verdict"]), (2, "PRESERVED"), retained)
+            self.assertNotIn("code", retained)
+            self.assertEqual(retained["resources"], [])
+            self.assertEqual(retained["retained"], [{"resource_id": "resource-predecessor", "kind": "session",
+                                                     "state": "REGISTERED", "origin_context_id": "ctx-old",
+                                                     "code": "RESOURCE-RETAINED-ELSEWHERE"}])
+            # A predecessor resource already CLOSED is nothing to report, so it
+            # must not drag the verdict down either.
+            code, settled = payload_for({"resource-predecessor": resource("ctx-old", "activity-1", state="CLOSED")})
+            self.assertEqual((code, settled["verdict"], settled["retained"]), (0, "CLEANED", []), settled)
+            # (4) R4-1/T034: the same report, now scoped to the selector. A
+            # cleanup aimed at ONE activity must not be dragged down by a
+            # predecessor resource belonging to another activity -- that
+            # selection was never meant to reach it, and the downgrade would be
+            # permanent (T026 leaves no verb to reconcile a predecessor's
+            # resource). Verified by reversion: collecting before the selector
+            # discrimination turns this into PRESERVED/exit 2.
+            mine = {"activity-mine": {"context_id": "ctx-1"}}
+            owned = resource("ctx-1", "activity-mine", state="CLOSED")
+            owned["result_acceptance_ref"] = "receipts/acceptance"
+            code, scoped = payload_for(
+                {"resource-mine": owned, "resource-predecessor": resource("ctx-old", "activity-other")},
+                "--activity-id", "activity-mine", activities=mine)
+            self.assertEqual((code, scoped["verdict"], scoped["retained"]), (0, "CLEANED", []), scoped)
+            self.assertEqual([entry["resource_id"] for entry in scoped["resources"]], ["resource-mine"])
+            # (5) and the scoping is a filter, not a mute: a predecessor
+            # resource the selection DOES reach is still reported, and still
+            # drops the verdict.
+            code, in_scope = payload_for(
+                {"resource-mine": owned, "resource-predecessor": resource("ctx-old", "activity-mine")},
+                "--activity-id", "activity-mine", activities=mine)
+            self.assertEqual((code, in_scope["verdict"]), (2, "PRESERVED"), in_scope)
+            self.assertEqual([entry["resource_id"] for entry in in_scope["retained"]], ["resource-predecessor"])
+
     def test_failed_or_unproven_cleaned_worker_never_unblocks_dependency(self):
         for state, converged in (("FAILED", True), ("CLEANED", False)):
             with self.subTest(state=state, converged=converged):
@@ -977,6 +1171,10 @@ class AgentOrchestrationContract(unittest.TestCase):
                 "w": {"state": "PREPARED", "lease": {"expires_at": "2000-01-01T00:00:00Z"}}}}}}}}},
             {"activities": {}, "resources": {}}, "work-x")
         self.assertEqual(active, ["worker:run-1:w"]); self.assertEqual(unknown, [])
+        self.assertEqual(grill_workspace._takeover_prepared_workers(
+            {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"workers": {
+                "prepared": {"state": "PREPARED"}, "preparing": {"state": "PREPARING"}}}}}}}},
+            "work-x"), ["worker:run-1:prepared"])
         active, unknown = grill_workspace._continuity_quiescence(
             {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"state": "BLOCKED", "workers": {
                 "w": {"state": "PREPARED", "lease": {"expires_at": "2000-01-01T00:00:00Z"}}}}}}}}},
@@ -1351,6 +1549,1151 @@ class AgentOrchestrationContract(unittest.TestCase):
                         "--context-id", destination["context_id"], "--epoch", "2", "--session-ref", session,
                         "--step", "implement-parallel")
                     self.assertEqual(code, 0, entered)
+
+    def test_continuity_siblings_judge_only_the_structural_tuple(self):
+        """T035/R4-3/FR-001/FR-005: `gauntlet-prepare-switch` and
+        `gauntlet-resume` judge the sealed stamp on the same structural tuple
+        the takeover moved to, not on the whole identity.
+
+        Both sides matter, and neither had a test. `phase` moves with every
+        cycle step and `branch` by routine human action, only a successful
+        takeover ever rewrites a stamp, and the takeover stamps the phase of
+        that instant -- so while the siblings compared every field, the first
+        step turn after a takeover made them refuse forever. The block was not
+        removed by Phase 9, only deferred. The refusal side is asserted too:
+        widening the tuple back out is not the same as deleting the check.
+        """
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            code, created = self.run_cli("init", str(root), "--work-id", "work-sibling", "--type", "feature",
+                "--slug", "work-sibling", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            seeded = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-sibling"]
+            sibling_context_id = seeded["current_context_id"]
+            switch = ("gauntlet-prepare-switch", str(root), "--work-id", "work-sibling", "--session-ref",
+                      orchestration_fixture.SESSION, "--context-id", sibling_context_id, "--epoch", "1",
+                      "--to-runtime", "claude")
+            code, quiescing = self.run_cli(*switch)
+            self.assertEqual((code, quiescing.get("verdict")), (0, "QUIESCING"), quiescing)
+            sealed = copy.deepcopy(store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-sibling"]["contexts"][sibling_context_id]["worktree_identity"])
+            original_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                             check=True, capture_output=True, text=True).stdout.strip()
+            # R5-2: teardown, not a protected block. The restoration tolerates
+            # failure so it never masks the real assertion (T038), and as a
+            # `finally` that meant the cases *after* it could silently derive
+            # identity from the test branch. Registered as cleanup it always
+            # runs, at the end of the case, with no uncovered window.
+            self.addCleanup(subprocess.run, ["git", "-C", str(root), "checkout", "-q", original_branch],
+                            check=False)
+            subprocess.run(["git", "-C", str(root), "checkout", "-q", "-b", "a-branch-nobody-was-on"], check=True)
+            state_path = root / ".grill" / "work-items" / "work-sibling" / "state.json"
+            aged = json.loads(state_path.read_text(encoding="utf-8"))
+            aged["active_phase"] = "a-later-step"
+            state_path.write_text(json.dumps(aged), encoding="utf-8")
+            self.assertNotEqual((sealed["phase"], sealed["branch"]),
+                                ("a-later-step", "a-branch-nobody-was-on"))
+            # The identity check runs before the idempotent reuse of the
+            # switch operation, so reaching that verdict at all is the
+            # proof: with phase and branch still inside the tuple this is
+            # CONTINUITY-STATE-DIVERGENCE, exit 2.
+            code, again = self.run_cli(*switch)
+            self.assertEqual((code, again.get("verdict")), (0, "SWITCH-PREPARED"), again)
+            # The cases below need the original branch back, so the case
+            # restores it explicitly and demands success -- no assertion is in
+            # flight here, so `check=True` masks nothing. The cleanup above
+            # stays as the net for the paths that never reach this line.
+            subprocess.run(["git", "-C", str(root), "checkout", "-q", original_branch], check=True)
+            # The refusal side: narrowing the tuple is not deleting the check.
+            # The sealed stamp is immutable in the Store, so the divergence is
+            # produced where production produces it -- on the *live* side, the
+            # tree answering from somewhere else.
+            real_identity = grill_workspace._continuity_identity
+
+            def moved_tree(*args, **kwargs):
+                identity = real_identity(*args, **kwargs)
+                return {**identity, "real_path": identity["real_path"] + "-a-tree-that-is-not-this-one"}
+
+            # A fresh item, because the item above already committed its
+            # switch: its context is RELEASED and would refuse on authority,
+            # well before the identity is ever compared.
+            code, created = self.run_cli("init", str(root), "--work-id", "work-sibling-moved", "--type", "feature",
+                "--slug", "work-sibling-moved", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            moved_context_id = store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-sibling-moved"]["current_context_id"]
+            moved_switch = ("gauntlet-prepare-switch", str(root), "--work-id", "work-sibling-moved",
+                            "--session-ref", orchestration_fixture.SESSION, "--context-id", moved_context_id,
+                            "--epoch", "1", "--to-runtime", "claude")
+            code, stamped = self.run_cli(*moved_switch)
+            self.assertEqual((code, stamped.get("verdict")), (0, "QUIESCING"), stamped)
+            before = store.read_snapshot(root).content_sha256
+            with mock.patch.object(grill_workspace, "_continuity_identity", side_effect=moved_tree):
+                code, blocked = self.run_cli(*moved_switch)
+            self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-STATE-DIVERGENCE"), blocked)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+    def test_continuity_resume_judges_only_the_structural_tuple(self):
+        """T035, the resume half: the same tuple, on the seeded RELEASED
+        fixture the public resume contract already uses. A stamp carrying a
+        stale `phase` and `branch` must still resume; one structural field
+        moved must refuse CONTINUITY-STATE-DIVERGENCE and write nothing."""
+        import validate_orchestrator_store_contract as seed
+        store_module = grill_workspace.grill_core_module("store")
+        runtime, session = "claude", "orca:ctx-destination"
+        for label, drift in (("stale-phase-and-branch", {"phase": "a-later-step",
+                                                         "branch": "a-branch-nobody-was-on"}),
+                             ("structural", {"real_path": "/a-tree-that-is-not-this-one"})):
+            temporary, root = self.fixture()
+            with temporary, self.subTest(case=label), orchestration_fixture.offline_leader(grill_workspace):
+                with mock.patch.object(grill_workspace, "_initialize_orchestration", return_value={}):
+                    code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                        "--work-id", "work-x", "--runtime", "codex",
+                        "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+                self.assertEqual(code, 0, payload)
+                state = grill_workspace.read_development_state(root,
+                    grill_workspace.resolve_development_item(root, "work-x"), "work-x")[1]
+                live = grill_workspace._continuity_identity(root, "work-x", state)
+                sealed = {**live, **drift}
+                self.assertNotEqual(sealed, live)
+                context = seed.ORCHESTRATION_CONTEXT(state="RELEASED", leader_state="RELEASED")
+                context.update(runtime="codex", adapter="codex", worktree_identity=sealed)
+                checkpoint = seed.ORCHESTRATION_CHECKPOINT()
+                checkpoint.update(worktree_identity=sealed, accepted_outputs={"specify": {"output_sha256": "a" * 64}})
+                checkpoint["checkpoint_sha256"] = store_module.jcs_sha256(
+                    {k: v for k, v in checkpoint.items() if k != "checkpoint_sha256"})
+                operation = seed.ORCHESTRATION_OPERATION()
+                operation.update(kind="continuity-switch", state="APPLIED",
+                                 expected_before={"checkpoint_id": "checkpoint-1"},
+                                 intended_after={"to_runtime": runtime, "campaign_bridge": None})
+                item = seed.ORCHESTRATION_ITEM({"ctx-1": context}, {"op-1": operation})
+                item["policy_ref"] = "assets/agent-orchestration.v1.json"
+                item["policy_sha256"] = context["policy_sha256"] = grill_workspace.hash_bytes(
+                    (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes())
+                item.update(checkpoints={"checkpoint-1": checkpoint}, checkpoint_head="checkpoint-1")
+                store_module.bootstrap(root)
+                store_module.transact(root, lambda doc: {**doc, "agent_orchestration": {
+                    "schema": "grill-agent-orchestration/v1", "work_items": {"work-x": item}}})
+                argv = ("gauntlet-resume", str(root), "--work-id", "work-x", "--checkpoint", "checkpoint-1",
+                        "--runtime", runtime, "--session-ref", session)
+                before = store_module.read_snapshot(root).content_sha256
+                if label == "structural":
+                    # The identity check runs before any leader observation, so
+                    # this refusal needs no boundary at all.
+                    code, blocked = self.run_cli(*argv)
+                    self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-STATE-DIVERGENCE"), blocked)
+                    self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
+                    continue
+                adapter, _show, transcript = orchestration_fixture.boundary(
+                    grill_workspace, root, runtime, session, "work-x")
+                transcript["result"]["transcript"]["messages"][0]["blocks"][0]["input"] = {
+                    "command": shlex.join([sys.executable, "-B", str(SCRIPTS / "grill_workspace.py"), *argv])}
+                with mock.patch.object(grill_workspace, "_continuity_effective_activation",
+                        return_value={"runtime": {"id": runtime, "adapter": runtime}}), \
+                     mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                    code, preview = self.run_cli(*argv)
+                self.assertEqual((code, preview.get("verdict")), (0, "PREVIEW"), preview)
+                self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
+
+    def test_continuity_resume_compares_the_bound_execution_branch(self):
+        """R5-1/T040, the resume half: `branch` left the structural tuple
+        (T035) because it moves in normal life and no verb re-stamps it, and
+        the compensating control -- the execution branch the work item binds --
+        was never read here. So a work item already bound to one branch resumed
+        from any other. The binding is the SSOT that does survive a switch:
+        when it exists, the live branch must equal it; when it does not, the
+        resume stays as permissive as T035 made it.
+
+        Verified by reversion: deleting the comparison makes the bound-elsewhere
+        half return PREVIEW/exit 0 -- the resume proceeding on a branch the work
+        item is not bound to, not merely a different refusal code (T046).
+        """
+        import validate_orchestrator_store_contract as seed
+        store_module = grill_workspace.grill_core_module("store")
+        runtime, session = "claude", "orca:ctx-destination"
+        for label, bound in (("bound-elsewhere", "a-branch-nobody-was-on"), ("bound-here", None)):
+            temporary, root = self.fixture()
+            with temporary, self.subTest(case=label), orchestration_fixture.offline_leader(grill_workspace):
+                with mock.patch.object(grill_workspace, "_initialize_orchestration", return_value={}):
+                    code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                        "--work-id", "work-x", "--runtime", "codex",
+                        "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+                self.assertEqual(code, 0, payload)
+                state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
+                live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                             check=True, capture_output=True, text=True).stdout.strip()
+                stored = json.loads(state_path.read_text(encoding="utf-8"))
+                stored["development"]["execution_branch"] = bound or live_branch
+                state_path.write_text(json.dumps(stored), encoding="utf-8")
+                if bound is not None:
+                    # T063: fixture sanity, not coverage -- `bound` is the fixed
+                    # literal below ("a-branch-nobody-was-on"), never derived
+                    # from `live_branch`, so this only guards against the
+                    # fixture's init branch colliding with the literal. The
+                    # real assertion is the readback further down.
+                    self.assertNotEqual(bound, live_branch)
+                state = grill_workspace.read_development_state(root,
+                    grill_workspace.resolve_development_item(root, "work-x"), "work-x")[1]
+                # The stamp itself is untouched: only the binding disagrees, so
+                # a failure here can only come from the new comparison.
+                sealed = grill_workspace._continuity_identity(root, "work-x", state)
+                context = seed.ORCHESTRATION_CONTEXT(state="RELEASED", leader_state="RELEASED")
+                context.update(runtime="codex", adapter="codex", worktree_identity=sealed)
+                checkpoint = seed.ORCHESTRATION_CHECKPOINT()
+                checkpoint.update(worktree_identity=sealed, accepted_outputs={"specify": {"output_sha256": "a" * 64}})
+                checkpoint["checkpoint_sha256"] = store_module.jcs_sha256(
+                    {k: v for k, v in checkpoint.items() if k != "checkpoint_sha256"})
+                operation = seed.ORCHESTRATION_OPERATION()
+                operation.update(kind="continuity-switch", state="APPLIED",
+                                 expected_before={"checkpoint_id": "checkpoint-1"},
+                                 intended_after={"to_runtime": runtime, "campaign_bridge": None})
+                item = seed.ORCHESTRATION_ITEM({"ctx-1": context}, {"op-1": operation})
+                item["policy_ref"] = "assets/agent-orchestration.v1.json"
+                item["policy_sha256"] = context["policy_sha256"] = grill_workspace.hash_bytes(
+                    (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes())
+                item.update(checkpoints={"checkpoint-1": checkpoint}, checkpoint_head="checkpoint-1")
+                store_module.bootstrap(root)
+                store_module.transact(root, lambda doc: {**doc, "agent_orchestration": {
+                    "schema": "grill-agent-orchestration/v1", "work_items": {"work-x": item}}})
+                argv = ("gauntlet-resume", str(root), "--work-id", "work-x", "--checkpoint", "checkpoint-1",
+                        "--runtime", runtime, "--session-ref", session)
+                before = store_module.read_snapshot(root).content_sha256
+                # R6-3/T046: both halves get the SAME boundary substitutes. The
+                # divergent half used to run without them, so it stopped short
+                # on the missing activation and the reversion only changed which
+                # refusal code came out first -- exit code and write barrier read
+                # identically with and without the comparison. Installed here,
+                # the reversion degrades this half to PREVIEW/exit 0, which is
+                # what "the resume proceeds on a foreign branch" actually means.
+                adapter, _show, transcript = orchestration_fixture.boundary(
+                    grill_workspace, root, runtime, session, "work-x")
+                transcript["result"]["transcript"]["messages"][0]["blocks"][0]["input"] = {
+                    "command": shlex.join([sys.executable, "-B", str(SCRIPTS / "grill_workspace.py"), *argv])}
+                with mock.patch.object(grill_workspace, "_continuity_effective_activation",
+                        return_value={"runtime": {"id": runtime, "adapter": runtime}}), \
+                     mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                    code, payload = self.run_cli(*argv)
+                if bound is not None:
+                    self.assertEqual((code, payload.get("code")), (2, "CONTINUITY-STATE-DIVERGENCE"), payload)
+                    self.assertIn(bound, payload.get("error", ""))
+                else:
+                    self.assertEqual((code, payload.get("verdict")), (0, "PREVIEW"), payload)
+                self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
+
+    def test_continuity_resume_refuses_a_malformed_development_block(self):
+        """T055/T060: `_continuity_identity` validates `development`'s own
+        shape unconditionally, before any continuity verb reads
+        `execution_branch` -- DEVELOPMENT-SCHEMA when the block is present
+        but not a mapping. The step-confirmation and phase-turn commands
+        raise the same named code for the identical shape, but only on
+        their own local `state.json` read; this guard is reachable through
+        `continuity-resume` too, and had no case proving it there.
+        `_continuity_refuse_branch_contradiction` carries the same-named
+        guard, but it is defense in depth today: no CLI path reaches it,
+        because `_continuity_identity` runs first in all three verbs and
+        already refuses this shape.
+
+        Verified by reversion: removing the guard from `_continuity_identity`
+        does not let this case proceed -- measured result is
+        (2, "UNEXPECTED-FAILURE") with an AttributeError, because nothing
+        downstream still names DEVELOPMENT-SCHEMA for this shape.
+        """
+        import validate_orchestrator_store_contract as seed
+        store_module = grill_workspace.grill_core_module("store")
+        runtime, session = "claude", "orca:ctx-destination"
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            with mock.patch.object(grill_workspace, "_initialize_orchestration", return_value={}):
+                code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                    "--work-id", "work-x", "--runtime", "codex",
+                    "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, payload)
+            state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
+            state = grill_workspace.read_development_state(root,
+                grill_workspace.resolve_development_item(root, "work-x"), "work-x")[1]
+            sealed = grill_workspace._continuity_identity(root, "work-x", state)
+            context = seed.ORCHESTRATION_CONTEXT(state="RELEASED", leader_state="RELEASED")
+            context.update(runtime="codex", adapter="codex", worktree_identity=sealed)
+            checkpoint = seed.ORCHESTRATION_CHECKPOINT()
+            checkpoint.update(worktree_identity=sealed, accepted_outputs={"specify": {"output_sha256": "a" * 64}})
+            checkpoint["checkpoint_sha256"] = store_module.jcs_sha256(
+                {k: v for k, v in checkpoint.items() if k != "checkpoint_sha256"})
+            operation = seed.ORCHESTRATION_OPERATION()
+            operation.update(kind="continuity-switch", state="APPLIED",
+                             expected_before={"checkpoint_id": "checkpoint-1"},
+                             intended_after={"to_runtime": runtime, "campaign_bridge": None})
+            item = seed.ORCHESTRATION_ITEM({"ctx-1": context}, {"op-1": operation})
+            item["policy_ref"] = "assets/agent-orchestration.v1.json"
+            item["policy_sha256"] = context["policy_sha256"] = grill_workspace.hash_bytes(
+                (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes())
+            item.update(checkpoints={"checkpoint-1": checkpoint}, checkpoint_head="checkpoint-1")
+            store_module.bootstrap(root)
+            store_module.transact(root, lambda doc: {**doc, "agent_orchestration": {
+                "schema": "grill-agent-orchestration/v1", "work_items": {"work-x": item}}})
+            stored = json.loads(state_path.read_text(encoding="utf-8"))
+            stored["active_phase"] = None
+            stored["development"] = "not-a-mapping"
+            state_path.write_text(json.dumps(stored), encoding="utf-8")
+            argv = ("gauntlet-resume", str(root), "--work-id", "work-x", "--checkpoint", "checkpoint-1",
+                    "--runtime", runtime, "--session-ref", session)
+            before = store_module.read_snapshot(root).content_sha256
+            adapter, _show, transcript = orchestration_fixture.boundary(
+                grill_workspace, root, runtime, session, "work-x")
+            transcript["result"]["transcript"]["messages"][0]["blocks"][0]["input"] = {
+                "command": shlex.join([sys.executable, "-B", str(SCRIPTS / "grill_workspace.py"), *argv])}
+            with mock.patch.object(grill_workspace, "_continuity_effective_activation",
+                    return_value={"runtime": {"id": runtime, "adapter": runtime}}), \
+                 mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                code, blocked = self.run_cli(*argv)
+            self.assertEqual((code, blocked.get("code")), (2, "DEVELOPMENT-SCHEMA"), blocked)
+            self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
+
+    def test_continuity_refuse_branch_contradiction_guards_malformed_development_directly(self):
+        """T061: `_continuity_refuse_branch_contradiction`'s own DEVELOPMENT-SCHEMA
+        guard (T047) is defense in depth today -- `_continuity_identity` (T055)
+        already refuses the same shape first, in all three continuity verbs, so
+        no CLI path reaches this one (see T059/T060). It still needs its own
+        coverage: nothing else in this file calls the function directly, and
+        swapping its guard for silent continuation leaves the whole suite green.
+
+        Verified by mutation: replacing the `raise` with `pass` makes this case
+        fail -- the call returns `None` instead of refusing.
+
+        T068: `_continuity_identity_matches`'s own fail-closed branch (a
+        present-but-non-mapping stamp never matches) has no direct case
+        either -- inverting it makes a non-mapping stamp match in all three
+        comparators (prepare-switch, resume, takeover). Verified by mutation:
+        flipping that `return False` to `return True` makes this line fail.
+        """
+        with self.assertRaises(grill_workspace.CliFailure) as blocked:
+            grill_workspace._continuity_refuse_branch_contradiction(
+                {"development": "not-a-mapping"}, {}, "work-x")
+        self.assertEqual(blocked.exception.code, "DEVELOPMENT-SCHEMA")
+        self.assertFalse(grill_workspace._continuity_identity_matches("not-a-mapping", {}))
+
+    def test_prepare_switch_and_takeover_compare_the_bound_execution_branch(self):
+        """T067/R10: the sixth review round (R6-T045) made
+        `_continuity_refuse_branch_contradiction` the single point every
+        continuity verb calls so a sealed/live execution-branch contradiction
+        is named *before* anything mutates -- prepare-switch creates the
+        operation and releases the leader, and takeover re-stamps the
+        identity, before either one is done checking. Neither call site
+        (grill_workspace.py, `gauntlet_prepare_switch_command` and
+        `gauntlet_context_takeover_command`) had a case: swapping either call
+        for `pass` leaves the whole 51-test suite green.
+
+        Each half seeds `development.execution_branch` (the work item's own
+        sealed SSOT) to a branch that is not the live one and requires the
+        named refusal, with the store digest unchanged -- proving the
+        refusal happens before any write, which is the entire point of the
+        finding.
+
+        Verified by mutation: commenting out either
+        `_continuity_refuse_branch_contradiction(...)` call (prepare-switch
+        or takeover) makes its half proceed to SWITCH-PREPARED/QUIESCING or
+        TAKEOVER-APPLIED instead of refusing, and the store digest changes.
+        """
+        bound = "a-branch-nobody-was-on"
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                         check=True, capture_output=True, text=True).stdout.strip()
+            self.assertNotEqual(bound, live_branch)
+
+            def bind_to(work_id):
+                state_path = root / ".grill" / "work-items" / work_id / "state.json"
+                stored = json.loads(state_path.read_text(encoding="utf-8"))
+                stored["development"]["execution_branch"] = bound
+                state_path.write_text(json.dumps(stored), encoding="utf-8")
+
+            # -- prepare-switch half. --
+            code, created = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                "--work-id", "work-switch", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            switch_context_id = store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-switch"]["current_context_id"]
+            bind_to("work-switch")
+            before = store.read_snapshot(root).content_sha256
+            code, blocked = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-switch",
+                "--session-ref", orchestration_fixture.SESSION, "--context-id", switch_context_id,
+                "--epoch", "1", "--to-runtime", "claude")
+            self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-STATE-DIVERGENCE"), blocked)
+            self.assertIn(bound, blocked.get("error", ""))
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            # -- takeover half. --
+            code, created = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                "--work-id", "work-takeover", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            bind_to("work-takeover")
+            before = store.read_snapshot(root).content_sha256
+            old_dispatch = orchestration_fixture.SESSION.removeprefix("orca:")
+            raw = takeover_show(old_dispatch, status="completed")
+            real_run = subprocess.run
+            def guarded(cmd, **kwargs):
+                if isinstance(cmd, list) and "worker-show" in cmd:
+                    return subprocess.CompletedProcess(cmd, 0, stdout=raw)
+                return real_run(cmd, **kwargs)
+            with mock.patch.dict(os.environ, {"ORCA_TERMINAL_HANDLE": "term-fixture"}), \
+                 mock.patch.object(subprocess, "run", side_effect=guarded):
+                code, blocked = self.run_cli("gauntlet-context-takeover", str(root), "--work-id", "work-takeover",
+                    "--session-ref", "orca:ctx-new-takeover")
+            self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-STATE-DIVERGENCE"), blocked)
+            self.assertIn(bound, blocked.get("error", ""))
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+    def test_continuity_resume_tolerates_an_absent_development_block(self):
+        """T062: `_continuity_identity`'s DEVELOPMENT-SCHEMA guard only fires
+        when `development` is present and the wrong type -- `development is
+        not None and not isinstance(development, dict)`. Absence is a
+        legitimate state, not a hypothesis: it is the terminal-milestone
+        shape `audit_decisions.py` requires (`active_phase` null), and the
+        `is not None` half of the clause is what lets a work item in that
+        shape resume at all. Untested until now: tightening the clause to
+        `not isinstance(development, dict)`, which refuses absence too,
+        leaves the whole suite green.
+
+        Verified by mutation: that tightened clause makes this case refuse
+        DEVELOPMENT-SCHEMA/exit 2 instead of proceeding.
+        """
+        import validate_orchestrator_store_contract as seed
+        store_module = grill_workspace.grill_core_module("store")
+        runtime, session = "claude", "orca:ctx-destination"
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            with mock.patch.object(grill_workspace, "_initialize_orchestration", return_value={}):
+                code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                    "--work-id", "work-x", "--runtime", "codex",
+                    "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, payload)
+            state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
+            state = grill_workspace.read_development_state(root,
+                grill_workspace.resolve_development_item(root, "work-x"), "work-x")[1]
+            sealed = grill_workspace._continuity_identity(root, "work-x", state)
+            context = seed.ORCHESTRATION_CONTEXT(state="RELEASED", leader_state="RELEASED")
+            context.update(runtime="codex", adapter="codex", worktree_identity=sealed)
+            checkpoint = seed.ORCHESTRATION_CHECKPOINT()
+            checkpoint.update(worktree_identity=sealed, accepted_outputs={"specify": {"output_sha256": "a" * 64}})
+            checkpoint["checkpoint_sha256"] = store_module.jcs_sha256(
+                {k: v for k, v in checkpoint.items() if k != "checkpoint_sha256"})
+            operation = seed.ORCHESTRATION_OPERATION()
+            operation.update(kind="continuity-switch", state="APPLIED",
+                             expected_before={"checkpoint_id": "checkpoint-1"},
+                             intended_after={"to_runtime": runtime, "campaign_bridge": None})
+            item = seed.ORCHESTRATION_ITEM({"ctx-1": context}, {"op-1": operation})
+            item["policy_ref"] = "assets/agent-orchestration.v1.json"
+            item["policy_sha256"] = context["policy_sha256"] = grill_workspace.hash_bytes(
+                (grill_workspace.ASSETS / "agent-orchestration.v1.json").read_bytes())
+            item.update(checkpoints={"checkpoint-1": checkpoint}, checkpoint_head="checkpoint-1")
+            store_module.bootstrap(root)
+            store_module.transact(root, lambda doc: {**doc, "agent_orchestration": {
+                "schema": "grill-agent-orchestration/v1", "work_items": {"work-x": item}}})
+            stored = json.loads(state_path.read_text(encoding="utf-8"))
+            stored["active_phase"] = None
+            del stored["development"]
+            state_path.write_text(json.dumps(stored), encoding="utf-8")
+            argv = ("gauntlet-resume", str(root), "--work-id", "work-x", "--checkpoint", "checkpoint-1",
+                    "--runtime", runtime, "--session-ref", session)
+            before = store_module.read_snapshot(root).content_sha256
+            adapter, _show, transcript = orchestration_fixture.boundary(
+                grill_workspace, root, runtime, session, "work-x")
+            transcript["result"]["transcript"]["messages"][0]["blocks"][0]["input"] = {
+                "command": shlex.join([sys.executable, "-B", str(SCRIPTS / "grill_workspace.py"), *argv])}
+            with mock.patch.object(grill_workspace, "_continuity_effective_activation",
+                    return_value={"runtime": {"id": runtime, "adapter": runtime}}), \
+                 mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                code, preview = self.run_cli(*argv)
+            self.assertEqual((code, preview.get("verdict")), (0, "PREVIEW"), preview)
+            self.assertEqual(store_module.read_snapshot(root).content_sha256, before)
+
+    def _graft_succession(self, root, work_id, branch):
+        """Leave behind the shape a takeover/resume produces: a successor
+        context, descending from the current one, whose worktree identity is
+        stamped on `branch`. The real verbs derive that stamp live and validate
+        the structural identity in the act, so the stamp is the only evidence
+        of which tree the context ran on -- and the Store forbids rewriting a
+        context in place, which is why the succession is grafted as a new one.
+        """
+        import validate_orchestrator_store_contract as seed
+        store_module = grill_workspace.grill_core_module("store")
+        state = grill_workspace.read_development_state(
+            root, grill_workspace.resolve_development_item(root, work_id), work_id)[1]
+        sealed = {**grill_workspace._continuity_identity(root, work_id, state), "branch": branch}
+
+        def apply(document):
+            document = copy.deepcopy(document)
+            item = document["agent_orchestration"]["work_items"][work_id]
+            prior_id = item["current_context_id"]
+            prior = item["contexts"][prior_id]
+            epoch = prior["epoch"] + 1
+            operation = seed.ORCHESTRATION_OPERATION("op-continuity", "ctx-successor")
+            operation.update(kind="continuity-switch", state="APPLIED", fence=epoch,
+                             intended_after={"campaign_bridge": None})
+            item["contexts"][prior_id] = {**prior, "state": "SUPERSEDED",
+                                          "leader": {**prior["leader"], "state": "RELEASING"}}
+            item["contexts"]["ctx-successor"] = {
+                **copy.deepcopy(prior), "context_id": "ctx-successor", "epoch": epoch,
+                "predecessor_context_id": prior_id, "continuity_ref": "op-continuity",
+                "worktree_identity": sealed,
+                "leader": {**prior["leader"], "owner_id": "ctx-successor", "fence": epoch, "epoch": epoch}}
+            item["operations"]["op-continuity"] = operation
+            item["current_context_id"] = "ctx-successor"
+            return document
+
+        store_module.transact(root, apply)
+
+    def _finish_phase(self, state_path, *, unbind):
+        """Complete every step of the matrix so `phase-turn` is admissible,
+        optionally clearing the binding to reach the turn's own minting branch."""
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        development = state["development"]
+        development["steps"] = {step: "complete" for step in development["sequence"]}
+        development["current_step"] = development["sequence"][-1]
+        if unbind:
+            development["execution_branch"] = None
+        state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+    def test_execution_branch_minting_ignores_the_identity_stamp(self):
+        """R6-1/T044, T048/T049. This case used to assert EXECUTION-BRANCH-MISMATCH
+        whenever the identity stamp contradicted the live branch -- itself a
+        narrower descendant of the very defect T048 removed. `_continuity_stamped_branch`
+        read a value written once, at context creation, that no verb ever
+        re-stamps, while `phase-turn` clears the binding on purpose so the next
+        phase's first confirmation can mint a fresh one. Comparing an unrenewed
+        stamp against the live branch refused every work item that was ever
+        taken over or resumed, on its first confirmation after the very next
+        phase turn -- permanently, with no verb to undo it.
+
+        T048 removed the comparison entirely, at both minting sites -- the step
+        confirmation and the phase turn, which had no guard of its own before
+        R6 added one. The criterion is now just: no bound branch yet, mint the
+        live one. What the identity stamp claims -- absent or contradicting,
+        the two subcases this case still covers -- no longer matters: there
+        is no upstream proof that the live branch is the one the context ran
+        on. `branch` was pulled out of the structural tuple in T035, and two
+        branches inside the same worktree look identical on
+        project/path/git_common_dir alone. Minting just records the current
+        branch as the binding; it does not verify one.
+
+        Covers the sequence that motivated the removal end to end: succession,
+        then the step confirmation, then the phase turn -- the dead end R6
+        found, now open on both minting sites regardless of what the stamp
+        says.
+
+        Verified by reversion: restoring either stamp comparison makes the
+        "stamp contradicts" subcase refuse EXECUTION-BRANCH-MISMATCH again, at
+        whichever site it was restored on.
+        """
+        for label, stamp in (("no stamp", None),
+                              ("stamp contradicts", "a-branch-nobody-was-on")):
+            temporary, root = self.fixture()
+            with temporary, self.subTest(case=label), orchestration_fixture.offline_leader(grill_workspace):
+                code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                    "--work-id", "work-x", "--runtime", "codex",
+                    "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+                self.assertEqual(code, 0, payload)
+                state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
+                self.assertNotIn("execution_branch",
+                                 json.loads(state_path.read_text(encoding="utf-8"))["development"])
+                live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                             check=True, capture_output=True, text=True).stdout.strip()
+                if stamp is not None:
+                    # T063: no subcase loads "live" any more -- the "agreeing"
+                    # situation was removed on purpose (only "no stamp" and
+                    # "stamp contradicts" remain above), so the selector this
+                    # ternary switched on is dead. `stamp` is the value.
+                    sealed_value = stamp
+                    self._graft_succession(root, "work-x", sealed_value)
+                    # Assert the value the graft actually sealed -- not a
+                    # value standing in for the subcase's own label -- so a
+                    # regression that stops the graft from writing the stamp
+                    # is caught here, not just at the mint.
+                    document = store.read_snapshot(root).document
+                    item = document["agent_orchestration"]["work_items"]["work-x"]
+                    context = item["contexts"][item["current_context_id"]]
+                    self.assertEqual(context["worktree_identity"]["branch"], sealed_value)
+                    # Fixture sanity, not coverage -- `sealed_value` here is
+                    # the fixed literal "a-branch-nobody-was-on", never
+                    # derived from `live_branch`. The real assertion is the
+                    # readback above.
+                    self.assertNotEqual(sealed_value, live_branch)
+
+                # The step confirmation, which is where the backfill lives.
+                code, payload = self.run_cli("checkpoint", str(root), "--work-id", "work-x",
+                    "--step", "specify", "--state", "in-progress", "--operation-id", "op-specify",
+                    "--session-ref", orchestration_fixture.SESSION)
+                self.assertEqual(code, 0, payload)
+                self.assertEqual(json.loads(state_path.read_text(encoding="utf-8"))[
+                    "development"]["execution_branch"], live_branch)
+
+                # The phase turn mints the binding through its own branch, the
+                # one R6 found without any guard at all.
+                self._finish_phase(state_path, unbind=True)
+                code, payload = self.run_cli("phase-turn", str(root), "--work-id", "work-x",
+                    "--reason", "abrindo a fase seguinte", "--session-ref", orchestration_fixture.SESSION)
+                self.assertEqual((code, payload.get("verdict")), (0, "TURNED"), payload)
+                turned = json.loads(state_path.read_text(encoding="utf-8"))["development"]
+                self.assertIsNone(turned["execution_branch"])
+                self.assertEqual(turned["audit"][-1]["previous_execution_branch"], live_branch)
+
+    def test_a_succeeded_work_item_still_binds_a_branch_after_the_phase_turn(self):
+        """R6-1/T044, the dead end itself, as one uninterrupted sequence:
+        succession, then phase turn, then step confirmation. `phase-turn` clears
+        `development["execution_branch"]` deliberately, so the next phase binds
+        its own branch, and the only other writer is the mint. Under the old
+        monotonic criterion the successor context could never mint again, so the
+        first turn after ANY takeover or resume blocked the work item forever --
+        an availability defect no verb could undo.
+
+        Verified by reversion: restoring the "has a predecessor" criterion makes
+        the final confirmation refuse EXECUTION-BRANCH-UNSET.
+        """
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                "--work-id", "work-x", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, payload)
+            state_path = root / ".grill" / "work-items" / "work-x" / "state.json"
+            live_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                         check=True, capture_output=True, text=True).stdout.strip()
+            code, payload = self.run_cli("checkpoint", str(root), "--work-id", "work-x",
+                "--step", "specify", "--state", "in-progress", "--operation-id", "op-first",
+                "--session-ref", orchestration_fixture.SESSION)
+            self.assertEqual(code, 0, payload)
+            self._graft_succession(root, "work-x", live_branch)
+            self._finish_phase(state_path, unbind=False)
+            code, payload = self.run_cli("phase-turn", str(root), "--work-id", "work-x",
+                "--reason", "fase entregue", "--session-ref", orchestration_fixture.SESSION)
+            self.assertEqual((code, payload.get("verdict")), (0, "TURNED"), payload)
+            self.assertIsNone(json.loads(state_path.read_text(encoding="utf-8"))[
+                "development"]["execution_branch"])
+            code, payload = self.run_cli("checkpoint", str(root), "--work-id", "work-x",
+                "--step", "specify", "--state", "in-progress", "--operation-id", "op-next-phase",
+                "--session-ref", orchestration_fixture.SESSION)
+            self.assertEqual(code, 0, payload)
+            self.assertEqual(json.loads(state_path.read_text(encoding="utf-8"))[
+                "development"]["execution_branch"], live_branch)
+
+    def test_block_refuses_a_resource_whose_activity_lives_in_another_context(self):
+        """o1/T043: every producer pins a resource to the context of its own
+        activity (`new_specialist_resource`) and no verb moves an activity
+        between contexts (`prepare_activity` fences on it), so the shape the
+        cleanup scope reasons about -- a foreign-context resource carrying the
+        requested activity -- is one the core never emits. It was only implicit:
+        the Store accepted it, which is what made the cleanup case covering
+        that branch a test of a document nothing produces. Asserted here, the
+        branch becomes defence in depth instead of false confidence.
+
+        Verified by reversion: without the invariant the divergent block
+        validates clean.
+        """
+        import validate_orchestrator_store_contract as seed
+        item = seed.ORCHESTRATION_ITEM({"ctx-1": seed.ORCHESTRATION_CONTEXT(),
+                                        "ctx-2": seed.ORCHESTRATION_CONTEXT("ctx-2", 2)})
+        item["activities"] = {"activity-1": seed.ORCHESTRATION_ACTIVITY()}
+        item["resources"] = {"resource-1": seed.ORCHESTRATION_RESOURCE()}
+        block = {"schema": agent_orchestration.SCHEMA, "work_items": {"work-x": item}}
+        agent_orchestration.validate_block(copy.deepcopy(block))
+        divergent = copy.deepcopy(block)
+        divergent["work_items"]["work-x"]["resources"]["resource-1"]["origin_context_id"] = "ctx-2"
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "another context"):
+            agent_orchestration.validate_block(divergent)
+
+    def test_prepare_switch_refuses_declared_but_unknown_checkpoint(self):
+        """T005: only the "no checkpoint at all yet" branch (checkpoint_head is
+        None) was relaxed to synthesize one (FR-006, see
+        test_every_work_entry_reobserves_authority_and_requires_presentation).
+        A checkpoint_head that IS set but does not resolve inside checkpoints
+        still refuses CONTINUITY-CHECKPOINT-MISSING. validate_block already
+        refuses to persist a document shaped that way through any real write
+        (p02-a's own T005 finding), so this stubs store.read_snapshot for one
+        call instead of writing it to disk."""
+        temp, root = self.fixture()
+        store_module = grill_workspace.grill_core_module("store")
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            code, created = self.run_cli("init", str(root), "--work-id", "work-x", "--type", "feature",
+                "--slug", "x", "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            real = store_module.read_snapshot(root)
+            context_id = real.document["agent_orchestration"]["work_items"]["work-x"]["current_context_id"]
+            tampered = copy.deepcopy(real.document)
+            tampered["agent_orchestration"]["work_items"]["work-x"]["checkpoint_head"] = "cp-declared-but-unknown"
+            stub = store_module.Snapshot(document=tampered, revision=real.revision,
+                content_sha256=real.content_sha256, project_id=real.project_id, path=real.path)
+            with mock.patch.object(store_module, "read_snapshot", return_value=stub):
+                code, blocked = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-x",
+                    "--context-id", context_id, "--epoch", "1", "--session-ref", orchestration_fixture.SESSION,
+                    "--to-runtime", "claude")
+                self.assertEqual((code, blocked.get("code")), (2, "CONTINUITY-CHECKPOINT-MISSING"), blocked)
+
+    def test_context_takeover(self):
+        """T007: gauntlet-context-takeover accepts a takeover only on a proven
+        terminal observation of the predecessor dispatch, refuses every live or
+        inconclusive signal with its own code, preview and apply agree on every
+        verdict, preview never writes, a stale hash is refused and an identical
+        replay short-circuits without re-observing (contracts/context-takeover.md)."""
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            old_session = orchestration_fixture.SESSION
+            old_dispatch = old_session.removeprefix("orca:")
+
+            def spawn(work_id):
+                code, created = self.run_cli("init", str(root), "--work-id", work_id, "--type", "feature",
+                    "--slug", work_id, "--runtime", "codex", "--session-ref", old_session, "--skip-backlog")
+                self.assertEqual(code, 0, created)
+                item = store.read_snapshot(root).document["agent_orchestration"]["work_items"][work_id]
+                return item["current_context_id"]
+
+            def takeover(work_id, new_session, *tail):
+                return self.run_cli("gauntlet-context-takeover", str(root), "--work-id", work_id,
+                                    "--session-ref", new_session, *tail)
+
+            real_run = subprocess.run
+
+            def guarded_run(raw):
+                # Only the orca worker-show call _takeover_observation issues is
+                # synthetic (or forbidden, when raw is None); every other
+                # subprocess call (git, via store.read_snapshot et al.) still
+                # runs for real -- it must pass through untouched either way.
+                def run(cmd, **kwargs):
+                    if isinstance(cmd, list) and "worker-show" in cmd:
+                        if raw is None:
+                            raise AssertionError("observation must not run here")
+                        return subprocess.CompletedProcess(cmd, 0, stdout=raw)
+                    return real_run(cmd, **kwargs)
+                return mock.patch.object(subprocess, "run", side_effect=run)
+
+            def observing(raw):
+                return mock.patch.dict(os.environ, {"ORCA_TERMINAL_HANDLE": "term-fixture"}), guarded_run(raw)
+
+            def assert_refused_and_unwritten(work_id, new_session, code_, raw=None):
+                context = observing(raw) if raw is not None else (guarded_run(None),)
+                with contextlib.ExitStack() as stack:
+                    for manager in context:
+                        stack.enter_context(manager)
+                    before = store.read_snapshot(root).content_sha256
+                    for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                        with self.subTest(work_id=work_id, code=code_, apply=bool(tail)):
+                            status, blocked = takeover(work_id, new_session, *tail)
+                            self.assertEqual((status, blocked.get("code")), (2, code_), blocked)
+                    self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            # -- three independent, real reasons observe_predecessor_termination
+            # calls the predecessor terminal; every one accepts the takeover. --
+            terminal = {
+                "status": (takeover_show(old_dispatch, status="completed",
+                    liveness={"verdict": "live", "source": "agent_status"}), "completed",
+                    {"verdict": "live", "source": "agent_status"}),
+                "revoked": (takeover_show(old_dispatch, status="dispatched",
+                    revoked="2026-01-01T00:00:00Z"), "dispatched", None),
+                "exited": (takeover_show(old_dispatch, status="dispatched",
+                    liveness={"verdict": "exited", "source": "agent_status"}), "dispatched",
+                    {"verdict": "exited", "source": "agent_status"}),
+            }
+            for label, (raw, expected_status, expected_liveness) in terminal.items():
+                work_id = "work-terminal-" + label
+                old_context_id = spawn(work_id)
+                new_session = "orca:ctx-new-" + label
+                env, transport = observing(raw)
+                with self.subTest(case=label), env, transport:
+                    before = store.read_snapshot(root).content_sha256
+                    code, preview = takeover(work_id, new_session)
+                    self.assertEqual((code, preview.get("verdict")), (0, "TAKEOVER-PREVIEW"), preview)
+                    self.assertEqual(store.read_snapshot(root).content_sha256, before)
+                    code, applied = takeover(work_id, new_session, "--apply", "--expected-sha256", preview["expected_sha256"])
+                    self.assertEqual((code, applied.get("verdict")), (0, "TAKEOVER-APPLIED"), applied)
+                    self.assertEqual(applied["from_context_id"], old_context_id)
+                    self.assertEqual(applied["succession"]["reason"], "takeover")
+                    # T014/FR-004: dispatch_status and liveness must come from the
+                    # same enveloped {"ok": true, "result": {...}} shape the real
+                    # transport returns, not a top-level read that always misses.
+                    self.assertEqual(applied["succession"]["evidence"]["dispatch_status"], expected_status)
+                    self.assertEqual(applied["succession"]["evidence"]["liveness"], expected_liveness)
+                    document = store.read_snapshot(root).document["agent_orchestration"]["work_items"][work_id]
+                    self.assertEqual(document["contexts"][old_context_id]["state"], "SUPERSEDED")
+                    new_context = document["contexts"][applied["context_id"]]
+                    self.assertEqual((new_context["state"], new_context["leader"]["session_ref"]), ("ACTIVE", new_session))
+                    # T021/T016/FR-001: the successor leader must carry the
+                    # *incoming* session's own observation. These three were
+                    # installed as None, so every @_gauntlet_authorized command
+                    # refused the very session the takeover had just installed.
+                    readiness = grill_workspace._session_readiness(root, "codex", new_session, work_id=work_id)
+                    leader = new_context["leader"]
+                    self.assertEqual([leader["observation_ref"], leader["observation_sha256"], leader["incarnation"]],
+                                     [readiness["ref"], readiness["sha256"], readiness["incarnation"]])
+                    self.assertTrue(all(leader[key] is not None for key in
+                                        ("observation_ref", "observation_sha256", "incarnation")))
+                    # FR-004: the presentation now comes from the incoming
+                    # session's readiness (mirroring continuity_resume_command),
+                    # not from a copy of the predecessor's context.
+                    self.assertEqual(new_context["presentation"], readiness["presentation"])
+                    self.assertEqual(applied["presentation"], new_context["presentation"])
+                    # FR-004: the persisted succession operation carries reason,
+                    # destination runtime, proof and instant -- the response is
+                    # not the record.
+                    operation = document["operations"][new_context["continuity_ref"]]
+                    self.assertEqual(operation["kind"], "continuity-switch")
+                    self.assertEqual(operation["context_id"], old_context_id)
+                    self.assertEqual(operation["subject_ids"], [old_context_id, applied["context_id"]])
+                    self.assertEqual({key: operation["intended_after"][key] for key in
+                                      ("reason", "to_runtime", "from_session_ref", "to_session_ref", "evidence", "taken_at")},
+                                     {"reason": "takeover", "to_runtime": "codex", "from_session_ref": old_session,
+                                      "to_session_ref": new_session, "evidence": applied["succession"]["evidence"],
+                                      "taken_at": applied["succession"]["taken_at"]})
+                    # The case that would have caught T016: an authorized verb
+                    # run as the incoming session must be accepted, end to end,
+                    # through _require_current_leader.
+                    code, entered = self.run_cli("gauntlet-step-enter", str(root), "--work-id", work_id,
+                        "--context-id", applied["context_id"], "--epoch", str(applied["epoch"]),
+                        "--session-ref", new_session, "--step", "implement-parallel")
+                    self.assertEqual(code, 0, entered)
+            applied_work_id, applied_session = "work-terminal-status", "orca:ctx-new-status"
+
+            # -- T021/FR-004: worktree identity is inherited, not re-derived. A
+            # fresh context has none yet, so the predecessor is first taken
+            # through prepare-switch (which stamps it and leaves the context
+            # QUIESCING, a state takeover still accepts). --
+            inherit_context_id = spawn("work-inherit")
+            code, quiescing = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-inherit",
+                "--session-ref", old_session, "--context-id", inherit_context_id, "--epoch", "1",
+                "--to-runtime", "claude")
+            self.assertEqual((code, quiescing.get("verdict")), (0, "QUIESCING"), quiescing)
+            stamped = store.read_snapshot(root).document["agent_orchestration"]["work_items"][
+                "work-inherit"]["contexts"][inherit_context_id]["worktree_identity"]
+            self.assertTrue(stamped)
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport:
+                code, preview = takeover("work-inherit", "orca:ctx-new-inherit")
+                self.assertEqual(code, 0, preview)
+                code, inherited = takeover("work-inherit", "orca:ctx-new-inherit", "--apply",
+                                           "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, inherited.get("verdict")), (0, "TAKEOVER-APPLIED"), inherited)
+            inherit_item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-inherit"]
+            self.assertEqual(inherit_item["contexts"][inherited["context_id"]]["worktree_identity"], stamped)
+
+            # -- R3-1/R3-2/T030: `phase` and `branch` move during the normal
+            # life of a context (phase with every cycle step, branch by routine
+            # human action once nobody drives the tree), and only a successful
+            # takeover rewrites the stamp -- there is no re-stamp verb. While
+            # they were inside the compared identity, the takeover refused the
+            # very scenario it exists to cure, permanently. They must be
+            # re-stamped from the live derived identity instead. --
+            restamp_context_id = spawn("work-restamp")
+            code, quiescing = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-restamp",
+                "--session-ref", old_session, "--context-id", restamp_context_id, "--epoch", "1",
+                "--to-runtime", "claude")
+            self.assertEqual((code, quiescing.get("verdict")), (0, "QUIESCING"), quiescing)
+            sealed_identity = copy.deepcopy(store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-restamp"]["contexts"][restamp_context_id]["worktree_identity"])
+            # The stamp is immutable in the Store, so the *live* tree is what
+            # moves -- exactly as it does in production: the cycle advances a
+            # step and someone switches branch once the session is dead.
+            original_branch = subprocess.run(["git", "-C", str(root), "branch", "--show-current"],
+                                             check=True, capture_output=True, text=True).stdout.strip()
+            # R5-2: teardown, not a protected block. The restoration tolerates
+            # failure so it never masks the real assertion (T038), and as a
+            # `finally` that meant the cases *after* it could silently derive
+            # identity from the test branch. Registered as cleanup it always
+            # runs, at the end of the case, with no uncovered window.
+            self.addCleanup(subprocess.run, ["git", "-C", str(root), "checkout", "-q", original_branch],
+                            check=False)
+            subprocess.run(["git", "-C", str(root), "checkout", "-q", "-b", "a-branch-nobody-was-on"], check=True)
+            state_path = root / ".grill" / "work-items" / "work-restamp" / "state.json"
+            aged = json.loads(state_path.read_text(encoding="utf-8"))
+            aged["active_phase"] = "a-later-step"
+            state_path.write_text(json.dumps(aged), encoding="utf-8")
+            self.assertNotEqual((sealed_identity["phase"], sealed_identity["branch"]),
+                                ("a-later-step", "a-branch-nobody-was-on"))
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport:
+                code, preview = takeover("work-restamp", "orca:ctx-new-restamp")
+                self.assertEqual(code, 0, preview)
+                code, restamped = takeover("work-restamp", "orca:ctx-new-restamp", "--apply",
+                                           "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, restamped.get("verdict")), (0, "TAKEOVER-APPLIED"), restamped)
+            restamp_item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-restamp"]
+            successor = restamp_item["contexts"][restamped["context_id"]]["worktree_identity"]
+            # The successor carries the *live* values, not the predecessor's
+            # stale copy; every structural field is preserved untouched.
+            self.assertEqual((successor["phase"], successor["branch"]),
+                             ("a-later-step", "a-branch-nobody-was-on"))
+            self.assertEqual({key: successor[key] for key in
+                              ("project_id", "work_id", "du", "git_common_dir", "real_path")},
+                             {key: sealed_identity[key] for key in
+                              ("project_id", "work_id", "du", "git_common_dir", "real_path")})
+            # The cases below need the original branch back, so the case
+            # restores it explicitly and demands success -- no assertion is in
+            # flight here, so `check=True` masks nothing. The cleanup above
+            # stays as the net for the paths that never reach this line.
+            subprocess.run(["git", "-C", str(root), "checkout", "-q", original_branch], check=True)
+            # -- R4-2/T036: the REFUSAL side of the same guard, which no test
+            # exercised at all: `grep -rn TAKEOVER-IDENTITY-DIVERGENT tests/`
+            # returned zero, and deleting the whole `raise` -- not relaxing it,
+            # deleting it -- left the suite green. The `work-restamp` case above
+            # covers only acceptance, and the reversions behind it prove the
+            # guard cannot be widened *back*, never that it exists. Here a
+            # STRUCTURAL field moves instead of phase and branch: `real_path` is
+            # rewritten straight in the sealed stamp (a fixture mutation; no
+            # product path rewrites a stamp), so the live tree still answers
+            # what it always did and only the sealed claim disagrees. --
+            divergent_context_id = spawn("work-divergent")
+            code, quiescing = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", "work-divergent",
+                "--session-ref", old_session, "--context-id", divergent_context_id, "--epoch", "1",
+                "--to-runtime", "claude")
+            self.assertEqual((code, quiescing.get("verdict")), (0, "QUIESCING"), quiescing)
+
+            # worktree_identity is an immutable context field, so the Store
+            # refuses to persist the moved stamp through any write (verified:
+            # ORCHESTRATOR_INVALID, "context immutable field changed"). The
+            # divergence is therefore handed in by stubbing one read, exactly
+            # as test_prepare_switch_refuses_declared_but_unknown_checkpoint
+            # does; the "nothing was written" check below reads the real file.
+            takeover_store = grill_workspace.grill_core_module("store")
+            real_snapshot = takeover_store.read_snapshot(root)
+            tampered = copy.deepcopy(real_snapshot.document)
+            moved_stamp = tampered["agent_orchestration"]["work_items"]["work-divergent"][
+                "contexts"][divergent_context_id]["worktree_identity"]
+            moved_stamp["real_path"] = moved_stamp["real_path"] + "-a-tree-that-is-not-this-one"
+            self.assertNotEqual(moved_stamp["real_path"], str(root.resolve()))
+            divergent_stub = takeover_store.Snapshot(document=tampered, revision=real_snapshot.revision,
+                content_sha256=real_snapshot.content_sha256, project_id=real_snapshot.project_id,
+                path=real_snapshot.path)
+            before = store.read_snapshot(root).content_sha256
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport:
+                for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                    with self.subTest(case="identity-divergent", apply=bool(tail)), \
+                         mock.patch.object(takeover_store, "read_snapshot", return_value=divergent_stub):
+                        code, blocked = takeover("work-divergent", "orca:ctx-new-divergent", *tail)
+                        # R5-3: inside the subTest. Dedented, a failure of the
+                        # preview iteration aborted the loop and the apply
+                        # subcase never ran at all.
+                        self.assertEqual((code, blocked.get("code")), (2, "TAKEOVER-IDENTITY-DIVERGENT"), blocked)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            # -- a live dispatch refuses distinctly from an inconclusive one. --
+            spawn("work-leader-active")
+            assert_refused_and_unwritten("work-leader-active", "orca:ctx-new-active", "TAKEOVER-LEADER-ACTIVE",
+                takeover_show(old_dispatch, status="dispatched", liveness={"verdict": "live", "source": "agent_status"}))
+
+            # -- every inconclusive shape of the observation refuses the same way. --
+            spawn("work-evidence-absent")
+            with mock.patch.dict(os.environ, clear=False):
+                os.environ.pop("ORCA_TERMINAL_HANDLE", None)
+                assert_refused_and_unwritten("work-evidence-absent", "orca:ctx-new-absent", "TAKEOVER-EVIDENCE-UNPROVEN")
+            for label, raw in (
+                ("illegible", b"\xff\xfe\x00not-utf8"),
+                ("invalid-json", b"not a json document at all"),
+                ("uncorrelated", takeover_show("some-other-dispatch", status="dispatched")),
+                ("liveness-unverifiable", takeover_show(old_dispatch, status=None, liveness={"verdict": "unverifiable"})),
+            ):
+                work_id = "work-evidence-" + label
+                spawn(work_id)
+                assert_refused_and_unwritten(work_id, "orca:ctx-new-" + label, "TAKEOVER-EVIDENCE-UNPROVEN", raw)
+
+            # -- a session_ref the adapter cannot even shape a query out of.
+            # A legitimate init always observes the LeaderBoundary form (same
+            # regex as observe_predecessor_termination), so this can only be a
+            # pre-existing binding -- built directly, like the seeded store
+            # fixtures elsewhere in this file, rather than mutating one that
+            # went through init (the Store's write-once transition guard
+            # refuses a live context's leader identity changing underfoot). --
+            import validate_orchestrator_store_contract as seed
+            legacy_context = seed.ORCHESTRATION_CONTEXT()
+            legacy_context["leader"]["session_ref"] = "orca:legacy-worker-1"
+            legacy_item = seed.ORCHESTRATION_ITEM({"ctx-1": legacy_context})
+            def add_legacy_item(document):
+                document["agent_orchestration"]["work_items"]["work-not-observable"] = legacy_item
+                return document
+            store.transact(root, add_legacy_item)
+            assert_refused_and_unwritten("work-not-observable", "orca:ctx-new-unobservable", "TAKEOVER-NOT-OBSERVABLE")
+
+            # -- specialist activity still in flight refuses even a terminal observation. --
+            active_context_id = spawn("work-active")
+            active_policy_sha256 = store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-active"]["policy_sha256"]
+            activity = seed.ORCHESTRATION_ACTIVITY("activity-live")
+            activity.update(context_id=active_context_id, state="BOOTSTRAPPING", policy_sha256=active_policy_sha256)
+            def add_activity(document):
+                document["agent_orchestration"]["work_items"]["work-active"]["activities"]["activity-live"] = activity
+                return document
+            store.transact(root, add_activity)
+            assert_refused_and_unwritten("work-active", "orca:ctx-new-work", "TAKEOVER-WORK-ACTIVE",
+                takeover_show(old_dispatch, status="completed"))
+
+            # -- a fully prepared worker passes to the successor instead of
+            # deadlocking behind the terminal predecessor's authority. --
+            spawn("work-prepared-worker")
+            inherited = ["worker:run-1:worker-a"]
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport, \
+                 mock.patch.object(grill_workspace, "_continuity_quiescence", return_value=(inherited, [])), \
+                 mock.patch.object(grill_workspace, "_takeover_prepared_workers", return_value=inherited):
+                code, preview = takeover("work-prepared-worker", "orca:ctx-new-prepared")
+                self.assertEqual((code, preview.get("inherited_prepared_workers")), (0, inherited), preview)
+                code, applied = takeover("work-prepared-worker", "orca:ctx-new-prepared", "--apply",
+                                         "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, applied.get("verdict")), (0, "TAKEOVER-APPLIED"), applied)
+            self.assertEqual(applied["inherited_prepared_workers"], inherited)
+
+            # -- a reread hash mismatch on --apply refuses without writing. --
+            spawn("work-stale")
+            env, transport = observing(takeover_show(old_dispatch, status="completed",
+                liveness={"verdict": "live", "source": "agent_status"}))
+            with env, transport:
+                code, preview = takeover("work-stale", "orca:ctx-new-stale")
+                self.assertEqual(code, 0, preview)
+                before = store.read_snapshot(root).content_sha256
+                code, blocked = takeover("work-stale", "orca:ctx-new-stale", "--apply", "--expected-sha256", "0" * 64)
+                self.assertEqual((code, blocked.get("code")), (2, "TAKEOVER-INPUTS-STALE"), blocked)
+                self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            # -- R2-4/T027: the applied takeover projects what stays pinned
+            # under the superseded context. The filters are the point: a
+            # CLOSED resource and a settled operation must NOT appear, so a
+            # projection reverted to {} (or dropped from the payload) fails
+            # here instead of passing the whole suite green. --
+            projection_context_id = spawn("work-projection")
+            projection_policy = store.read_snapshot(root).document["agent_orchestration"][
+                "work_items"]["work-projection"]["policy_sha256"]
+            # DECLARED is quiescent (_continuity_quiescence), so the resources
+            # below get a creation binding without refusing the takeover.
+            projection_activity = seed.ORCHESTRATION_ACTIVITY("activity-projection")
+            projection_activity.update(context_id=projection_context_id, policy_sha256=projection_policy)
+            kept_resource = seed.ORCHESTRATION_RESOURCE("resource-kept")
+            kept_resource.update(origin_context_id=projection_context_id, activity_id="activity-projection", state="REGISTERED")
+            closed_resource = seed.ORCHESTRATION_RESOURCE("resource-closed")
+            closed_resource.update(origin_context_id=projection_context_id, activity_id="activity-projection", state="CLOSED")
+            kept_operation = seed.ORCHESTRATION_OPERATION("op-kept", context_id=projection_context_id)
+            settled_operation = seed.ORCHESTRATION_OPERATION("op-settled", context_id=projection_context_id,
+                                                             result_sha256="f" * 64)
+            settled_operation.update(state="CONFIRMED", observation_ref="receipts/op-settled")
+            def add_projection(document):
+                target = document["agent_orchestration"]["work_items"]["work-projection"]
+                target["activities"]["activity-projection"] = copy.deepcopy(projection_activity)
+                target["resources"].update({"resource-kept": copy.deepcopy(kept_resource),
+                                            "resource-closed": copy.deepcopy(closed_resource)})
+                target["operations"].update({"op-kept": copy.deepcopy(kept_operation),
+                                             "op-settled": copy.deepcopy(settled_operation)})
+                return document
+            store.transact(root, add_projection)
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport:
+                code, preview = takeover("work-projection", "orca:ctx-new-projection")
+                self.assertEqual(code, 0, preview)
+                code, projected = takeover("work-projection", "orca:ctx-new-projection", "--apply",
+                                           "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, projected.get("verdict")), (0, "TAKEOVER-APPLIED"), projected)
+            self.assertEqual(projected["preserved_resources"], {"resource-kept": kept_resource})
+            self.assertEqual(projected["operations_to_reconcile"], {"op-kept": kept_operation})
+
+            # -- R2-5/T027: the revision guard at the top of mutate. The whole
+            # verdict is computed from a snapshot read outside the lock; when
+            # the document moved between that read and the commit, the
+            # takeover refuses instead of committing over the newer state.
+            # Same seam the resume sibling's CONTINUITY-CAS-CONFLICT uses. --
+            store_module = grill_workspace.grill_core_module("store")
+            spawn("work-cas")
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport:
+                code, preview = takeover("work-cas", "orca:ctx-new-cas")
+                self.assertEqual(code, 0, preview)
+                before = store.read_snapshot(root).content_sha256
+                real = store_module.read_snapshot(root)
+                stale = store_module.Snapshot(document=real.document, revision=real.revision - 1,
+                    content_sha256=real.content_sha256, project_id=real.project_id, path=real.path)
+                with mock.patch.object(store_module, "read_snapshot", return_value=stale):
+                    code, blocked = takeover("work-cas", "orca:ctx-new-cas", "--apply",
+                                             "--expected-sha256", preview["expected_sha256"])
+                self.assertEqual((code, blocked.get("code")), (2, "TAKEOVER-CAS-CONFLICT"), blocked)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            # -- an identical, already-applied request short-circuits: no re-observation. --
+            before = store.read_snapshot(root).content_sha256
+            with guarded_run(None):
+                for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                    code, reused = takeover(applied_work_id, applied_session, *tail)
+                    self.assertEqual((code, reused.get("verdict")), (0, "TAKEOVER-REUSED"), reused)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+    def test_orchestration_adopt_preview_matches_apply_when_context_fenced(self):
+        """T006/T007: a preview against a work item already bound to another
+        observed leader refuses CONTEXT-FENCED exactly like --apply would, and
+        writes nothing either way (contracts/context-takeover.md parity note)."""
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            code, created = self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x",
+                "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            args = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex",
+                    "--session-ref", orchestration_fixture.SESSION, "--scope-file", "src/a.py")
+            code, preview = self.run_cli(*args)
+            self.assertEqual(code, 0, preview)
+            code, adopted = self.run_cli(*args, "--apply", "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, adopted.get("verdict")), (0, "ORCHESTRATION-ADOPTED"), adopted)
+            before = store.read_snapshot(root).content_sha256
+            other = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex",
+                     "--session-ref", "orca:ctx-other-leader", "--scope-file", "src/a.py")
+            for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                code, fenced = self.run_cli(*other, *tail)
+                self.assertEqual((code, fenced.get("code")), (2, "CONTEXT-FENCED"), fenced)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+    def test_orchestration_adopt_preview_matches_apply_when_origin_changed(self):
+        """T066/FR-011: `_adoption_conflict` (grill_workspace.py) mirrors the
+        apply closure's origin-changed branch so the preview raises the same
+        refusal the apply would -- but the only existing preview/apply parity
+        case (test_orchestration_adopt_preview_matches_apply_when_context_fenced,
+        above) covers CONTEXT-FENCED only. The origin-changed invariant this
+        delivery built was proven only by eyeballing the two branches stay in
+        lockstep, never by a test: that is exactly what let a main-branch
+        merge loosen `_adoption_conflict` without either the preview or the
+        suite noticing, and the suite only caught it because a case coming
+        from main happened to exercise this path (converge round 21).
+
+        Both sides of the branch: origin changed together with a changed
+        scope (or no current context) refuses identically on preview and
+        apply; origin changed with the scope unchanged and a current context
+        accepts on both, with the very same context_id.
+
+        Verified by mutation: deleting the origin-changed `raise` in
+        `_adoption_conflict` (grill_workspace.py ~1772) makes the "both
+        refuse" half fail -- preview returns PREVIEW/exit 0 where apply still
+        refuses ORCHESTRATION-POLICY-STALE.
+        """
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            code, created = self.run_cli("init", str(root), "--type", "feature", "--slug", "x", "--work-id", "work-x",
+                "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            args = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex",
+                    "--session-ref", orchestration_fixture.SESSION, "--scope-file", "src/a.py")
+            code, preview = self.run_cli(*args)
+            self.assertEqual(code, 0, preview)
+            code, adopted = self.run_cli(*args, "--apply", "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, adopted.get("verdict")), (0, "ORCHESTRATION-ADOPTED"), adopted)
+            changed_origin = {**preview["origin"], "state_sha256": "f" * 64}
+            # -- both refuse: origin changed AND scope also changed. --
+            before = store.read_snapshot(root).content_sha256
+            refused = ("gauntlet-orchestration-adopt", str(root), "--work-id", "work-x", "--runtime", "codex",
+                       "--session-ref", orchestration_fixture.SESSION, "--scope-file", "src/b.py")
+            with mock.patch.object(grill_workspace, "_orchestration_origin", return_value=changed_origin):
+                for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                    code, blocked = self.run_cli(*refused, *tail)
+                    self.assertEqual((code, blocked.get("code")), (2, "ORCHESTRATION-POLICY-STALE"), blocked)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+            # -- both accept: origin changed, scope unchanged, current context exists. --
+            with mock.patch.object(grill_workspace, "_orchestration_origin", return_value=changed_origin):
+                code, refresh = self.run_cli(*args)
+                self.assertEqual((code, refresh.get("verdict")), (0, "PREVIEW"), refresh)
+                code, refreshed = self.run_cli(*args, "--apply", "--expected-sha256", refresh["expected_sha256"])
+            self.assertEqual((code, refreshed.get("verdict"), refreshed.get("context_id")),
+                             (0, "ORCHESTRATION-ADOPTED", adopted["context_id"]), refreshed)
 
     def boundary(self, probe=None, after=None, release=None, adapter="orca", capabilities=None, calls=None):
         probe = probe or native_sources()

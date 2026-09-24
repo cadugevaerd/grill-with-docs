@@ -1,0 +1,41 @@
+{
+  "worker": "p13-a",
+  "feature": "032-continuity-context",
+  "completed": ["T048", "T051", "T052"],
+  "tasks": {
+    "T048": {
+      "status": "done",
+      "summary": "CRITICAL. Removida a comparacao entre a branch carimbada em worktree_identity (via _continuity_stamped_branch) e a branch viva, nos dois pontos que a Phase 12 introduziu para cunhar development.execution_branch: gauntlet-checkpoint (confirmacao de etapa) e phase_turn_command (virada de fase). O helper _continuity_stamped_branch foi removido por inteiro (ficava sem chamador). Motivo: o carimbo so e escrito na criacao de contexto, nenhum verbo o reescreve, e worktree_identity e campo imutavel no store; a virada de fase zera development.execution_branch de proposito para o proximo `specify` vincular branch propria -- entao sucessao seguida de virada de fase produzia recusa permanente (EXECUTION-BRANCH-MISMATCH), sem saida que nao fosse outra sucessao. A protecao ja e dada a montante: takeover (_continuity_identity_matches) e continuity-resume (_continuity_refuse_branch_contradiction, ex-_continuity_require_bound_branch) derivam a identidade ao vivo e recusam divergencia estrutural antes de mutar. Nos dois pontos editados, o comentario local foi reescrito para explicar a ausencia de guarda em vez de referenciar codigo removido; o ramo 'existing_branch ausente' do checkpoint ficou com 'pass' documentado (o mint simplesmente aceita a branch viva). As outras duas comparacoes que permanecem nesses mesmos blocos -- existing_branch/previous_execution_branch != branch viva, contra o valor JA selado em development.execution_branch -- nao foram tocadas: sao o vinculo do work item, nao o carimbo de worktree_identity, e continuam legitimas.",
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]
+    },
+    "T051": {
+      "status": "done",
+      "summary": "Bloco em :3294-3299 (_CONTINUITY_STRUCTURAL) conferido: ja fica verdadeiro sozinho apos T048, nao precisou de edicao (nao ha mais nenhum comparador de phase/branch no modulo). No bloco irmao do comando de tomada (comentario T023/T030, hoje em torno de :3750-3779), que ja explicava por que branch nao e comparado no takeover, foi acrescentado o paragrafo que faltava: a mesma liberdade de a arvore mudar depois que a sessao termina nao expira com o takeover -- o valor recem-recarimbado fica exatamente tao obsoleto quanto o anterior assim que a sessao sucessora tambem terminar ou trocar de branch, entao nenhum leitor futuro deve tratar esse carimbo como oraculo ao vivo; so um takeover ou continuity-resume subsequente o rederiva, e so no instante em que roda. O paragrafo fecha citando que e exatamente por isso que checkpoint e phase-turn cunham a propria branch a partir da branch viva em vez de comparar contra esse carimbo -- amarrando esta tarefa ao T048.",
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]
+    },
+    "T052": {
+      "status": "done",
+      "summary": "_continuity_require_bound_branch renomeado para _continuity_refuse_branch_contradiction (4 ocorrencias: definicao + 3 chamadores, em prepare-switch, continuity-resume e takeover) -- o nome antigo prometia exigencia de vinculo, mas carimbo ausente ou vazio passa em silencio por design; o novo nome descreve o que a funcao de fato faz, recusar contradicao. Docstring expandida: (1) cita explicitamente a guarda de esquema DEVELOPMENT-SCHEMA que a funcao tambem aplica antes de ler execution_branch, antes so mencionada de passagem via 'same named code'; (2) distingue os dois detalhes que hoje saem sob o mesmo codigo CONTINUITY-STATE-DIVERGENCE em pontos diferentes -- a checagem de identidade de contexto que cada chamador faz logo antes ('worktree identity changed' / 'project or worktree changed...') versus a contradicao do vinculo de branch do work item que esta funcao propria levanta ('work item is bound to <branch>') -- deixando explicito que quem le a recusa deve distinguir pela mensagem, nao pelo codigo. Item da tarefa sobre 'documentacao que cita dois verbos quando sao tres': a unica ocorrencia desse erro no arquivo vivia na docstring de _continuity_stamped_branch ('takeover and resume both derive it live...'), que o T048 removeu por inteiro junto com a funcao; a docstring desta funcao renomeada ja citava corretamente 'all three verbs' (R6-T045) e nao precisou de correcao.",
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]
+    }
+  },
+  "known_breakage": {
+    "note": "Esperado pelo brief, fora do meu grant (tests/validate_agent_orchestration_contract.py nao esta na lista de caminhos que posso escrever). Rodei o validador apenas para confirmar e documentar, sem editar.",
+    "command": "python3 tests/validate_agent_orchestration_contract.py",
+    "result": "Ran 43 tests in ~21s, FAILED (failures=1)",
+    "failure": "test_execution_branch_minting_refuses_only_a_contradicting_identity_stamp (case='stamp contradicts'): esperava (2, 'EXECUTION-BRANCH-MISMATCH'), obteve (0, None) -- o mint agora aceita a branch viva e cunha o checkpoint em vez de recusar, exatamente o comportamento que T048 restabelece. Converter esse caso (e o irmao equivalente na virada de fase, se existir sob outro nome de teste) e escopo do node p13-b, per T049/T050."
+  },
+  "verification": {
+    "commands": [
+      {"command": "python3 -m py_compile plugin/skills/grill-with-docs/scripts/grill_workspace.py", "result": "OK"},
+      {"command": "python3 tests/validate_orchestrator_store_contract.py", "result": "Ran 136 tests, OK, exit 0"},
+      {"command": "python3 tests/validate_checkpoint_contract.py", "result": "Ran 80 tests, OK, exit 0"},
+      {"command": "python3 tests/validate_agent_orchestration_contract.py", "result": "Ran 43 tests, FAILED (failures=1) -- ver known_breakage, esperado"}
+    ],
+    "notes": "tests/run_validators.py nao foi rodado, conforme o brief (~11min, ja derrubou sessao antes)."
+  },
+  "files_touched": [
+    "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+    "specs/032-continuity-context/implement/p13-a.tasks.json"
+  ]
+}

@@ -1,0 +1,1313 @@
+# Converge Report — 032 continuidade de contexto sem líder vivo
+
+**Data**: 2026-09-19 · **Entradas**: spec.md, plan.md, tasks.md (T001–T013), `.specify/memory/constitution.md` (11 cláusulas) · **Desfecho**: `tasks_appended` (Phase 6, T014–T015)
+
+## Contexto
+
+`implement-parallel` fechou com T001–T013 pela run `run-27d4a4df4c0ec78046f8c430` (4 waves, 8 workers, fase 5 do leader) e `python3 tests/run_validators.py` em exit 0. As duas lacunas trazidas do `AUDIT.md` foram confirmadas no código; nenhuma outra apareceu.
+
+## Findings
+
+| ID | Gap Type | Severidade | Origem | Evidência | Trabalho restante |
+|----|----------|------------|--------|-----------|-------------------|
+| F1 | contradicts | HIGH | FR-002, FR-004, FR-010 | `_takeover_observation` (`plugin/skills/grill-with-docs/scripts/grill_workspace.py:1526`) faz `json.loads(raw)` e lê `show.get("dispatch")`/`show.get("projection")` no nível de topo; o transporte devolve `{ok, result}`, que é o que `_object` exige e desembrulha antes de `observe_predecessor_termination` ler os mesmos campos | T014 |
+| F2 | partial | HIGH | FR-008 | `CHECKPOINT_SCHEMA_V2` e o par `context_inputs_sha256`/`origin_metadata_sha256` existem, e a validação escolhe as chaves pelo `schema` do documento (`grill_core/agent_orchestration.py:680-681`), mas os dois pontos de emissão (`grill_workspace.py:1869` e `:3354`) gravam `CHECKPOINT_SCHEMA` (v1) com os nomes antigos | T015 |
+
+Nenhum achado CRITICAL. Nada `missing`. Nada `unrequested`.
+
+### F1 em detalhe
+
+Contra a resposta real do adapter, `status` e `liveness` saem sempre `None` de `_takeover_observation`. Duas consequências:
+
+1. **Código de recusa errado para líder vivo.** Em `:3663-3666` o ramo `status in {"dispatched", "running"}` nunca dispara, então um líder ainda ativo é recusado como `TAKEOVER-EVIDENCE-UNPROVEN` em vez de `TAKEOVER-LEADER-ACTIVE`. Fail-closed está preservado — a tomada continua recusada —, mas FR-002 exige um código próprio e distinto por caso, e FR-010 exige dizer qual prova faltou.
+2. **Prova vazia no registro de sucessão.** `evidence.dispatch_status` e `evidence.liveness` (`:3684`) nascem `None`, degradando exatamente o que FR-004 manda gravar.
+
+Os testes de T007 passaram porque o fixture `takeover_show()` espelha **as duas** formas de propósito, documentando a inconsistência em vez de reprová-la — a correção em T007 estava fora do grant do worker. É o padrão conhecido de fixture mais permissiva que a realidade: o caso sintético cobre um formato que o mundo não produz.
+
+### F2 em detalhe
+
+FR-008 pede que os campos de digest tenham nomes correspondentes ao conteúdo **e** que a mudança venha em versão nova do formato. A metade de leitura está pronta e travada por teste; a metade de escrita não migrou, então todo ponto de retomada novo continua nascendo com `workflow_sha256`/`constitution_sha256`. FR-009 e SC-005 seguem satisfeitos de qualquer modo: a versão anterior continua legível e utilizável sem reescrita, e assim deve permanecer depois de T015.
+
+## Cobertura verificada
+
+| Item | Situação |
+|---|---|
+| FR-001, FR-003, FR-005, FR-006, FR-007, FR-011 | satisfeitos |
+| FR-002, FR-004, FR-010 | F1 |
+| FR-008 | F2 |
+| FR-009 | satisfeito (validação aceita as duas versões, sem reescrita) |
+| FR-012 | oito pontos em 6.0.3, `validate_distribution` OK; a release é ato do `ship` |
+| SC-001 a SC-006 | cobertos pela suíte; SC-006 em exit 0 |
+| SC-007 | fora do aceite desta entrega, por definição da própria spec |
+
+## Constituição
+
+Sem violação. O bump obrigatório está completo nos oito pontos. A cláusula de release por versão é cumprida no `ship`, pelo pipeline do push para `main`.
+
+## Métricas
+
+- Requisitos/critérios verificados: 12 FR + 6 SC aplicáveis
+- Decisões de plano verificadas: 5 fases, 10 arquivos nomeados
+- Cláusulas constitucionais verificadas: 11
+- Achados: missing 0 · partial 1 · contradicts 1 · unrequested 0
+- Severidade: CRITICAL 0 · HIGH 2 · MEDIUM 0 · LOW 0
+
+## Próxima ação
+
+Duas tarefas anexadas em `## Phase 6: Convergence` (T014, T015). Executar `implement-parallel` sobre elas e reconvergir; uma segunda passagem deve encontrar zero achados.
+
+---
+
+# Rodada 2 — 2026-09-19, após a Phase 6
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T015), constituição (11 cláusulas) · **Desfecho**: `converged`
+
+A Phase 6 foi entregue pelo nó `p06-a` da run `run-635a5d0f4a44bb793a1482fa` e integrada em `989f519`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 1
+
+| Achado | Situação | Prova |
+|---|---|---|
+| F1 — envelope duplo (contradicts, FR-002/FR-004/FR-010) | **fechado** | `_takeover_observation` passou a ler `dispatch` e `projection` do mapa desembrulhado, via `agent_runtime._object`, o mesmo caminho do adapter. O helper `takeover_show()` deixou de espelhar as duas formas e produz só a envelopada, que é a real — é o que torna o caso sensível à regressão: com a leitura antiga, `status` voltaria a ser nulo e falhariam tanto a asserção de `TAKEOVER-LEADER-ACTIVE` para líder vivo quanto a asserção nova de `liveness` no registro de sucessão |
+| F2 — emissão na versão anterior (partial, FR-008) | **fechado** | Os dois pontos de emissão (`grill_workspace.py:1872` e `:3357`) gravam `CHECKPOINT_SCHEMA_V2` com `context_inputs_sha256` e `origin_metadata_sha256`, carregando os mesmos valores de antes. O caso novo em `validate_checkpoint_contract.py` exige a versão nova na emissão e nega a presença dos nomes antigos; `CommittedCheckpointContract`, que monta um documento da versão anterior, ficou byte a byte intocado, preservando FR-009 |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Verificação
+
+| Validador | Resultado |
+|---|---|
+| `validate_agent_orchestration_contract.py` | 36 OK |
+| `validate_checkpoint_contract.py` | 80 OK (78 antes) |
+| `validate_orchestrator_store_contract.py` | 136 OK |
+| `python3 tests/run_validators.py` | **exit 0** — 30 validadores, 1488 testes, 0 falhas, 2 skips de macOS |
+
+A suíte completa foi reexecutada de propósito: T015 mudou o schema que a emissão grava, e os três validadores do grant não provariam sozinhos que nenhum outro validador lê um ponto de retomada recém-emitido. SC-006 exige a suíte inteira, sem validador desativado ou afrouxado.
+
+## Observação para o review
+
+`_takeover_observation` chama `agent_runtime._object`, um helper privado de outro módulo. É o menor diff correto e reusa a validação do envelope em vez de reimplementá-la, mas acopla a um nome privado. Não é violação de requisito nem de cláusula; é ponto de julgamento técnico da etapa `review`.
+
+## Próxima ação
+
+Seguir para `verify`.
+
+---
+
+# Rodada 3 — 2026-09-20, consumindo o review R1
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T015), review.md (R1), constituição (11 cláusulas) · **Desfecho**: `tasks_appended` (Phase 7, T016–T022)
+
+O review R1 devolveu `REQUEST CHANGES` com 1 Critical e 7 Important. Esta rodada avaliou cada achado contra a intenção declarada e converteu em tarefa o que é lacuna real de requisito.
+
+## Findings
+
+| ID | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|----|----------|------------|--------|-----------|--------|
+| G1 | contradicts | **CRITICAL** | FR-001, FR-003 (US1, P1) | `grill_workspace.py:3739-3741` grava o líder sucessor com encarnação, referência e digest de observação nulos; `_require_current_leader` (`:1629-1632`) compara esses campos contra observação fresca, então os 14 comandos com `@_gauntlet_authorized` recusam a sessão entrante com `LEADER-AUTHORITY-UNPROVEN`, sem saída | T016 |
+| G2 | contradicts | HIGH | FR-002, FR-003 | O bloco de mutação (`:3722-3729`) revalida só identidade de contexto; quiescência (`:3672`), ponto de retomada corrente (`:3681`) e campanha são decididos sobre o snapshot de `:3643`, fora do lock | T017 |
+| G3 | contradicts | HIGH | FR-003, FR-010 | O hash de entradas relidas (`:3693-3699`) inclui o digest dos bytes crus da resposta viva; campo volátil torna a aplicação inalcançável e a recusa mente sobre a causa | T018 |
+| G4 | partial | HIGH | FR-011, SC-002, SC-004 | Os casos de tomada em `validate_orchestrator_store_contract.py` exercitam a fixture `CONTEXT_TAKEOVER`, que reimplementa a mutação; o produto nunca roda. O caso dito de concorrência não concorre, e o ponto de retomada sintetizado é testado na versão anterior do formato | T020 |
+| G5 | partial | MEDIUM | FR-011 | Cobertura da preparação de troca deslocada para estado inalcançável em produção; o caminho novo só assere o veredito, sem verificar o documento gravado | T021 |
+| G6 | partial | MEDIUM | Key Entity "Contexto de orquestração", FR-005 | Recursos do predecessor ficam inalcançáveis: a verificação de autoridade exige contexto corrente e ativo, e a tomada deixa o anterior encerrado | T019 |
+| G7 | contradicts | LOW | FR-008 | O comentário em `agent_orchestration.py:28-32` afirma que a emissão ainda usa a versão anterior; falso desde T015, e convida a reverter a entrega | T022 |
+
+## O que não virou tarefa
+
+Débito de design registrado, sem requisito violado, portanto fora do escopo de tarefa desta rodada:
+
+- `observe_predecessor_termination` devolver `dispatch_status` e `liveness`, eliminando o reparse, o canal lateral de captura e o acoplamento ao nome privado `_object`;
+- extrair a leitura de transporte comum entre a observação de tomada e a fronteira de líder, removendo o parâmetro `runtime` morto;
+- construtor único para o documento de ponto de retomada, hoje duplicado em dois emissores;
+- mover a tabela decisória da tomada para `grill_core`, pelo critério que rege `triage.py`.
+
+Os dois primeiros tocam exatamente a fronteira que T016 e T018 vão editar, então entram como orientação de implementação dessas tarefas — não como escopo novo.
+
+## Ressalva sobre G6
+
+É o único achado cujo trace de requisito é **inferido, não literal**: a spec não menciona limpeza de recursos em nenhum ponto. O vínculo vem da Key Entity declarar que o contexto registra as atividades do work item, e de FR-005 exigir que o estado sobreviva à tomada — um recurso preso num contexto encerrado é estado que não sobreviveu de forma utilizável. Se a leitura humana for de que isso é escopo novo, T019 deve sair desta entrega e virar work item próprio.
+
+## Versão
+
+A 6.0.3 ainda não foi publicada — `main` está em 6.0.2. Correções que entrem nesta mesma versão não exigem novo bump, e os oito pontos de distribuição seguem coerentes.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais verificadas: 11 — sem violação
+- Achados: missing 0 · partial 3 · contradicts 4 · unrequested 0
+- Severidade: CRITICAL 1 · HIGH 3 · MEDIUM 2 · LOW 1
+
+## Próxima ação
+
+Sete tarefas anexadas em `## Phase 7: Convergence`. Executar `implement-parallel` e reconvergir; depois `verify` e `review` de novo.
+
+---
+
+# Rodada 4 — 2026-09-20, após a Phase 7
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T022), constituição (11 cláusulas) · **Desfecho**: `converged`
+
+A Phase 7 foi entregue pelos nós `p07-a`, `p07-b` e `p07-c` da run `run-dc0dc8ba5b7a8f9de176ddb2` e integrada até `6ed634a`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 3
+
+Cada um verificado no código integrado, não no relato dos workers.
+
+| Achado | Situação | Prova |
+|---|---|---|
+| G1 — líder sucessor sem observação (CRITICAL) | **fechado** | `_session_readiness` da sessão entrante é chamado em `grill_workspace.py:3681`, antes do cálculo de `expected`, então vale para prévia e aplicação; os três campos são gravados no líder do sucessor em `:3768-3770`. A cobertura correspondente executa `gauntlet-step-enter` com o `--session-ref` da sessão entrante e exige saída 0, atravessando `_require_current_leader` |
+| G2 — sem guarda de revisão | **fechado** | `grill_workspace.py:3750`, primeira linha do `mutate`, com o comentário nomeando a janela que fecha: um worker transicionando entre a leitura e o commit faria `TAKEOVER-APPLIED` sair onde `TAKEOVER-WORK-ACTIVE` era devido |
+| G3 — digest da resposta viva | **fechado** | `expected` passou a digerir `verdict`, `reference` e `snapshot.revision`; o digest dos bytes crus permanece apenas em `evidence`, onde é prova de sucessão e não entrada de comparação |
+| G4 — casos do store exercitando a fixture | **fechado** | Os que permanecem na fixture declaram no nome que são aceitação de formato do `validate_block`, e o cabeçalho da fixture lista as divergências em relação ao produto. O caso dito de concorrência virou `test_takeover_over_an_already_superseded_source_is_refused`, sequencial. O do ponto de retomada passou a chamar `grill_workspace._initial_continuity_checkpoint`, o emissor real |
+| G5 — cobertura deslocada do prepare-switch | **fechado** | Depois do veredito, o caso relê o snapshot e assere `schema == CHECKPOINT_SCHEMA_V2`, `previous_checkpoint_id` nulo e os dois digests contra `context["inputs_sha256"]` e `item["origin"]["metadata_sha256"]` |
+| G6 — recursos órfãos | **fechado** | `preserved_resources` e `operations_to_reconcile` projetados e devolvidos em `TAKEOVER-APPLIED` |
+| G7 — comentário falso | **fechado** | Reescrito: desde T015 todo emissor usa v2, e v1 permanece apenas para leitura de documentos já materializados, nunca sendo emitida |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Sensibilidade à regressão
+
+O ponto que faltava nas rodadas anteriores, e que explicava o Critical ter atravessado 1488 testes verdes, foi atacado de frente. O worker de T021 verificou por reversão temporária, com o arquivo restaurado ao final:
+
+- T016 revertido — líder com os três campos nulos: **3 subcasos reprovam**;
+- T016 revertido **com as asserções de campo removidas**, deixando apenas o comando autorizado: **3 reprovam**, com `LEADER-AUTHORITY-UNPROVEN`. O caso sozinho reproduz o defeito ponta a ponta, sem depender de asserção sobre estrutura interna;
+- `presentation` revertida para cópia do predecessor: **3 reprovam** — a asserção não é vácua, os dois valores divergem de fato na fixture;
+- checkpoint inicial revertido para v1: **1 reprova**.
+
+## Decisão sobre a apresentação do sucessor
+
+A linha de T021 em `tasks.md` pedia asserir a apresentação "herdada do predecessor". Isso está errado e foi corrigido na condução, não no texto: apresentação é propriedade da sessão, e herdar a de uma sessão comprovadamente morta seria prova falsa. O sucessor grava a apresentação observada da sessão entrante, espelhando `continuity_resume_command`; `worktree_identity` segue herdada do predecessor. Quem levantou a contradição foi o próprio worker que implementou T016, antes de o caso errado ser escrito.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, 1488 testes, 0 falhas, 2 skips condicionados a macOS. A contagem não subiu porque as asserções novas entraram em casos existentes, via subTests, e o trabalho no store foi de renomeação e precisão, não de volume.
+
+## Versão
+
+A 6.0.3 continua sem publicar — `main` está em 6.0.2. As correções desta fase entram na mesma versão e não exigem novo bump; os oito pontos de distribuição seguem coerentes.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais verificadas: 11 — sem violação
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+- Severidade: nenhuma
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R2.
+
+---
+
+# Rodada 5 — 2026-09-20, consumindo o review R2
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T022), review.md (R2), constituição · **Desfecho**: `tasks_appended` (Phase 8, T023–T029)
+
+## Correção de um erro da rodada 4
+
+A rodada 4 declarou G6 **fechado**. Estava errado, e quem pegou foi o revisor de correção do R2. Verifiquei que `preserved_resources` e `operations_to_reconcile` passaram a ser devolvidos; não verifiquei que algum caminho os consome. Nenhum consome: `gauntlet_cleanup_command` filtra por contexto corrente e a verificação de autoridade exige corrente e ativo, condições que o contexto encerrado pela tomada não satisfaz mais.
+
+Presença de código não é cumprimento de requisito. O registro fica, porque o erro é instrutivo: nas rodadas anteriores a verificação foi feita contra o diff, e não contra o comportamento que o diff deveria produzir.
+
+## Findings
+
+| ID | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|----|----------|------------|--------|-----------|--------|
+| H1 | contradicts | **CRITICAL** | FR-001, FR-005 | `grill_workspace.py:3774` copia `worktree_identity` sem reverificar, enquanto o irmão de retomada deriva a identidade viva e recusa (`:3544-3546`). A identidade inclui a branch, então trocar de branch depois da morte da sessão faz o sucessor herdar identidade falsa, e toda retomada posterior falha sem verbo de re-carimbo | T023 |
+| H2 | contradicts | HIGH | FR-003 | `snapshot.revision` no digest (`:3705-3708`) é a revisão global do documento; qualquer escrita invalida a prévia, inclusive a do próprio decorador de autorização (`:3227-3233`). A guarda sob lock (`:3749`) já cobre isso de forma mais forte | T024 |
+| H3 | contradicts | HIGH | FR-010 | `gauntlet_cleanup_command:3862` avalia `any()` sobre lista vazia e devolve `CLEANED` com saída zero. Defeito **pré-existente**, não introduzido pela Phase 7 | T025 |
+| H4 | partial | HIGH | FR-011 | As duas projeções não têm asserção alguma; revertê-las para vazio passa verde nos 1488 testes | T027 |
+| H5 | partial | HIGH | FR-011 | `TAKEOVER-CAS-CONFLICT` só aparece em comentário | T027 |
+| H6 | contradicts | MEDIUM | FR-004 | O comentário de T019 afirma entrega ao sucessor para reconciliação; nada reconcilia | T026 |
+| H7 | partial | MEDIUM | FR-011 | O cabeçalho da fixture omite que `evidence.liveness` é string na fixture e `dict` ou `None` no produto | T028 |
+| H8 | partial | LOW | FR-011 | O contrato do store importa um helper privado do CLI que toca disco | T029 |
+
+## Decisão sobre a reconciliação de recursos
+
+**Não implementar nesta entrega.** O trace de G6 sempre foi inferido, e está registrado como tal desde a rodada 3: a spec não menciona limpeza de recursos em ponto algum. Implementar a reconciliação agora seria escopo novo entrando sem passar pela spec.
+
+O que entra é corrigir as duas mentiras que a entrega produziu: a afirmação falsa no comentário (H6) e o sucesso falso do verbo de limpeza (H3). A reconciliação de recursos de contexto encerrado fica registrada como trabalho próprio, a ser especificado.
+
+Essa escolha é deliberada e revisável: a alternativa — fazer o cleanup aceitar recursos cuja origem esteja na cadeia de predecessores — está descrita em `review.md`, R2-2, opção (a).
+
+## O que não virou tarefa
+
+Preferência de design, sem requisito violado: derivar o identificador de operação a partir do hash de entradas em vez da observação; a prévia devolver a apresentação; o tamanho da função de tomada, hoje em 162 linhas contra o teto de 200; extrair a projeção de recursos para o núcleo; e os quatro itens de débito já registrados na rodada 3.
+
+## Versão
+
+A 6.0.3 continua sem publicar — `main` em 6.0.2. Sem novo bump.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação
+- Achados: missing 0 · partial 4 · contradicts 4 · unrequested 0
+- Severidade: CRITICAL 1 · HIGH 4 · MEDIUM 2 · LOW 1
+
+## Próxima ação
+
+Sete tarefas em `## Phase 8: Convergence`. Executar `implement-parallel` e reconvergir.
+
+---
+
+# Rodada 6 — 2026-09-20, após a Phase 8
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T029), constituição · **Desfecho**: `converged`
+
+Phase 8 entregue pelos nós `p08-a`, `p08-b` e `p08-c` da run `run-7b4f4d82ed49a5ead7c15c3e`, integrada até `9c43b96`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 5
+
+Cada um verificado no código integrado. Desta vez a verificação foi feita contra o **comportamento**, não contra a presença do diff — que foi o erro da rodada 4.
+
+| Achado | Situação | Prova |
+|---|---|---|
+| H1 — identidade herdada sem verificar (CRITICAL) | **fechado** | `_continuity_identity` derivado em `grill_workspace.py:3716`; recusa `TAKEOVER-IDENTITY-DIVERGENT` quando diverge do carimbo do predecessor; a identidade derivada, e não a cópia, é gravada no sucessor. O caso sem carimbo prévio não recusa — carimba pela primeira vez, porque recusar tornaria a tomada impossível para sempre, já que não existe verbo de re-carimbo |
+| H2 — `snapshot.revision` no digest | **fechado** | zero ocorrências dentro do comando de tomada; a guarda sob o lock permanece e é a proteção real |
+| H3 — sucesso falso na limpeza | **fechado** | `if selected and candidates and not results` (`:3914`), com os candidatos contados **antes** dos filtros. Zero candidatos segue sendo no-op legítimo; candidatos sem resultado é falha de seleção |
+| H4 e H5 — projeções e recusa de CAS sem teste | **fechado** | casos novos em `validate_agent_orchestration_contract.py`, com quatro reversões verificadas — inclusive a que remove os filtros das compreensões, provando que o filtro é testado e não só a presença da chave |
+| H6 — comentário falso | **fechado** | passou a dizer que a projeção existe só para auditoria e que a reconciliação **não** está implementada |
+| H7 — divergência de tipo na fixture | **fechado** | a fixture passou a emitir o mapa que o produto emite, eliminando a divergência em vez de documentá-la |
+| H8 — import do CLI no contrato do store | **fechado** | o import foi removido; resta apenas a menção no comentário que explica a remoção |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Duas intervenções do coordenador, registradas
+
+**T025 voltou ao worker por ter pegado largo demais.** A primeira versão da guarda usava `selected and not results`, e `selected` é verdadeiro com qualquer `--context-id` — o que passou a recusar o caso legítimo de não haver nada a limpar. Um caso existente quebrou, e isso foi tratado como evidência do erro, não como dano colateral aceitável. Depois do estreitamento por contador de candidatos, aquele caso voltou a passar **sozinho**, sem que ninguém tocasse no arquivo de teste. Essa é a prova de que a guarda ficou no lugar certo.
+
+**T029 não foi executada como escrita, por decisão do worker que eu endosso.** Mover o emissor do ponto de retomada para o núcleo exige editar `grill_workspace.py`, fora do grant daquele nó; obedecer ao pé da letra deixaria duas implementações do mesmo emissor no repositório. O worker optou por remover a dependência do helper privado dentro do que podia tocar, trocou asserções de shape por uma recusa real de cadeia para o caso não virar tautologia, e registrou a pendência. Verifiquei que nenhuma cobertura se perdeu: a fidelidade do emissor day-zero é exercida no nível do CLI, em `validate_agent_orchestration_contract.py`, onde o caso lê o checkpoint que o `prepare-switch` real gravou e confere schema, ausência de predecessor e os dois digests contra suas fontes.
+
+## Débito acumulado desta entrega
+
+Registrado, sem virar tarefa por não violar requisito:
+
+- `observe_predecessor_termination` devolver `dispatch_status` e `liveness`, eliminando o reparse, o canal lateral e o acoplamento ao helper privado `_object`;
+- extrair a leitura de transporte comum e remover o parâmetro `runtime` morto de `_takeover_observation`;
+- mover o emissor do ponto de retomada inicial para o núcleo, recebendo as obrigações já lidas pela fronteira — exige um nó com `grill_workspace.py` e `agent_orchestration.py` no mesmo grant;
+- extrair a projeção de recursos, que é lógica pura e duplicada entre a tomada e a retomada;
+- reconciliação de recursos presos em contexto encerrado, que a spec nunca declarou e que precisa de especificação própria;
+- o tamanho do comando de tomada, hoje acima do limiar prático e abaixo do teto.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, 1488 testes, 0 falhas, 2 skips condicionados a macOS.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais verificadas: 11 — sem violação; 6.0.3 segue sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R3.
+
+---
+
+# Rodada 7 — 2026-09-20, consumindo o review R3
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T029), review.md (R3), constituição · **Desfecho**: `tasks_appended` (Phase 9, T030–T033)
+
+## O padrão desta rodada
+
+A Phase 8 corrigiu os achados do R2 **fechando demais**. As duas guardas que acrescentou para impedir estados ruins passaram a impedir também estados legítimos, e de forma permanente, porque o core não tem verbo de re-carimbo nem de reconciliação. É a terceira rodada seguida em que a correção de um defeito cria outro na direção oposta.
+
+| Achado | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|---|---|---|---|---|---|
+| J1 | contradicts | **CRITICAL** | FR-001 | `grill_workspace.py:3716-3721` compara a identidade inteira; `phase` (`:3289`) avança a cada etapa do ciclo. Contexto criado em `implement-parallel`, ciclo em `converge`, sessão morta: a tomada recusa `TAKEOVER-IDENTITY-DIVERGENT` para sempre. Metade dos work items do repositório cai no fallback para `current_step` | T030 |
+| J2 | contradicts | HIGH | FR-001 | `branch` no mesmo predicado faz a tomada recusar **exatamente** o cenário que o comentário de T023 declara curar. O deadlock mudou do `prepare-switch` para a tomada | T030 |
+| J3 | contradicts | HIGH | FR-010 | `:3888` incrementa `candidates` antes do filtro de `origin_context_id`, contando recurso de outro contexto. Depois de uma tomada, a limpeza do sucessor recusa para sempre por um recurso que ele não pode fechar, e que o próprio T026 declara não reconciliável | T031 |
+| J4 | partial | HIGH | FR-011 | A guarda de `candidates` não tem teste: removida, a suíte inteira passa | T032 |
+| J5 | partial | MEDIUM | FR-011 | O comentário em `validate_orchestrator_store_contract.py:596` promete cobertura do estado projetado que não existe; a validação aceita `dict` ou `list` no campo, então regressão de formato passaria | T033 |
+
+## Decisão sobre o predicado de identidade
+
+**`phase` e `branch` saem da comparação.** Ficam como pinos `project_id`, `work_id`, `du`, `git_common_dir` e `real_path` — os campos que de fato identificam a árvore e o work item, e que não mudam por trabalho normal.
+
+O raciocínio é que a tomada é o **caminho de recuperação**, e o sucessor já grava a identidade **derivada**. Tirando os dois campos voláteis do predicado, a tomada passa a recarimbar fase e branch em vez de recusar por causa delas — e o comentário que promete curar o caso da branch trocada passa a dizer a verdade, porque a cura passa a existir.
+
+A alternativa, manter `branch` no predicado e acrescentar um verbo de re-selagem ao core, é escopo maior e não declarado pela spec. Fica registrada como caminho alternativo em `review.md`, R3-2.
+
+## Uma falha de instrução do coordenador
+
+J3 não é erro do worker. Na rodada anterior devolvi a guarda por estar larga demais e instruí que contasse "candidatos antes dos filtros". O worker seguiu ao pé da letra. A instrução é que estava errada: "antes dos filtros" inclui o filtro de contexto, que é justamente o que deveria filtrar. A guarda que pedi para eliminar um sucesso falso criou um bloqueio permanente na direção oposta.
+
+Fica registrado porque o padrão é instrutivo: uma instrução imprecisa do coordenador produz um defeito que nenhum worker tem autoridade para questionar.
+
+## Os Minor não viram tarefa
+
+m1 é consequência de J1 e J2 e se resolve junto. m2 — `sealed is None` aceitar árvore que o predecessor nunca usou — é limitação conhecida, estreita e sem remédio barato. m3, m4 e m5 são polimento sem requisito violado. Todos registrados como débito em `review.md`.
+
+## Versão
+
+6.0.3 segue sem publicar, `main` em 6.0.2. Sem novo bump.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação
+- Achados: missing 0 · partial 2 · contradicts 3 · unrequested 0
+- Severidade: CRITICAL 1 · HIGH 3 · MEDIUM 1
+
+## Próxima ação
+
+Quatro tarefas em `## Phase 9: Convergence`. Executar `implement-parallel` e reconvergir.
+
+---
+
+# Rodada 8 — 2026-09-20, após a Phase 9
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T033), constituição · **Desfecho**: `converged`
+
+Phase 9 entregue pelos nós `p09-a` e `p09-b` da run `run-de9b8afd4321a379178c64fb`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 7
+
+| Achado | Situação | Prova |
+|---|---|---|
+| J1 e J2 — `phase` e `branch` no predicado (CRITICAL) | **fechado** | `grill_workspace.py:3730` compara apenas `("project_id", "work_id", "du", "git_common_dir", "real_path")`. A identidade derivada segue sendo gravada no sucessor, então a tomada **recarimba** fase e branch em vez de recusar |
+| J3 — contador inflado por recurso de outro contexto | **fechado** | O filtro de `origin_context_id` foi separado e vem **antes** do incremento; o recurso de outro contexto vai para a lista `retained`, que rebaixa o veredito em vez de recusar a operação |
+| J4 — guarda sem teste | **fechado** | Caso novo cobrindo os dois lados, com quatro reversões verificadas |
+| J5 — estado projetado sem asserção | **fechado** | Asserções sobre sequência, etapa corrente e resultados aceitos, com verificação de que a sequência é lista |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Duas decisões do worker que corrigiram o enunciado
+
+**O texto de T032 estava desatualizado, e o worker percebeu.** A tarefa mandava semear, para o lado da recusa, "recurso cujo contexto de origem é outro". Mas isso **deixou de ser candidato** justamente por causa de T031, que entrou na mesma fase. O enunciado foi escrito antes de a correção existir. O worker usou o candidato que a guarda de fato protege hoje — recurso do próprio contexto sem atividade vinculada — e moveu o cenário original para os casos de relato. Ler o código em vez de obedecer à prosa é o comportamento correto, e fica registrado.
+
+**O caso de recarimbo é fiel à produção.** `worktree_identity` é campo imutável no store, então não havia como alterar o carimbo. Em vez de forçar, o worker moveu a **árvore viva**: `git checkout -b` real e `active_phase` novo no `state.json`, que é exatamente o que acontece quando um humano troca de branch depois de a sessão morrer. A branch original é restaurada no `finally`.
+
+## Sensibilidade verificada
+
+Quatro reversões, todas reprovando:
+
+- predicado de volta à identidade inteira → o caso `work-restamp` reprova com `TAKEOVER-IDENTITY-DIVERGENT`, que **é** o bloqueio permanente descrito no R3;
+- filtro de volta para depois do contador → o sucessor volta a ser recusado em vez de ter o veredito rebaixado;
+- guarda neutralizada → a seleção que não alcança nada volta a devolver sucesso, o buraco do R3-4;
+- guarda alargada de volta → reprova pelo lado do no-op legítimo.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1489** testes, 0 falhas, 2 skips condicionados a macOS. A contagem subiu de 1488 com o caso `work-restamp`.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R4.
+
+---
+
+# Rodada 9 — 2026-09-20, consumindo o review R4
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T033), review.md (R4), constituição · **Desfecho**: `tasks_appended` (Phase 10, T034–T039)
+
+## O padrão, nomeado
+
+Quatro rodadas de review, quatro `REQUEST CHANGES`, e a mesma forma em todas: **a correção fecha o caso que examinou e abre o vizinho**. A raiz comum é que `gauntlet_context_takeover_command` e `gauntlet_cleanup_command` vêm sendo corrigidos isoladamente, sem tratar os irmãos que compartilham a mesma lógica — o predicado mudou na tomada e não nos dois comandos de continuidade; o filtro mudou no ramo de contexto e não no de atividade.
+
+T035 existe justamente para quebrar esse ciclo: em vez de corrigir mais um ponto, alinha os irmãos.
+
+| Achado | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|---|---|---|---|---|---|
+| K1 | contradicts | **CRITICAL** | FR-010 | `grill_workspace.py:3903-3918` coleta o retido antes da discriminação por seletor, que só ocorre em `:3920`. O ramo por atividade sai rebaixado por recurso alheio, permanentemente | T034 |
+| K2 | partial | **CRITICAL** | FR-011 | `TAKEOVER-IDENTITY-DIVERGENT` não aparece em teste algum; apagar o `raise` inteiro deixa a suíte em 37/37 | T036 |
+| K3 | contradicts | HIGH | FR-001, FR-005 | A tomada ignora fase e branch; `prepare-switch` e `continuity-resume` comparam tudo e nunca recarimbam. A primeira virada de etapa recusa para sempre | T035 |
+| K4 | partial | HIGH | FR-011 | O emissor paralelo do comando de checkpoint não é observado; regredindo só ele, os três validadores passam | T037 |
+| K5 | partial | MEDIUM | FR-011 | O caso de recarimbo move a árvore fora do bloco protegido; falha entre checkout e escrita vaza branch para os casos seguintes | T038 |
+| K6 | partial | MEDIUM | FR-010 | O código de recurso retido e o campo que o carrega não existem no protocolo. O leader recebe vocabulário sem regra e, como o protocolo manda não converter preservação em aprovação, a leitura padrão vira bloqueio — anulando o desenho não-bloqueante que a própria correção introduziu | T039 |
+
+## Sobre K6, que quase não virou tarefa
+
+A pergunta era se documentação de protocolo é lacuna de requisito ou débito. É lacuna. A correção de K1 desenha o campo para **relatar sem bloquear**, mas essa semântica só existe se quem consome souber lê-la. Sem o texto, a entrega publica um comportamento que o consumidor interpreta ao contrário do pretendido — o que é, na prática, o comportamento não entregue.
+
+## Fora de escopo, por decisão registrada
+
+**R4-4** (os cinco campos estruturais não distinguem worktree recriada no mesmo caminho) e **R4-5** (`project_id` vira com `git stash push -u`, porque a derivação usa `--all`, que inclui as referências de stash) são defeitos **pré-existentes** e de alcance maior que esta entrega. A spec não declara âncora de árvore nem derivação de identidade de projeto; corrigi-los aqui seria escopo novo entrando sem passar pela spec, e o segundo re-deriva identidade de campanha já selada.
+
+Ficam registrados como trabalho próprio, a ser especificado. O detalhe de R4-5 merece registro à parte: **guardar a árvore suja antes de assumir a sessão é o gesto natural do fluxo de recuperação**, e é exatamente o que dispara o bloqueio — o defeito cai onde a tomada existe para curar.
+
+## Os Minor
+
+n1, n3, n4, n5, n6 e n7 seguem como débito, sem virar tarefa. n2 virou K6.
+
+## Versão
+
+6.0.3 sem publicar, `main` em 6.0.2. Sem novo bump.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação
+- Achados: missing 0 · partial 4 · contradicts 2 · unrequested 0
+- Severidade: CRITICAL 2 · HIGH 2 · MEDIUM 2
+
+## Próxima ação
+
+Seis tarefas em `## Phase 10: Convergence`. Executar `implement-parallel` e reconvergir.
+
+---
+
+# Rodada 10 — 2026-09-20, após a Phase 10
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T039), constituição · **Desfecho**: `converged`
+
+Phase 10 entregue pelos nós `p10-a`, `p10-b` e `p10-c` da run `run-ebb3b0c174a59ed859d5a5ff`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 9
+
+| Achado | Situação | Prova |
+|---|---|---|
+| K1 — coleta de retidos ignorava o seletor (CRITICAL) | **fechado** | A coleta passou a exigir escopo: sem atividade selecionada, ou recurso pertencente à atividade pedida. O ramo por atividade deixa de ser rebaixado por recurso alheio |
+| K2 — guarda de identidade sem cobertura (CRITICAL) | **fechado** | O código de recusa passou de **zero** para duas ocorrências nos testes. A reversão que apaga o `raise` inteiro agora reprova — antes fechava verde |
+| K3 — predicado assimétrico | **fechado** | `_CONTINUITY_STRUCTURAL` e `_continuity_identity_matches`, com cinco usos: os três comparadores passaram a compartilhar a mesma regra |
+| K4 — segundo emissor não observado | **fechado** | Asserções replicadas sobre o checkpoint emitido pelo comando de confirmação de etapa, contra o estado vivo |
+| K5 — árvore movida fora do bloco protegido | **fechado** | Troca de branch e reescrita dentro do `try`, com restauração que não exige sucesso |
+| K6 — vocabulário sem regra no protocolo | **fechado** | O código e o campo entraram na tabela de recursos, dizendo que são relato e não recusa, e que não bloqueiam a ação do contexto corrente |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## A causa estrutural, finalmente atacada
+
+Quatro rodadas de review encontraram a mesma forma de defeito: a correção fechava o caso examinado e abria o vizinho. A razão era que a mesma regra de comparação de identidade existia em **três cópias**, e cada rodada corrigia uma.
+
+T035 extraiu a regra para um ponto único. Não é refatoração cosmética: é a remoção da condição que produzia o ciclo.
+
+## Duas decisões de worker que valem registro
+
+**Discordância fundamentada.** A instrução de T035 trazia uma ressalva minha: os irmãos rodam em janela quiescente, então talvez a comparação estrita se justificasse num deles. O worker respondeu que não: **quiescência prova que nada roda *agora*, e não diz nada sobre a idade do carimbo**. Comparar fase e branch equivale a afirmar "nada mudou desde o primeiro carimbo", falso na vida normal do work item. Alinhou os dois e corrigiu o comentário da tomada, que afirmava o contrário. O argumento está certo.
+
+**Alerta de cobertura pelo próprio autor.** O mesmo worker reportou que os dois validadores fecharam verdes **antes e depois** das suas correções — ou seja, nem o defeito nem a correção tinham carga de teste. Levantar isso sobre o próprio trabalho é exatamente o que faltava nas rodadas anteriores, e virou entrada na tarefa de cobertura da wave seguinte.
+
+## Sensibilidade verificada
+
+Seis reversões, todas reprovando. A que importa mais: apagar o `raise` de identidade agora reprova, e o autor registrou que **a mesma deleção fechava verde antes do caso novo** — a diferença entre provar que a guarda não pode ser alargada e provar que ela existe.
+
+Um caso não admitia mutante de produto, por ser ordenação de teste: foi verificado injetando falha entre a troca de branch e a reescrita, asserindo que a árvore voltou ao estado original, e removendo a injeção depois.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1491** testes, 0 falhas, 2 skips condicionados a macOS.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R5.
+
+---
+
+# Rodada 11 — 2026-09-20, consumindo o review R5
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T039), review.md (R5), constituição · **Desfecho**: `tasks_appended` (Phase 11, T040–T043)
+
+## O ciclo quebrou
+
+Esta é a primeira rodada em que o review **não** encontrou Critical, e a razão é estrutural, não sorte. As quatro rodadas anteriores acharam a mesma forma de defeito porque a regra de comparação de identidade vivia em três cópias e cada rodada corrigia uma. A Phase 10 extraiu para um ponto único, e o revisor confirmou por varredura que **a extração está completa** — nenhum outro ponto compara identidade campo a campo.
+
+Registro também a distinção que o revisor trouxe, porque ela explica por que a extração é correta e não apenas conveniente: existe uma quarta comparação, em `validate_transition`, que compara o dicionário inteiro e está **certa fora do helper**, porque responde outra pergunta. O helper pergunta "o carimbo bate com a árvore viva"; `validate_transition` pergunta "ninguém reescreveu o carimbo". Só a primeira pode relaxar. E é a segunda que torna a relaxação **obrigatória**: carimbo imutável mais ausência de verbo de re-selagem implica que campo que se move na vida normal do contexto tem de ficar fora do predicado, ou a recusa é permanente.
+
+## Findings
+
+| ID | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|---|---|---|---|---|---|
+| L1 | contradicts | HIGH | FR-001, FR-005 | `grill_workspace.py:5889-5899` trata o carimbo de branch de execução ausente como preenchimento a partir da branch viva. Com `branch` fora do predicado, um work item sem etapa confirmada aceita retomada em branch trocada, e a primeira confirmação o liga permanentemente à errada | T040 |
+| L2 | partial | MEDIUM | FR-011 | A restauração de branch é tolerante a falha, o que evita mascarar o erro real, mas os dois métodos seguem executando casos **depois** dela: a falha passa em silêncio e contamina os seguintes. A correção anterior moveu o problema, não o fechou | T041 |
+| L3 | partial | MEDIUM | FR-011 | Asserção fora do bloco de subcaso: falhar a primeira iteração aborta o laço e o subcaso com aplicação nunca roda | T042 |
+| L4 | partial | LOW | FR-011 | Ramificação inalcançável coberta por documento que nenhum produtor gera. Confiança falsa é pior que ausência de cobertura | T043 |
+
+## Por que L1 não se resolve recolocando `branch`
+
+Seria a correção óbvia e é a errada: reabre exatamente a recusa permanente que a Phase 10 acabou de fechar. O controle certo já existe e é o carimbo de branch de execução, que é fonte única de verdade — o defeito é que ele **só protege depois de existir**, e o código trata sua ausência como autorização para preencher a partir do que estiver vivo.
+
+A correção tem duas metades: comparar contra o carimbo quando ele existir, e recusar que ele nasça de uma sessão retomada.
+
+## Sobre L4, que quase ficou como débito
+
+A pergunta era se ramificação morta coberta por teste é lacuna ou polimento. É lacuna, sob FR-011: um caso que monta um documento que produtor nenhum gera não valida cenário nenhum — dá confiança numa ramificação que não existe. Cobertura falsa é pior que ausência, porque desencoraja a cobertura verdadeira.
+
+A escolha entre afirmar o invariante na validação, tornando o caso defesa em profundidade honesta, ou remover ramo e caso, fica com quem implementa, mediante justificativa.
+
+## Débito
+
+o2 (a única cobertura dos dois emissores mora em teste de nome alheio), o3 (substituição por valor fixo em vez de função) e o4 (desigualdade de auditoria no bridge da campanha) seguem como débito, junto com o já registrado em R1 a R4.
+
+## Versão
+
+6.0.3 sem publicar, `main` em 6.0.2. Sem novo bump.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação
+- Achados: missing 0 · partial 3 · contradicts 1 · unrequested 0
+- Severidade: CRITICAL 0 · HIGH 1 · MEDIUM 2 · LOW 1
+
+## Próxima ação
+
+Quatro tarefas em `## Phase 11: Convergence`. Executar `implement-parallel` e reconvergir.
+
+---
+
+# Rodada 12 — 2026-09-20, após a Phase 11
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T043), constituição · **Desfecho**: `converged`
+
+Phase 11 entregue pelo nó `p11-a` da run `run-6806206e7518e395e9d1a080`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 11
+
+| Achado | Situação | Prova |
+|---|---|---|
+| L1 — carimbo de branch de execução só protegia depois de existir | **fechado** | A retomada passou a exigir coincidência com o carimbo quando ele existe (`grill_workspace.py:3581`), e o preenchimento retroativo é recusado quando o contexto corrente tem predecessor. `branch` **não** voltou ao conjunto comparado |
+| L2 — restauração de branch falhando em silêncio | **fechado** | Restauração explícita ao fim de cada bloco, com limpeza de encerramento como rede |
+| L3 — asserção fora do subcaso | **fechado** | Movida para dentro do bloco (`:1790`), com comentário registrando por que a posição importa |
+| L4 — ramificação inalcançável com cobertura falsa | **fechado** | O invariante foi afirmado na validação de bloco: a atividade de um recurso tem de viver no contexto que o originou |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Duas decisões do worker que corrigiram a condução
+
+**Desvio fundamentado em L2, e a instrução do coordenador é que estava incompleta.** Eu mandei substituir o bloco protegido por limpeza de encerramento. O worker verificou por execução que **só teardown não funciona**: os casos seguintes de cada método precisam da branch original de imediato, não no fim do teste — sem isso, a inicialização seguinte falha. Manteve restauração explícita ao fim de cada bloco, onde não há asserção em voo e portanto não há o que mascarar, e deixou o teardown como rede. A instrução estava errada por omissão; ele descobriu testando.
+
+**Premissa verificada antes de agir, em L4.** Antes de escolher, confirmou no código que o produtor é único e fixa a origem do recurso no contexto da atividade, e que nenhum verbo move atividade entre contextos. Só então concluiu que a ramificação é morta. Escolheu afirmar o invariante em vez de apagar o ramo, porque a validação de bloco é **fronteira de confiança sobre documento editável à mão** e o invariante era apenas implícito — o caso de teste deixa de ser cobertura falsa e vira defesa em profundidade.
+
+## Sensibilidade verificada
+
+Quatro reversões, todas reprovando. A mais relevante é a do preenchimento retroativo: neutralizada, o contexto retomado vincula o work item à branch errada e o comando devolve sucesso — exatamente o defeito que o R5 descreveu. E a de L3 produziu **dois** fracassos onde antes só rodava um subcaso, o que prova que a indentação mudou o alcance do teste.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1494** testes, 0 falhas, 2 skips condicionados a macOS. O validador de orquestração subiu de 39 para 42.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R6.
+
+---
+
+# Rodada 13 — 2026-09-20, consumindo o review R6
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T043), review.md (R6), constituição · **Desfecho**: `tasks_appended` (Phase 12, T044–T047)
+
+## A lição de método desta rodada
+
+O Critical do R6 veio de **instrução minha**. A tarefa T040 dizia, literalmente, "recusar o preenchimento retroativo quando o contexto corrente tiver predecessor". O worker implementou exatamente isso, e o resultado é um bloqueio permanente.
+
+É a **segunda vez** nesta entrega. A primeira foi T031: "contar candidatos antes dos filtros" — e "antes dos filtros" incluía justamente o filtro que deveria discriminar, o que produziu o bloqueio do R4-3.
+
+O padrão comum não é técnico, é de método: **critério baseado em estado que só cresce, aplicado a uma decisão que precisa ser reavaliável**. "Tem predecessor" nunca deixa de ser verdade. "Antes dos filtros" nunca exclui nada. Nos dois casos escrevi uma condição estrutural onde cabia uma condição de evidência.
+
+A correção de T044 aplica a doutrina que T023 e T035 já haviam adotado neste mesmo arquivo, e que eu não apliquei ao redigir T040: **recusar por contradição observada, não por propriedade herdada**.
+
+## Findings
+
+| ID | Gap Type | Severidade | Origem | Evidência | Tarefa |
+|---|---|---|---|---|---|
+| M1 | contradicts | **CRITICAL** | FR-001, FR-005 | A referência ao contexto anterior é gravada em toda sucessão e nunca removida — `validate_transition:1513` a exige. Com a virada de fase zerando o vínculo de branch de propósito (`:6088`) e nenhum verbo o restabelecendo, todo work item que sofreu sucessão trava no primeiro ponto de confirmação seguinte. Reproduzido por execução. Agrava que a virada de fase tem o ramo de preenchimento idêntico **sem** guarda alguma | T044 |
+| M2 | partial | HIGH | FR-010 | A comparação de branch só existe na retomada. A preparação de troca cria a operação, grava o ponto de retomada e **libera o condutor** antes de qualquer checagem | T045 |
+| M3 | partial | MEDIUM | FR-011 | A metade divergente do caso discrimina apenas pela cadeia do código de recusa: sem a guarda, o resultado é recusa por ativação ausente, não prévia bem-sucedida. Nunca prova que a retomada prosseguiria | T046 |
+| M4 | partial | MEDIUM | FR-010 | Dois caminhos morrem com traceback em vez de recusa nomeada. Ausência de resposta não é recusa | T047 |
+
+Nenhum achado novo além dos que o review trouxe.
+
+## Sobre M4, que era Minor no review
+
+Promovido a tarefa porque o projeto inteiro opera sob fail-closed com recusa **nomeada**, e um traceback não é recusa — é ausência de resposta. O comando de confirmação de etapa já protege o caso equivalente com código próprio, então a assimetria é do tipo que esta entrega vem pagando caro: mesma lógica, tratamento diferente em pontos irmãos.
+
+## O desvio do worker na Phase 11, confirmado correto
+
+Pedi ao revisor que julgasse se o desvio de T041 — manter restauração explícita em vez de usar apenas limpeza de encerramento — estava certo. Está, e foi verificado nos dois sentidos: aplicar minha instrução ao pé da letra reprova dois casos, porque os casos seguintes precisam da branch restaurada de imediato; e a verificação estrita não reintroduz o mascaramento do R5, porque fica depois de todas as asserções, sendo inalcançável quando alguma falha. Mais que isso, ela **corrige** o silêncio que o bloco original produzia.
+
+Registro porque é o contraponto exato da lição acima: quando o worker questionou a instrução, o resultado melhorou; quando obedeceu a uma instrução mal formulada, o resultado piorou.
+
+## Débito
+
+p3, p4 e p5 do R6 seguem como débito, junto com o já registrado em R1 a R5.
+
+## Versão
+
+6.0.3 sem publicar, `main` em 6.0.2. Sem novo bump.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação
+- Achados: missing 0 · partial 3 · contradicts 1 · unrequested 0
+- Severidade: CRITICAL 1 · HIGH 1 · MEDIUM 2
+
+## Próxima ação
+
+Quatro tarefas em `## Phase 12: Convergence`. Executar `implement-parallel` e reconvergir.
+
+---
+
+# Rodada 14 — 2026-09-20, após a Phase 12
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T047), constituição · **Desfecho**: `converged`
+
+Phase 12 entregue pelos nós `p12-a` e `p12-b` da run `run-d62baee8b153c3d191f1d5db`. `tasks.md` não foi tocado nesta rodada.
+
+## Achados da rodada 13
+
+| Achado | Situação | Prova |
+|---|---|---|
+| M1 — critério monotônico produzindo bloqueio permanente (CRITICAL) | **fechado** | O predicado de descendência foi **removido** do arquivo: zero ocorrências. No lugar, o critério por evidência, com 3 usos, e a guarda aplicada nos **dois** pontos de cunhagem — inclusive o da virada de fase, que não tinha nenhuma |
+| M2 — comparação só na retomada | **fechado** | Ponto único com 4 usos, chamado também na preparação de troca e na tomada, antes de mutar |
+| M3 — caso que não demonstrava o que afirmava | **fechado** | Substitutos de fronteira instalados nas duas metades; o código de recusa novo aparece 3 vezes nos testes |
+| M4 — dois caminhos morrendo sem código | **fechado** | Recusa nomeada nos dois |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Um caso que codificava o próprio defeito
+
+A quebra que a Phase 12 produziu merece registro, porque é uma categoria que esta entrega ainda não tinha visto. O caso `test_checkpoint_never_backfills_the_execution_branch_from_a_resumed_context` **não testava a proteção — testava o defeito**: fazia substituição do predicado monotônico e exigia o código de recusa, ou seja, afirmava por contrato exatamente o critério que o R6 mandou remover.
+
+Cobertura assim é pior que cobertura ausente, porque transforma a correção em "quebra de teste" e cria pressão para reverter o conserto. Foi reescrita sobre o critério novo, cobrindo os três lados — carimbo ausente vinculando, divergente recusando, coincidente vinculando — mais a sequência que produzia o beco sem saída: sucessão, virada de fase, confirmação.
+
+## Uma divergência de worker que endosso
+
+O brief não nomeava o código de recusa. O worker escolheu o código de contradição em vez do de ausência de vínculo, com o argumento de que a recusa agora é por **contradição observada**, e dizer "sem vínculo" seria falso quando o carimbo existe.
+
+Está certo, e a razão é a mesma que motivou vários achados desta entrega: **o nome do código descrevia o critério antigo**. Trocar a condição sem trocar o nome deixaria uma afirmação falsa no payload — o mesmo gênero de defeito que o R6 encontrou nos comentários.
+
+É o quinto worker desta entrega a divergir do literal do brief com justificativa, e, como nos anteriores, a divergência melhorou o resultado.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1495** testes, 0 falhas, 2 skips condicionados a macOS. O validador de orquestração fechou em 43, vindo de 42 com um erro.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R7.
+
+---
+
+# Rodada 15 — 2026-09-20, consumindo o review R7
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T047), constituição, `review.md` seção R7 · **Desfecho**: `tasks_appended` — seis tarefas em `## Phase 13: Convergence`
+
+O R7 devolveu REQUEST CHANGES com 1 Critical, 2 Important e 9 Minor. O Critical é o que importa, e ele muda a leitura desta entrega inteira.
+
+## O Critical é regressão de um Critical que esta entrega já fechou
+
+| Achado | Gap | Severidade | Origem | Tarefa |
+|---|---|---|---|---|
+| R7-1 — a comparação de branca no caminho de cunhagem congela no carimbo e volta a bloquear permanentemente | contradicts | **CRITICAL** | FR-001, FR-005 | T048 |
+| R7-2 — o subcaso de carimbo coincidente não prova nada | partial | Important | FR-011 | T050 |
+| R7-3 — comentários afirmando o critério antigo | partial | Important | FR-010 | T051 |
+| m1, m3, m5 — nome que promete o que não cumpre, dois detalhes sob um código, documentação citando dois verbos de três | partial | Minor | FR-010 | T052 |
+| m9 — dois ramos de recusa sem teste algum | missing | Minor | FR-011 | T053 |
+| — conversão dos dois casos da Phase 12 ao comportamento novo | partial | — | FR-011 | T049 |
+
+**A rodada 5 desta mesma entrega fechou J1 e H1, ambos CRITICAL, removendo `phase` e `branch` do conjunto comparado.** O registro de fechamento do H1 diz, textualmente, que o caso sem carimbo prévio não pode recusar *"porque recusar tornaria a tomada impossível para sempre, já que não existe verbo de re-carimbo"*.
+
+A Phase 12 reintroduziu a comparação de `branch` — em outro caminho, o da cunhagem do vínculo, mas com a mesma consequência e pelo mesmo mecanismo. O comentário que registra a doutrina do J1 continua no arquivo, **três linhas acima do auxiliar novo**, e descreve o defeito em português claro. Não é um comentário que envelheceu: é um aviso correto que foi atropelado.
+
+## A decisão de conserto foi do humano
+
+Apresentei duas saídas e a decisão foi **remover a comparação** (T048), não mitigá-la com consulta ao audit.
+
+O argumento que sustenta a remoção é que a proteção aparente já existe a montante: tomada e retomada derivam a identidade ao vivo e recusam divergência estrutural antes de mutar, e a varredura de segurança do R7 confirmou no código — não na prosa — que não há caminho de carimbo forjado. Depois de uma sucessão, a branca viva **é** a árvore daquele contexto. A guarda não acrescentava prova; acrescentava uma condição que envelhece.
+
+Consequência assumida: T048 desfaz parte do que o R6 pediu, e os dois casos que a Phase 12 escreveu para assertar recusa passam a assertar vínculo (T049). Nenhum dos dois pode ser apagado — juntos são a única cobertura da sequência que motivou a entrega.
+
+## O padrão das minhas instruções está completo, e tem nome
+
+O critério do R7-1 foi recomendado pelo R6 e repassado por mim ao brief da Phase 12 **sem confronto com o J1, que está neste mesmo arquivo**. O worker executou o brief corretamente. A falha é da instrução, e é a terceira seguida do mesmo tipo:
+
+| # | Tarefa | Critério que instruí | Por que quebrou |
+|---|---|---|---|
+| 1 | T031 | contar candidatos antes dos filtros | "antes dos filtros" incluía o filtro que discriminava |
+| 2 | T040 | recusar quando o contexto tiver predecessor | predecessor só cresce; a decisão precisa ser reavaliável |
+| 3 | T044 | recusar quando o carimbo existir e diferir | o carimbo só nasce na sucessão; a branca se move sem ele |
+
+Os três ancoram uma recusa em estado que **não é reavaliável no momento da decisão**: nos dois primeiros o estado só crescia, no terceiro ele congela. A pergunta que teria pego os três, e que passa a ser obrigatória antes de eu aceitar qualquer critério de recusa: *quem escreve esse estado, quem o limpa, e o que acontece quando o mundo muda legitimamente e ele não muda junto?*
+
+A segunda lição é mais barata e mais constrangedora: **o `converge.md` já continha a resposta**. Bastava ler o fechamento do J1 antes de escrever o brief do T044.
+
+## O que o R7 confirmou fechado
+
+Nenhuma regressão entre R1 e R6 fora a do J1: o ponto único da Phase 10 está intacto e a tupla estrutural é única, o filtro de contexto do R4-3 continua antes da contagem, os quatro achados laterais do R5 seguem fechados, e o R6-2 e o R6-3 estão fechados — este último com as duas metades instalando os mesmos substitutos de fronteira, provado por reversão executada.
+
+Três das quatro reversões que o revisor de teste executou passaram, incluindo a que isola a guarda da virada de fase e prova que os dois sítios são independentemente cobertos. A quarta virou o R7-2.
+
+A varredura de segurança não achou Critical nem Important: a afrouxada da Phase 12 está corretamente ancorada, a branca vem de nome curto validado por `check-ref-format` nos dois sítios, e o dado não entra em construção de caminho em lugar nenhum.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 1 · partial 4 · contradicts 1 · unrequested 0
+- Tarefas acrescentadas: 6 (T048–T053), uma delas CRITICAL
+
+## Próxima ação
+
+Executar `implement-parallel` na Phase 13 e reconvergir. T048 e T049 tocam os mesmos dois arquivos e são sequenciais entre si; T051, T052 e T053 são independentes.
+
+---
+
+# Rodada 16 — 2026-09-20, após a Phase 13
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T053), constituição · **Desfecho**: `converged`
+
+Phase 13 entregue pelos nós `p13-a` (`eaebb55`) e `p13-b` (`ebbaafc`) da run `run-03358b33038fc478571bf194`, serializados de propósito: o segundo converte os testes que o primeiro quebra. `tasks.md` não foi tocado pelos workers.
+
+## Achados do R7
+
+| Achado | Situação | Prova no código integrado |
+|---|---|---|
+| R7-1 — regressão do J1: comparação de branca congelada bloqueando permanentemente (CRITICAL) | **fechado** | `_continuity_stamped_branch` tem **zero** ocorrências no produto. As duas recusas `EXECUTION-BRANCH-MISMATCH` que restam comparam `development.execution_branch` — o vínculo do próprio work item, que o ciclo escreve e limpa, portanto reavaliável |
+| R7-2 — subcaso de carimbo coincidente era cobertura falsa | **fechado** | O subcaso agora lê o valor selado de volta do store e afirma contra ele; a asserção vizinha passou a comparar o valor selado com a branca viva, não o rótulo literal do subcaso |
+| R7-3 — comentários afirmando o critério antigo | **fechado** | O bloco do T035 voltou a ser verdadeiro sozinho, sem edição, porque o T048 removeu a comparação que o contrariava. O bloco irmão da tomada ganhou a ressalva que faltava |
+| m1, m3, m5 | **fechados** | `_continuity_require_bound_branch` → `_continuity_refuse_branch_contradiction`, 4 usos, zero do nome antigo; a documentação distingue as duas mensagens; o item dos "dois verbos quando são três" vivia na documentação do helper que o T048 apagou |
+| m9, primeira metade | **fechado** | Caso novo cobrindo a recusa por esquema pela retomada |
+| m9, segunda metade | **não implementado**, com justificativa | Ver abaixo |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## A divergência do `p13-b`, que eu endosso
+
+O segundo ramo do T053 — cobrir a tradução de erro de armazenamento para recusa nomeada — **não foi implementado**, e a razão é boa: essa tradução vivia **apenas dentro** do helper que o T048 removeu por inteiro. O worker verificou os três chamadores restantes e reportou que eles chamam a leitura de snapshot exigindo presença, sem tratamento próprio, de modo que o erro cai no tratamento genérico.
+
+Ele preferiu registrar isso no sidecar a inventar cobertura para código que não existe mais. É exatamente a conduta certa, e é o sexto worker desta entrega a divergir do literal do brief com justificativa.
+
+**Débito registrado**: os três verbos de continuidade deixam erro de armazenamento sair como falha genérica em vez de recusa nomeada. É **pré-existente ao T048** — o helper removido era o único ponto que traduzia, e ele nasceu na Phase 12 — então não é regressão desta fase, mas ficou sem dono. O projeto exige que toda recusa diga o que faltou, então isto é trabalho próprio, não polimento.
+
+## O que a Phase 13 realmente fez
+
+Ela **removeu** código. O diff do `p13-a` é negativo no produto: a guarda dos dois sítios de cunhagem e o helper inteiro saíram, e o comentário que registrava a doutrina do J1 voltou a ser verdadeiro sem que ninguém o editasse.
+
+Esse é o sinal de que a remoção foi a leitura certa: quando o conserto faz um comentário antigo voltar a descrever o código, o comentário estava certo e o código é que havia divergido.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1496** testes, 0 falhas. O validador de orquestração fechou em **44**, vindo de 43.
+
+As três reversões que o `p13-b` executou em cópia fora da árvore, e o que cada uma provou:
+
+| Reversão | Falhou onde devia |
+|---|---|
+| reinstaurar o helper e a comparação | subcaso de carimbo contraditório volta a recusar |
+| quebrar o enxerto de sucessão para não gravar a branca pedida | subcaso de carimbo coincidente falha na asserção nova — que é precisamente o buraco do R7-2 |
+| neutralizar a recusa por esquema | caso novo do T053 falha por não recusar |
+
+A segunda é a que importa: ela prova que a correção do R7-2 fechou o buraco que a mutação do revisor tinha aberto.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R8.
+
+---
+
+# Rodada 17 — 2026-09-20, consumindo o review R8
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T053), constituição, `review.md` seção R8 · **Desfecho**: `tasks_appended` — quatro tarefas em `## Phase 14: Convergence`
+
+O R8 devolveu REQUEST CHANGES com **zero Critical**, 3 Important e 5 Minor. É a primeira rodada sem Critical desde o R5, e a diferença de natureza importa: nenhum dos três Important é defeito de comportamento.
+
+| Achado | Gap | Severidade | Origem | Tarefa |
+|---|---|---|---|---|
+| R8-1 — o comentário da tupla estrutural continua afirmando que a branca nunca é comparada | contradicts | Important | FR-010 | T054 |
+| R8-3 — a recusa por esquema é inalcançável quando a fase ativa é nula | partial | Important | FR-010 | T055 |
+| R8-2 — o conserto do R7-2 não fechou o buraco do subcaso que ele anota | partial | Important | FR-011 | T056 |
+| — o caso do T053 prova a guarda só no caminho em que ela já funcionava | partial | — | FR-011 | T057 |
+| n1, n2 | partial | Minor | FR-010, FR-011 | T054, T056 |
+| n3, n4, n5 | — | Minor | — | débito registrado |
+
+## O Critical do R7 está fechado, verificado por três revisores independentes
+
+A tupla estrutural tem **uma definição e um consumidor** no repositório, aplicados nos três verbos, e nada mais compara carimbo para recusar. Os dois sítios de cunhagem seguem vivos e independentemente cobertos, provado por mutação isolada em cada um. A regressão do J1 foi desfeita.
+
+## Duas das afirmações falsas desta rodada são minhas
+
+O R8-1 é o mais instrutivo da entrega inteira. O comentário do T035 diz que a branca é carimbada *"but never compared"*. Isso é falso: o ponto único compara a branca viva contra o vínculo do work item seis linhas abaixo. O T048 tornou verdadeira a parte sobre o **carimbo**, não a frase como escrita.
+
+**E eu registrei, na rodada 16 deste mesmo arquivo, que o bloco "voltou a ser verdadeiro sozinho, sem edição".** Confiei na negativa absoluta em vez de verificá-la — que é exatamente o mecanismo do R7-1, onde um leitor confiou neste mesmo comentário e reintroduziu um Critical.
+
+O n1 é o mesmo erro em outra escala: escrevi no R7 e na rodada 16 que "depois de uma sucessão, a branca viva **é** a árvore daquele contexto". A validação a montante é de projeto, caminho real e diretório comum — **nunca de branca**. Duas brancas na mesma worktree passam idênticas, e um work item que nunca sofreu tomada nem retomada não atravessa cerca nenhuma. A conclusão do T048 continua certa; a razão que registrei para ela, não.
+
+O conserto do R8-1 recusa acrescentar parágrafo ou mover explicação, e estreita a frase no lugar. O motivo é bom: a explicação correta já existe em dois pontos, e um terceiro exemplar seria o R3/R4 outra vez. O que faltava não era explicação — era a frase falsa deixar de ser absoluta.
+
+## O padrão que o R8-2 fecha
+
+É o **quinto** defeito de cobertura falsa nesta entrega: R6-3, o caso da Phase 12 que codificava o próprio defeito, o R7-2, e agora o **conserto do R7-2**, que não fechou o buraco do subcaso que ele anota.
+
+A regularidade é exata e vale como regra: **toda vez que a correção de uma cobertura falsa foi escrita sem rodar a mutação que a motivou, ela não fechou o buraco.** O revisor do R8 rodou seis mutações; a que derrubou o conserto do R7-2 levou segundos.
+
+Por isso o T056 **remove** o subcaso em vez de reforçá-lo: depois da remoção da comparação ele é comportamentalmente idêntico ao subcaso sem carimbo, e todo o poder de detecção está no contraditório.
+
+## Por que subi a severidade do R8-3
+
+O revisor graduou Minor, por ser pré-existente. Subi para Important com evidência que ele não tinha: a fase ativa é **nula em 4 dos 8** work items reais deste repositório, e o auditor **exige** fase ativa nula em milestone terminal.
+
+O nulo não é caso exótico, é estado obrigatório em parte do ciclo. Então a recusa nomeada não acontece justamente nos work items em milestone terminal. O crash é pré-existente; o que é desta entrega é a guarda que afirma tratá-lo e o teste que afirma prová-lo — e o teste só o prova porque planta o único valor que torna a guarda alcançável.
+
+## Débito registrado, fora de escopo
+
+n3: dentro de uma mesma fase, renomear ou apagar a branca vinculada trava os dois sítios e nenhum verbo limpa o vínculo. Recuperável recriando o nome.
+n4: os três verbos deixam erro de armazenamento sair como falha genérica; a tradução vivia no helper que a Phase 12 criou e o T048 removeu.
+n5: preferência de forma no primeiro ramo da cadeia.
+
+R4-4 e R4-5 seguem **não verificáveis**, porque nunca foram declarados fechados — o R4 os remeteu a decisão humana e ela continua pendente.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 3 · contradicts 1 · unrequested 0
+- Tarefas acrescentadas: 4 (T054–T057), nenhuma CRITICAL
+
+## Próxima ação
+
+Executar `implement-parallel` na Phase 14 e reconvergir. T054 e T055 tocam o produto; T056 e T057 tocam o teste, e o T057 depende do T055 ter entrado.
+
+---
+
+# Rodada 18 — 2026-09-20, após a Phase 14
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T057), constituição · **Desfecho**: `converged`
+
+Phase 14 entregue pelos nós `p14-a` (`c4d7ea1`) e `p14-b` (`af530ba`) da run `run-0e0e55b9387b153ab355e4ae`, serializados: o segundo depende do primeiro ter entrado.
+
+## Achados do R8
+
+| Achado | Situação | Prova no código integrado |
+|---|---|---|
+| R8-1 — o comentário da tupla estrutural afirmava que a branca nunca é comparada | **fechado** | A frase foi estreitada no lugar: `"stay OUT of it"`, `"comparing the stamped value"`, e uma linha final nomeando `_continuity_refuse_branch_contradiction` e a fonte contra a qual ele compara. Os dois exemplares corretos que já existiam não foram tocados |
+| R8-3 — a recusa por esquema era inalcançável com fase ativa nula | **fechado** | `_continuity_identity` valida o tipo do bloco **antes** de resolver a fase, e levanta a recusa nomeada incondicionalmente. Medido nos dois lados: antes `AttributeError`, depois a recusa |
+| R8-2 — o conserto do R7-2 não fechava o buraco do subcaso que anotava | **fechado** | O subcaso coincidente foi **removido**, junto com o comentário falso. Com dois subcasos, a mutação que antes passava agora falha |
+| n1 — a justificativa do sítio de cunhagem | **fechado** | A alegação de que a branca já fora verificada a montante saiu; a conclusão do T048 permanece, com a razão certa |
+| n2 — asserção trivialmente verdadeira | **fechado** | Movida para dentro da condição |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## A regra que esta fase confirmou
+
+A rodada 17 registrou uma regularidade e a Phase 14 a testou:
+
+> toda vez que a correção de uma cobertura falsa foi escrita sem rodar a mutação que a motivou, ela não fechou o buraco.
+
+Desta vez as mutações foram rodadas **antes** de declarar pronto, e ambas falharam pela asserção certa:
+
+| Mutação | Asserção que falhou |
+|---|---|
+| suprimir a escrita da branca no enxerto de sucessão | `'master' != 'a-branch-nobody-was-on'`, no subcaso contraditório |
+| reverter a validação de tipo no produto | `(2, 'UNEXPECTED-FAILURE') != (2, 'DEVELOPMENT-SCHEMA')` |
+
+A primeira responde à dúvida que a remoção levantava: com dois subcasos em vez de três, **o poder de detecção sobrevive inteiro**. O subcaso removido não estava protegendo nada — era o que absorvia a mutação e a fazia parecer detectada.
+
+A segunda prova que o caso novo mede a guarda nova, e não o caminho antigo que já funcionava. Sem o conserto do produto, o caso com fase ativa nula quebra antes de chegar à recusa nomeada.
+
+## O que a entrega acumulou sobre si mesma
+
+Esta é a oitava rodada de review e a décima oitava de convergência. O que mudou de natureza, e vale registrar antes do fechamento:
+
+- **R1 a R4** acharam defeito de comportamento, incluindo dois Critical de identidade comparada com campos que se movem;
+- **R5 a R7** acharam sobretudo **reincidência**: a mesma regra em cópias, depois a mesma regra reintroduzida por outro caminho;
+- **R8** não achou nenhum defeito de comportamento. Os três Important foram afirmações contradizendo o código, e duas delas eram minhas, escritas no converge da rodada anterior.
+
+A curva é a esperada de uma entrega convergindo, mas o custo foi alto e a causa é nomeável: **três instruções minhas seguidas ancoraram recusas em estado não reavaliável**, e uma quarta declarou fechado um comentário sem verificá-lo.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1496** testes, 0 falhas. O validador de orquestração fechou em **44**, estável — a Phase 14 removeu um subcaso e não acrescentou caso novo.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R9.
+
+---
+
+# Rodada 19 — 2026-09-21, consumindo o review R9
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T057), constituição, `review.md` seção R9 · **Desfecho**: `tasks_appended` — seis tarefas em `## Phase 15: Convergence`
+
+O R9 devolveu REQUEST CHANGES com **zero Critical** pela segunda rodada seguida, 3 Important e 4 Minor. Nenhum achado é defeito de comportamento.
+
+| Achado | Gap | Severidade | Origem | Tarefa |
+|---|---|---|---|---|
+| R9-1 — a alegação que causou o Critical do R7 sobrevive em duas cópias | contradicts | Important | FR-010 | T058 |
+| R9-2 — a guarda do ponto único virou inalcançável, e o teste carrega recibo de reversão falsificado | contradicts | Important | FR-010, FR-011 | T059, T060, T061 |
+| R9-3 — a cláusula que preserva ausência como estado legítimo não tem teste | missing | Important | FR-011 | T062 |
+| p1, p2, p3 | partial | Minor | FR-011 | T061, T063 |
+| p4 | — | Minor | — | registro, sem ação |
+
+## O que o R9 realmente mediu
+
+A Phase 14 existiu **principalmente para consertar afirmações falsas**. O R9 mostrou que ela corrigiu **uma de três cópias** da principal, e que o conserto de uma guarda deixou outra guarda morta com um recibo de reversão que já não descreve o sistema.
+
+Duas mutações sustentam isso, e o coordenador reproduziu ambas de forma independente:
+
+| Mutação | Resultado |
+|---|---|
+| trocar o `raise` da guarda do ponto único por atribuição silenciosa | **44 testes passam** — guarda inalcançável, sem cobertura |
+| transformar ausência de bloco em recusa | **suíte inteira verde** — a cláusula que separa ausência legítima de ausência recusada não é protegida |
+
+## A sexta instrução minha da mesma família
+
+O T054 dizia "o comentário do sítio de cunhagem", **no singular**, e não mandou varrer por cópias. Havia três; ele consertou uma. A cópia esquecida no caminho da virada de fase fica a **seis linhas** da corrigida, e diz o oposto dela.
+
+A regularidade agora é firme e cara:
+
+| # | Tarefa | O que instruí | O que faltou |
+|---|---|---|---|
+| 1 | T031 | contar candidatos antes dos filtros | "antes dos filtros" incluía o filtro que discriminava |
+| 2 | T040 | recusar quando o contexto tiver predecessor | estado monotônico |
+| 3 | T044 | recusar quando o carimbo existir e diferir | estado congelado |
+| 4 | rodada 16 | declarei um comentário "de novo verdadeiro" | não verifiquei |
+| 5 | T057 | tornar a guarda alcançável | tornou a **outra** guarda alcançável e matou a original |
+| 6 | T054 | corrigir **o** comentário | eram três cópias |
+
+As três primeiras são critérios ancorados em estado não reavaliável. As três últimas são **afirmações declaradas sem varredura**. O conserto de método está no T058, que exige explicitamente a varredura antes de dar a tarefa por concluída — a primeira vez nesta entrega em que a instrução carrega a verificação em vez de nomear o ponto.
+
+## A decisão doutrinária do R9-2
+
+A guarda inalcançável podia ser apagada — menor diff, remove código morto. **Escolhi mantê-la**, e a razão é doutrinária: a assinatura aceita valor de qualquer tipo, o projeto é fail-closed, e apagar deixaria armadilha para um quarto chamador que não passe pela derivação. Validação em fronteira de confiança não se simplifica por economia.
+
+O custo é honesto: a guarda precisa dizer na documentação que é defesa em profundidade inalcançável hoje (T059) e ganhar cobertura própria (T061), em vez de continuar anunciando-se como a guarda efetiva.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 2 · partial 2 · contradicts 2 · unrequested 0
+- Tarefas acrescentadas: 6 (T058–T063), nenhuma CRITICAL
+
+## Próxima ação
+
+Executar `implement-parallel` na Phase 15 e reconvergir. T058 e T059 tocam o produto; T060 a T063 tocam o teste, e o T060 depende do T059 ter entrado.
+
+---
+
+# Rodada 20 — 2026-09-21, após a Phase 15
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T063), constituição · **Desfecho**: `converged`
+
+Phase 15 entregue pelos nós `p15-b` (`98dbf40`, produto) e `p15-a` (`b14ab2e`, teste), nesta ordem, porque o segundo depende do primeiro.
+
+## Achados do R9
+
+| Achado | Situação | Prova no código integrado |
+|---|---|---|
+| R9-1 — a alegação que causou o Critical do R7 sobrevivia em duas cópias | **fechado** | **Zero** ocorrências em toda a fonte. A única batida restante é um `.pyc` de cache |
+| R9-2 — guarda inalcançável com recibo de reversão falsificado | **fechado** | O recibo antigo tem zero ocorrências; a docstring do produto declara explicitamente que a guarda é defesa em profundidade e que nenhum caminho de CLI a alcança; caso novo cobre a guarda diretamente |
+| R9-3 — a cláusula que preserva ausência não tinha teste | **fechado** | Caso novo cobrindo bloco ausente com fase ativa nula |
+| p1, p2, p3 | **fechados** | Asserções tautológicas rotuladas como sanidade de fixture, ternário morto removido, docstring reduzida a duas situações |
+| p4 | registro | Ordem das guardas, sem ação |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## O conserto de método funcionou, e é mensurável
+
+A rodada 19 mudou a forma da instrução: em vez de nomear **o** ponto a corrigir, o T058 exigiu **varrer o repositório e registrar todas as ocorrências**, incluindo as fora do grant.
+
+O resultado foi a primeira varredura completa desta entrega. O worker achou **três** cópias da alegação, corrigiu a sua, e registrou as outras duas com destino:
+
+- uma no arquivo de teste, que era do nó seguinte e foi corrigida por ele;
+- uma no `review.md`, que é **citação histórica do próprio achado** e corretamente não deve ser alterada.
+
+Esse segundo registro importa: a varredura literal encontraria a frase e um worker menos cuidadoso a "corrigiria", apagando o registro do defeito. Distinguir ocorrência viva de citação histórica foi julgamento dele, não do brief.
+
+Comparação direta: a instrução anterior, que dizia "o comentário" no singular, corrigiu **uma de três**. A instrução com varredura obrigatória corrigiu **três de três**, com destino explícito para cada uma.
+
+## Um erro meu de processo, que o projeto já tinha registrado
+
+O `gauntlet-tasks-reconcile` marcou **zero tarefas** na primeira tentativa, e **não emitiu erro algum** — `missing_sidecars` veio vazio, o veredito veio `APPLIED`. A causa: os dois sidecars gravaram a lista sob a chave `tasks`, e o reconciliador lê **apenas** `completed`.
+
+Isto está registrado nos aprendizados do projeto, e mordeu assim mesmo, porque o brief não especifica a chave e o worker escolheu um nome razoável. Corrigi os dois sidecars e remarquei.
+
+O defeito de fundo não é dos workers: **um reconciliador que não acha nada e reporta sucesso é indistinguível de um que achou tudo**. Vale como trabalho próprio no core.
+
+## Uma correção retroativa
+
+O sidecar do nó `p14-b` afirmava que mover uma asserção a tornara não-trivial. O R9 mediu e mostrou que não — ela permanece tautológica, e é sanidade de fixture, não cobertura. O nó `p15-a` sinalizou que a frase estava fora do grant dele; corrigi o sidecar como coordenador.
+
+Registro isso porque é o mesmo padrão da entrega em escala menor: **a afirmação sobre o conserto era mais forte que o conserto**.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1498** testes, 0 falhas. O validador de orquestração foi de 44 a **46**, com os dois casos novos — a guarda de defesa em profundidade e a tolerância a bloco ausente.
+
+Todas as mutações desta fase foram medidas antes de a tarefa ser declarada pronta, conforme a regra que a rodada 18 estabeleceu e a rodada 19 tornou obrigatória no brief.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.3 sem publicar, sem novo bump
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R10.
+
+---
+
+# Rodada 21 — 2026-09-21, após integrar a `main`
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T063), constituição · **Desfecho**: `converged`
+
+Esta rodada não consome review. Ela existe porque a árvore mudou por **integração**, não por implementação: a `main` avançou sete commits durante a entrega, e os merges `43f8cd3` e `dba49b2` trouxeram 6.0.11 e 6.0.12 para esta branch. O fingerprint mudou, então converge, verify e review precisam ser reexecutados sobre a base nova.
+
+## Por que a integração não podia esperar pelo `ship`
+
+A `main` publicou 6.0.11 enquanto esta branch estava em 6.0.3. O gate de bump exige versão acima da publicada, então a entrega **já não podia fechar** sem integrar. Não era escolha de conveniência.
+
+O momento foi o correto pelo aprendizado do projeto: a run `run-4fa3f407` estava `COMPLETE` e a árvore limpa. Integrar com run aberta derruba a run, porque o digest de configuração cobre o `gauntlet.yaml` inteiro.
+
+## Dois conflitos semânticos, e o que eles ensinam
+
+O `git` resolveu sozinho a maior parte. O que ele **não** resolve é contradição de intenção entre dois lados que, isolados, estão ambos corretos.
+
+### O que quase entrou em silêncio
+
+No `prepare-switch`, o lado entrante comparava o **mapeamento de identidade inteiro**:
+
+```python
+if context.get("worktree_identity") not in (None, identity):
+```
+
+Isso é o defeito **J1/H1**, CRITICAL, que a rodada 5 desta entrega fechou removendo `phase` e `branch` do conjunto comparado — porque os dois se movem na vida normal e nenhum verbo os re-carimba. A `main` nunca recebeu o conserto, já que os seis commits nasceram em paralelo.
+
+Aceitar o lado entrante teria reintroduzido o Critical **sem conflito visível e sem teste reprovando**, porque a `main` não tem os casos que o cobrem.
+
+Resolvido mantendo a comparação estrutural e tomando do lado entrante apenas a lógica de líder liberado. A justificativa ficou no código, para que o próximo leitor não "conserte" de volta — que é exatamente como o R7-1 nasceu.
+
+### O que só existia na soma
+
+Este é o mais instrutivo da entrega. Nenhum dos dois lados estava errado:
+
+- a 6.0.3 fez a prévia de `orchestration-adopt` rodar a mesma verificação do apply, **para que prévia e aplicação nunca discordassem**;
+- a `main` afrouxou o apply: origem alterada com contexto corrente e escopo igual passa, atualizando a apresentação.
+
+Somados, a prévia ficou **mais estrita que o apply** — a inversão exata que a nossa mudança existia para impedir. O defeito não estava em nenhum dos lados; nasceu da junção.
+
+Foi pego por um **teste da `main` rodando sobre código desta branch**, no primeiro `run_validators` pós-merge. Auto-merge limpo não é evidência de compatibilidade semântica, e esta é a prova cara disso.
+
+## Invariantes da 032 conferidos na árvore mesclada
+
+| Invariante | Estado |
+|---|---|
+| Tupla estrutural única, sem `phase` nem `branch` | uma definição, um uso; o comparador tem quatro call sites em três verbos (corrigido na rodada 22 — ver q2 do R10) |
+| Nada compara identidade inteira para recusar | zero ocorrências |
+| Comparação de branca congelada do R7-1 | zero ocorrências |
+| Alegação falsa do R9-1 | zero ocorrências em fonte |
+| Ponto único renomeado | 7 usos |
+| Casos novos da Phase 15 | ambos vivos |
+
+Nenhum achado: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1505** testes, 0 falhas. A contagem subiu de 1498 para 1505 com os casos que a `main` trouxe; o validador de orquestração foi de 46 a **51**.
+
+Versão em **6.0.13** nos oito pontos, acima da 6.0.12 publicada. `distribution: OK`.
+
+## Registro de contexto
+
+Há **outra sessão trabalhando neste mesmo repositório**, com a suíte completa em execução durante esta integração, e é a origem dos sete commits. Os arquivos que ela toca são os mesmos da 032. Enquanto isso durar, cada fechamento desta entrega corre risco de nova divergência, e a integração final no `ship` precisará ser refeita contra a `main` daquele momento.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.13 sem publicar
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R10, sobre a base mesclada.
+
+---
+
+# Rodada 22 — 2026-09-21, consumindo o review R10
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T063), constituição, `review.md` seção R10 · **Desfecho**: `tasks_appended` — cinco tarefas em `## Phase 16: Convergence`
+
+O R10 devolveu REQUEST CHANGES com **zero Critical** pela terceira rodada seguida, 5 Important e 4 Minor.
+
+| Achado | Gap | Severidade | Origem | Tarefa |
+|---|---|---|---|---|
+| R10-1 — o atalho de reuso perdeu a checagem de origem na junção | contradicts | Important | FR-010 | T064 |
+| R10-2 — a seção da 6.0.12 sumiu do CHANGELOG, e ela já shipou | contradicts | Important | cláusula `Release obrigatória por versão` | T065 |
+| R10-3 — o invariante do T006 não tem teste no caminho que o merge mexeu | missing | Important | FR-011 | T066 |
+| R10-4, R10-5 — as duas metades do R6-2 sem prova | missing | Important | FR-011 | T067 |
+| q1 | missing | Minor | FR-011 | T068 |
+| q2, q3, q4 | — | Minor | — | q2 corrigido abaixo; q3 e q4 como débito |
+
+## A integração não regrediu nada, e isso foi medido
+
+Sete das dez mutações morreram como deviam, incluindo a que reintroduz o J1/H1: acrescentar `phase` e `branch` à tupla derruba cinco testes. **O conserto crítico desta entrega está protegido por prova, não por comentário** — o que importa porque o lado entrante oferecia exatamente essa reintrodução.
+
+Para cada mutação sobrevivente, o auditor **repetiu a medição na árvore pré-integração** e demonstrou que já sobrevivia. É a diferença entre afirmar "não houve regressão" e provar.
+
+Nada se perdeu do lado entrante: dois dos três arquivos que fizeram auto-merge têm diff **zero** contra a `main`, e o arquivo de teste recebeu 285 inserções com **zero deleções**.
+
+## Os dois defeitos que eu introduzi
+
+Nenhum dos cinco Important é regressão da `main`. Dois são meus, cometidos ao resolver os merges:
+
+**R10-1** é o segundo defeito de junção desta integração. O primeiro a suíte pegou; este **nenhum teste pega**, porque o estado em disco não muda — só o veredito diverge, e `REUSED` passa a afirmar "repetição idêntica" sobre entrada cuja origem mudou. A mecânica é idêntica à do primeiro: o T006 retirou uma checagem porque outro ponto a cobria, e o merge afrouxou exatamente esse outro ponto.
+
+**R10-2** é erro de resolução: renomeei a seção da 6.0.12 em vez de preservá-la. Aquela versão tem tag e Release, e a cláusula constitucional faz do CHANGELOG registro público — perder a seção faz um item já entregue reaparecer como novidade.
+
+## Os três achados de cobertura são uma classe, não três itens
+
+R10-3, R10-4 e R10-5 têm a mesma forma: **um conserto entrou e a prova não**.
+
+R10-4 e R10-5 são literalmente as duas metades que o R6-2 mandou acrescentar. O conserto entrou na Phase 11; trocar qualquer uma das duas chamadas por continuação deixa os 51 testes verdes até hoje.
+
+R10-3 é o mesmo, na camada do invariante: o T006 estabeleceu que prévia e apply nunca discordam, e a única paridade testada é de outra recusa. Foi essa ausência que permitiu ao merge inverter o invariante sem aviso — e a suíte só reprovou porque um caso **da `main`** exercitava o caminho.
+
+A lição operacional, que esta entrega já vinha aprendendo: **conserto sem mutação medida não está fechado**. A Phase 15 adotou isso para casos novos; falta aplicar retroativamente aos consertos que entraram antes da regra.
+
+## Correção imediata do q2
+
+A tabela de invariantes da rodada 21 dizia "uma definição, **dois usos**". O correto: a tupla tem **um** uso, e o comparador tem **quatro** call sites em três verbos. Afirmação minha, mais forte que o fato — a mesma família que esta entrega passou dez rodadas combatendo, cometida no documento que a combate.
+
+## Fragilidade de processo, registrada e sem tarefa
+
+**O conserto do J1/H1 não está na `main`.** Toda integração futura reoferece a linha do lado entrante, e o comentário que explica por que recusá-la existe só nesta branch. A proteção real são os dois testes que derrubam a reintrodução — e eles também só existem aqui. **A blindagem só nasce quando esta entrega chegar à `main`.**
+
+## Nota metodológica adotada
+
+Rodar mutações reusando o mesmo diretório de cópia produziu falha constante num teste que a mutação não tocava. Em cópia limpa o efeito some: era poluição entre execuções.
+
+A instrução de "provar por mutação" desta entrega passa a exigir **uma cópia nova por mutação**, e isso entra nos briefs da Phase 16.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — uma citada por achado (`Release obrigatória por versão`); 6.0.13 sem publicar
+- Achados: missing 3 · partial 0 · contradicts 2 · unrequested 0
+- Tarefas acrescentadas: 5 (T064–T068), nenhuma CRITICAL
+
+## Próxima ação
+
+Executar `implement-parallel` na Phase 16 e reconvergir. T064 e T065 tocam produto e documentação; T066, T067 e T068 tocam o mesmo arquivo de teste.
+
+---
+
+# Rodada 23 — 2026-09-21, após a Phase 16
+
+**Entradas**: spec.md, plan.md, tasks.md (T001–T068), constituição · **Desfecho**: `converged`
+
+Phase 16 entregue pelos nós `p16-b` (`d31d9b3`, produto), `p16-a` (`e001d77`, teste) e `p16-serial` (coordenador, T065).
+
+## Achados do R10
+
+| Achado | Situação | Prova |
+|---|---|---|
+| R10-1 — o atalho de reuso perdeu a checagem de origem | **fechado** | Igualdade de origem reposta. Medido por execução: o mesmo cenário devolvia reuso antes e devolve adoção depois, igual à `main` |
+| R10-2 — a seção 6.0.12 sumiu do CHANGELOG | **fechado** | Seção restaurada com o item que de fato saiu nela; sequência de versões íntegra; `distribution: OK` |
+| R10-3 — paridade prévia/apply sem teste no caminho de origem | **fechado** | Caso novo cobrindo os dois lados. Mutação: removendo a recusa do ponto de conflito, a prévia passa a aceitar enquanto o apply recusa — exatamente a inversão descrita |
+| R10-4, R10-5 — as duas metades do R6-2 sem prova | **fechado** | Caso novo cobrindo os dois verbos. Mutação: a troca vira `QUIESCING`/exit 0 e a tomada vira prévia/exit 0, em vez de recusar |
+| q1 — fail-closed de carimbo malformado | **fechado** | Uma linha no caso direto; mutação confirmada |
+
+Nenhum achado novo: missing 0 · partial 0 · contradicts 0 · unrequested 0.
+
+## O T067 fechou um conserto que estava aberto desde a Phase 11
+
+Vale nomear, porque é o achado mais instrutivo da entrega sobre o próprio método.
+
+O R6-2 mandou acrescentar a comparação de vínculo na preparação de troca e na tomada, com o argumento de que a preparação *"cria a operação, grava o ponto de retomada e libera o líder antes de qualquer checagem"*. O conserto entrou na Phase 11 e foi **aprovado em cinco rodadas de review seguidas**.
+
+Só que, até hoje, trocar qualquer uma das duas chamadas por continuação deixava os 51 testes verdes. O conserto estava certo e **completamente desprotegido**.
+
+Ele só apareceu porque o R10 mutou o que já estava dado por pronto. A regra que esta entrega vinha aplicando a código novo — provar por mutação — precisava valer também **retroativamente**, para consertos aprovados antes da regra existir.
+
+## O que a partição léxica não enxerga
+
+O T065 caiu como tarefa **não mapeada**: `CHANGELOG.md` está na raiz e não contém barra, então o extrator de caminhos não o vê, e o nó que recebeu a tarefa não tem o arquivo no grant. Um worker despachado ali reprovaria com `GRANT-SCOPE-VIOLATION` ao tocar o único arquivo que a tarefa manda tocar.
+
+Editar o DAG à mão é o remédio que o projeto proíbe. A saída foi o coordenador executar a tarefa e registrar o porquê no sidecar do nó — mesma natureza da correção retroativa feita no sidecar do `p14-b` na rodada 20, e legítima porque o conserto era da **própria resolução de merge do coordenador**.
+
+Registro como limitação conhecida: **tarefa cujo alvo é arquivo de raiz sem barra no nome nunca entra em grant de worker**.
+
+## Verificação
+
+`python3 tests/run_validators.py` → **exit 0**: 30 validadores, **1507** testes, 0 falhas. O validador de orquestração foi de 51 a **53**, com os dois métodos novos.
+
+As cinco mutações desta fase foram medidas antes de qualquer tarefa ser declarada pronta, cada uma em cópia nova — a ressalva metodológica que o R10 levantou, depois de reusar o mesmo diretório ter produzido falso positivo.
+
+## Métricas
+
+- Requisitos verificados: 12 FR + 6 SC aplicáveis
+- Cláusulas constitucionais: 11 — sem violação; 6.0.13 sem publicar
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+
+## Próxima ação
+
+Seguir para `verify` e depois `review` R11.
+
+# Rodada 24 — 2026-09-23, após a quarta integração e o R12
+
+## Entradas consumidas
+
+- Merge `9f66346` da `main` 6.0.24 (`b929808..d4bf60b`, 12 commits em continuidade, run-abandon, tasks-import/rebase, scheduler e apresentação do líder). Código de continuidade em auto-merge; conflito real só em `tests/validate_agent_orchestration_contract.py`, resolvido mantendo o bloco que semeia `work-quiescing-check`.
+- Commit `54a4131` (status: snapshot do Store lido uma vez por `build_status`), fora do escopo funcional da 032 mas na mesma entrega.
+- Review R12 independente: **APPROVE**, 0 Critical, 0 Important, 3 Minor. Fecha as ressalvas r1 e r2 da R11.
+
+## Achados
+
+Nenhum finding bloqueante; nenhuma tarefa acrescentada ao `tasks.md`. Os três Minor do R12 ficam **diferidos**, registrados aqui:
+
+| # | Achado | Decisão |
+|---|---|---|
+| m1 | Checkpoint inicial do `prepare-switch` (T005) grava `store_revision`/`journal_anchor` lidos fora do lock (`grill_workspace.py:3862-3864`) | diferido: campo sem consumidor no core; conserto de uma linha com guarda de revisão no `mutate`, como `:4077` |
+| m2 | `TAKEOVER-EVIDENCE-UNPROVEN` nomeia o dispatch, não a prova faltante (FR-010) | diferido: FR-002 cumprido; devolver a razão do adapter em `extra` não muda contrato |
+| m3 | Predicado terminal trata qualquer status fora de `dispatched`/`running` como encerrado (`agent_runtime.py:1287`) | diferido: herdado da R11 (q3), pré-existente, sem estado da `main` que o exercite |
+
+## Verificação
+
+Suíte na árvore mesclada: 31 validadores, **1534** testes, 0 falhas (skipped=1). R12 matou três mutações em cópias limpas.
+
+## Métricas
+
+- Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0
+- Status: **CONVERGED**
+
+## Próxima ação
+
+`verify` rodada 12 e fechamento do `review`.
+
+# Rodada 25 — 2026-09-23, quinta integração durante o ship
+
+A transação de ship da 6.0.25 encontrou a `main` em 6.0.27 (`657e2ba`, 3 commits de rebase aninhado em `gauntlet_runs.py`/`validate_task_import_contract.py`) e foi abortada sem publicar. Integrada no merge desta rodada, sem conflito de código: as mudanças entrantes ficam em `verified_task_import`, `import_task_results`, `_accepted_source_tasks` e `_task_rebase_inputs`, sem interseção com os fluxos da 032 nem com `_read_runs`/`cleanup_projection`. Versão sobe para 6.0.28.
+
+Suíte: 31 validadores, **1536** testes, 0 falhas. Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0. Status: **CONVERGED**. O R12 continua aplicável: nada do que entrou toca a superfície revisada.

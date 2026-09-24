@@ -1,0 +1,55 @@
+{
+  "worker": "p12-b",
+  "feature": "032-continuity-context",
+  "completed": ["T046"],
+  "tasks": {
+    "T046": {
+      "status": "done",
+      "summary": "R6-3. A docstring de test_continuity_resume_compares_the_bound_execution_branch afirmava que remover a comparacao faz a metade divergente devolver PREVIEW/exit 0. Era falso: a metade 'bound-elsewhere' rodava ANTES de instalar os substitutos de fronteira (_continuity_effective_activation e _leader_boundary) que so a outra metade instalava, entao a reversao parava antes, em ativacao ausente, e o caso discriminava apenas pela cadeia do codigo de recusa -- exit code e barreira de escrita saiam identicos com e sem a guarda. Correcao: a montagem do adapter e do transcript foi hoisted para antes do ramo, as duas metades rodam o CLI dentro do MESMO with de mocks, e o ramo passou a decidir so as asercoes (bound -> 2/CONTINUITY-STATE-DIVERGENCE + a branch na mensagem; nao-bound -> 0/PREVIEW). A checagem de content_sha256 do Store ficou unica, depois do ramo, valendo para as duas metades. Docstring corrigida para dizer o que a reversao agora produz de fato.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    }
+  },
+  "rewritten": [
+    {
+      "test": "test_checkpoint_never_backfills_the_execution_branch_from_a_resumed_context",
+      "became": "test_execution_branch_minting_refuses_only_a_contradicting_identity_stamp + test_a_succeeded_work_item_still_binds_a_branch_after_the_phase_turn",
+      "why": "O caso encodava o defeito, nao a protecao: fazia mock.patch.object(grill_workspace, '_continuity_resumed_context', return_value=True) e exigia EXECUTION-BRANCH-UNSET -- exatamente o criterio monotonico que o R6-1 mandou remover. O helper deixou de existir (substituido por _continuity_stamped_branch), entao o patch levantava AttributeError. Quebra legitima e esperada.",
+      "now": "O primeiro caso varre os tres lados do criterio novo (carimbo ausente -> cunha; carimbo coincidente -> cunha; carimbo divergente -> recusa EXECUTION-BRANCH-MISMATCH sem escrever um byte) e exercita cada lado nos DOIS pontos de cunhagem: o ponto de confirmacao de etapa (checkpoint) e a virada de fase (phase-turn), que antes nao tinha guarda alguma. O segundo caso e a sequencia do beco sem saida do R6-1, sem interrupcao: sucessao -> virada de fase -> ponto de confirmacao. Antes da correcao o ultimo passo travava o work item para sempre; agora vincula de novo. Esse e o caso que impede a regressao.",
+      "fixture_note": "A sucessao e enxertada por _graft_succession: o Store proibe reescrever um contexto no lugar ('context immutable field changed'), entao o helper adiciona um contexto sucessor real -- predecessor_context_id, continuity_ref para uma operacao continuity-switch com a mesma fence, epoch+1, anterior em SUPERSEDED com o lider em RELEASING -- e carimba worktree_identity a partir de _continuity_identity, trocando so 'branch'. Identidade parcial e recusada pelo validador ('invalid worktree identity keys'), por isso a identidade e derivada de verdade e nao montada a mao. _finish_phase completa a matriz de etapas para o phase-turn ser admissivel e, quando preciso, zera o vinculo para alcancar o ramo de cunhagem do proprio turn."
+    }
+  ],
+  "loosened": "Nenhum caso existente foi afrouxado. A unica mudanca em caso preexistente e a de T046, que ENDURECE: a metade divergente passou a rodar com os mesmos substitutos de fronteira da outra, entao a reversao degrada para PREVIEW/exit 0 em vez de parar antes por ativacao ausente.",
+  "reversions": [
+    {
+      "target": "T046 -- comparacao entre branch viva e vinculo selado",
+      "how": "_continuity_require_bound_branch neutralizado com 'return' no topo do corpo (plugin/, temporario)",
+      "result": "detectado: test_continuity_resume_compares_the_bound_execution_branch falha no subcaso 'bound-elsewhere' com (0, None) != (2, 'CONTINUITY-STATE-DIVERGENCE'), payload verdict=PREVIEW. Ou seja, a retomada PROSSEGUE numa branch alheia -- exatamente o que a docstring promete, e o que o caso nao provava antes. Restaurado por git checkout --."
+    },
+    {
+      "target": "R6-1 -- criterio monotonico de volta no ponto de confirmacao",
+      "how": "guarda de _continuity_stamped_branch no ramo de cunhagem do checkpoint trocada por leitura direta do store recusando EXECUTION-BRANCH-UNSET quando o contexto corrente tem predecessor_context_id (o criterio anterior a correcao)",
+      "result": "detectado: 3 falhas. test_a_succeeded_work_item_still_binds_a_branch_after_the_phase_turn falha no passo final com EXECUTION-BRANCH-UNSET -- o beco sem saida reproduzido -- e test_execution_branch_minting_refuses_only_a_contradicting_identity_stamp falha nos subcasos 'stamp agrees' (2 != 0) e 'stamp contradicts' (UNSET em vez de MISMATCH). Restaurado por git checkout --."
+    },
+    {
+      "target": "R6-1 -- recusa por carimbo contraditorio nos dois pontos de cunhagem",
+      "how": "as duas guardas (checkpoint e phase-turn) trocadas por 'pass'",
+      "result": "detectado: subcaso 'stamp contradicts' falha com (0, None) != (2, 'EXECUTION-BRANCH-MISMATCH'). Restaurado por git checkout --."
+    },
+    {
+      "target": "R6-1 -- recusa SO na virada de fase",
+      "how": "somente a guarda de phase_turn_command trocada por 'pass', a do checkpoint intacta",
+      "result": "detectado isoladamente: subcaso 'stamp contradicts' falha na asercao da virada de fase (linha 1559), provando que a cobertura do segundo ponto de cunhagem nao esta sendo carregada pela do primeiro. Restaurado por git checkout --."
+    }
+  ],
+  "verification": {
+    "commands": [
+      {"command": "python3 tests/validate_agent_orchestration_contract.py", "result": "Ran 43 tests, OK, exit 0"}
+    ],
+    "count": {"before": "42 tests, 1 error", "after": "43 tests, 0 failures"},
+    "notes": "tests/run_validators.py nao foi rodado, conforme o brief. Todas as reversoes foram feitas em plugin/skills/grill-with-docs/scripts/grill_workspace.py (fora do grant) e desfeitas com git checkout -- <caminho>; git status ao final mostra apenas os dois caminhos do grant."
+  },
+  "files_touched": [
+    "tests/validate_agent_orchestration_contract.py",
+    "specs/032-continuity-context/implement/p12-b.tasks.json"
+  ]
+}

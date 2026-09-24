@@ -1,0 +1,22 @@
+{
+  "worker": "p06-a",
+  "feature": "032-continuity-context",
+  "completed": ["T014", "T015"],
+  "tasks": {
+    "T014": {
+      "status": "done",
+      "summary": "grill_workspace.py _takeover_observation (linha ~1526): substituido o json.loads(raw) + show.get(...) no nivel de topo por agent_runtime._object(raw, 'Orca worker-show'), o mesmo unwrap de envelope {\"ok\": true, \"result\": {...}} que LeaderBoundary.observe e observe_predecessor_termination ja usam, dentro de try/except Exception que preserva status=liveness=None para resposta ausente, ilegivel, JSON invalido ou envelope invalido (sem levantar excecao). dispatch/projection agora sao lidos do dict desembrulhado. Em tests/validate_agent_orchestration_contract.py, takeover_show() deixou de emitir a forma mirrored (topo + envelope) e produz somente a forma real envelopada. Fortalecido test_context_takeover: o caso de lider vivo (status=dispatched, liveness=live) ja exigia TAKEOVER-LEADER-ACTIVE e nao TAKEOVER-EVIDENCE-UNPROVEN (preexistente, continua provando isso apos o fix); adicionada asercao de succession.evidence['liveness'] (alem da dispatch_status ja existente) para os tres casos terminais, cobrindo o caso 'exited' onde dispatch_status='dispatched' e liveness={'verdict':'exited','source':'agent_status'} ficam ambos preenchidos no registro de sucessao apos takeover aplicado.",
+      "evidence": "python3 tests/validate_agent_orchestration_contract.py -> Ran 36 tests, OK."
+    },
+    "T015": {
+      "status": "done",
+      "summary": "grill_workspace.py: os dois pontos de emissao de checkpoint (comando de confirmacao de etapa, ~linha 1871; _initial_continuity_checkpoint / _projected_checkpoint, ~linha 3356) passaram a gravar contract.CHECKPOINT_SCHEMA_V2 com os campos renomeados context_inputs_sha256=context['inputs_sha256'] e origin_metadata_sha256=item['origin']['metadata_sha256'] (mesmos valores de antes). Nenhum outro ponto do repo lia checkpoint['workflow_sha256']/['constitution_sha256'] diretamente (grep confirmado), entao a migracao nao quebrou leitor nenhum; leitura de checkpoints antigos (schema v1) nao foi tocada e continua aceita por _CHECKPOINT_DIGEST_FIELDS em agent_orchestration.py, que ja tratava as duas versoes. Em tests/validate_checkpoint_contract.py, adicionado test_checkpoint_emission_uses_v2_schema em CheckpointContract, que roda o comando checkpoint e confirma schema==CHECKPOINT_SCHEMA_V2 e os campos renomeados presentes/corretos e os v1 ausentes. CommittedCheckpointContract.test_content_wal_recovers_state_and_commits_head (linha ~139, prova viva de FR-009) foi preservado intocado, ainda construindo um checkpoint v1 com workflow_sha256/constitution_sha256 a mao.",
+      "evidence": "python3 tests/validate_checkpoint_contract.py -> Ran 80 tests, OK (inclui o teste novo e o teste v1 preservado)."
+    }
+  },
+  "verification": {
+    "validate_agent_orchestration_contract.py": "Ran 36 tests in 11.216s, OK",
+    "validate_checkpoint_contract.py": "Ran 80 tests in 158.286s, OK",
+    "validate_orchestrator_store_contract.py": "Ran 136 tests in 11.826s, OK"
+  }
+}

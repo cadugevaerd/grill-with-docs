@@ -1,0 +1,439 @@
+{
+  "feature": "032-continuity-context",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "specs/032-continuity-context/implement/p01-a.tasks.json"
+      ],
+      "id": "p01-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "specs/032-continuity-context/implement/p01-b.tasks.json"
+      ],
+      "id": "p01-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a",
+        "p01-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p02-a.tasks.json"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p03-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p03-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p03-b.tasks.json",
+        "tests/validate_orchestrator_store_contract.py"
+      ],
+      "id": "p03-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a",
+        "p03-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "specs/032-continuity-context/implement/p04-a.tasks.json",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p04-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a",
+        "p03-b"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "specs/032-continuity-context/implement/p04-b.tasks.json"
+      ],
+      "id": "p04-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a",
+        "p03-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "specs/032-continuity-context/implement/p04-c.tasks.json"
+      ],
+      "id": "p04-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p04-a",
+        "p04-b",
+        "p04-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p06-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_checkpoint_contract.py"
+      ],
+      "id": "p06-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p06-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p07-a.tasks.json"
+      ],
+      "id": "p07-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p06-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "specs/032-continuity-context/implement/p07-b.tasks.json",
+        "tests/validate_orchestrator_store_contract.py"
+      ],
+      "id": "p07-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p06-a"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p07-c.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p07-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p07-a",
+        "p07-b",
+        "p07-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p08-a.tasks.json"
+      ],
+      "id": "p08-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p07-a",
+        "p07-b",
+        "p07-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "specs/032-continuity-context/implement/p08-b.tasks.json",
+        "tests/validate_orchestrator_store_contract.py"
+      ],
+      "id": "p08-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p07-a",
+        "p07-b",
+        "p07-c"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p08-c.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p08-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p08-a",
+        "p08-b",
+        "p08-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p09-a.tasks.json"
+      ],
+      "id": "p09-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p08-a",
+        "p08-b",
+        "p08-c"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p09-b.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p09-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p09-a",
+        "p09-b"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p10-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p10-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p09-a",
+        "p09-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p10-b.tasks.json"
+      ],
+      "id": "p10-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p09-a",
+        "p09-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "specs/032-continuity-context/implement/p10-c.tasks.json"
+      ],
+      "id": "p10-c",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p10-a",
+        "p10-b",
+        "p10-c"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p11-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p11-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p11-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p12-a.tasks.json"
+      ],
+      "id": "p12-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p11-a"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p12-b.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p12-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p12-a",
+        "p12-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p13-a.tasks.json"
+      ],
+      "id": "p13-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p12-a",
+        "p12-b"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p13-b.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p13-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p13-a",
+        "p13-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p14-a.tasks.json"
+      ],
+      "id": "p14-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p13-a",
+        "p13-b"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p14-b.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p14-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p14-a",
+        "p14-b"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p15-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p15-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p14-a",
+        "p14-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p15-b.tasks.json"
+      ],
+      "id": "p15-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p15-a",
+        "p15-b"
+      ],
+      "files": [
+        "specs/032-continuity-context/implement/p16-a.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p16-a",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p15-a",
+        "p15-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p16-b.tasks.json"
+      ],
+      "id": "p16-b",
+      "parallel": true,
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p16-a",
+        "p16-b"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/032-continuity-context/implement/p16-serial.tasks.json",
+        "tests/validate_agent_orchestration_contract.py",
+        "tests/validate_checkpoint_contract.py",
+        "tests/validate_distribution.py",
+        "tests/validate_orchestrator_store_contract.py"
+      ],
+      "id": "p16-serial",
+      "parallel": false,
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v1"
+}

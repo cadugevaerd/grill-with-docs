@@ -1,0 +1,500 @@
+{
+  "deferred_to_leader": [
+    "T013"
+  ],
+  "dispatchable_tasks": 67,
+  "feature": "032-continuity-context",
+  "max_workers": 3,
+  "nodes": [
+    {
+      "id": "p01-a",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T001"
+      ]
+    },
+    {
+      "id": "p01-b",
+      "parallel": true,
+      "phase": 1,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T002"
+      ]
+    },
+    {
+      "id": "p02-a",
+      "parallel": true,
+      "phase": 2,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T003",
+        "T004",
+        "T005",
+        "T006"
+      ]
+    },
+    {
+      "id": "p03-a",
+      "parallel": true,
+      "phase": 3,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T007"
+      ]
+    },
+    {
+      "id": "p03-b",
+      "parallel": true,
+      "phase": 3,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T008"
+      ]
+    },
+    {
+      "id": "p04-a",
+      "parallel": true,
+      "phase": 4,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T009",
+        "T012"
+      ]
+    },
+    {
+      "id": "p04-b",
+      "parallel": true,
+      "phase": 4,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T010"
+      ]
+    },
+    {
+      "id": "p04-c",
+      "parallel": true,
+      "phase": 4,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T011"
+      ]
+    },
+    {
+      "id": "p06-a",
+      "parallel": true,
+      "phase": 6,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T014",
+        "T015"
+      ]
+    },
+    {
+      "id": "p07-a",
+      "parallel": true,
+      "phase": 7,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T016",
+        "T017",
+        "T018",
+        "T019"
+      ]
+    },
+    {
+      "id": "p07-b",
+      "parallel": true,
+      "phase": 7,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T020",
+        "T022"
+      ]
+    },
+    {
+      "id": "p07-c",
+      "parallel": true,
+      "phase": 7,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T021"
+      ]
+    },
+    {
+      "id": "p08-a",
+      "parallel": true,
+      "phase": 8,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T023",
+        "T024",
+        "T025",
+        "T026"
+      ]
+    },
+    {
+      "id": "p08-b",
+      "parallel": true,
+      "phase": 8,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T028",
+        "T029"
+      ]
+    },
+    {
+      "id": "p08-c",
+      "parallel": true,
+      "phase": 8,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T027"
+      ]
+    },
+    {
+      "id": "p09-a",
+      "parallel": true,
+      "phase": 9,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T030",
+        "T031"
+      ]
+    },
+    {
+      "id": "p09-b",
+      "parallel": true,
+      "phase": 9,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T032",
+        "T033"
+      ]
+    },
+    {
+      "id": "p10-a",
+      "parallel": true,
+      "phase": 10,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T036",
+        "T037",
+        "T038"
+      ]
+    },
+    {
+      "id": "p10-b",
+      "parallel": true,
+      "phase": 10,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T034",
+        "T035"
+      ]
+    },
+    {
+      "id": "p10-c",
+      "parallel": true,
+      "phase": 10,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T039"
+      ]
+    },
+    {
+      "id": "p11-a",
+      "parallel": true,
+      "phase": 11,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T040",
+        "T041",
+        "T042",
+        "T043"
+      ]
+    },
+    {
+      "id": "p12-a",
+      "parallel": true,
+      "phase": 12,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T044",
+        "T045",
+        "T047"
+      ]
+    },
+    {
+      "id": "p12-b",
+      "parallel": true,
+      "phase": 12,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T046"
+      ]
+    },
+    {
+      "id": "p13-a",
+      "parallel": true,
+      "phase": 13,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T048",
+        "T051",
+        "T052"
+      ]
+    },
+    {
+      "id": "p13-b",
+      "parallel": true,
+      "phase": 13,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T049",
+        "T050",
+        "T053"
+      ]
+    },
+    {
+      "id": "p14-a",
+      "parallel": true,
+      "phase": 14,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T054",
+        "T055"
+      ]
+    },
+    {
+      "id": "p14-b",
+      "parallel": true,
+      "phase": 14,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T056",
+        "T057"
+      ]
+    },
+    {
+      "id": "p15-a",
+      "parallel": true,
+      "phase": 15,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T060",
+        "T061",
+        "T062",
+        "T063"
+      ]
+    },
+    {
+      "id": "p15-b",
+      "parallel": true,
+      "phase": 15,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T058",
+        "T059"
+      ]
+    },
+    {
+      "id": "p16-a",
+      "parallel": true,
+      "phase": 16,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T066",
+        "T067",
+        "T068"
+      ]
+    },
+    {
+      "id": "p16-b",
+      "parallel": true,
+      "phase": 16,
+      "scope": "DECLARED",
+      "task_ids": [
+        "T064"
+      ]
+    },
+    {
+      "id": "p16-serial",
+      "parallel": false,
+      "phase": 16,
+      "scope": "FEATURE_WIDE",
+      "task_ids": [
+        "T065"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "achieved_groups": 2,
+      "phase": 1,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "Contrato do checkpoint e prova de encerramento",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 2,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 4,
+      "title": "Tomada, troca e paridade da prévia",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 3,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "Cobertura",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 3,
+      "phase": 4,
+      "reasons": [],
+      "requested_groups": 3,
+      "tasks": 4,
+      "title": "Distribuição",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 6,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 2,
+      "title": "Convergence",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 3,
+      "phase": 7,
+      "reasons": [],
+      "requested_groups": 3,
+      "tasks": 7,
+      "title": "Convergence",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 3,
+      "phase": 8,
+      "reasons": [],
+      "requested_groups": 3,
+      "tasks": 7,
+      "title": "Convergence",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 9,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 4,
+      "title": "Convergence",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 3,
+      "phase": 10,
+      "reasons": [],
+      "requested_groups": 3,
+      "tasks": 6,
+      "title": "Convergence",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 1,
+      "phase": 11,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 4,
+      "title": "Convergence",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 12,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 4,
+      "title": "Convergence",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 13,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 6,
+      "title": "Convergence",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 14,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 4,
+      "title": "Convergence",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 15,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT"
+      ],
+      "requested_groups": 3,
+      "tasks": 6,
+      "title": "Convergence",
+      "unmapped_tasks": 0
+    },
+    {
+      "achieved_groups": 2,
+      "phase": 16,
+      "reasons": [
+        "CONFLICT_GROUPS_BELOW_LIMIT",
+        "UNMAPPED_TASKS"
+      ],
+      "requested_groups": 3,
+      "tasks": 5,
+      "title": "Convergence",
+      "unmapped_tasks": 1
+    }
+  ],
+  "requested_groups": 3,
+  "schema": "grill-partition-report/v1",
+  "tasks": 68,
+  "unmapped_task_ids": [
+    "T065"
+  ],
+  "verdict": "PARTITION-DEGRADED"
+}

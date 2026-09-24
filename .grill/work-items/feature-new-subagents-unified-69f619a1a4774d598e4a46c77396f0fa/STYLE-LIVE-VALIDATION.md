@@ -409,3 +409,24 @@ Notas sem perda:
 ### Correção de versão da matriz — 2026-09-19
 
 A matriz acima rodou com o plugin **6.0.0** instalado nos caches Claude e Codex, mas a versão publicada no dia já era a **6.0.1** (`v6.0.1`, commit `6ed8c90`, 2026-09-15), que esta branch ainda não tinha integrado. A frase "a candidata instalada é a fonte" valia só para esta branch, não para a main. A 6.0.1 já descarta leituras integrais anteriores ao último bloco `compaction` (metade da lacuna 4). A lacuna do Codex (`installPath`) e a suspensão não são tocadas por ela. A branch recebeu a `origin/main` no merge `ef3299e`. A reexecução da matriz exige a versão com o fix `fix-codex-install-path` (6.0.2) instalada nos dois runtimes.
+
+### Reexecução da metade Codex com a 6.0.2 — 2026-09-19
+
+Plugin `grill-with-docs` 6.0.2 instalado nos dois runtimes pela CLI de cada harness (`claude plugin update` de 6.0.0 para 6.0.2; `codex plugin add`); o `agent_runtime.py` instalado tem o mesmo sha256 da fonte da tag `v6.0.2`.
+
+**C1 — Codex novo, `$grill-with-docs iniciar ROOT` — PASSA a carga** (dispatch `ctx_2d70a6015640`, terminal `term_5d701d4e-b0e8-4b95-a981-69b9fb73067a`, `codex/gpt-5.6-sol/medium`, `launch.effective == launch.requested`, modo terminal; sessão Codex `01a0bbff-0048-7860-a61b-22e614f70b96`):
+
+- O observer reconheceu a instalação sem `installPath`: `install_root = /home/carlosaraujo/.codex/plugins/cache/i-have-adhd/i-have-adhd/0.3.0`. É a primeira entrada GWD bem-sucedida no Codex — antes da 6.0.2 toda tentativa morria em `STYLE-DEPENDENCY-UNDETERMINED`.
+- Carga integral correlacionada: `loading=loaded`, `body_sha256 7ab4bd4e…bedcf`, evento `orca:ctx_2d70a6015640:ctco_01a0bc01-…`.
+- `init` criou `feature-t029-c1-v2` com backlog vinculado; bootstrap concluído antes da primeira resposta de trabalho.
+- Os quatro prompts fixos foram respondidos; `/compact` nativo do Codex (`Context compacted`, 39 s); retomada canônica com apresentação carregada; prompt 2 repetido; `stop adhd mode` aceito com o trabalho seguindo.
+- Encerrado com `worker_done --outcome succeeded`.
+
+**C2 — Codex novo, `$grill-with-docs retomar ROOT --work-id feature-t029-c1-v2` — IMPEDIDO** (dispatch `ctx_52aa51512a16`, sessão `01a0bc0b-539d-7a92-a0d1-6f3d7a407ba6`):
+
+1. Primeiro bloqueio, **de procedimento e não do core**: `STYLE-DEPENDENCY-UNDETERMINED` porque o worker encadeou a sonda de plugins com outros comandos. O observer exige a forma literal `<caminho do codex> plugin list --json`, como o C1 fez. Instruído, o worker repetiu e a carga integral passou.
+2. Segundo bloqueio, **lacuna do core já registrada**: `CONTEXT-FENCED` ("existing leader observation differs"). O work item ficou preso à sessão do C1, que encerrou sem `gauntlet-prepare-switch` — impossível antes do primeiro checkpoint. É exatamente o work item `fix-continuity-context-2babd3080cc84b59a4404d6514f948c2`. Encerrado com `worker_done --outcome failed`, sem contorno e sem edição de store.
+
+**Observação sobre compactação no Codex**: na retomada pós-compactação do C1 o preflight reportou `loading=loaded` sem evidência de releitura integral no transcript da sessão. A correção da 6.0.1 descarta leituras anteriores ao bloco de compactação do transcript Orca; o caminho do Codex não foi coberto por ela. Soma-se ao work item `fix-presentation-suspension-d97e4c3d7b434c119477ec59d56ecbd5`, que passa a valer para os dois runtimes.
+
+**Estado da matriz**: C1 tem carga live comprovada; C2 impedido por lacuna do core; A1 e A2 executados em 2026-09-19 com 6.0.0 e reprovados na revisão independente (F1: fatos citados por ordinal em A2; F2: suspensão não registrada pelo core). `functional_verified` permanece `false` e FR-024/SC-008 seguem não aceitos. O caminho para o PASS exige: `fix-continuity-context` (destrava C2 e a retomada), `fix-presentation-suspension` (F2, nos dois runtimes) e nova execução de A1/A2 com a versão corrigida.

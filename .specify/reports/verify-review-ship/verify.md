@@ -1,36 +1,56 @@
-## Verify Report — rodada r4 (árvore final do ship, com os aprendizados aplicados)
+## Verify Report
 
-Verdict: PASS
-Source fingerprint: tree dc5dec79246a11c46c22e0440cf6d53ae88c700b42afbbb4e09f68e5aa88aafc / work e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 / plan 15e0cee81a10cb63b7cb3e8b1c8d43580db5b77c59726b1c616329944fb2449f   (gate reports excluded)
-Converge: CONVERGED (converge r5, depois do implement-parallel r3; zero findings). Depois dele o gate de aprendizados do ship aplicou mudanças só de documentação (`CLAUDE.md`) e de backlog/memória fora do repositório, e os gates foram reexecutados nesta árvore.
+**Verdict: PASS** — rodada 6, após a Phase 11
+
+Source fingerprint: tree `1391107f8d541fd5cd34bf4ba2fcb0d2e1275288579330e5c4308cefb997279e` / work `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` / plan `7c34aec1d07bb1754c7cd033d53b3a9d21b5871ada727b220680295df46173db`   (gate reports excluídos)
+
+Converge: **CONVERGED** — rodada 12, `specs/032-continuity-context/converge.md`, zero achados, `tasks.md` intocado, atestado e selado.
 
 ### Operational Gates
-| Gate | Command | Result | Evidence | Validator |
+
+| Gate | Comando | Resultado | Evidência | Validador |
 |---|---|---|---|---|
-| Suíte canônica (CI `full`) | `PYTHONDONTWRITEBYTECODE=1 python3 tests/run_validators.py` | PASS | exit 0; 30 validadores (marcador `==>`), 1477 testes; 1 skip legítimo (`accepts_macos_var_root_alias`: host sem alias `/var -> /private/var`). Reexecutado na rodada r4 sobre o fingerprint final `dc5dec79` | leader, execução sequencial |
-| Smoke de portabilidade (CI `portability`) | `python3 tests/validate_distribution.py` + os 8 testes nomeados de `WorkspaceV2Contract` do `ci.yml` | PASS | exit 0; `Ran 8 tests ... OK` | leader |
-| Bump gate (`bump-gate.yml`) | `python3 tests/check_version_bump.py --base-ref origin/main` | PASS | `PASS BUMPED: plugin/ mudou e a versão aumentou de 6.0.1 para 6.0.2.` | leader |
-| Diff check | `git diff --check` | PASS | sem saída | leader |
-| Build / lint / typecheck / format | — | SKIPPED | projeto stdlib sem build, linter, typechecker ou formatter configurados no CI | — |
+| Testes | `python3 tests/run_validators.py` | **PASS** | exit 0 — 30 validadores, **1494** testes, 0 falhas, 1 skip real | coordenador |
+| Contrato de distribuição | `python3 tests/validate_distribution.py` | **PASS** | `distribution: OK` — oito pontos em 6.0.3 | coordenador |
+| Bump de versão | comparação com `origin/main` | **PASS** | `main` em 6.0.2, HEAD em 6.0.3; a 6.0.3 não foi publicada, então as fases 7 a 11 entram na mesma versão sem novo bump | coordenador |
+| Sintaxe | `python3 -m py_compile` nos 6 arquivos tocados | **PASS** | sem erro | coordenador |
+| Espaço em branco | `git diff --check` | **PASS** | limpo | coordenador |
+| Segredos | varredura no diff da entrega | **PASS** | nenhum `.env`, `secret`, `credential`, `.pem` ou `id_rsa` | coordenador |
+| Lint / typecheck / format | — | **SKIPPED** | o projeto não declara essas ferramentas; o core é só biblioteca padrão | — |
+
+A contagem subiu de 1491 para 1494. O validador de orquestração passou de 39 para 42 casos.
+
+O único skip é `test_reject_symlink_chain_accepts_macos_var_root_alias`, condicionado ao sistema operacional. Não é validador desativado, e a matriz de CI cobre macOS. SC-006 satisfeito.
 
 ### Diff Hygiene
 
-- Produto (`origin/main...HEAD` em `plugin/` e `tests/`): exatamente os 8 arquivos do plano — `agent_runtime.py`, `validate_agent_orchestration_contract.py`, a fixture nova `tests/fixtures/orchestration/codex-plugin-list-0.154.0.json`, `validate_distribution.py`, os dois manifests de `plugin/` e os dois headings; mais `README.md`, `CHANGELOG.md` e os dois marketplaces na raiz.
-- A fixture contém só a entrada do `i-have-adhd` (sem caminhos locais da máquina).
-- Nenhum segredo (varredura por chaves AWS/OpenAI/GitHub e blocos de chave privada: 0).
-- A branch também carrega documentação de coordenação desta sessão (`.grill/` do T029, bundles dos fixes `fix-continuity-context` e `fix-presentation-suspension`, triagem): artefatos de governança, não produto.
+Entrega em 80 commits, de `73a90bd` ao HEAD, incluindo as integrações do gauntlet das dez runs.
+
+- **Código do plugin**: `grill_core/agent_orchestration.py`, `grill_core/agent_runtime.py`, `grill_workspace.py`.
+- **Protocolo**: `references/session-protocol.md`.
+- **Testes**: `validate_agent_orchestration_contract.py`, `validate_orchestrator_store_contract.py`, `validate_checkpoint_contract.py`, `validate_distribution.py`.
+- **Distribuição**: os quatro manifests, os dois headings sob `plugin/`, `README.md`, `CHANGELOG.md`.
+- **Artefatos da feature**: `specs/032-continuity-context/` e os sidecars por nó.
+
+Nada gerado foi commitado por engano; nenhum arquivo fora do escopo.
 
 ### Executable Scenarios
 
-- `quickstart.md` 1: `tests/validate_agent_orchestration_contract.py` — 33 testes OK, incluindo `test_codex_install_path_composed_from_cache_when_installpath_absent`, agora com os casos da rodada r2: segmento com drive (`D:` semeado como diretório real no cache), tipos não-string, `installPath` nulo, `installed` ausente, `Path.home` levantando `RuntimeError` e `is_dir` levantando `PermissionError`.
-- Mutação (r1): com `agent_runtime.py` sem T002 (commit `1c79562`), o teste novo falha (`errors=1`).
-- T011 (rodada r3): o caso do diretório literal `D:` passa a semear o cache só fora do Windows, mantendo a asserção de recusa incondicional; no Windows o segmento é âncora de drive e o caminho semeado escaparia do diretório temporário.
-- Mutação (r2, feita pelo worker do nó `p04-a`): revertendo o filtro para apenas barra e contrabarra, o caso do diretório `D:` falha; removendo o bloco de exceções, o caso de `RuntimeError` propaga a exceção. Os dois fixes são discriminados por teste.
-- `quickstart.md` 4 (live C1) fica fora deste gate por definição (SC-005).
+A Phase 11 fechou os quatro achados laterais que o R5 encontrou, e dois deles tiveram o worker corrigindo a instrução recebida:
+
+- **carimbo de branch de execução**: a retomada passou a exigir coincidência quando o carimbo existe, e o preenchimento retroativo é recusado quando o contexto tem predecessor. `branch` **não** voltou ao conjunto comparado, porque isso reabriria a recusa permanente que a Phase 10 fechou;
+- **restauração de branch na fixture**: a instrução do coordenador mandava trocar o bloco protegido por limpeza de encerramento. O worker verificou por execução que só teardown **não funciona** — os casos seguintes precisam da branch restaurada de imediato — e manteve restauração explícita com o teardown como rede;
+- **asserção fora do subcaso**: movida para dentro, com a reversão produzindo **dois** fracassos onde antes só um subcaso rodava;
+- **ramificação inalcançável**: o invariante foi afirmado na validação de bloco, depois de o worker confirmar no código que o produtor é único e que nenhum verbo move atividade entre contextos. O caso de teste deixou de ser cobertura falsa e virou defesa em profundidade.
+
+Quatro reversões confirmaram a sensibilidade, com o produto restaurado ao final de cada uma.
+
+Nenhum teste depende de runtime real, rede ou processo externo (FR-011).
 
 ### Failures / Blockers
 
 Nenhum.
 
 ### Next Action
-- PASS: run `/speckit-verify-review-ship-review`
+
+PASS: executar `/speckit.verify-review-ship.review`.

@@ -1,0 +1,21 @@
+{
+  "worker": "p07-b",
+  "feature": "032-continuity-context",
+  "completed": ["T020", "T022"],
+  "tasks": {
+    "T020": {
+      "status": "done",
+      "summary": "Tres frentes em tests/validate_orchestrator_store_contract.py. (1) Honestidade de nome e comentario: os dois casos que continuam usando a fixture CONTEXT_TAKEOVER foram renomeados para test_store_accepts_hand_built_takeover_document_and_leaves_item_state_untouched e test_store_accepts_hand_built_continuity_switch_operation_record. O cabecalho da fixture agora declara que ela NAO e o produto, NAO e mantida em sincronia e lista as divergencias conhecidas (worktree_identity, checkpoint_id sempre em expected_before, to_runtime em intended_after, quatro guardas, e as novidades de f628c20: guarda de revisao, observacao da sessao entrante no lider do sucessor, preserved_resources e operations_to_reconcile). O comentario de bloco acima dos casos diz explicitamente que nenhum deles reprovaria com o mutate() revertido. (2) Concorrencia: opcao (b) do brief. A opcao (a) exigiria invocar o CLI, e este arquivo nao tem harness de CLI nenhum -- ele so faz store.bootstrap sobre um git init, sem workspace .grill, sem work item bundle e sem as pre-condicoes de sessao que gauntlet_context_takeover_command exige; montar isso seria inventar o harness que o brief proibe. O caso virou test_takeover_over_an_already_superseded_source_is_refused, sequencial, sem Barrier nem ThreadPoolExecutor, com comentario dizendo por que o nome anterior mentia (store.transact serializa tudo sob orchestrator_lock; quem levantava STATE_DIVERGENCE era a guarda da fixture) e que a corrida real e TAKEOVER-CAS-CONFLICT, fora do alcance deste arquivo. (3) Ponto de retomada: o caso deixou de ser fixture e passou a chamar o PRODUTO, grill_workspace._initial_continuity_checkpoint, que e o que gauntlet-prepare-switch usa (T005). Nao precisou de infraestrutura: o store que o proprio caso ja montava basta. Some a tautologia (as asercoes agora batem contra o emissor real e contra agent_orchestration.CHECKPOINT_SCHEMA_V2), some o schema v1 obsoleto e some o drift de tipo -- development_sequence e lista. O helper ORCHESTRATION_CHECKPOINT_V2 tambem passou a emitir lista, como todo emissor v2, e o checkpoint encadeado do mesmo caso passou de v1 para v2.",
+      "evidence": "tests/validate_orchestrator_store_contract.py: Ran 136 tests, OK. O caso do ponto de retomada e agora sensivel a regressao: reverter a emissao para v1, ou voltar development_sequence a dict, reprova nas asercoes de schema e de tipo."
+    },
+    "T022": {
+      "status": "done",
+      "summary": "Comentario das constantes de versao do ponto de retomada em grill_core/agent_orchestration.py reescrito. O texto anterior afirmava que a emissao ainda usava CHECKPOINT_SCHEMA (v1) 'porque validate_checkpoint_contract.py fixa a constante em v1', falso desde T015: os dois emissores usam CHECKPOINT_SCHEMA_V2 e o validador foi reescrito. O novo texto diz o que vale hoje -- v1 permanece aceita somente para leitura de documentos ja materializados, nunca e emitida -- e mantem o apontamento para o contrato e a lista dos dois campos renomeados. Nenhuma mudanca de comportamento neste arquivo.",
+      "evidence": "Diff de comentario apenas; validador do store segue OK."
+    }
+  },
+  "validators": {
+    "tests/validate_orchestrator_store_contract.py": "Ran 136 tests, OK"
+  },
+  "notes": "Nenhum caso existente foi afrouxado. Dois casos mudaram de nome sem mudar de asercao, justamente para parar de prometer prova de comportamento que nao entregam. Um caso perdeu threads e ganhou precisao de nome. Um caso trocou fixture por produto e ficou mais estrito. Debito que permanece aberto e fora do grant: a cobertura real do mutate() de gauntlet_context_takeover_command -- inclusive das quatro correcoes de f628c20 -- exige um harness de CLI que nao existe neste arquivo; o lugar dela e tests/validate_agent_orchestration_contract.py. A suite completa nao foi rodada: e do leader, depois da convergencia."
+}

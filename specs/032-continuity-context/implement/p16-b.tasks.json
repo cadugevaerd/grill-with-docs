@@ -1,0 +1,38 @@
+{
+  "worker_id": "p16-b",
+  "work_id": "fix-continuity-context-2babd3080cc84b59a4404d6514f948c2",
+  "run_id": "run-07401dfed0e0a820b14f27ec",
+  "wave_id": "wave-0015",
+  "tasks": [
+    {
+      "id": "T064",
+      "status": "completed",
+      "file": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+      "summary": "Repos a igualdade de origem (`existing.get(\"origin\") == inputs[\"origin\"]`) na condicao do atalho REUSED de orchestration_adopt_command (linha ~1801, dentro do bloco `if args.apply` apos a checagem de expected_sha256). O atalho checava so scope_files e presentation e por isso devolvia REUSED mesmo com origem alterada, quando escopo/apresentacao/lider batiam -- veredito que a main (ORCHESTRATION-ADOPTED) nao emitia mais depois do merge que afrouxou _adoption_conflict.",
+      "decision": {
+        "question": "policy_sha256 e checagem de lider tambem voltam ao atalho?",
+        "answer": "NAO -- so origem foi reposta.",
+        "reasoning": "_adoption_conflict roda incondicionalmente antes deste ponto (chamada em toda invocacao, preview ou apply) e hoje garante, sem excecao de origem-alterada: (1) `existing.get(\"policy_sha256\") != policy_sha256` sempre levanta ORCHESTRATION-POLICY-STALE, sem clausula condicional; (2) quando `current is not None`, `_same_observed_leader` sempre levanta CONTEXT-FENCED se divergir, tambem sem clausula condicional. So a checagem de origem tem a excecao (comentario 'Merge note (main 6.0.11)' em _adoption_conflict, linhas ~1765-1770): origem alterada passa quando current existe e scope_files bate. Logo, ao chegar no atalho REUSED, policy_sha256 e lider ja estao garantidamente iguais -- reafirma-los ali seria checagem morta, nunca falsa. So origem precisa ser reposta porque e o unico dos quatro checks com furo aberto por _adoption_conflict."
+      },
+      "verification": {
+        "scenario": "origem alterada (state_sha256 mutado via mock em _orchestration_origin) + scope_files igual + presentation igual + mesmo lider observado (mesmo session_ref/runtime)",
+        "method": "duas copias novas em /tmp (git archive HEAD), nunca a worktree: /tmp/p16b-before com o codigo pre-fix (HEAD, sem a edicao), /tmp/p16b-after com o codigo pos-fix (working tree apos a edicao). Script /tmp/.../scratchpad/repro_t064.py reproduz o fluxo do teste existente test_rollout_and_canonical_pins (init -> adopt preview -> adopt --apply -> muda origin via mock -> adopt preview -> adopt --apply) e imprime o veredito final.",
+        "before": {"verdict": "REUSED", "context_id_unchanged": true},
+        "after": {"verdict": "ORCHESTRATION-ADOPTED", "context_id_unchanged": true},
+        "note": "o teste existente test_rollout_and_canonical_pins (linhas ~985-1004) ja exercita exatamente este cenario (origem mutada via _orchestration_origin, mesmo scope/presentation) mas so afirma `refreshed[\"context_id\"] == adopted[\"context_id\"]`, nunca o verdict -- por isso nao reprovava antes do conserto. Cobertura formal do invariante e tarefa do no p16-a (T066), que roda depois de mim."
+      },
+      "tests": {
+        "validate_agent_orchestration_contract": "51 tests, OK, sem regressao (python3 tests/validate_agent_orchestration_contract.py, ~22s)"
+      }
+    }
+  ],
+  "out_of_scope_confirmed_not_touched": [
+    "tests/validate_agent_orchestration_contract.py (T066/T067/T068 -- pertencem ao no p16-a, fora do meu grant)",
+    "CHANGELOG.md (T065 -- fora do meu grant, escopo de outro no)",
+    "_adoption_conflict (nao relaxada, apenas lida para justificar a decisao)",
+    "paridade previa/apply (nao mexida, ja correta conforme instrucao do brief)"
+  ],
+  "completed": [
+    "T064"
+  ]
+}
