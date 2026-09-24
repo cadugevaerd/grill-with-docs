@@ -178,4 +178,16 @@
 - resolution: decisão do coordenador sob o goal (opção A; o humano pode reverter): não nesta versão. O plano declara o efeito (na forma com líder vivo, o cleanup reporta o recurso cercado como `SESSION-CLOSE-UNPROVEN` sem bloquear takeover, switch, phase-turn nem ship) e um teste o fixa. O reconhecimento aditivo fica em SGD-41, com o gatilho "líder vivo precisa de `CLEANED` após fence".
 - evidence: DQ proposta DQ-P2 e Finding 3 de `plan-reviewer-001` (agent-orchestration/activities/plan-reviewer-001.result.md); item SGD-41 aberto no backlog `SGD`.
 
+## DQ-0015 — O implement-parallel segue com o `checklists/release-gate.md` sem itens marcados (CHECKLIST-INCOMPLETE)?
+- phase: FASE-001
+- fingerprint: implement-checklist-incomplete-release-gate
+- impact: low
+- state: resolved
+- context-refs: fence autorizado
+- artifacts: specs/034-fence-autorizado-atividade/checklists/release-gate.md
+- depends-on: none
+- final-ref: R-0014
+- resolution: decisão do coordenador sob o goal (opção A; o humano foi informado e pode reverter): seguir sem marcar. A avaliação item a item é o resultado commitado de `checklist-reviewer-001` (33 PASS; 2 FAIL menores absorvidos nas tasks). Marcar editaria o artefato atestado da etapa checklist e tornaria a cadeia stale.
+- evidence: `agent-orchestration/activities/checklist-reviewer-001.result.md`; preflight da skill `grill-implement-parallel` (35 itens abertos em `release-gate.md`, 16/16 em `requirements.md`).
+
 > Estados: open | resolved | deferred | split | blocked | out-of-scope. Não duplique fingerprints abertos.
