@@ -1,0 +1,42 @@
+{
+  "schema": "grill-continuity-bundle-proof/v1",
+  "created_at": "2026-09-24T15:51:44.224207+00:00",
+  "bundle_root": "/home/carlosaraujo/orca/workspaces/grill-with-docs/continuity-5544829",
+  "revision": "5544829185c2e5d1d75e52736364aa00bede9323",
+  "plugin_tree": "d5cc959f9c02a98ddc3a5adfd958d729b62807ce",
+  "worktree_status": "",
+  "files": [
+    {
+      "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+      "sha256": "00c1220ff3fd167149134792a16b9e35d0b2349b431f6e75e818bf3c54822389",
+      "size": 421550
+    },
+    {
+      "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+      "sha256": "aad0a06e5d8d51c6f75e1126a09410e6fc67b65f72f48083e8731e6eeaca9b1b",
+      "size": 114088
+    },
+    {
+      "path": "plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json",
+      "sha256": "c30b3cecf9c5cc4949c8c3d14eca050608d773f4ffa690fc2c9e72e7a95a3553",
+      "size": 4246
+    },
+    {
+      "path": "plugin/skills/grill-with-docs/references/agent-orchestration.md",
+      "sha256": "04b4533636117f26e6870bec6f43632bca8114d0bf1cc92911c15b5855ff7ed3",
+      "size": 3899
+    },
+    {
+      "path": "plugin/skills/grill-with-docs/assets/task-files.v1.template.md",
+      "sha256": "4961ec90bd4c31b09aaecd00ed14cf28a7caa927081cdf50110bcc6b5a380eee",
+      "size": 1175
+    }
+  ],
+  "read_only_proofs": {
+    "adopt_preview": "PREVIEW, exit 0, current work item and Store validation",
+    "validate_block": "PASS on current Store agent_orchestration block",
+    "prepare_activity_author": "BOOTSTRAPPING gpt-6-astra xhigh",
+    "prepare_activity_reviewer": "BOOTSTRAPPING gpt-6-astra high",
+    "core_write": "none"
+  }
+}
