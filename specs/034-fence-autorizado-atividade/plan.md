@@ -6,7 +6,7 @@
 
 ## Summary
 
-Uma atividade de especialista `DISPATCHED` cujo dispatch terminou sem gravar resultado, ou `RESULT_RECORDED` cuja sessão ficou retida pelo Orca, conta para sempre como trabalho ativo: `_continuity_quiescence` (`grill_workspace.py:3654-3672`) a lista em `active`, `gauntlet-context-takeover` recusa `TAKEOVER-WORK-ACTIVE` (4170-4174) e nenhum verbo a leva a estado terminal, porque `gauntlet-activity` exige o líder corrente (`@_gauntlet_authorized`, 5952) e `RESULT_RECORDED → FAILED` não é aresta (`agent_orchestration.py:48`). A entrega acrescenta um **verbo de fence autorizado**, `gauntlet-activity-fence`, preview-first e não decorado, ao lado do takeover (4126-4350) e na forma do `gauntlet-run-abandon` (5152-5189): exige prova terminal Orca do dispatch do especialista e do líder da atividade, prova de readiness do solicitante quando o líder terminou, e `human-authorization/v1` com `scope = work_id:context_id:activity_id`. A aplicação registra uma operação `activity-fence` `CONFIRMED`, leva a atividade a `FAILED` com `diagnostic_ref` apontando a operação e fecha o recurso de sessão em `CLOSED` com receipt correlacionado, em dois `transact` na forma órfã e em um na forma retida (research R7). O resultado gravado nunca é aceito; o sucessor reexecuta o autor como atividade nova depois do takeover. Uma aresta nova `RESULT_RECORDED → FAILED` (ADR-0001, DQ-0009) e o bump 6.0.30 → 6.0.31 completam o escopo.
+Uma atividade de especialista `DISPATCHED` cujo dispatch terminou sem gravar resultado, ou `RESULT_RECORDED` cuja sessão ficou retida pelo Orca, conta para sempre como trabalho ativo: `_continuity_quiescence` (`grill_workspace.py:3654-3672`) a lista em `active`, `gauntlet-context-takeover` recusa `TAKEOVER-WORK-ACTIVE` (4170-4174) e nenhum verbo a leva a estado terminal, porque `gauntlet-activity` exige o líder corrente (`@_gauntlet_authorized`, 5952) e `RESULT_RECORDED → FAILED` não é aresta (`agent_orchestration.py:48`). A entrega acrescenta um **verbo de fence autorizado**, `gauntlet-activity-fence`, preview-first e não decorado, ao lado do takeover (4126-4350) e na forma do `gauntlet-run-abandon` (5152-5189): exige prova terminal Orca do dispatch do especialista e do líder da atividade, prova de readiness do solicitante quando o líder terminou, e `human-authorization/v1` com `scope = work_id:context_id:activity_id`. A aplicação registra uma operação `activity-fence` `CONFIRMED`, leva a atividade a `FAILED` com `diagnostic_ref` apontando a operação e fecha o recurso de sessão em `CLOSED` com receipt correlacionado, em dois `transact` na forma órfã e em um na forma retida (research R7). O resultado gravado nunca é aceito; o autor é reexecutado como atividade nova — pelo sucessor depois do takeover na forma órfã, ou pelo próprio líder vivo no mesmo contexto na forma retida (research R10). Uma aresta nova `RESULT_RECORDED → FAILED` (ADR-0001, DQ-0009) e o bump 6.0.30 → 6.0.31 completam o escopo.
 
 ## Technical Context
 
@@ -36,13 +36,13 @@ Constituição 2.1.0, sha256 `54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b
 
 | Cláusula | Situação | Evidência |
 |---|---|---|
-| Evidência antes de afirmação | PASS | leituras literais do Store do X7 (DQ-0001, DQ-0005); estado vivo de `interview-author-001` do work item de origem (DQ-0007); 23 arquivos do input manifest conferidos por sha256; toda citação file:line deste plano reconferida no HEAD `9dd8df6` (código idêntico ao `39380f7` pelos hashes do manifest) |
+| Evidência antes de afirmação | PASS | leituras literais do Store do X7 (DQ-0001, DQ-0005); estado vivo de `interview-author-001` do work item de origem (DQ-0007); 23 arquivos (`plan-author-001`) e 30 arquivos (`plan-author-002`) do input manifest conferidos por sha256; toda citação file:line deste plano reconferida no HEAD `ad42a65` (código idêntico ao `39380f7` pelos sha256 do manifest; `plan-reviewer-001` reconferiu em `4cad807`) |
 | Work item isolado e ownership | PASS | bundle `fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24`, tipo fix, branch `cadugevaerd/fix-leader`, contexto `ctx-146fb68d0d6e` |
 | Feature/fix plan-only | PASS | este plano não altera produto; mudanças só em `implement-parallel`, por worker; o ciclo termina em `PLAN_ONLY_STOP` |
 | Sequência obrigatória | PASS | specify aceito (`specify-reviewer-001` e `specify-reviewer-002` APPROVED); plan em andamento |
 | Verify/review antes de ship | PASS | etapas pending, precedem ship |
 | Fail-closed sem waiver | PASS | cada prova tem código próprio (contracts/activity-fence.md); `not_observable`, `indeterminate`, autorização ausente ou de outro alvo, líder vivo que não é o chamador, especialista vivo e hash stale recusam sem escrever (FR-003, FR-004, FR-005, FR-013) |
-| Rastreabilidade | PASS | FR-001..FR-015 → research R1..R13 → tarefas; ADR-0001; DQ-0001..DQ-0012 seladas; SGD-37, SGD-38 e SGD-39 fora do escopo, registrados |
+| Rastreabilidade | PASS | FR-001..FR-015 → research R1..R13 → tarefas; ADR-0001; DQ-0001..DQ-0014 seladas (DQ-0013 opção A → SGD-40; DQ-0014 opção A → SGD-41); SGD-37, SGD-38, SGD-39, SGD-40 e SGD-41 fora do escopo, registrados |
 | Tier de modelo do worker Orca | PASS | tier derivado do nó do DAG (implementação delimitada = intermediário; revisão final = forte/alto); nenhum modelo de fronteira como worker |
 | Bump obrigatório | PASS | FR-014: 6.0.30 → 6.0.31 nos 8 pontos de `CLAUDE.md` mais a seção `## 6.0.31` em `CHANGELOG.md`, que `tests/validate_distribution.py:41-43` também fixa (research R12) |
 | Release por versão | PASS | criada por `publish.yml` no push para `main`, ancorada na tag |
@@ -76,7 +76,7 @@ tests/validate_orchestrator_store_contract.py                              # loc
 
 # Fase 2 — nó B: verbo, parser e testes de contrato
 plugin/skills/grill-with-docs/scripts/grill_workspace.py                   # gauntlet_activity_fence_command + parser + tabela de dispatch
-tests/validate_agent_orchestration_contract.py                             # test_activity_fence (n1..n8, p1..p5)
+tests/validate_agent_orchestration_contract.py                             # test_activity_fence (n1..n9, p1..p5)
 
 # Fase 2 — nó C: documentação e distribuição (independente do nó B)
 plugin/skills/grill-with-docs/references/session-protocol.md              # heading v6.0.31 (1) + parágrafo do verbo (85-89)

@@ -20,7 +20,7 @@ Nenhuma chave nova no schema do Store. Muda um literal de aresta (`agent_orchest
 | `evidence_manifest.receipts` | `[{ref: "orca:<owner_dispatch>", sha256}]` | acrescenta `{ref: "orca:<owner_dispatch>:fence", sha256: <digest da observação do especialista>}` (refs únicos, 1054-1058; append, 1550-1553) |
 | `last_observation` | `orca:<owner_dispatch>` | `orca:<owner_dispatch>:fence` (precisa constar em receipts, 1066-1068) |
 | `operation_id` | `None` | `<operation_id>` (nullable; precisa existir em `operations`, 1002-1003 e 1442) |
-| `result_acceptance_ref` | `None` | `None` — nada foi aceito; `cleanup_reasons` continua a devolver `RESULT_NOT_DURABLE` (1082-1083), irrelevante após supersede |
+| `result_acceptance_ref` | `None` | `None` — nada foi aceito; `cleanup_reasons` continua a devolver `RESULT_NOT_DURABLE` (1082-1083), irrelevante após supersede; por isso `gauntlet-cleanup` do contexto vivo reporta o recurso como `SESSION-CLOSE-UNPROVEN` (4452-4455; DQ-0014 A, SGD-41; R8) |
 | `preservation_reasons` | `[]` | `[]` |
 | identidade (`identity`, `creation_observation`, …) | — | intocada (1542-1546) |
 
@@ -35,7 +35,7 @@ Nenhuma chave nova no schema do Store. Muda um literal de aresta (`agent_orchest
 | `subject_ids` | `[activity_id, resource_id]` |
 | `input_sha256` | `expected` da prévia (R6) |
 | `expected_before` | `{"context_id", "activity_id", "activity_state", "resource_id", "resource_state"}` (Finding 4) |
-| `intended_after` | `{"reason": "activity-fence", "activity_state": "FAILED", "resource_state": "CLOSED", "evidence": {...}, "requester": {...}, "authorization": <bundle verbatim>, "successor": "attempt-2-in-successor-context", "applied_at": <RFC3339 UTC>}` |
+| `intended_after` | `{"reason": "activity-fence", "activity_state": "FAILED", "resource_state": "CLOSED", "evidence": {...}, "requester": {...}, "authorization": <bundle verbatim>, "successor": "attempt-2-as-new-activity", "applied_at": <RFC3339 UTC>}` |
 | `idempotency_key` | `operation_id` (identidade `(kind, context_id, subject_ids, input_sha256)`, 1379-1381) |
 | `state` | `"CONFIRMED"` (exige `observation_ref` e `result_sha256`, 651-652; imutável depois, 1525) |
 | `result_ref` | `f"activity-fence/{operation_id}.json"` — referência lógica, como `context-takeover/…` (4286); nenhuma categoria nova em `RECEIPT_CATEGORIES` (`store.py:100-111`) |
@@ -55,7 +55,7 @@ Nenhuma chave nova no schema do Store. Muda um literal de aresta (`agent_orchest
 | `scope` | `f"{work_id}:{context_id}:{activity_id}"` — `context_id` da atividade no Store, não do chamador |
 | `decision` | `"APPROVED"`; qualquer outro valor = ausência (spec, edge case) |
 | `authorized_by`, `receipt_ref` | `FREE_REF_RE` (134); `receipt_ref` é o recibo humano preexistente |
-| `content_sha256` | `SHA256_RE` (130), só forma (R5; DQ-P1) |
+| `content_sha256` | `SHA256_RE` (130), só forma (R5; DQ-0013, opção A; SGD-40) |
 
 ## Entradas do verbo (lidas)
 
@@ -63,7 +63,7 @@ Nenhuma chave nova no schema do Store. Muda um literal de aresta (`agent_orchest
 |---|---|---|
 | `work_id`, `activity_id` | argumentos | alvo; `context_id`, `resource_id`, `epoch` e `fence` derivam do Store |
 | `session_ref` | argumento | solicitante; sucessor (líder terminal) ou o próprio líder corrente (líder vivo) |
-| `authorization` | caminho relativo ao root | bundle acima |
+| `authorization` | caminho relativo ao root; flag omitida → `FENCE-AUTHORIZATION-INVALID` (R5) | bundle acima |
 | observação do especialista | adapter, por `orca:<owner_dispatch>` | prova terminal (R3) |
 | observação do líder | adapter, por `context.leader.session_ref` | autoridade (R4) |
 | readiness do solicitante | adapter, por `session_ref`, só com líder terminal | prova do host do sucessor (F4) |
@@ -81,7 +81,7 @@ Nenhuma chave nova no schema do Store. Muda um literal de aresta (`agent_orchest
 
 - Forma órfã: `(DISPATCHED, REGISTERED)` → salto 1 → `(FAILED, CLOSE_PENDING)` + operação `CONFIRMED` → salto 2 → `(FAILED, CLOSED)`.
 - Forma retida: `(RESULT_RECORDED, CLOSE_PENDING)` → salto 1 → `(FAILED, CLOSED)` + operação `CONFIRMED`.
-- Qualquer recusa → nenhum byte escrito (prévia e apply).
-- Replay sobre `(FAILED, CLOSED)` com a operação presente → `FENCE-REUSED`, nenhum byte escrito.
-- Retomada sobre `(FAILED, CLOSE_PENDING)` com a operação presente → só o salto 2.
-- Depois: `_continuity_quiescence` não lista a atividade (3664, 3668); `gauntlet-context-takeover` admite; `gauntlet-activity --phase accept` recusa `ACTIVITY-STATE-DIVERGENCE` (6074-6075).
+- Qualquer recusa → nenhum byte escrito (prévia e apply), com uma exceção: `FENCE-CAS-CONFLICT` depois do salto 1 gravado carrega `activity_state`, `resource_state` e `operation_id`, e a saída é a retomada (R7).
+- Replay sobre `(FAILED, CLOSED)` com a operação presente e o mesmo solicitante (`session_ref == intended_after.requester.ref`) → `FENCE-REUSED`, nenhum byte escrito; outro solicitante → `FENCE-ACTIVITY-STATE`, nenhum byte escrito.
+- Retomada sobre `(FAILED, CLOSE_PENDING)` com a operação presente e o mesmo solicitante → só o salto 2; outro solicitante → `FENCE-ACTIVITY-STATE`.
+- Depois: `_continuity_quiescence` não lista a atividade (3664, 3668); `gauntlet-context-takeover` admite; `gauntlet-activity --phase accept` recusa `ACTIVITY-STATE-DIVERGENCE` (6074-6075); `gauntlet-cleanup` do contexto vivo reporta o recurso como `SESSION-CLOSE-UNPROVEN` sem bloquear nada (DQ-0014 A).
