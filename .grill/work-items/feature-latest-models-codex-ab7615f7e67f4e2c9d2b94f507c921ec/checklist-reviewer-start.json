@@ -1,0 +1,86 @@
+{
+  "id": "6d199f3c-0518-44ba-bba0-108c26cd8497",
+  "ok": true,
+  "result": {
+    "runId": "run_0b1a6188850b",
+    "taskId": "task_bf2003fac92b",
+    "dispatchId": "ctx_be0bd5c3be9e",
+    "state": "ready",
+    "stage": "input_accepted",
+    "turnStart": "observed",
+    "setup": {
+      "requested": "not_applicable",
+      "effective": "not_applicable",
+      "source": "existing_worktree",
+      "hookFound": false,
+      "startupPolicy": "start-immediately",
+      "state": "not_applicable"
+    },
+    "launch": {
+      "requested": {
+        "agent": "codex",
+        "model": "gpt-6-astra",
+        "effort": "high"
+      },
+      "effective": {
+        "agent": "codex",
+        "model": "gpt-6-astra",
+        "effort": "high"
+      }
+    },
+    "mode": {
+      "mode": "terminal",
+      "preferred": "terminal",
+      "reason": "user_default",
+      "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+    },
+    "timeoutMs": 60000,
+    "effects": [
+      {
+        "kind": "worktree",
+        "action": "reused",
+        "id": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models"
+      },
+      {
+        "kind": "setup",
+        "action": "not_applicable",
+        "state": "not_applicable"
+      },
+      {
+        "kind": "terminal",
+        "role": "agent",
+        "action": "created",
+        "id": "term_b1d311b4-f71f-4b6b-a995-c57ab14d5dc6",
+        "surface": "visible"
+      },
+      {
+        "kind": "dispatch_input",
+        "role": "agent",
+        "id": "term_b1d311b4-f71f-4b6b-a995-c57ab14d5dc6",
+        "state": "accepted"
+      }
+    ],
+    "prompt": {
+      "requestId": "6eacb800-e89f-4037-b051-47821bd29d58",
+      "stages": [
+        "input_accepted",
+        "turn_started"
+      ],
+      "provider": "codex",
+      "observation": "supported",
+      "processIncarnation": "03a923c1-dea2-40f5-9ecf-da3afd3b270d",
+      "generation": 247,
+      "baselineWorkingSequence": 1,
+      "baselineExplicitWorkingStartedAt": null,
+      "baselinePermissionSequence": 0
+    },
+    "residualResources": [],
+    "mutation": {
+      "requestId": "6eacb800-e89f-4037-b051-47821bd29d58",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "a1e53186-1808-4006-af41-a29ec02a0d0c"
+  }
+}

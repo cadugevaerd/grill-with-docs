@@ -22,10 +22,17 @@
       "runtime": "codex"
     },
     "attested_executions": {
+      "checklist": "se-6b9a7202934276c66908ec2066ec95a570bfa47f4013b7cce086517d8a0304a8",
       "plan": "se-12ebc01b62acdaa5dad133875261caa3d6db2c495107686996d60301885f4e1f",
       "specify": "se-a59acdd25ab39378cb20e88a3e901eb46883fb8d9189728866aa5f4c2c27bb0d"
     },
     "attested_outputs": {
+      "checklist": {
+        "output_sha256": "sha256:9e827946a53e8be3adc3d6bf77d091deb4eaa76804d423dab9d495374c1402ff",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
       "plan": {
         "output_sha256": "sha256:bee1724dfd5c56441faf3d23d3d4a9dd953294d585c63caa7e4abf6763fe4e7c",
         "provenance": "current-generation",
@@ -91,9 +98,28 @@
         "reason": "",
         "state": "complete",
         "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/033-latest-models/checklists/orchestration.md",
+            "sha256": "9e827946a53e8be3adc3d6bf77d091deb4eaa76804d423dab9d495374c1402ff"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
       }
     ],
-    "current_step": "checklist",
+    "current_step": "tasks",
     "execution_branch": "cadugevaerd/fix-latest-models",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -112,7 +138,7 @@
     ],
     "steps": {
       "analyze": "pending",
-      "checklist": "pending",
+      "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
