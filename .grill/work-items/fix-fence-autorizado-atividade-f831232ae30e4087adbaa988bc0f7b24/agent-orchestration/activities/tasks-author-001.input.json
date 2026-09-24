@@ -1,0 +1,140 @@
+{
+ "files": [
+  {
+   "path": "specs/034-fence-autorizado-atividade/spec.md",
+   "sha256": "23b2942533c5dbd3de35ecddfc8645e790e48e6438bcbed1309cd88d6ede0834",
+   "size": 11876,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/plan.md",
+   "sha256": "9710cb5ccd81648ffec72b6688e3955feb10c40c26406031291366765ef2b6a6",
+   "size": 8990,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/research.md",
+   "sha256": "f1b6fde6784037777fca08923782e8e348709c0c6a7aa0de1da9718686f0bdac",
+   "size": 36873,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/data-model.md",
+   "sha256": "837705fd1854a95cd205dee5b270cfba257d6ec868441175e382f87cb6fcc1ef",
+   "size": 7991,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/quickstart.md",
+   "sha256": "60c04d3fa6f4d04e77480736de2e69fd44aa9157f2c1570f21da55bef2fdc7e3",
+   "size": 2200,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/contracts/activity-fence.md",
+   "sha256": "5bdbc1b4d3e91efd9251c5d52a3dc817cb2059f1f865099a0c70c80bba079a53",
+   "size": 6323,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/checklists/release-gate.md",
+   "sha256": "b6f5dd7b8211dad4ca8a36dd7aae2332f151decdecc590033b70f81cb413aa08",
+   "size": 6696,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/plan-reviewer-003.result.md",
+   "sha256": "155a6d27598ecd4a51178956bd1ada58d9be18a481c3af3c480f7469fe7085fd",
+   "size": 17741,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/checklist-reviewer-001.result.md",
+   "sha256": "bfc0061d7be9fda76efadefad0c0369d2e91c4cc64280bbc7c6cccfeb1dcaaf3",
+   "size": 15833,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DECISION-FRONTIER.md",
+   "sha256": "95c58c9062e313bb310be031aae36acf94545c46dc4aff94f2f402f5553e68ea",
+   "size": 16578,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DELIVERY-MAP.md",
+   "sha256": "33a0556c26be29a1e4e4d1dd3350fd813f8f771e9df89aad8d817be2d2521b1c",
+   "size": 3518,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/assets/task-files.v1.template.md",
+   "sha256": "4961ec90bd4c31b09aaecd00ed14cf28a7caa927081cdf50110bcc6b5a380eee",
+   "size": 1175,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/references/agent-orchestration.md",
+   "sha256": "04b4533636117f26e6870bec6f43632bca8114d0bf1cc92911c15b5855ff7ed3",
+   "size": 3899,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".specify/templates/tasks-template.md",
+   "sha256": "fc29a233f6f5a27ca31f1aa46b596af6500c627441c6e62b2bc4a1d721525842",
+   "size": 9171,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".specify/memory/constitution.md",
+   "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+   "size": 4787,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "CLAUDE.md",
+   "sha256": "107f4273e63bca63d7e0f7a9c782e55de2d409d62be8e03c4c59779082ce1152",
+   "size": 17981,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/032-continuity-context/tasks.md",
+   "sha256": "84fd7c6723e50a6796af64596b568bd4aef74c727dfdae775d0c276d5f13fc2c",
+   "size": 48857,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+   "sha256": "00c1220ff3fd167149134792a16b9e35d0b2349b431f6e75e818bf3c54822389",
+   "size": 421550,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+   "sha256": "aad0a06e5d8d51c6f75e1126a09410e6fc67b65f72f48083e8731e6eeaca9b1b",
+   "size": 114088,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "tests/validate_agent_orchestration_contract.py",
+   "sha256": "56c3328eef1b84d83beef2262fa68d7669497c14621546e3e5eb25b2aacdb102",
+   "size": 238808,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "tests/validate_orchestrator_store_contract.py",
+   "sha256": "79f5f6280313b92c25e4f8f8c56aa93318b657deaaa3fa4919c8bf13a9f8647f",
+   "size": 157287,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "tests/validate_distribution.py",
+   "sha256": "57dc2450fb5bcba4e2df1ae41d3e10aac4878470808952e7d442053a0f36e018",
+   "size": 2908,
+   "media_type": "text/x-python"
+  }
+ ],
+ "required_activity_ids": [],
+ "author_activity_ids": [],
+ "task_binding": null,
+ "human_authorization": null
+}
