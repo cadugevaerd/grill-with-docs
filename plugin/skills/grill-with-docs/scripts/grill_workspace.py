@@ -4351,6 +4351,215 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
             "store_revision": committed.revision}, EXIT_OK
 
 
+_FENCE_HOPS = {("DISPATCHED", "REGISTERED"): 2, ("RESULT_RECORDED", "CLOSE_PENDING"): 1}
+
+
+def _fence_recorded(item: dict[str, Any], operation_id: str, activity_id: str, resource_id: str,
+                    session_ref: str) -> str:
+    """none | replay | resume | foreign | conflict -- how a recorded fence relates to this caller."""
+    operation = item.get("operations", {}).get(operation_id)
+    if operation is None:
+        return "none"
+    activity, resource = item.get("activities", {}).get(activity_id), item.get("resources", {}).get(resource_id)
+    if (operation.get("kind") != "activity-fence" or operation.get("state") != "CONFIRMED"
+            or operation.get("subject_ids") != [activity_id, resource_id]
+            or not isinstance(activity, dict) or activity.get("state") != "FAILED"
+            or activity.get("diagnostic_ref") != operation.get("result_ref")
+            or not isinstance(resource, dict) or resource.get("state") not in {"CLOSED", "CLOSE_PENDING"}):
+        return "conflict"
+    requester = operation.get("intended_after", {}).get("requester", {})
+    if requester.get("ref") != session_ref:
+        return "foreign"
+    return "replay" if resource["state"] == "CLOSED" else "resume"
+
+
+def _fence_conflict(item: dict[str, Any], activity_id: str, resource_id: str, operation_id: str, message: str) -> CliFailure:
+    return CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-CAS-CONFLICT", message, extra={
+        "activity_state": item.get("activities", {}).get(activity_id, {}).get("state"),
+        "resource_state": item.get("resources", {}).get(resource_id, {}).get("state"),
+        "operation_id": operation_id})
+
+
+def _fence_authorization(root: Path, args: argparse.Namespace, scope: str) -> dict[str, Any]:
+    """Every way the bundle can fail to authorize is one code (contract activity-fence)."""
+    attestation = grill_core_module("attestation")
+    if args.authorization is None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-AUTHORIZATION-INVALID", "--authorization is required")
+    try:
+        bundle = load_checkpoint_attestation(root, args.authorization)
+    except CliFailure as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-AUTHORIZATION-INVALID", error.message) from error
+    try:
+        attestation._validate_human_authorization(bundle, scope)
+    except attestation.AttestationError as error:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-AUTHORIZATION-INVALID", error.reason) from error
+    return bundle
+
+
+def _fence_observe(root: Path, runtime: str, ref: str | None, who: str) -> tuple[dict[str, Any], dict[str, Any], bool]:
+    """Observe one dispatch; returns (observation, evidence entry, live). Inconclusive raises UNPROVEN."""
+    observation, status, liveness = _takeover_observation(root, runtime, ref)  # type: ignore[arg-type]
+    if observation["verdict"] == "not_observable":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-NOT-OBSERVABLE", str(ref))
+    live = observation["verdict"] != "terminal"
+    if live and status not in {"dispatched", "running"}:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", f"FENCE-{who}-UNPROVEN", str(ref))
+    return observation, {"session_ref": ref, "observation_ref": observation["reference"],
+                         "observation_sha256": observation["digest"], "dispatch_status": status,
+                         "liveness": liveness, "verdict": "active" if live else "terminal"}, live
+
+
+def _fence_prove_requester(root: Path, work_id: str, context: dict[str, Any], session_ref: str, role: str) -> dict[str, Any]:
+    if role == "successor":
+        readiness = _session_readiness(root, context["runtime"], session_ref, work_id=work_id)
+        return {"role": role, "ref": readiness["ref"], "sha256": readiness["sha256"], "incarnation": readiness["incarnation"]}
+    _require_current_leader(root, work_id, context, session_ref)
+    leader = context["leader"]
+    return {"role": role, "ref": leader["session_ref"], "sha256": leader["observation_sha256"],
+            "incarnation": leader["incarnation"]}
+
+
+def gauntlet_activity_fence_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Fence an orphaned/retained specialist activity under exact human authorization.
+
+    Not @_gauntlet_authorized: in the orphan form the context leader is
+    terminal and require_authority would refuse first. Preview and apply run
+    the same checks in the same order (contract activity-fence).
+    """
+    root = project_root(args.root)
+    if not isinstance(args.session_ref, str) or not args.session_ref:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "gauntlet-activity-fence requires --session-ref")
+    store = grill_core_module("store")
+    snapshot = store.read_snapshot(root, required=True)
+    item = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
+    if not isinstance(item, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-MIGRATION-REQUIRED", args.work_id)
+    activity = item.get("activities", {}).get(args.activity_id)
+    if not isinstance(activity, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-ACTIVITY-NOT-FOUND", args.activity_id)
+    context_id, resource_id = activity["context_id"], activity["session_resource_id"]
+    context = item["contexts"][context_id]
+    resource = item.get("resources", {}).get(resource_id)
+    if not isinstance(resource, dict) or resource.get("kind") != "session":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-ACTIVITY-STATE", str(resource_id))
+    operation_id = "fence-" + hashlib.sha256(canonical({"context": context_id, "activity": args.activity_id})).hexdigest()[:24]
+    recorded = _fence_recorded(item, operation_id, args.activity_id, resource_id, args.session_ref)
+    if recorded == "conflict":
+        raise _fence_conflict(item, args.activity_id, resource_id, operation_id, "fence recorded under a different outcome")
+    base = {"work_id": args.work_id, "context_id": context_id, "activity_id": args.activity_id, "operation_id": operation_id,
+            "activity_state": "FAILED", "resource_state": "CLOSED"}
+    if recorded == "replay":
+        operation = item["operations"][operation_id]
+        return {"verdict": "FENCE-REUSED", **base, "evidence": operation["intended_after"]["evidence"],
+                "requester": operation["intended_after"]["requester"], "store_revision": snapshot.revision}, EXIT_OK
+    if recorded == "resume":
+        operation = item["operations"][operation_id]
+        intended = operation["intended_after"]
+        if not args.apply:
+            return {"verdict": "FENCE-PREVIEW", **base, "evidence": intended["evidence"], "requester": intended["requester"],
+                    "expected_sha256": operation["input_sha256"], "hops": 1, "resume": True}, EXIT_OK
+        if args.expected_sha256 != operation["input_sha256"]:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-INPUTS-STALE", "expected_sha256 does not match the recorded fence")
+        _fence_prove_requester(root, args.work_id, context, args.session_ref, intended["requester"]["role"])
+        return _fence_hop2(root, store, args, base, resource_id, operation_id, operation["input_sha256"], intended)
+    pair = (activity.get("state"), resource.get("state"))
+    if pair not in _FENCE_HOPS:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-ACTIVITY-STATE", f"{pair[0]}/{pair[1]}")
+    bundle = _fence_authorization(root, args, f"{args.work_id}:{context_id}:{args.activity_id}")
+    owner = resource.get("identity", {}).get("owner_dispatch")
+    specialist_ref = "orca:" + owner if isinstance(owner, str) else None
+    specialist, specialist_evidence, specialist_live = _fence_observe(root, context["runtime"], specialist_ref, "SPECIALIST")
+    if specialist_live:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-SPECIALIST-ACTIVE", str(specialist_ref))
+    leader_ref = context["leader"]["session_ref"]
+    leader, leader_evidence, leader_live = _fence_observe(root, context["runtime"], leader_ref, "LEADER")
+    if leader_live and args.session_ref != leader_ref:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-LEADER-ACTIVE", leader_ref)
+    requester = _fence_prove_requester(root, args.work_id, context, args.session_ref,
+                                       "current-leader" if leader_live else "successor")
+    evidence = {"specialist": specialist_evidence, "leader": leader_evidence}
+    expected = store.jcs_sha256({"work_id": args.work_id, "context_id": context_id, "activity_id": args.activity_id,
+        "activity_state": pair[0], "resource_id": resource_id, "resource_state": pair[1], "to_session_ref": args.session_ref,
+        "specialist": {"verdict": specialist_evidence["verdict"], "reference": specialist["reference"]},
+        "leader": {"verdict": leader_evidence["verdict"], "reference": leader["reference"]},
+        "authorization": {key: bundle.get(key) for key in ("scope", "decision", "authorized_by", "receipt_ref", "content_sha256")}})
+    hops = _FENCE_HOPS[pair]
+    if not args.apply:
+        return {"verdict": "FENCE-PREVIEW", **base, "evidence": evidence, "requester": requester,
+                "expected_sha256": expected, "hops": hops}, EXIT_OK
+    if args.expected_sha256 != expected:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "FENCE-INPUTS-STALE", "expected_sha256 does not match reread fence inputs")
+    result_ref = f"activity-fence/{operation_id}.json"
+    intended = {"reason": "activity-fence", "activity_state": "FAILED", "resource_state": "CLOSED", "evidence": evidence,
+                "requester": requester, "authorization": copy.deepcopy(bundle), "successor": "attempt-2-as-new-activity",
+                "applied_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    operation = {
+        "kind": "activity-fence", "context_id": context_id, "fence": context["leader"]["fence"],
+        "subject_ids": [args.activity_id, resource_id], "input_sha256": expected,
+        "expected_before": {"context_id": context_id, "activity_id": args.activity_id, "activity_state": pair[0],
+                            "resource_id": resource_id, "resource_state": pair[1]},
+        "intended_after": intended, "idempotency_key": operation_id, "state": "CONFIRMED", "result_ref": result_ref,
+        "result_sha256": store.jcs_sha256({"evidence": evidence, "requester": requester, "authorization": bundle}),
+        "observation_ref": result_ref, "error": None}
+    fence_receipt = {"ref": specialist_ref + ":fence", "sha256": specialist["digest"]}
+    def hop1(document: dict[str, Any]) -> dict[str, Any]:
+        if document["revision"] != snapshot.revision:
+            raise store.StoreError(store.STATE_DIVERGENCE, "fence inputs changed during observation")
+        target = document["agent_orchestration"]["work_items"][args.work_id]
+        current, held = target["activities"].get(args.activity_id), target["resources"].get(resource_id)
+        if (not isinstance(current, dict) or current.get("state") != pair[0] or current.get("session_resource_id") != resource_id
+                or not isinstance(held, dict) or held.get("state") != pair[1] or operation_id in target["operations"]):
+            raise store.StoreError(store.STATE_DIVERGENCE, "fence target changed")
+        target["operations"][operation_id] = copy.deepcopy(operation)
+        current.update({"state": "FAILED", "diagnostic_ref": result_ref})
+        receipts = held["evidence_manifest"]["receipts"]
+        if all(receipt["ref"] != fence_receipt["ref"] for receipt in receipts):
+            receipts.append(dict(fence_receipt))
+        held.update({"last_observation": fence_receipt["ref"], "operation_id": operation_id,
+                     "state": "CLOSE_PENDING" if pair[1] == "REGISTERED" else "CLOSED"})
+        return document
+    try:
+        committed = store.transact(root, hop1)
+    except store.StoreError as exc:
+        raise _fence_failure(root, store, args, resource_id, operation_id, exc) from exc
+    if hops == 1:
+        return {"verdict": "FENCE-APPLIED", **base, "evidence": evidence, "requester": requester,
+                "store_revision": committed.revision}, EXIT_OK
+    return _fence_hop2(root, store, args, base, resource_id, operation_id, expected, intended)
+
+
+def _fence_failure(root: Path, store: Any, args: argparse.Namespace, resource_id: str, operation_id: str, exc: Any) -> CliFailure:
+    fresh = store.read_snapshot(root, required=True).document["agent_orchestration"]["work_items"][args.work_id]
+    return _fence_conflict(fresh, args.activity_id, resource_id, operation_id, exc.message)
+
+
+def _fence_hop2(root: Path, store: Any, args: argparse.Namespace, base: dict[str, Any], resource_id: str, operation_id: str,
+                expected: str, intended: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    """Second hop: no revision guard (hop 1 stamped a new one), state guard only."""
+    def hop2(document: dict[str, Any]) -> dict[str, Any]:
+        target = document["agent_orchestration"]["work_items"][args.work_id]
+        operation = target["operations"].get(operation_id)
+        current, held = target["activities"].get(args.activity_id), target["resources"].get(resource_id)
+        if (not isinstance(operation, dict) or operation.get("state") != "CONFIRMED" or operation.get("kind") != "activity-fence"
+                or operation.get("input_sha256") != expected or not isinstance(current, dict) or current.get("state") != "FAILED"
+                or current.get("diagnostic_ref") != operation.get("result_ref") or not isinstance(held, dict)):
+            raise store.StoreError(store.STATE_DIVERGENCE, "fence target changed")
+        if held.get("state") != "CLOSE_PENDING":
+            raise store.StoreError(store.STATE_DIVERGENCE, "fence already completed")
+        held["state"] = "CLOSED"
+        return document
+    try:
+        committed = store.transact(root, hop2)
+    except store.StoreError as exc:
+        fresh = store.read_snapshot(root, required=True).document["agent_orchestration"]["work_items"][args.work_id]
+        if _fence_recorded(fresh, operation_id, args.activity_id, resource_id, args.session_ref) == "replay":
+            return {"verdict": "FENCE-REUSED", **base, "evidence": intended["evidence"], "requester": intended["requester"],
+                    "store_revision": store.read_snapshot(root, required=True).revision}, EXIT_OK
+        raise _fence_conflict(fresh, args.activity_id, resource_id, operation_id, exc.message) from exc
+    return {"verdict": "FENCE-APPLIED", **base, "evidence": intended["evidence"], "requester": intended["requester"],
+            "store_revision": committed.revision}, EXIT_OK
+
+
 @_gauntlet_authorized
 def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     activity_id = getattr(args, "activity_id", None)
@@ -7134,6 +7343,14 @@ def build_parser() -> JsonParser:
     context_takeover_parser.add_argument("--session-ref", required=True)
     context_takeover_parser.add_argument("--expected-sha256")
     context_takeover_parser.add_argument("--apply", action="store_true")
+    activity_fence_parser = subparsers.add_parser("gauntlet-activity-fence")
+    activity_fence_parser.add_argument("root")
+    activity_fence_parser.add_argument("--work-id", required=True)
+    activity_fence_parser.add_argument("--activity-id", required=True)
+    activity_fence_parser.add_argument("--session-ref", required=True)
+    activity_fence_parser.add_argument("--authorization", default=None)
+    activity_fence_parser.add_argument("--expected-sha256")
+    activity_fence_parser.add_argument("--apply", action="store_true")
     attest_parser = subparsers.add_parser("attest")
     attest_parser.add_argument("root")
     attest_parser.add_argument("--work-id", required=True)
@@ -7210,6 +7427,7 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-resume": gauntlet_resume_command,
             "gauntlet-prepare-switch": gauntlet_prepare_switch_command,
             "gauntlet-context-takeover": gauntlet_context_takeover_command,
+            "gauntlet-activity-fence": gauntlet_activity_fence_command,
             "gauntlet-prepare-worker": gauntlet_prepare_worker_command,
             "gauntlet-cleanup": gauntlet_cleanup_command,
             "partition-emit": partition_emit_command,
