@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.30
+
+- Fix: `gauntlet-context-takeover` herda workers já `PREPARED` depois de comprovar que o líder anterior terminou, eliminando o ciclo em que esses workers bloqueavam a tomada mas somente o líder encerrado podia avançá-los. Outros estados ativos, atividades e observações desconhecidas continuam bloqueando; a lista herdada integra o hash da prévia e os retornos de preview/apply.
+
 ## 6.0.29
 
 - Fix: `gauntlet-tasks-reconcile` resolve a proveniência por tarefa em rebases encadeados com origens mistas, sem exigir que o import ancestral de outra tarefa contenha o aceite corrente.
