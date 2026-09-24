@@ -2,7 +2,7 @@
 """Executable contract for pointing marketplace entries at a published release.
 
 Runs with no network, no credentials and no marketplace checkout, because it is
-collected by ``tests/run_validators.py`` on every supported OS and Python version.
+collected by the essential and full ``tests/run_validators.py`` suites.
 """
 from __future__ import annotations
 
