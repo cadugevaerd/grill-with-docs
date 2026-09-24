@@ -1,4 +1,4 @@
-# Protocolo de sessão v6.0.30
+# Protocolo de sessão v6.1.0
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -64,7 +64,7 @@ O líder invoca as onze skills canônicas na própria sessão com o contexto de 
 
 `gauntlet-activity` percorre `prepare → dispatch → accept`, usando `--work-id`, `--context-id`, `--epoch`, `--session-ref`, `--activity-id`, `--input-manifest` e `--kind author|reviewer|deterministic_check`. Use `--step STEP` no ciclo ou `--scope interview` na entrevista. A preparação só autoriza bootstrap neutro; o payload técnico só sai após observação correlacionada de identidade/modelo/esforço efetivos e capacidade de fechamento. Revalidar inputs/fence e efetivo no aceite; persistir resultado ou diagnóstico antes de fechar a sessão.
 
-Autor de todo COMO: Codex `gpt-6-astra/xhigh`, Claude `fable/xhigh`; revisor de julgamento: o mesmo modelo obrigatório do runtime, `high`, em sessão/incarnation distinta de todos os autores dos inputs correntes. Passes mistos são separados. `--author-activity` correlaciona autoria; `--files` repete por arquivo e reviewer não recebe escrita. Checks determinísticos são reproduzíveis e não produzem revisão de julgamento. Implementadores conservam o tier não-frontier e os verbos do scheduler.
+Autor de todo COMO: Codex família `astra` (slug mais recente do catálogo local, hoje `gpt-6-astra`) `/xhigh`, Claude `opus/xhigh`; revisor de julgamento: o mesmo modelo obrigatório do runtime, `high`, em sessão/incarnation distinta de todos os autores dos inputs correntes. Passes mistos são separados. `--author-activity` correlaciona autoria; `--files` repete por arquivo e reviewer não recebe escrita. Checks determinísticos são reproduzíveis e não produzem revisão de julgamento. Implementadores conservam o tier não-frontier e os verbos do scheduler.
 
 Plan frontend exige Impeccable observado, prévia HTML autocontida, capturas PNG e manifest; autor xhigh, revisor high e aprovação humana são fatos distintos. `gauntlet-preview` registra o visual; `gauntlet-preview-decide` registra `approved|rejected` com `--human-evidence` referente ao digest apresentado, em preview/apply com hash esperado. A flag sozinha não é aprovação. Aprovação pendente, negada ou stale bloqueia entrada em tasks e é rechecada no checkpoint/attest/partition. Sem frontend coerentemente classificado, `NOT_APPLICABLE`; não adicionar macroetapa.
 

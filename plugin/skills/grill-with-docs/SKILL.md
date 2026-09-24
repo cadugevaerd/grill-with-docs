@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v6.0.30
+# Grill with Docs v6.1.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -37,8 +37,10 @@ Carregue o [suplemento de orquestração](references/agent-orchestration.md), a 
 
 | Runtime | Recomendação da sessão principal | Autor de COMO | Revisor de julgamento |
 |---|---|---|---|
-| Codex | Sol | `gpt-6-astra`, `xhigh` | `gpt-6-astra`, `high` |
-| Claude Code | Opus | `fable`, `xhigh` | `fable`, `high` |
+| Codex | Sol | família `astra` (hoje `gpt-6-astra`), `xhigh` | família `astra`, `high` |
+| Claude Code | Opus | `opus`, `xhigh` | `opus`, `high` |
+
+No Codex o modelo é resolvido na hora do despacho: a família (de especialista ou de tier de worker) vira o slug de menor `priority` listado em `$CODEX_HOME/models_cache.json`, o catálogo local do próprio Codex. Catálogo ausente, ilegível ou sem slug da família recusa `TIER-MODEL-UNRESOLVED`, sem cair em slug antigo. No Claude o alias já acompanha a geração mais recente.
 
 A recomendação é apresentada em todo início/retomada, sem trocar modelo. Autoria inclui entrevista, plan, tasks, design e novas decisões de implementação; revisão inclui requisitos, planos, tarefas, visual, código e segurança. O revisor usa outra sessão/incarnation, distinta de todos os autores dos bytes revisados. Novo nome de atividade na mesma sessão não cria independência; checks determinísticos não são revisão. Workers de implementação mantêm o binding não-frontier por tier.
 

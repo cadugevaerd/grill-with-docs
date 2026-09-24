@@ -1,5 +1,12 @@
 # Changelog
 
+## 6.1.0
+
+- Feature: o GWD passa a escolher sozinho o modelo mais recente. No Codex, cada tier de worker (`workflow-tier-models.json`) e o par autor/revisor de especialista declaram uma **família** (`luna`, `terra`, `sol`, `astra`) em vez de um slug fixo; no despacho, `tier_models.resolve_codex_family` lê `$CODEX_HOME/models_cache.json` (o catálogo local que o próprio Codex mantém, sem rede e sem subprocesso) e escolhe o slug `gpt-<geração>-<família>` de menor `priority`. Hoje: `gpt-6-luna`, `gpt-5.6-terra` (ainda sem terra na geração 6), `gpt-6-sol` e `gpt-6-astra`; quando o Codex listar `gpt-7-*`, o GWD usa sem edição. O Codex não tem alias local (nome curto vai literal para a API), por isso a resolução é do core. Catálogo ausente, ilegível ou sem slug da família recusa `TIER-MODEL-UNRESOLVED` antes de qualquer worktree, nunca cai num slug antigo. O slug resolvido continua gravado no registro do worker.
+- Feature: o par especialista do Claude passa de `fable` para o alias `opus` (autor `xhigh`, revisor `high`), que acompanha a geração mais recente. `assets/agent-orchestration.v1.json` não muda: seus bytes são selados por work item (`policy_sha256`), e o gate lê o par do código.
+- Fix: a primeira campanha pode nascer num contexto sucessor pré-campanha. Um `gauntlet-context-takeover` feito antes de existir campanha grava `campaign_bridge=null`, e o checkpoint seguinte era recusado com `ORCHESTRATOR_INVALID: successor context has no campaign bridge`, sem verbo de saída. Sem campanha no predecessor não há o que ligar; sucessor de predecessor com campanha continua exigindo a ponte.
+- Test: as verificações de corpus do `validate_partition_contract.py` aceitam relatórios do contrato task-files v1 (`read_only_tasks` e nós sem flag `parallel`). Os testes fixam um catálogo Codex derivado da saída real do codex-cli 0.155.1 (`tests/fixtures/codex-home/`), então nunca dependem do `~/.codex` do host.
+
 ## 6.0.30
 
 - Fix: `gauntlet-context-takeover` herda workers já `PREPARED` depois de comprovar que o líder anterior terminou, eliminando o ciclo em que esses workers bloqueavam a tomada mas somente o líder encerrado podia avançá-los. Outros estados ativos, atividades e observações desconhecidas continuam bloqueando; a lista herdada integra o hash da prévia e os retornos de preview/apply.

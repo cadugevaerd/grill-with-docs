@@ -1,6 +1,6 @@
 # grill-with-docs
 
-**v6.0.30 · MIT**
+**v6.1.0 · MIT**
 
 Plugin de planejamento arquitetural e entrega **Delivery First**: entrevista decisões, mantém work items isolados, valida a Constituição e produz evidência auditável. O plugin é plan-only para feature/fix (`PLAN_ONLY_STOP`); hotfix/incident segue uma faixa rápida, explícita e fail-closed (`HOTFIX-GO`). Auditoria e reconciliação não substituem o ship externo.
 
@@ -56,7 +56,7 @@ O suplemento `grill-agent-orchestration/v1` define as seguintes obrigações. Es
 | 2. Escrita explícita | `Files:` JSON é a única autoridade do grant, incluindo raiz, novos arquivos e `./`; a prosa não concede escrita. `Result:` de tarefa despachável consta em Files; sem sidecar implícito. Declaração inválida bloqueia sem grant parcial. |
 | 3. Continuidade | Codex↔Claude na mesma worktree usa checkpoint coerente, quiescência observada e nova época via CAS. Preserva outputs/efeitos aceitos e repete somente tentativa não aceita; worker ativo ou efeito desconhecido bloqueia. |
 | 4. Orientação do líder | Início e retomada recomendam Sol/Opus conforme runtime; `active_model_changed=false`. Recomendação não altera configuração nem a seleção obrigatória dos especialistas. |
-| 5. Autoria técnica | Todo COMO, inclusive entrevista, plan, tasks e design, requer autor `gpt-6-astra/xhigh` no Codex ou `fable/xhigh` no Claude. Verificar identidade/modelo/esforço efetivos antes do payload; capacidade insuficiente bloqueia. |
+| 5. Autoria técnica | Todo COMO, inclusive entrevista, plan, tasks e design, requer autor da família `astra` (slug mais recente do catálogo local do Codex) `/xhigh` no Codex ou `opus/xhigh` no Claude. Verificar identidade/modelo/esforço efetivos antes do payload; capacidade insuficiente bloqueia. |
 | 6. Revisão independente | Todo julgamento de requisitos, plano, tasks, design, código ou segurança requer o mesmo modelo obrigatório do runtime com `high`, em sessão distinta de todos os autores dos bytes. Teste determinístico não substitui revisão. |
 | 7. Prévia frontend | Design ocorre dentro de plan, com Impeccable observado, HTML autocontido, capturas PNG, manifest e revisão independente. Tasks exige aprovação humana do digest atual; alteração invalida aprovação. Sem frontend coerentemente classificado: `NOT_APPLICABLE`. |
 | 8. Apresentação local | GWD carrega i-have-adhd por padrão em início/retomada nos dois CLIs, sem invocação manual, mantendo conteúdo completo, Ponytail e sessões externas. Instalação, habilitação, carga e comportamento são evidências distintas. |
