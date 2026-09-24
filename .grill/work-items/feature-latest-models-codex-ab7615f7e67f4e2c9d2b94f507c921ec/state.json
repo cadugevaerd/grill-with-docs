@@ -22,12 +22,19 @@
       "runtime": "codex"
     },
     "attested_executions": {
+      "analyze": "se-92ba2363695b0fde63b0d5763e0a644eedfef6a9f4430e7fbacd8e5e90a17f19",
       "checklist": "se-6b9a7202934276c66908ec2066ec95a570bfa47f4013b7cce086517d8a0304a8",
       "plan": "se-12ebc01b62acdaa5dad133875261caa3d6db2c495107686996d60301885f4e1f",
       "specify": "se-a59acdd25ab39378cb20e88a3e901eb46883fb8d9189728866aa5f4c2c27bb0d",
       "tasks": "se-14a37abc9c6a0a1f7c27df809d52d04a9fd92b28a35d76369992297d9ed5eb4f"
     },
     "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:32bcbe459aa5f4f6b36037eab5fb1e21afea1291f52b6cd78153d716c8e1b8cb",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "step_id": "analyze"
+      },
       "checklist": {
         "output_sha256": "sha256:9e827946a53e8be3adc3d6bf77d091deb4eaa76804d423dab9d495374c1402ff",
         "provenance": "current-generation",
@@ -143,9 +150,28 @@
         "reason": "",
         "state": "complete",
         "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/analyze-reviewer-result.md",
+            "sha256": "32bcbe459aa5f4f6b36037eab5fb1e21afea1291f52b6cd78153d716c8e1b8cb"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
       }
     ],
-    "current_step": "analyze",
+    "current_step": "partition",
     "execution_branch": "cadugevaerd/fix-latest-models",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -163,7 +189,7 @@
       "ship"
     ],
     "steps": {
-      "analyze": "pending",
+      "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",

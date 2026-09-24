@@ -1,0 +1,29 @@
+# Analyze reviewer — canonical read-only skill
+
+Invoke `.agents/skills/speckit-analyze/SKILL.md` on the accepted `spec.md`, `plan.md`, `tasks.md`. Run the prerequisite command exactly; inspect all 20 sealed context files or relevant portions, map every FR-001..013 and buildable SC-001..009 to tasks, assess duplications/ambiguities/inconsistencies and constitution MUSTs. Include stable findings, coverage table, metrics, severity and next actions. Decide `APPROVED` only if no critical/high actionable finding blocks implementation; otherwise `CHANGES_REQUIRED`.
+
+STRICTLY READ-ONLY: do not write any file anywhere or commit, launch workers or advance stages. The skill says report in output, so send your complete Markdown analysis report as an Orca `status` message addressed to the coordinator before `worker_done` (include task/dispatch IDs), and provide a 3-sentence worker_done summary with verdict. The coordinator alone will copy the report body byte-for-byte to `.grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/analyze-reviewer-result.md` for core acceptance. Do not use a report-path that you did not create. No need to ask the human whether to remediate: the authorized v4 cycle already requires resolving blocking findings, and the coordinator will decide the next step.
+
+Pay special attention to a possible circularity: current v1 campaign uses frozen CLI for gates while candidate source introduces v2, and implementation tasks must remain completable before converge/verify/review/ship. If relevant, cite exact lines. The accepted tasks reviewer report and continuity proof are inputs, not substitutes for your analysis.
+
+Sealed context files:
+- `goal.md` (sha256 `af97e2899ddd6668c5fc80eef153cd94b7d88ea92235650370572770e5b291d1`)
+- `CLAUDE.md` (sha256 `107f4273e63bca63d7e0f7a9c782e55de2d409d62be8e03c4c59779082ce1152`)
+- `.specify/memory/constitution.md` (sha256 `54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569`)
+- `.specify/extensions.yml` (sha256 `fb23337f023f64ea78f064abfcf5afa9689f717428e5807e0b3ae77824cc694b`)
+- `.agents/skills/speckit-analyze/SKILL.md` (sha256 `a84a54c4701706a711bf23c59817bc659bd6e484488fd7402a908496992af217`)
+- `plugin/skills/grill-with-docs/assets/agent-orchestration.v1.json` (sha256 `c30b3cecf9c5cc4949c8c3d14eca050608d773f4ffa690fc2c9e72e7a95a3553`)
+- `plugin/skills/grill-with-docs/references/agent-orchestration.md` (sha256 `04b4533636117f26e6870bec6f43632bca8114d0bf1cc92911c15b5855ff7ed3`)
+- `specs/033-latest-models/spec.md` (sha256 `96033b87503c3db544d33913baaf81df7b6e262fde3f2be8f5a8d625825a9fee`)
+- `specs/033-latest-models/plan.md` (sha256 `bee1724dfd5c56441faf3d23d3d4a9dd953294d585c63caa7e4abf6763fe4e7c`)
+- `specs/033-latest-models/tasks.md` (sha256 `f70639d839803532422ba28979f8a4475fda225f268c03da6d1f01bca40006a8`)
+- `specs/033-latest-models/research.md` (sha256 `0edb58f17683142c41a786e7c30030170558ce4edeada094975cf613e1b07f8d`)
+- `specs/033-latest-models/data-model.md` (sha256 `14a8f0d7e61d584d6b7e84f7ece0136ba9b7ea1d1ec332fc6ffb6845ea3b3e96`)
+- `specs/033-latest-models/quickstart.md` (sha256 `e62784abbd507c7056045c4d9dfdb7b97e8a0a7edf9460b0ec23991f290bab7a`)
+- `specs/033-latest-models/contracts/model-selection.md` (sha256 `480f57a4f353a2dd574f538957b6b740deae808d11446054aad1b2b8fa6732e3`)
+- `specs/033-latest-models/checklists/orchestration.md` (sha256 `9e827946a53e8be3adc3d6bf77d091deb4eaa76804d423dab9d495374c1402ff`)
+- `.grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/tasks-author-result.md` (sha256 `bb52f9d51089a5b28fa5f334cc93f9e49bcffde43cc0f15f3ef052c6fca7112b`)
+- `.grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/tasks-reviewer-result.md` (sha256 `cd512b393e265e1a873de3e25782158a9a33dc7941766b0e4409b27c9f5c85e4`)
+- `.grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/continuity-bundle-proof.json` (sha256 `89f6ede5fd321c1fe901271386458ba6fda452661a3758db4d2cedea0b4817fc`)
+- `.grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/docs/adr/ADR-0001.md` (sha256 `d52fcc97e32192015aef21fef662f12862edcfd942e2341fc88acd2fcf67bd2e`)
+- `.grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/docs/adr/ADR-0002.md` (sha256 `d688e624871463f1ee4fbda6402c3b33dcededebea3b9a53c2a0f6f8d6718142`)
