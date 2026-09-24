@@ -22,12 +22,19 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "analyze": "se-1904aa9a89fb990bb3f27d1204c97e921593dbf672800578f2b7b95d15f83dc0",
       "checklist": "se-1156e1ab07e910ead8890b8011bc876f048c7ab9b354586484211a146d3e264f",
       "plan": "se-8d05e1f914c0ee79dd71246b3b2a236df13ca7be6c838821ec9caa782b491685",
       "specify": "se-9266a8dccfb19b1f2b821c7a80fdef8051ede658d8496f561931e5b78f28136e",
       "tasks": "se-f258c4e11e54f077152a58c6ed2984759874ab0a305fe54eabba3286beaacfc5"
     },
     "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:90ffc97b2e57dce7dd5e89528f1c0ed566821742abe6587deb1fd5279d0792ef",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "step_id": "analyze"
+      },
       "checklist": {
         "output_sha256": "sha256:b6f5dd7b8211dad4ca8a36dd7aae2332f151decdecc590033b70f81cb413aa08",
         "provenance": "current-generation",
@@ -129,9 +136,28 @@
         "reason": "",
         "state": "complete",
         "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/034-fence-autorizado-atividade/analysis.md",
+            "sha256": "90ffc97b2e57dce7dd5e89528f1c0ed566821742abe6587deb1fd5279d0792ef"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
       }
     ],
-    "current_step": "analyze",
+    "current_step": "partition",
     "execution_branch": "cadugevaerd/fix-leader",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -149,7 +175,7 @@
       "ship"
     ],
     "steps": {
-      "analyze": "pending",
+      "analyze": "complete",
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
