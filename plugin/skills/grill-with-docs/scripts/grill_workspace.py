@@ -1340,6 +1340,74 @@ def _with_coordinator_response(payload: dict[str, Any], runtime: str) -> dict[st
     return {**payload, **_coordinator_response(runtime)}
 
 
+def require_openrouter_key() -> None:
+    """The GWD decides through Jev; without the key the workflow cannot run."""
+    jev = grill_core_module("jev")
+    try:
+        jev.require_key()
+    except jev.JevError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.detail) from exc
+
+
+def decide_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Answer one typed workflow decision through Jev.
+
+    Read-only except for ``step-assessment --apply``, which writes the same
+    ``step-inputs/<step>.json`` the agent would otherwise write by hand, and
+    only when Jev cleared the confidence threshold on every question.
+    """
+    jev = grill_core_module("jev")
+    root = project_root(args.root)
+    refs: list[dict[str, str]] = []
+    texts: dict[str, str] = {}
+    for relative in args.file or []:
+        data = safe_read_regular_fd(root, root / relative)
+        refs.append({"path": Path(relative).as_posix(), "sha256": hash_bytes(data)})
+        texts[Path(relative).as_posix()] = data.decode("utf-8", errors="replace")
+    state: dict[str, Any] = {"files": texts}
+    if args.step:
+        state["step"] = args.step
+    if args.context:
+        state["context"] = json.loads(safe_read_regular_fd(root, root / args.context).decode("utf-8"))
+    items: list[str] = []
+    policy: dict[str, Any] | None = None
+    if args.kind == "step-assessment":
+        if not args.step or not args.work_id or not WORK_ID_RE.fullmatch(args.work_id) or not refs:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS",
+                             "step-assessment needs --work-id, --step and --file")
+        policy = json.loads(_policy_path(root, args.work_id).read_bytes())
+        items = list(policy.get("review_risks", []))
+    elif args.kind == "dq-batch":
+        candidates = state.get("context", {}).get("candidates") if isinstance(state.get("context"), dict) else None
+        items = list(candidates) if isinstance(candidates, dict) else []
+    elif args.kind == "spec-coverage":
+        items = jev.requirements("".join(t for p, t in texts.items() if p.endswith("spec.md")))
+    try:
+        decision = jev.decide(args.kind, state, items, jev.Transport())
+    except jev.JevError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.detail) from exc
+    payload = {"schema": "grill-decision/v1", "verdict": "OK", **decision, "files": refs, "written": None}
+    if args.kind == "step-assessment" and decision["decided_by"] == "jev" and args.apply:
+        confidence = ", ".join(f"{k}={v:.2f}" for k, v in sorted(decision["confidence"].items()))
+        assessment = {
+            "schema": "grill-step-assessment/v1", "step": args.step,
+            "new_how": decision["result"]["new_how"], "risks": decision["result"]["risks"],
+            "justification": f"decided_by=jev model={decision['model']} confidence: {confidence}",
+            "files": refs,
+        }
+        try:
+            grill_core_module("agent_orchestration").validate_step_assessment(assessment, policy, args.step)
+        except grill_core_module("agent_orchestration").OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-INVALID", str(exc)) from exc
+        reference = f".grill/work-items/{args.work_id}/step-inputs/{args.step}.json"
+        if not (root / ".grill/work-items" / args.work_id).is_dir():
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORK-ITEM-MISSING", args.work_id)
+        data = (json.dumps(assessment, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        atomic_write(root, root / reference, data)
+        payload["written"] = reference
+    return payload, EXIT_OK
+
+
 def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Report and optionally repair the environment without creating a work item."""
     root = project_root(args.root)
@@ -1362,6 +1430,10 @@ def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         payload["verdict"], payload["code"] = "BLOCKED", exc.code
         if exc.extra and isinstance(exc.extra.get("presentation"), dict):
             payload["presentation"] = exc.extra["presentation"]
+    try:
+        require_openrouter_key()
+    except CliFailure as exc:
+        payload["verdict"], payload["code"] = "BLOCKED", exc.code
     return _with_coordinator_response(payload, args.runtime), EXIT_OK if payload["verdict"] == "OK" else EXIT_BLOCKED
 
 
@@ -2097,6 +2169,7 @@ def init_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     work_id = args.work_id or f"{args.type}-{args.slug}-{uuid.uuid4().hex}"
     if not WORK_ID_RE.fullmatch(work_id):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", work_id)
+    require_openrouter_key()
     readiness = _session_readiness(root, args.runtime, args.session_ref, work_id=work_id)
     workflow = ensure_project_workflow(root)
     goal = ensure_project_goal(root)
@@ -7141,6 +7214,16 @@ def build_parser() -> JsonParser:
     triage_parser.add_argument("--rollback")
     triage_parser.add_argument("--triage-id", dest="triage_id")
     triage_parser.add_argument("--apply", action="store_true")
+    # No `choices=` on --kind, same reason as --route: jev answers with
+    # JEV-KIND-UNKNOWN instead of argparse's INVALID-ARGUMENTS.
+    decide_parser = subparsers.add_parser("decide")
+    decide_parser.add_argument("root")
+    decide_parser.add_argument("--kind", required=True)
+    decide_parser.add_argument("--file", action="append")
+    decide_parser.add_argument("--context")
+    decide_parser.add_argument("--work-id", dest="work_id")
+    decide_parser.add_argument("--step")
+    decide_parser.add_argument("--apply", action="store_true")
     backlog_parser = subparsers.add_parser("backlog-sync")
     backlog_parser.add_argument("root")
     backlog_parser.add_argument("--work-id", required=True)
@@ -7542,6 +7625,7 @@ def main(argv: list[str] | None = None) -> int:
             "status": status_command,
             "preflight": preflight_command,
             "triage": triage_command,
+            "decide": decide_command,
             "backlog-sync": backlog_sync_command,
             "backlog-adopt": backlog_adopt_command,
             "backlog-project": backlog_project_command,

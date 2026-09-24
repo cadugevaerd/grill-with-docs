@@ -1,5 +1,12 @@
 # Changelog
 
+## 8.0.0
+
+- Feature: decisões tipadas via Jev (TypeSafe) no OpenRouter. O novo subcomando `decide ROOT --kind K` responde, numa única chamada de 70–500 ms a `typesafe/jev-1.13` (`POST /api/alpha/decisions`), as perguntas estreitas que antes custavam um turno de LLM: `step-assessment` (grava `step-inputs/<step>.json` com `--apply` e, portanto, decide se reviewer/autor extra são exigidos), `triage` (rota e severidade), `dq-batch` (até três DQs materiais), `partition-groups` e `spec-coverage` (NO-GO antecipado por FR/SC). As perguntas vivem em `assets/jev-questions.json`. Todas acima do limiar → `decided_by: jev`; qualquer uma abaixo → `decided_by: agent` e o agente decide como antes.
+- Breaking: `OPENROUTER_API_KEY` passa a ser obrigatória. `init` recusa com `OPENROUTER-KEY-REQUIRED` e `preflight` reporta `BLOCKED`, sem depender de `--require-dependencies` nem de `GRILL_SKIP_DEPENDENCIES`. Só a presença é verificada; o valor nunca é gravado nem ecoado.
+- Fail-closed: `OPENROUTER-KEY-INVALID` (401), `OPENROUTER-CREDIT-EXHAUSTED` (402), `JEV-UNAVAILABLE` (rede, timeout, 5xx, JSON inválido), `JEV-RESPONSE-INVALID` (resposta fora do formato pedido), `JEV-STATE-TOO-LARGE`.
+- Test: `validate_jev_contract.py` sem rede; o formato é fixado pelo exemplo da OpenAPI do OpenRouter (`tests/fixtures/jev/openapi-example.json`). O runner injeta uma chave placeholder porque os validadores só verificam presença.
+
 ## 7.1.0
 
 - Feature: o GWD passa a escolher sozinho o modelo mais recente. No Codex, cada tier de worker (`workflow-tier-models.json`) e o par autor/revisor de especialista declaram uma **família** (`luna`, `terra`, `sol`, `astra`) em vez de um slug fixo; no despacho, `tier_models.resolve_codex_family` lê `$CODEX_HOME/models_cache.json` (o catálogo local que o próprio Codex mantém, sem rede e sem subprocesso) e escolhe o slug `gpt-<geração>-<família>` de menor `priority`. Hoje: `gpt-6-luna`, `gpt-5.6-terra` (ainda sem terra na geração 6), `gpt-6-sol` e `gpt-6-astra`; quando o Codex listar `gpt-7-*`, o GWD usa sem edição. O Codex não tem alias local (nome curto vai literal para a API), por isso a resolução é do core. Catálogo ausente, ilegível ou sem slug da família recusa `TIER-MODEL-UNRESOLVED` antes de qualquer worktree, nunca cai num slug antigo. O slug resolvido continua gravado no registro do worker.

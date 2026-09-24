@@ -92,6 +92,17 @@ Bundle criado antes da projeção tem registro **autoral**, detectado pela ausê
 
 `WORK-ITEM.json` registra metadata imutável e hash canônico: `work_id`, tipo, slug, branch, HEAD, base ref/commit, Constituição e workflow. Escopo, dependências e conflitos ADR permanecem declarados em campos próprios para reconciliação.
 
+## Decisões via Jev (OpenRouter)
+
+`OPENROUTER_API_KEY` é obrigatória para o fluxo: `init` recusa com `OPENROUTER-KEY-REQUIRED` (exit 2) e `preflight` reporta `BLOCKED` com o mesmo código, independentemente de `--require-dependencies` e de `GRILL_SKIP_DEPENDENCIES`. Só a presença é verificada; o valor nunca é gravado, logado nem ecoado.
+
+```bash
+python3 .../grill_workspace.py decide ROOT --kind step-assessment|triage|dq-batch|partition-groups|spec-coverage \
+  [--file PATH]... [--context JSON] [--work-id ID --step STEP --apply]
+```
+
+Uma requisição por decisão a `typesafe/jev-1.13` (`POST https://openrouter.ai/api/alpha/decisions`), com as perguntas de `assets/jev-questions.json`. Todas as perguntas acima do limiar do kind → `decided_by: jev` e `result`; qualquer uma abaixo → `decided_by: agent`, `result: null` e `hint`, e o agente decide pelo caminho anterior. `step-assessment --apply` grava `step-inputs/<step>.json` validado por `validate_step_assessment`; os demais kinds só imprimem. `dq-batch` lê `context.candidates` (`{id: texto}`); `spec-coverage` extrai `FR-`/`SC-` de `spec.md` entre os `--file` e só antecipa NO-GO. Falhas são fail-closed: `OPENROUTER-KEY-INVALID`, `OPENROUTER-CREDIT-EXHAUSTED`, `JEV-UNAVAILABLE`, `JEV-RESPONSE-INVALID`, `JEV-STATE-TOO-LARGE`. É a única chamada de rede do core; nada é baixado.
+
 ## Entradas da entrevista
 
 Defina `WORK_ITEM=.grill/work-items/<work-id>`. As oito entradas decisórias são:

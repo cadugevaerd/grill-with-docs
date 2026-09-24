@@ -1,6 +1,6 @@
 # grill-with-docs
 
-**v7.1.0 · MIT**
+**v8.0.0 · MIT**
 
 Workflow v5: duas revisões fixas (plan/review), exceções de risco verificadas por etapa,
 dois grupos de workers e entrevista em lotes de até três perguntas independentes.
@@ -47,6 +47,8 @@ python3 "$CORE" status "$PWD" --format markdown
 O formato padrão é JSON. O Markdown é a resposta humana canônica: `all good` quando não há pendências ou a tabela estável de work items pendentes, reproduzida integralmente.
 
 `init` exige `--runtime claude|codex` e `--session-ref REF`; uma string inventada não comprova a sessão. Ele preserva o bootstrap de WORKFLOW/Constituição e o vínculo com backlog existente, reconhecido em todas as worktrees registradas. `--skip-backlog` mantém seu carimbo auditável. `--allow-install` autoriza somente a instalação delegada pelas superfícies proprietárias; o core nunca baixa bytes. As dependências anteriormente consultivas mantêm sua semântica e `--require-dependencies`; o requisito de apresentação abaixo é obrigatório no fluxo novo, mesmo sem essa flag. `GRILL_SKIP_DEPENDENCIES=1` não satisfaz esse requisito.
+
+`OPENROUTER_API_KEY` é obrigatória: `init` e `preflight` recusam com `OPENROUTER-KEY-REQUIRED` sem ela. O subcomando `decide` responde decisões estreitas do fluxo (classificação de risco por etapa, rota da triagem, lote de DQs, `--groups` do partition, cobertura da spec) com o modelo de decisão tipada `typesafe/jev-1.13` pela Decisions API do OpenRouter, em vez de gastar um turno de LLM. Abaixo do limiar de confiança o agente decide como antes; falha da API é fail-closed. É a única chamada de rede do core.
 
 **Limitação atual:** na fonte `5bc9500e6fff10fce5353f758fdc334e490a3523`, `init` e `gauntlet-orchestration-adopt` podem criar contexto `ACTIVE` com uma string `session_ref`, sem observação de sessão correlacionada e sem `presentation`. O guard de autoridade compara contexto/época/estado e igualdade da string; sem apresentação, o guard retorna `{"legacy": true, "work_ready": true}`. Sucesso de init/adopt, contexto ACTIVE e esse fallback não provam a sessão nem a apresentação obrigatória. O bootstrap acima é obrigação normativa, ainda não garantida por esses handlers: manter trabalho dependente bloqueado até remediação delimitada do core e revalidação, pré-condições dos aceites funcionais posteriores.
 

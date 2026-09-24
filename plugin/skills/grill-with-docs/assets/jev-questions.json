@@ -1,0 +1,95 @@
+{
+  "schema": "grill-jev-questions/v1",
+  "endpoint": "https://openrouter.ai/api/alpha/decisions",
+  "model": "typesafe/jev-1.13",
+  "kinds": {
+    "step-assessment": {
+      "threshold": 0.85,
+      "questions": {
+        "new_how": {
+          "type": "noul",
+          "instructions": "Does the Spec Kit step `step` introduce a new decision about HOW the system is built, one not already settled by the approved artifacts in `files`?",
+          "criteria": {
+            "true": "The step makes a new design, architecture or implementation-approach decision.",
+            "false": "The step only applies, refines or executes decisions already present in the artifacts."
+          }
+        }
+      },
+      "per_item": {
+        "prefix": "risk_",
+        "type": "noul",
+        "instructions": "Does the work in `files` for step `step` materially touch the review risk '{item}'?",
+        "criteria": {
+          "true": "The change affects '{item}' in a way a reviewer must check.",
+          "false": "The change does not touch '{item}', or only mentions it without changing it."
+        }
+      }
+    },
+    "triage": {
+      "threshold": 0.8,
+      "questions": {
+        "route": {
+          "type": "choice",
+          "instructions": "Given the root-cause report in `files`, which delivery route fits the problem?",
+          "criteria": {
+            "hotfix": "Production is impacted now and the fix is a contained change with a rollback.",
+            "bugfix": "The behavior deviates from a requirement already written in an existing spec.",
+            "feature": "The problem is missing functionality that no existing spec promises.",
+            "module": "The problem needs a new self-contained module or subsystem."
+          }
+        },
+        "severity": {
+          "type": "choice",
+          "instructions": "How severe is the problem described in `files`?",
+          "criteria": {
+            "critical": "Data loss, security exposure or production down.",
+            "high": "Main flow broken for many users, no workaround.",
+            "medium": "Degraded behavior with a workaround.",
+            "low": "Cosmetic or minor inconvenience."
+          }
+        }
+      }
+    },
+    "partition-groups": {
+      "threshold": 0.7,
+      "questions": {
+        "groups": {
+          "type": "choice",
+          "instructions": "Given the task list in `files`, how many parallel worker groups give the best speedup without workers colliding on the same files?",
+          "criteria": {
+            "1": "Tasks are mostly sequential or share most files.",
+            "2": "Two clearly independent streams of work.",
+            "3": "Three or more independent streams of moderate size.",
+            "4": "Many small file-disjoint tasks."
+          }
+        }
+      }
+    },
+    "dq-batch": {
+      "threshold": 0.75,
+      "questions": {},
+      "per_item": {
+        "prefix": "dq_",
+        "type": "noul",
+        "instructions": "Is the candidate decision question '{item}' in `context.candidates` material right now, meaning the answer changes what gets built given `files`?",
+        "criteria": {
+          "true": "The answer changes scope, architecture or acceptance and is not already settled.",
+          "false": "Already answered by the artifacts, or its answer changes nothing material."
+        }
+      }
+    },
+    "spec-coverage": {
+      "threshold": 0.85,
+      "questions": {},
+      "per_item": {
+        "prefix": "req_",
+        "type": "noul",
+        "instructions": "Is requirement {item} of the spec in `files` fully implemented by the changed files also present in `files`?",
+        "criteria": {
+          "true": "The changed files implement every clause of {item}.",
+          "false": "{item} is missing, partial or contradicted by the changed files."
+        }
+      }
+    }
+  }
+}

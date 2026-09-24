@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -41,6 +42,11 @@ ESSENTIAL = (
 )
 
 
+# init refuses without OPENROUTER_API_KEY; validators only check presence and
+# never reach the network, so a placeholder keeps every init-based test honest.
+ENV = {**os.environ, "OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY") or "test-placeholder-not-a-key"}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--suite", choices=("full", "essential", "portability"), default="full")
@@ -60,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     for validator, tests in checks:
         print(f"==> {validator.name}", flush=True)
         check_started = perf_counter()
-        result = subprocess.run([sys.executable, str(validator), *tests], cwd=ROOT.parent)
+        result = subprocess.run([sys.executable, str(validator), *tests], cwd=ROOT.parent, env=ENV)
         print(f"<== {validator.name}: {perf_counter() - check_started:.1f}s", flush=True)
         if result.returncode:
             print(f"Suite duration: {perf_counter() - started:.1f}s", flush=True)
