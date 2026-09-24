@@ -1,5 +1,9 @@
 # Changelog
 
+## 6.0.27
+
+- Fix: limita a revalidação de workers locais do run ancestral aos nós solicitados pelo rebase, sem confundir sidecars de execução posterior com evidência importada.
+
 ## 6.0.26
 
 - Fix: inclui no rebase tarefas de workers locais `CLEANED` do source run, reutilizando a validação completa de sidecars, receipts, wave e cleanup.

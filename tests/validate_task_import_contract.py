@@ -360,6 +360,23 @@ class TaskImportContract(unittest.TestCase):
             apply=True, expected_sha256=preview['expected_sha256'])
         self.assertEqual(applied['verdict'], 'APPLIED')
 
+    def test_nested_rebase_ignores_unrequested_local_worker_sidecars(self):
+        self.complete_import_sources()
+        source_run, source_commit = self.sources['T011'], self.git('rev-parse', 'HEAD')
+        text = (self.root / self.tasks_ref).read_text()
+        text += (f'## Phase 5: New work\n- [ ] T012 New\n'
+                 f'  Files: ["new.py", "{self.result("T012")}"]\n'
+                 f'  Result: "{self.result("T012")}"\n')
+        self.write(self.tasks_ref, text)
+        target_dag, _ = partition.partition_task_files(text, feature='demo', groups=2, root=self.root)
+        target_ref = 'specs/demo/execution-dag.r4.json'
+        self.write(target_ref, json.dumps(target_dag))
+        unrelated = self.root / self.result('T011')
+        unrelated.write_bytes(unrelated.read_bytes() + b' ')
+        preview = runs.rebase_task_results(self.root, WORK, self.target, target_ref, source_run,
+            self.dag_ref, ['T007', 'T008', 'T009'], self.admission, source_commit=source_commit)
+        self.assertEqual(set(preview['import']['tasks']), {'T007', 'T008', 'T009'})
+
     def test_6020_import_projects_canonical_bindings_without_rewriting_receipts(self):
         _, applied = self.apply()
         imported = copy.deepcopy(applied['import'])
