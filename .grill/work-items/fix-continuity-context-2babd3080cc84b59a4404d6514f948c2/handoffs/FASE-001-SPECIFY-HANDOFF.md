@@ -1,7 +1,7 @@
 # FASE-001 — Continuidade de contexto sem líder vivo
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: contexto de orquestração, observação de líder, dispatch terminal, tomada de contexto, troca preparada, checkpoint de continuidade
 - ADRs: ADR-0001, ADR-0002

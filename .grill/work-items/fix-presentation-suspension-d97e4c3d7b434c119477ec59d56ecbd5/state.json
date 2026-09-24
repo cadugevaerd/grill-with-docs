@@ -12,8 +12,108 @@
     "state": "present"
   },
   "development": {
-    "audit": [],
-    "current_step": "specify",
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-7eb05409f50f3ee14aae492f89b5ca4f6c1700f8798c47cdec919452ab69abee",
+      "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+      "run_id": "leader-fix-presentation-suspension-d97e4c3d7b434c119477ec59d56ecbd5",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "checklist": "se-01b2f61cfbc3fa7dd0f80aeb0b3273561b6363ef6bda85fa01a87dfc93478843",
+      "plan": "se-f0d41c1064cc16f4ec149c9c547e597a20c833c9b1375691e2943a87ad7f716d",
+      "specify": "se-196bd5f1ad3f688b1a8f1115b54bafde41f1a223f362847a3a97484258ad0009"
+    },
+    "attested_outputs": {
+      "checklist": {
+        "output_sha256": "sha256:686b3d4a71def2d1f0c1a9f6b3a03782009e3cc014548b04cfafe9c3f111dd9b",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
+      "plan": {
+        "output_sha256": "sha256:f2a60ba87959e841277782d12d1685cdc78d56d9210e9f20d3ebbbd0fa0ab844",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
+      "specify": {
+        "output_sha256": "sha256:0c7d3be6a2e73e53584c64c4b9a38bc5c0fb7c79057c145124e2f0d2081c133e",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "step_id": "specify"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-specify com handoffs/FASE-001-SPECIFY-HANDOFF.md",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/033-presentation-suspension/spec.md",
+            "sha256": "0c7d3be6a2e73e53584c64c4b9a38bc5c0fb7c79057c145124e2f0d2081c133e"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "spec r2 apos revisao independente (ctx_bb9b9de2ada8) com C1/I1-I4/M1-M9 aplicados",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "plan: autor fable xhigh via Orca, invocacao /speckit-plan",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/033-presentation-suspension/plan.md",
+            "sha256": "f2a60ba87959e841277782d12d1685cdc78d56d9210e9f20d3ebbbd0fa0ab844"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "plan r3: autor fable xhigh, revisoes independentes R1 e R2 (fable high) aplicadas; R2 aprova condicionado a I1/I2, conferidos",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-checklist",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/033-presentation-suspension/checklists/suspension.md",
+            "sha256": "686b3d4a71def2d1f0c1a9f6b3a03782009e3cc014548b04cfafe9c3f111dd9b"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "26 itens, todos passam na spec r2; nenhum gap exige alterar a spec",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-tasks; autor fable xhigh",
+        "state": "in-progress",
+        "step": "tasks"
+      }
+    ],
+    "current_step": "tasks",
+    "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
     "sequence": [
@@ -31,15 +131,15 @@
     ],
     "steps": {
       "analyze": "pending",
-      "checklist": "pending",
+      "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
-      "plan": "pending",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
-      "tasks": "pending",
+      "specify": "complete",
+      "tasks": "in-progress",
       "verify": "pending"
     },
     "workflow_version": "v4"

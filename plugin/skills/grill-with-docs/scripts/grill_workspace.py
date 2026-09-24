@@ -3465,13 +3465,9 @@ def _gauntlet_authorized(handler: Callable[[argparse.Namespace], tuple[dict[str,
             if any(context["presentation"].get(key) != readiness["presentation"].get(key)
                    for key in ("session_identity", "runtime", "scope", "policy_sha256")):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STYLE-SCOPE-CONFLICT", "presentation authority, scope or policy changed")
-            # Configuration/version changes require a fresh full read, not a
-            # new leader context. Keep the existing CAS and append-only Store.
-            if (any(context["presentation"].get(key) != readiness["presentation"].get(key)
-                    for key in ("config_fingerprint", "gwd_skill_sha256"))
-                    and not readiness["presentation"]["use_ready"]):
-                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STYLE-LOAD-UNCONFIRMED", "presentation upgrade requires a fresh full read",
-                                 extra={"presentation": readiness["presentation"]})
+            # Configuration/version changes refresh the context in place. An
+            # active session without a fresh full read was already refused by
+            # _session_readiness; a valid suspension keeps working (ADR-0003).
             if context["presentation"] != readiness["presentation"]:
                 def refresh(document: dict[str, Any]) -> dict[str, Any]:
                     target = document["agent_orchestration"]["work_items"][args.work_id]

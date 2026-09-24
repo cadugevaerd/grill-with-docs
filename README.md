@@ -1,6 +1,6 @@
 # grill-with-docs
 
-**v6.0.30 · MIT**
+**v6.0.31 · MIT**
 
 Plugin de planejamento arquitetural e entrega **Delivery First**: entrevista decisões, mantém work items isolados, valida a Constituição e produz evidência auditável. O plugin é plan-only para feature/fix (`PLAN_ONLY_STOP`); hotfix/incident segue uma faixa rápida, explícita e fail-closed (`HOTFIX-GO`). Auditoria e reconciliação não substituem o ship externo.
 
@@ -69,7 +69,7 @@ Ponytail >=4.9.0 mantém a política de implementação. `i-have-adhd@i-have-adh
 
 O bootstrap resolve a instalação selecionada pelo harness, confirma habilitação/confiança, lê integralmente o SKILL.md aprovado apontado por `presentation.load_request` e correlaciona o evento à sessão, geração, configuração e root. `STYLE-LOAD-UNCONFIRMED` com pedido de carga íntegro indica o próximo passo do bootstrap; depois da leitura observada, revalidar a entrada. Se o binário ou adapter não oferecer essa continuação, diagnosticar o impedimento e bloquear trabalho dependente; não fabricar loaded. `use_ready=true` permite aplicação ativa, mas não prova `functional_verified`.
 
-Compactação ativa exige recarga corrente. `stop adhd mode` suspende somente a apresentação na mesma sessão/incarnation/escopo: revalidar fonte humana e pré-requisitos, permitir `work_ready=true` sem reinjeção, com `use_ready=false` e `functional_verified=false`. Nova sessão, inclusive especialista ou destino de retomada, inicia ativa com carga própria. Saída explícita do GWD produz `out_of_scope` e preserva o padrão externo. O limite de apresentação nunca omite requisitos, achados, arquivos, checks ou conteúdo solicitado; artefatos mantêm seus formatos integrais.
+Compactação ativa exige recarga corrente. `stop adhd mode`, dito como conteúdo único de uma mensagem de usuário da própria sessão (fonte não-agente; num despacho Orca pode ser o coordenador), suspende somente a apresentação na mesma sessão/incarnation/escopo: pré-requisitos revalidados, `work_ready=true` sem reinjeção, `use_ready=false` e `functional_verified=false`, inclusive após compactação, upgrade ou mudança de configuração. `start adhd mode`, nas mesmas condições, reativa e exige nova leitura integral posterior à frase. Nova sessão, inclusive especialista ou destino de retomada, inicia ativa com carga própria. Saída explícita do GWD produz `out_of_scope` e preserva o padrão externo. O limite de apresentação nunca omite requisitos, achados, arquivos, checks ou conteúdo solicitado; artefatos mantêm seus formatos integrais.
 
 A GWD lê a referência; não auto-invoca a skill upstream nem executa seu hook. Não cria `.i-have-adhd-always`, instrução global ou override de diretório de configuração. Consumidores não recebem edição automática de AGENTS/CLAUDE; neste repositório há apenas a instrução local de bootstrap. Aprovação válida já concedida não é pedida novamente sem mudança real; disabled ou conflito novo requer diagnóstico específico e controle nativo autorizado, sem reinstalar para sobrepor a escolha.
 

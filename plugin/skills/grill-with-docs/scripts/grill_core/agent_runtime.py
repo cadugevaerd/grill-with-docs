@@ -1104,6 +1104,35 @@ def _full_read(observed: dict[str, Any], transcript: dict[str, Any], request: di
     return None
 
 
+def _presentation_control(messages: list[Any]) -> tuple[int, int, dict[str, Any] | None]:
+    """Indexes of the last `stop adhd mode` and `start adhd mode` typed by the session user.
+
+    Only a user message whose whole content is the phrase counts; agent turns,
+    compaction summaries and synthetic turns are already `system` after
+    normalization, so they never suspend or reactivate. The compaction cut does
+    not apply here: a suspension outlives compaction in the same session.
+    """
+    stop = start = -1
+    control = None
+    for index, message in enumerate(messages):
+        if not isinstance(message, dict) or message.get("role") != "user":
+            continue
+        blocks = message.get("blocks")
+        if not (isinstance(message.get("id"), str) and message["id"]
+                and isinstance(blocks, list) and len(blocks) == 1 and isinstance(blocks[0], dict)
+                and blocks[0].get("type") == "text" and isinstance(blocks[0].get("text"), str)):
+            continue
+        phrase = blocks[0]["text"].strip()
+        if phrase == "stop adhd mode":
+            stop = index
+        elif phrase == "start adhd mode":
+            start = index
+        else:
+            continue
+        control = message
+    return stop, start, control
+
+
 def project_leader_presentation(value: Any, *, policy: dict[str, Any], policy_sha256: str,
                                 gwd_skill_sha256: str, runtime: str,
                                 scope: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1120,10 +1149,25 @@ def project_leader_presentation(value: Any, *, policy: dict[str, Any], policy_sh
         runtime=runtime, session_identity=leader_session_identity(observed), scope=scope,
         config_fingerprint=fingerprint,
         installation=axes.get("installation"), enablement=axes.get("enablement"), trust=axes.get("trust"))
-    presentation = presentation_state(**kwargs)
-    loading = _full_read(observed, transcript, presentation["load_request"])
-    if loading:
-        presentation = presentation_state(**kwargs, loading=loading)
+    messages = transcript.get("messages", [])
+    stop, start, control = _presentation_control(messages)
+    if stop > start:
+        # Suspended: no reload. The record is rebuilt on every observation, so
+        # a configuration upgrade keeps the suspension bound to the new config.
+        suspension = {"command": "stop adhd mode", "source_ref": observed["source_ref"] + ":" + control["id"],
+                      "source_sha256": _sha256(control["blocks"][0]["text"].encode()),
+                      "session_identity": kwargs["session_identity"], "config_fingerprint": fingerprint,
+                      "scope": scope}
+        presentation = presentation_state(**kwargs, application="suspended_by_user",
+                                          loading={"stale": True}, suspension=suspension)
+    else:
+        if start > stop >= 0:
+            # Reactivated: only a full read after `start adhd mode` counts.
+            transcript = {**transcript, "messages": messages[start + 1:]}
+        presentation = presentation_state(**kwargs)
+        loading = _full_read(observed, transcript, presentation["load_request"])
+        if loading:
+            presentation = presentation_state(**kwargs, loading=loading)
     if value.observe() != observed:
         _fail("LEADER-AUTHORITY-UNPROVEN")
     return observed, presentation
