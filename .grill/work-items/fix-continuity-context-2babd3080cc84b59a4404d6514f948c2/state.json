@@ -24,14 +24,14 @@
     "attested_executions": {
       "analyze": "se-196ab078abaa5484aeeb128524e505bd43e5b22da469bfc4fa6d08756db84fd7",
       "checklist": "se-200f8523aef027ad424fea76587c40b04bc22570883470a24a574eb1a25c6818",
-      "converge": "se-e6b8fb29311f168cb0daa14fe7dfcbcf70c22413e373305b52e7c20636855d7b",
+      "converge": "se-60a262b1ee3781fe21c9b4ba125aef1e12f597140c331e07e64e728fdec3f188",
       "implement-parallel": "se-0b78c9693d00388a97011d5f9b7cbcc81580c1cb29f9cc9fe3e327ec23f697bb",
       "partition": "se-04adb98823b3ba4bf25b7bb5facb3e35d60f6b5ab70605aaec094128e478b5fe",
       "plan": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d",
-      "review": "se-cd23c2e30f24e394b43c151ee79e49e67b4eb670a1397da65c24572aebaef69e",
+      "review": "se-850211c1abe182bcb42ba9b34b4fc71aaa1ed03ba368522db2b4be85309cc2ba",
       "specify": "se-060353aca85c47d984308a2bfb142fd1f520e65acabe2ff3aba597106604e47a",
       "tasks": "se-a7ab93f07b33ace8bcb5b3a0a2f7be0fd89990622ade7c18c5a4a96caf8d11ab",
-      "verify": "se-9dbe2858808764b386316ae3118dc4ea48ac4b4852e262cf4736bedf5ca428a5"
+      "verify": "se-ddeb02ba4a752ae0d22abcf6d0d628af481e67d2ca3070df251a880f13df1689"
     },
     "attested_outputs": {
       "analyze": {
@@ -47,9 +47,9 @@
         "step_id": "checklist"
       },
       "converge": {
-        "output_sha256": "sha256:469be8e66f896e99b9934b1e74125ff7f455770770db0172b9c4cdff3a5a4f00",
+        "output_sha256": "sha256:08cc990a2d3f24b1819be2b90e30f11082370fd14aa2dd1881dbb7b3a2e03ee4",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/converge-converge-17.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/converge-converge-18.terminal.json",
         "step_id": "converge"
       },
       "implement-parallel": {
@@ -73,7 +73,7 @@
       "review": {
         "output_sha256": "sha256:6ae2af2fa24c485d3df19bafb83946178e1fcf2ef5635f7b0f87f36cd8c6fcab",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/review-review-2.terminal.json",
         "step_id": "review"
       },
       "specify": {
@@ -89,9 +89,9 @@
         "step_id": "tasks"
       },
       "verify": {
-        "output_sha256": "sha256:7decec1bf5ff0c4c6d2ebeb71f8dbf99ddadd1029b8d730220c721e33062678b",
+        "output_sha256": "sha256:871b4e6f6f14fbecd6cdf7c751853b4ca9fa07a99e3277270d6135bdcdc439fb",
         "provenance": "current-generation",
-        "receipt_ref": "receipts/skill-invocation/verify-verify-12.terminal.json",
+        "receipt_ref": "receipts/skill-invocation/verify-verify-13.terminal.json",
         "step_id": "verify"
       }
     },
@@ -1026,6 +1026,53 @@
         "reason": "R12 independente APPROVE; ressalvas r1/r2 da R11 fechadas",
         "state": "complete",
         "step": "review"
+      },
+      {
+        "chain_stale": [
+          "verify",
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/converge.md",
+            "sha256": "08cc990a2d3f24b1819be2b90e30f11082370fd14aa2dd1881dbb7b3a2e03ee4"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "rodada 25: quinta integracao (6.0.27) durante o ship, sem conflito de codigo",
+        "state": "complete",
+        "step": "converge",
+        "supersedes": ".grill/attestations/032-converge-r17.json"
+      },
+      {
+        "chain_stale": [
+          "review"
+        ],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/verify.md",
+            "sha256": "871b4e6f6f14fbecd6cdf7c751853b4ca9fa07a99e3277270d6135bdcdc439fb"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "rodada 13: PASS sobre 6.0.28, 1536 testes",
+        "state": "complete",
+        "step": "verify",
+        "supersedes": ".grill/attestations/032-verify-r12.json"
+      },
+      {
+        "chain_stale": [],
+        "evidence": [
+          {
+            "path": "specs/032-continuity-context/review.md",
+            "sha256": "6ae2af2fa24c485d3df19bafb83946178e1fcf2ef5635f7b0f87f36cd8c6fcab"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "R12 inalterado; re-atestado apos a quinta integracao, que nao toca a superficie revisada",
+        "state": "complete",
+        "step": "review",
+        "supersedes": ".grill/attestations/032-review.json"
       }
     ],
     "chain_stale": [],
@@ -1252,6 +1299,18 @@
           "step_execution_id": "se-c8bf47720550a7d8b4da85ab425176364958d9ef4d1541ed192d1eed361fa280",
           "step_id": "converge",
           "superseded_by_step_execution_id": "se-e6b8fb29311f168cb0daa14fe7dfcbcf70c22413e373305b52e7c20636855d7b"
+        },
+        {
+          "attempt_id": "converge-17",
+          "attestation": ".grill/attestations/032-converge-r17.json",
+          "execution_round": 17,
+          "output_sha256": "sha256:469be8e66f896e99b9934b1e74125ff7f455770770db0172b9c4cdff3a5a4f00",
+          "provenance": "current-generation",
+          "reason": "rodada 25: quinta integracao (6.0.27) durante o ship, sem conflito de codigo",
+          "receipt_ref": "receipts/skill-invocation/converge-converge-17.terminal.json",
+          "step_execution_id": "se-e6b8fb29311f168cb0daa14fe7dfcbcf70c22413e373305b52e7c20636855d7b",
+          "step_id": "converge",
+          "superseded_by_step_execution_id": "se-60a262b1ee3781fe21c9b4ba125aef1e12f597140c331e07e64e728fdec3f188"
         }
       ],
       "implement-parallel": [
@@ -1464,6 +1523,20 @@
           "superseded_by_step_execution_id": "se-821a6cdeaca9add6d4768300aae2a8a6af6e3897b5b827f7b16a74edbc629d9d"
         }
       ],
+      "review": [
+        {
+          "attempt_id": "review-1",
+          "attestation": ".grill/attestations/032-review.json",
+          "execution_round": 1,
+          "output_sha256": "sha256:6ae2af2fa24c485d3df19bafb83946178e1fcf2ef5635f7b0f87f36cd8c6fcab",
+          "provenance": "current-generation",
+          "reason": "R12 inalterado; re-atestado apos a quinta integracao, que nao toca a superficie revisada",
+          "receipt_ref": "receipts/skill-invocation/review-review-1.terminal.json",
+          "step_execution_id": "se-cd23c2e30f24e394b43c151ee79e49e67b4eb670a1397da65c24572aebaef69e",
+          "step_id": "review",
+          "superseded_by_step_execution_id": "se-850211c1abe182bcb42ba9b34b4fc71aaa1ed03ba368522db2b4be85309cc2ba"
+        }
+      ],
       "specify": [
         {
           "attempt_id": "specify-1",
@@ -1610,6 +1683,18 @@
           "step_execution_id": "se-f6bff9438be7ea3220888a055ab0119c6d92357b498fd243187c85c601286112",
           "step_id": "verify",
           "superseded_by_step_execution_id": "se-9dbe2858808764b386316ae3118dc4ea48ac4b4852e262cf4736bedf5ca428a5"
+        },
+        {
+          "attempt_id": "verify-12",
+          "attestation": ".grill/attestations/032-verify-r12.json",
+          "execution_round": 12,
+          "output_sha256": "sha256:7decec1bf5ff0c4c6d2ebeb71f8dbf99ddadd1029b8d730220c721e33062678b",
+          "provenance": "current-generation",
+          "reason": "rodada 13: PASS sobre 6.0.28, 1536 testes",
+          "receipt_ref": "receipts/skill-invocation/verify-verify-12.terminal.json",
+          "step_execution_id": "se-9dbe2858808764b386316ae3118dc4ea48ac4b4852e262cf4736bedf5ca428a5",
+          "step_id": "verify",
+          "superseded_by_step_execution_id": "se-ddeb02ba4a752ae0d22abcf6d0d628af481e67d2ca3070df251a880f13df1689"
         }
       ]
     },
