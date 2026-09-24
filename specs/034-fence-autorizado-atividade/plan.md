@@ -22,7 +22,7 @@ Uma atividade de especialista `DISPATCHED` cujo dispatch terminou sem gravar res
 
 **Project Type**: plugin CLI / biblioteca do core GWD
 
-**Performance Goals**: duas observações do host por fence (especialista e líder) mais uma de readiness quando o líder terminou; nenhuma leitura no caminho quente de outros verbos
+**Performance Goals**: duas observações do host por fence (especialista e líder) mais uma de readiness quando o líder terminou; a retomada faz só a prova do solicitante e o replay não observa; nenhuma leitura no caminho quente de outros verbos
 
 **Constraints**: fail-closed; ausência, silêncio, expiry e observação inconclusiva nunca autorizam; prévia não escreve; toda recusa deixa o Store bit a bit igual; nada muda em Constituição, WORKFLOW, `ESSENTIAL`, registries, `attestation.py`, `agent_runtime.py` nem na policy `agent-orchestration.v1.json`
 
@@ -36,7 +36,7 @@ Constituição 2.1.0, sha256 `54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b
 
 | Cláusula | Situação | Evidência |
 |---|---|---|
-| Evidência antes de afirmação | PASS | leituras literais do Store do X7 (DQ-0001, DQ-0005); estado vivo de `interview-author-001` do work item de origem (DQ-0007); 23 arquivos (`plan-author-001`) e 30 arquivos (`plan-author-002`) do input manifest conferidos por sha256; toda citação file:line deste plano reconferida no HEAD `ad42a65` (código idêntico ao `39380f7` pelos sha256 do manifest; `plan-reviewer-001` reconferiu em `4cad807`) |
+| Evidência antes de afirmação | PASS | leituras literais do Store do X7 (DQ-0001, DQ-0005); estado vivo de `interview-author-001` do work item de origem (DQ-0007); 23 arquivos (`plan-author-001`), 30 arquivos (`plan-author-002`) e 32 arquivos (`plan-author-003`) do input manifest conferidos por sha256; toda citação file:line deste plano reconferida no HEAD `2fc26a0` (código idêntico ao `39380f7` pelos sha256 do manifest; `plan-reviewer-001` reconferiu em `4cad807` e `plan-reviewer-002` em `0eadd3a`) |
 | Work item isolado e ownership | PASS | bundle `fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24`, tipo fix, branch `cadugevaerd/fix-leader`, contexto `ctx-146fb68d0d6e` |
 | Feature/fix plan-only | PASS | este plano não altera produto; mudanças só em `implement-parallel`, por worker; o ciclo termina em `PLAN_ONLY_STOP` |
 | Sequência obrigatória | PASS | specify aceito (`specify-reviewer-001` e `specify-reviewer-002` APPROVED); plan em andamento |
@@ -76,7 +76,7 @@ tests/validate_orchestrator_store_contract.py                              # loc
 
 # Fase 2 — nó B: verbo, parser e testes de contrato
 plugin/skills/grill-with-docs/scripts/grill_workspace.py                   # gauntlet_activity_fence_command + parser + tabela de dispatch
-tests/validate_agent_orchestration_contract.py                             # test_activity_fence (n1..n9, p1..p5)
+tests/validate_agent_orchestration_contract.py                             # test_activity_fence (n1..n10, p1..p5)
 
 # Fase 2 — nó C: documentação e distribuição (independente do nó B)
 plugin/skills/grill-with-docs/references/session-protocol.md              # heading v6.0.31 (1) + parágrafo do verbo (85-89)

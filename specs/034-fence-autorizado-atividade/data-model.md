@@ -45,7 +45,7 @@ Nenhuma chave nova no schema do Store. Muda um literal de aresta (`agent_orchest
 
 `evidence` = `{"specialist": {"session_ref": "orca:<owner_dispatch>", "observation_ref", "observation_sha256", "dispatch_status", "liveness", "verdict": "terminal"}, "leader": {"session_ref": <context.leader.session_ref>, "observation_ref", "observation_sha256", "dispatch_status", "liveness", "verdict": "terminal" | "active"}}` (campos de 4195-4196 por observação).
 
-`requester` = `{"role": "successor", "ref", "sha256", "incarnation"}` (de `_session_readiness`, 1654-1655) ou `{"role": "current-leader", "ref", "sha256", "incarnation"}` (de `context["leader"]`, provados por `_require_current_leader`, 1658-1670).
+`requester` = `{"role": "successor", "ref", "sha256", "incarnation"}` (de `_session_readiness`, 1654-1655) ou `{"role": "current-leader", "ref", "sha256", "incarnation"}` (de `context["leader"]`, provados por `_require_current_leader`, 1658-1671).
 
 ## Autorização humana exata (lida; forma existente `attestation.py:191-193`)
 
@@ -81,7 +81,7 @@ Nenhuma chave nova no schema do Store. Muda um literal de aresta (`agent_orchest
 
 - Forma órfã: `(DISPATCHED, REGISTERED)` → salto 1 → `(FAILED, CLOSE_PENDING)` + operação `CONFIRMED` → salto 2 → `(FAILED, CLOSED)`.
 - Forma retida: `(RESULT_RECORDED, CLOSE_PENDING)` → salto 1 → `(FAILED, CLOSED)` + operação `CONFIRMED`.
-- Qualquer recusa → nenhum byte escrito (prévia e apply), com uma exceção: `FENCE-CAS-CONFLICT` depois do salto 1 gravado carrega `activity_state`, `resource_state` e `operation_id`, e a saída é a retomada (R7).
+- Toda recusa escreve zero bytes (prévia e apply); `FENCE-CAS-CONFLICT` pós-salto 1 reporta em `activity_state`/`resource_state`/`operation_id` o efeito já aplicado pelo salto 1 (próprio ou do solicitante vencedor), e a saída é a retomada (R7).
 - Replay sobre `(FAILED, CLOSED)` com a operação presente e o mesmo solicitante (`session_ref == intended_after.requester.ref`) → `FENCE-REUSED`, nenhum byte escrito; outro solicitante → `FENCE-ACTIVITY-STATE`, nenhum byte escrito.
-- Retomada sobre `(FAILED, CLOSE_PENDING)` com a operação presente e o mesmo solicitante → só o salto 2; outro solicitante → `FENCE-ACTIVITY-STATE`.
+- Retomada sobre `(FAILED, CLOSE_PENDING)` com a operação presente e o mesmo solicitante → prova do solicitante reexecutada conforme `intended_after.requester.role` (`successor` → readiness; `current-leader` → reobservação estrita), depois só o salto 2; prova recusada → nenhum byte escrito; outro solicitante → `FENCE-ACTIVITY-STATE`.
 - Depois: `_continuity_quiescence` não lista a atividade (3664, 3668); `gauntlet-context-takeover` admite; `gauntlet-activity --phase accept` recusa `ACTIVITY-STATE-DIVERGENCE` (6074-6075); `gauntlet-cleanup` do contexto vivo reporta o recurso como `SESSION-CLOSE-UNPROVEN` sem bloquear nada (DQ-0014 A).
