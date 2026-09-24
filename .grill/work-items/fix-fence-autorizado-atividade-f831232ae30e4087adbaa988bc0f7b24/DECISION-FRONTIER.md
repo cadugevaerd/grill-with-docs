@@ -154,4 +154,16 @@
 - resolution: decisão do coordenador sob o goal (opção A; o humano pode reverter, afeta só a FASE-002 pós-ship): só fence + marcação `superseded` no bundle de origem. O contexto `ctx-0c0155ef5a94` (líder `orca:ctx_ad48e72ddf4c`, terminal) fica `ACTIVE` no Store com líder terminal, como qualquer work item abandonado. Sem takeover ad hoc nem sucessor vazio.
 - evidence: DQ proposta A de `interview-author-001` (agent-orchestration/activities/interview-author-001.result.md, seção "DQs propostas"): a marcação `superseded` é edição do bundle e não passa pelo Store; takeover só é exigido por verbos `@_gauntlet_authorized`; nenhum verbo público encerra contexto sem sucessor.
 
+## DQ-0013 — O `content_sha256` da autorização humana do fence é validado só na forma, ou a prévia publica um digest de conteúdo que o apply exige?
+- phase: FASE-001
+- fingerprint: fence-authorization-content-binding
+- impact: low
+- state: resolved
+- context-refs: fence autorizado, autorização humana exata
+- artifacts: specs/034-fence-autorizado-atividade/research.md, specs/034-fence-autorizado-atividade/contracts/activity-fence.md
+- depends-on: DQ-0006
+- final-ref: R-0012
+- resolution: decisão do coordenador sob o goal (opção A; o humano pode reverter): nesta versão `content_sha256` de `human-authorization/v1` é validado só na forma, como no precedente `gauntlet-run-abandon` fixado pela DQ-0006. O escopo exato `work_id:context_id:activity_id` continua obrigatório. A amarração do conteúdo às observações da prévia fica como endurecimento aditivo em SGD-40, com gatilho.
+- evidence: DQ proposta DQ-P1 de `plan-author-001` (agent-orchestration/activities/plan-author-001.result.md; `specs/034-fence-autorizado-atividade/research.md`, seção "DQs propostas"); FR-003 da spec fala de escopo exato, não de conteúdo; item SGD-40 aberto no backlog `SGD`.
+
 > Estados: open | resolved | deferred | split | blocked | out-of-scope. Não duplique fingerprints abertos.
