@@ -1,0 +1,170 @@
+{
+ "files": [
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/CONTEXT.md",
+   "sha256": "2a9da36a0315bb99abcb8b1abff1a087f545de642a3a840ea181544ed8c051ab",
+   "size": 3673,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/docs/adr/ADR-0001.md",
+   "sha256": "7b5202641b791eae61bed7ea0d61a950e02ab7015c0cca1c62992fb7180f59c1",
+   "size": 7768,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/ROADMAP.md",
+   "sha256": "f2cf16bed213705e4a44a243c7eab74617a671bb23dade134d73c1cec000229b",
+   "size": 2736,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+   "sha256": "f0ae2bbb7e1e72e30366dd67aaf9297d26081ea5a9321a46bd457e0c73a947fa",
+   "size": 5426,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/PLAN-CONTEXT.md",
+   "sha256": "8a84f9a72942860910e297acc25bac07f738614806af14cd2f7c8d9577f6c76a",
+   "size": 12399,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/DELIVERY-MAP.md",
+   "sha256": "3307c9e65b8f3a8fcd4e6a54f88057b01a53f436bddd4638f3bf06e4340bb6f9",
+   "size": 1921,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/DECISION-FRONTIER.md",
+   "sha256": "8959f95d6b150cd23031d839fde5760ff2e908add55b7c7ee97505bbd5c43e8f",
+   "size": 11665,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/ROUND-LOG.jsonl",
+   "sha256": "3a76ae249a2d5fe2bcf548a6227e00e812f0d38aba12086b03e23267c45efad5",
+   "size": 3874,
+   "media_type": "application/x-ndjson"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/DECISION-BACKLOG.md",
+   "sha256": "0ead85c254fb8b2c6a817a2cebaad3594fe88019041c904ec9176af012f806ab",
+   "size": 362,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/CONSTITUTION-CHECK.md",
+   "sha256": "a6c53666bdd7328a46246cf47c8c92e654110cb89b1d23b8f8d2d2cdaa7ef308",
+   "size": 6315,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/agent-orchestration/activities/interview-reviewer-001.result.md",
+   "sha256": "2b5a62b0aac8c5afb85dc6445e7e156d00f1db08cec8c52c39a8c64051c44872",
+   "size": 15418,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/CONTEXT.md",
+   "sha256": "046a1d433eab29a57783aae06ea414afc271d25bcc7372290ccde7f00fd97ee7",
+   "size": 285,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/ROADMAP.md",
+   "sha256": "9c68e05c6993da8b319d96716b6d9fc90329af9876fdc74699eca4ee8b556734",
+   "size": 1039,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+   "sha256": "3cfe46ee546a9c46cf78fd7bf59ca897df07d24431a46ab4b61bf147fe919a58",
+   "size": 652,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/PLAN-CONTEXT.md",
+   "sha256": "9f43372c57b4ab07edece509be37d7ea7204ccf5300a984e2cc69a6216d82ded",
+   "size": 409,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DELIVERY-MAP.md",
+   "sha256": "26ce55d35ddb5c916fb1101e760320e51e5b57b205a924e67cbac6a720808d17",
+   "size": 640,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DECISION-FRONTIER.md",
+   "sha256": "3b129d57ccac57b1af5096e1639df58a20190abcef54382e0d948d778b44e0d6",
+   "size": 391,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DECISION-BACKLOG.md",
+   "sha256": "0ead85c254fb8b2c6a817a2cebaad3594fe88019041c904ec9176af012f806ab",
+   "size": 362,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/CONSTITUTION-CHECK.md",
+   "sha256": "70982f65169d6155e958ce6e8f7479ff88cff948d5f70133ccf1d91354ae7ea2",
+   "size": 2219,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".specify/memory/constitution.md",
+   "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+   "size": 4787,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "CLAUDE.md",
+   "sha256": "107f4273e63bca63d7e0f7a9c782e55de2d409d62be8e03c4c59779082ce1152",
+   "size": 17981,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/references/session-protocol.md",
+   "sha256": "03f59061b8e7c9bbca9516989442fc93d43bf0c1d5f2e8a67edd6120421691fd",
+   "size": 33178,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+   "sha256": "00c1220ff3fd167149134792a16b9e35d0b2349b431f6e75e818bf3c54822389",
+   "size": 421550,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+   "sha256": "aad0a06e5d8d51c6f75e1126a09410e6fc67b65f72f48083e8731e6eeaca9b1b",
+   "size": 114088,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+   "sha256": "2b5e43c77526423ef3b54bf28e98492fab92a800faf617175c4e2c690afd1bfa",
+   "size": 85382,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+   "sha256": "7d552a787206d184ad9ed15b00fa5dc8739e0b8cf53a617a76ac6684282bc401",
+   "size": 67651,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/audit_decisions.py",
+   "sha256": "e6b54186975bd14699ba9a9df633e9abcc824c9c2f74d09924a8285e7f205cf3",
+   "size": 45583,
+   "media_type": "text/x-python"
+  }
+ ],
+ "required_activity_ids": [],
+ "author_activity_ids": [],
+ "task_binding": null,
+ "human_authorization": null
+}
