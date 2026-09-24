@@ -3,7 +3,7 @@
 - execution-order: FASE-001
 
 ## FASE-001 — Continuidade de contexto sem líder vivo
-- state: ready-for-specify
+- state: complete
 - objetivo: uma sessão nova consegue retomar um work item cujo líder está comprovadamente terminal, e a troca ordenada é possível desde o `init`, sem afrouxar o fail-closed
 - scope-in: tomada de contexto com prova do adapter; `gauntlet-prepare-switch` sem checkpoint anterior; paridade do preview do `gauntlet-orchestration-adopt` com o apply; renomeação dos campos de hash do checkpoint em schema novo
 - scope-out: comparar digests reais de WORKFLOW e Constituição na retomada (BL-0001); observação de compactação e suspensão (work item fix-presentation-suspension); líder que nunca foi dispatch observável
