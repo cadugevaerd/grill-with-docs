@@ -1305,3 +1305,9 @@ Suíte na árvore mesclada: 31 validadores, **1534** testes, 0 falhas (skipped=1
 ## Próxima ação
 
 `verify` rodada 12 e fechamento do `review`.
+
+# Rodada 25 — 2026-09-23, quinta integração durante o ship
+
+A transação de ship da 6.0.25 encontrou a `main` em 6.0.27 (`657e2ba`, 3 commits de rebase aninhado em `gauntlet_runs.py`/`validate_task_import_contract.py`) e foi abortada sem publicar. Integrada no merge desta rodada, sem conflito de código: as mudanças entrantes ficam em `verified_task_import`, `import_task_results`, `_accepted_source_tasks` e `_task_rebase_inputs`, sem interseção com os fluxos da 032 nem com `_read_runs`/`cleanup_projection`. Versão sobe para 6.0.28.
+
+Suíte: 31 validadores, **1536** testes, 0 falhas. Achados: missing 0 · partial 0 · contradicts 0 · unrequested 0. Status: **CONVERGED**. O R12 continua aplicável: nada do que entrou toca a superfície revisada.

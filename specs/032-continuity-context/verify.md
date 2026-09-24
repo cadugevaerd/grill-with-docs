@@ -74,3 +74,13 @@ Nenhum.
 ### Next Action
 
 PASS: fechar `review` e aguardar autorização humana de `ship`.
+
+# Rodada 13 — 2026-09-23, sobre a quinta integração (6.0.28)
+
+| Gate | Comando | Resultado | Evidência |
+|---|---|---|---|
+| Testes | `python3 tests/run_validators.py` | **PASS** | exit 0 — 31 validadores, **1536** testes, 0 falhas (skipped=1) |
+| Contrato de distribuição | `python3 tests/validate_distribution.py` | **PASS** | oito pontos em 6.0.28 |
+| Bump de versão | comparação com `origin/main` | **PASS** | `main` em 6.0.27, HEAD em **6.0.28**, 0 commits atrás |
+
+Quarta colisão de versão: a `main` publicou 6.0.25–6.0.27 durante a transação de ship. Next Action: PASS, repetir a transação de ship.
