@@ -103,6 +103,13 @@
         "reason": "26 itens, todos passam na spec r2; nenhum gap exige alterar a spec",
         "state": "complete",
         "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-tasks; autor fable xhigh",
+        "state": "in-progress",
+        "step": "tasks"
       }
     ],
     "current_step": "tasks",
@@ -132,7 +139,7 @@
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
-      "tasks": "pending",
+      "tasks": "in-progress",
       "verify": "pending"
     },
     "workflow_version": "v4"
