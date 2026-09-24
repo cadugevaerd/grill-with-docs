@@ -28,6 +28,7 @@ ESSENTIAL = (
     "validate_contract.py",
     "validate_dependencies_contract.py",
     "validate_distribution.py",
+    "validate_efficiency_contract.py",
     "validate_extension_detection.py",
     "validate_orchestrator_store_contract.py",
     "validate_partition_contract.py",

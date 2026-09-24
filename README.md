@@ -1,6 +1,12 @@
 # grill-with-docs
 
-**v6.0.30 · MIT**
+**v7.0.0 · MIT**
+
+Workflow v5: duas revisões fixas (plan/review), exceções de risco verificadas por etapa,
+dois grupos de workers e entrevista em lotes de até três perguntas independentes.
+Projetos existentes continuam com os contratos originais; não há migração automática.
+Consulte o [relatório da entrega](docs/gwd-efficiency.md).
+
 
 Plugin de planejamento arquitetural e entrega **Delivery First**: entrevista decisões, mantém work items isolados, valida a Constituição e produz evidência auditável. O plugin é plan-only para feature/fix (`PLAN_ONLY_STOP`); hotfix/incident segue uma faixa rápida, explícita e fail-closed (`HOTFIX-GO`). Auditoria e reconciliação não substituem o ship externo.
 

@@ -1,0 +1,8 @@
+{
+  "catalogs": {
+    "codex-v5-local-skills": "sha256:a0887d1be953c353adc4780b3e55aca45c580af8892937b1f1118dec55a993dc",
+    "grill-v5-local-skills": "sha256:410d5e0bb0920e98558de5e6c399f3a37905a37f0744452f108372c6fdeb4f26"
+  },
+  "schema": "workflow-trusted-catalogs/v1",
+  "workflow_version": "v5"
+}

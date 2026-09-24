@@ -1,0 +1,242 @@
+{
+  "active_phase": "FASE-001",
+  "audit_verdict": "pending",
+  "capability": {
+    "name": "module-decomposition",
+    "schema": "v1",
+    "version": "v1"
+  },
+  "constitution": {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+    "state": "present"
+  },
+  "development": {
+    "attestation_campaign": {
+      "adapter": "claude-code-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-00176c30b91ad18cdc4bb183aec9b426b920b5288a6612266b4c6b1705eff2a3",
+      "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+      "run_id": "leader-fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24",
+      "runtime": "claude"
+    },
+    "attested_executions": {
+      "analyze": "se-1904aa9a89fb990bb3f27d1204c97e921593dbf672800578f2b7b95d15f83dc0",
+      "checklist": "se-1156e1ab07e910ead8890b8011bc876f048c7ab9b354586484211a146d3e264f",
+      "partition": "se-7661ebfad58615131aeb4043298f19c8e75c163fad5d5d8d28d3b5e6d685193c",
+      "plan": "se-8d05e1f914c0ee79dd71246b3b2a236df13ca7be6c838821ec9caa782b491685",
+      "specify": "se-9266a8dccfb19b1f2b821c7a80fdef8051ede658d8496f561931e5b78f28136e",
+      "tasks": "se-f258c4e11e54f077152a58c6ed2984759874ab0a305fe54eabba3286beaacfc5"
+    },
+    "attested_outputs": {
+      "analyze": {
+        "output_sha256": "sha256:90ffc97b2e57dce7dd5e89528f1c0ed566821742abe6587deb1fd5279d0792ef",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/analyze-analyze-1.terminal.json",
+        "step_id": "analyze"
+      },
+      "checklist": {
+        "output_sha256": "sha256:b6f5dd7b8211dad4ca8a36dd7aae2332f151decdecc590033b70f81cb413aa08",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
+      "partition": {
+        "output_sha256": "sha256:69fc6fc2f5e1bff38d295a4a35be8cd6111898b5967dfc09772d7c65782e40b2",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "step_id": "partition"
+      },
+      "plan": {
+        "output_sha256": "sha256:9710cb5ccd81648ffec72b6688e3955feb10c40c26406031291366765ef2b6a6",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
+      "specify": {
+        "output_sha256": "sha256:23b2942533c5dbd3de35ecddfc8645e790e48e6438bcbed1309cd88d6ede0834",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:c298d8219d9e650e3e5c43650ae7a42f72a674407b6fbf6021b65cc7116424c6",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "step_id": "tasks"
+      }
+    },
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/034-fence-autorizado-atividade/spec.md",
+            "sha256": "23b2942533c5dbd3de35ecddfc8645e790e48e6438bcbed1309cd88d6ede0834"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/034-fence-autorizado-atividade/plan.md",
+            "sha256": "9710cb5ccd81648ffec72b6688e3955feb10c40c26406031291366765ef2b6a6"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/034-fence-autorizado-atividade/checklists/release-gate.md",
+            "sha256": "b6f5dd7b8211dad4ca8a36dd7aae2332f151decdecc590033b70f81cb413aa08"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/034-fence-autorizado-atividade/tasks.md",
+            "sha256": "c298d8219d9e650e3e5c43650ae7a42f72a674407b6fbf6021b65cc7116424c6"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "in-progress",
+        "step": "analyze"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/034-fence-autorizado-atividade/analysis.md",
+            "sha256": "90ffc97b2e57dce7dd5e89528f1c0ed566821742abe6587deb1fd5279d0792ef"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "complete",
+        "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/034-fence-autorizado-atividade/execution-dag.r2.json",
+            "sha256": "69fc6fc2f5e1bff38d295a4a35be8cd6111898b5967dfc09772d7c65782e40b2"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "run_id=run-73cfb26345ca6cc45d9789ae DAG-VALID",
+        "state": "complete",
+        "step": "partition"
+      }
+    ],
+    "current_step": "implement-parallel",
+    "execution_branch": "cadugevaerd/fix-leader",
+    "renamed_from": {},
+    "schema": "grill-development/v2",
+    "sequence": [
+      "specify",
+      "plan",
+      "checklist",
+      "tasks",
+      "analyze",
+      "partition",
+      "implement-parallel",
+      "converge",
+      "verify",
+      "review",
+      "ship"
+    ],
+    "steps": {
+      "analyze": "complete",
+      "checklist": "complete",
+      "converge": "pending",
+      "implement-parallel": "pending",
+      "partition": "complete",
+      "plan": "complete",
+      "review": "pending",
+      "ship": "pending",
+      "specify": "complete",
+      "tasks": "complete",
+      "verify": "pending"
+    },
+    "workflow_version": "v4"
+  },
+  "goal": {
+    "path": "goal.md",
+    "sha256": "af97e2899ddd6668c5fc80eef153cd94b7d88ea92235650370572770e5b291d1",
+    "status": "REUSED"
+  },
+  "limits": {
+    "max_clarifications_per_question": 1,
+    "max_no_progress_rounds": 2,
+    "max_question_repeats": 2,
+    "max_questions_per_run": 25,
+    "max_scope_growth_streak": 3
+  },
+  "milestone_status": "in-progress",
+  "second_pass": {
+    "new_material_dqs": 0
+  },
+  "status": "in-progress",
+  "version": "1.2.0",
+  "work_id": "fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24",
+  "workflow": {
+    "path": "WORKFLOW.md",
+    "schema": "v2",
+    "sha256": "d2c4ea0806ea5e8235678582154aedaeb0ba686641bd836934bffe133db60ab5"
+  }
+}

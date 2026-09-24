@@ -358,6 +358,33 @@ class StoreContract(unittest.TestCase):
    store.transact(self.r,lambda document,state=state,updates=updates: (document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1'].update(state=state,**updates),document)[1],now=CLOCK)
   self.assertEqual(store.read_snapshot(self.r).document['agent_orchestration']['work_items']['orchestration-work']['activities']['activity-1']['state'],'ACCEPTED')
 
+ def test_orchestration_result_recorded_may_fail_only_with_diagnostic(self):
+  self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}
+  result={'result_ref':'receipts/result','result_sha256':'d'*64,'output_manifest':{'files':[],'return_ref':REF('receipts/return'),'effect_ref':None}}
+  def adopt(document):
+   checks={}
+   for name in ('activity-1','activity-2'):
+    check=ORCHESTRATION_ACTIVITY(name); check.update(activity_type='deterministic_check',role='deterministic_check',runtime=None,requested_model=None,requested_effort=None); checks[name]=check
+   document['agent_orchestration']=self._orchestration_doc(contexts); document['agent_orchestration']['work_items']['orchestration-work']['activities']=checks; return document
+  store.transact(self.r,adopt,now=CLOCK)
+  def step(name,state,**updates):
+   store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['activities'][name].update(state=state,**updates),document)[1],now=CLOCK)
+  def invalid(name,state,**updates):
+   with self.assertRaises(store.StoreError) as caught: step(name,state,**updates)
+   self.assertEqual(caught.exception.code,'ORCHESTRATOR_INVALID')
+  def activity(name): return store.read_snapshot(self.r).document['agent_orchestration']['work_items']['orchestration-work']['activities'][name]
+  for name in ('activity-1','activity-2'):
+   step(name,'BOOTSTRAPPING'); step(name,'VERIFIED'); step(name,'DISPATCHED',payload_sha256='b'*64)
+  step('activity-1','RESULT_RECORDED',**result)
+  invalid('activity-1','FAILED')
+  invalid('activity-1','BLOCKED',diagnostic_ref='receipts/diagnostic')
+  step('activity-1','FAILED',diagnostic_ref='receipts/diagnostic')
+  failed=activity('activity-1')
+  self.assertEqual(failed['state'],'FAILED')
+  for key,value in result.items(): self.assertEqual(failed[key],value)
+  step('activity-2','FAILED',diagnostic_ref='receipts/diagnostic')
+  self.assertEqual(activity('activity-2')['state'],'FAILED')
+
  def test_orchestration_epochs_scope_and_first_binding_have_closed_transitions(self):
   self.register(); contexts={'ctx-1':ORCHESTRATION_CONTEXT()}
   store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc(contexts)},now=CLOCK)

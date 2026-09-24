@@ -15,6 +15,7 @@ sys.path.insert(0,str(SCRIPTS))
 from grill_core import work_item_v3 as M  # noqa: E402
 from grill_core import workflow_v3 as WV3  # noqa: E402
 from grill_core import workflow_v4 as WV4  # noqa: E402
+from grill_core import workflow_v5 as WV5  # noqa: E402
 from grill_core import workflow_versions as WV  # noqa: E402
 
 WORK_ID='wx'
@@ -151,18 +152,16 @@ def render_v3_workflow_bytes():
 # fixtures must materialise the active frontier, not a version literal. The v3
 # renderer above stays for the tests that are genuinely about a v3 document.
 ACTIVE_WORKFLOW_VERSION=WV.ACTIVE_VERSION
-ACTIVE_GATE={'v3':WV3,'v4':WV4}[ACTIVE_WORKFLOW_VERSION]
+ACTIVE_GATE={'v3':WV3,'v4':WV4,'v5':WV5}[ACTIVE_WORKFLOW_VERSION]
 
 def render_active_workflow_bytes():
- rendered=WV4.render_v4() if ACTIVE_WORKFLOW_VERSION=='v4' else render_v3_workflow_bytes()
+ rendered={'v3':render_v3_workflow_bytes,'v4':WV4.render_v4,'v5':WV5.render_v5}[ACTIVE_WORKFLOW_VERSION]()
  assert b'__REGISTRY_SHA256__' not in rendered
  return rendered
 
 def active_registry_pin():
  """The registry digest the active frontier bakes into its document."""
- if ACTIVE_WORKFLOW_VERSION=='v4':
-  return WV4.registry_state()[1]
- return WV3.registry_state()['sha256']
+ return ACTIVE_GATE.pinned_registry_sha256(render_active_workflow_bytes().decode('utf-8'))
 
 def invoke_workspace(*args):
  completed=subprocess.run([sys.executable,str(WORKSPACE),*(str(value) for value in args)],text=True,capture_output=True)

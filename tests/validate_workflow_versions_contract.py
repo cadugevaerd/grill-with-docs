@@ -69,7 +69,7 @@ class Sequences(unittest.TestCase):
                 self.assertEqual(len(set(sequence)), len(sequence))
 
     def test_sequence_by_version_exposes_the_frozen_tuples(self) -> None:
-        self.assertEqual(wv.SEQUENCE_BY_VERSION, {"v3": FROZEN_V3, "v4": FROZEN_V4})
+        self.assertEqual(wv.SEQUENCE_BY_VERSION, {"v3": FROZEN_V3, "v4": FROZEN_V4, "v5": FROZEN_V4})
 
 
 class Renames(unittest.TestCase):

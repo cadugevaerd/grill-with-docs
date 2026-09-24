@@ -1,0 +1,180 @@
+{
+ "files": [
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/CONTEXT.md",
+   "sha256": "bdf2baddc037ab0e00e5828dbb87e0f6beaca713ca651fd07268252d5baf69d3",
+   "size": 4332,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/docs/adr/ADR-0001.md",
+   "sha256": "ae0881fdedcdc26313edda16248218a9a42a3346c8bc4e330847663058342980",
+   "size": 10113,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/ROADMAP.md",
+   "sha256": "ac7b53f72ef56ea4a85cbb902eeb89468633aa8603655689445b59f1da91a0ce",
+   "size": 4696,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+   "sha256": "e669f12692159cc280a0ef52dbbbf50873e7c4ac2e0001b971c89002bfc3d82e",
+   "size": 6377,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/handoffs/FASE-002-SPECIFY-HANDOFF.md",
+   "sha256": "2437ef92eb94b580a5ad6d144f5762f522f322fbccaf9b9defb5c655e8051489",
+   "size": 3453,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/PLAN-CONTEXT.md",
+   "sha256": "b091edc4d135618c247ab0b9fd98fe2cf80351afa055f8261081fc79e92bd109",
+   "size": 19741,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DELIVERY-MAP.md",
+   "sha256": "33a0556c26be29a1e4e4d1dd3350fd813f8f771e9df89aad8d817be2d2521b1c",
+   "size": 3518,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DECISION-FRONTIER.md",
+   "sha256": "f919b2d334a3d873a3690886366bed68081e6a8aeef987129d4be63a2f0957b2",
+   "size": 14405,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DECISION-BACKLOG.md",
+   "sha256": "a1fc3e109ef27a9295a0bf1a12b9d63fdd27cd2f303178b8723ff35e2ff98dd2",
+   "size": 1811,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/ROUND-LOG.jsonl",
+   "sha256": "7533350169889a020a87c60ecd4e5011d4fa2798f98919657fc50f0b80685807",
+   "size": 4236,
+   "media_type": "application/x-ndjson"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/CONSTITUTION-CHECK.md",
+   "sha256": "c30bbda41159279dc2d474d1270a41df4346b8b0c045f7b093f290d2c98d3535",
+   "size": 7104,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/interview-author-001.result.md",
+   "sha256": "9fc290227009c9541f0ca8f64a7000f2dc88be9f6d12617dd4b6372c15da8bb1",
+   "size": 84012,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/interview-author-001.payload.md",
+   "sha256": "9bcaee86a17c39e29ed03534ac037923bffff8fb4539b84305a91405bf1d5c33",
+   "size": 6494,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/DECISION-FRONTIER.md",
+   "sha256": "8959f95d6b150cd23031d839fde5760ff2e908add55b7c7ee97505bbd5c43e8f",
+   "size": 11665,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/ROUND-LOG.jsonl",
+   "sha256": "3a76ae249a2d5fe2bcf548a6227e00e812f0d38aba12086b03e23267c45efad5",
+   "size": 3874,
+   "media_type": "application/x-ndjson"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/PLAN-CONTEXT.md",
+   "sha256": "8a84f9a72942860910e297acc25bac07f738614806af14cd2f7c8d9577f6c76a",
+   "size": 12399,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/ROADMAP.md",
+   "sha256": "f2cf16bed213705e4a44a243c7eab74617a671bb23dade134d73c1cec000229b",
+   "size": 2736,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+   "sha256": "f0ae2bbb7e1e72e30366dd67aaf9297d26081ea5a9321a46bd457e0c73a947fa",
+   "size": 5426,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-continuidade-sem-checkpoint-d62bb2a5380d4409ace677fa741af28d/agent-orchestration/activities/interview-reviewer-001.result.md",
+   "sha256": "2b5a62b0aac8c5afb85dc6445e7e156d00f1db08cec8c52c39a8c64051c44872",
+   "size": 15418,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".specify/memory/constitution.md",
+   "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+   "size": 4787,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "CLAUDE.md",
+   "sha256": "107f4273e63bca63d7e0f7a9c782e55de2d409d62be8e03c4c59779082ce1152",
+   "size": 17981,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/references/session-protocol.md",
+   "sha256": "03f59061b8e7c9bbca9516989442fc93d43bf0c1d5f2e8a67edd6120421691fd",
+   "size": 33178,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+   "sha256": "00c1220ff3fd167149134792a16b9e35d0b2349b431f6e75e818bf3c54822389",
+   "size": 421550,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+   "sha256": "aad0a06e5d8d51c6f75e1126a09410e6fc67b65f72f48083e8731e6eeaca9b1b",
+   "size": 114088,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+   "sha256": "2b5e43c77526423ef3b54bf28e98492fab92a800faf617175c4e2c690afd1bfa",
+   "size": 85382,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+   "sha256": "7d552a787206d184ad9ed15b00fa5dc8739e0b8cf53a617a76ac6684282bc401",
+   "size": 67651,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/store.py",
+   "sha256": "eb215606b3862804784383c7aabc2f55fb52f4bc73ee1a7b3a881e9111cf5a87",
+   "size": 126465,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/audit_decisions.py",
+   "sha256": "e6b54186975bd14699ba9a9df633e9abcc824c9c2f74d09924a8285e7f205cf3",
+   "size": 45583,
+   "media_type": "text/x-python"
+  }
+ ],
+ "required_activity_ids": [
+  "interview-author-001"
+ ],
+ "author_activity_ids": [
+  "interview-author-001"
+ ],
+ "task_binding": null,
+ "human_authorization": null
+}

@@ -1,0 +1,22 @@
+{
+ "schema": "grill-agent-observation/v1",
+ "adapter": "orca",
+ "provider": "claude",
+ "handle": "term_7d8ab50e-724c-4844-aeaa-bb59b4bddb3f",
+ "incarnation": "f58ee421-d68c-4330-a769-754abc77d56c",
+ "dispatch_incarnation": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-leader@@cb92a33f:f58ee421-d68c-4330-a769-754abc77d56c",
+ "runtime_instance": "a1e53186-1808-4006-af41-a29ec02a0d0c",
+ "host": "local",
+ "owner_dispatch": "ctx_9c921b52a19f",
+ "task_id": "task_d6e80f9c3616",
+ "worktree_id": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-leader",
+ "source_ref": "orca:ctx_9c921b52a19f",
+ "source_sha256": "8f71ea1a9d9e4a6c57fb0d6928d4b19bed163d9f77939411aea80ee8b72b7296",
+ "requested_model": "fable",
+ "requested_effort": "xhigh",
+ "effective_model": "fable",
+ "effective_effort": "xhigh",
+ "resolved_model_id": "fable",
+ "activity": "exited",
+ "close": "closed"
+}

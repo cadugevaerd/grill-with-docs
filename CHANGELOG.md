@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.0.0
+
+- Workflow v5 e policy v2: revisões fixas em plan/review, classificação por etapa e exceções de risco vinculadas aos inputs.
+- Preserva contratos, registries e catálogos v3/v4; projetos existentes não são migrados automaticamente.
+- Dois grupos de workers por padrão no v5, perguntas independentes em lotes de até três e retomada com import/rebase.
+- Evita resolução repetida de executáveis durante a leitura de transcripts; sem cache de autoridade ou testes.
+
+
+## 6.0.31
+
+- Fix: novo verbo `gauntlet-activity-fence` encerra sem aceite uma atividade de especialista em duas formas cercadas, `DISPATCHED` órfã e `RESULT_RECORDED` de sessão retida, em prévia por padrão e efetivação com `--apply --expected-sha256`. Exige as provas terminais do especialista e do líder obtidas do ambiente, a readiness do solicitante (líder corrente exato, ou sucessor com a própria sessão provada) e a autorização humana exata `human-authorization/v1`. A atividade vai a `FAILED` com `diagnostic_ref`, o recurso a `CLOSED` com receipt correlacionado e a operação `activity-fence` a `CONFIRMED`; o resultado cercado nunca é aceito nem herdado e a reexecução nasce como atividade nova. A máquina de estados ganha a aresta `RESULT_RECORDED` para `FAILED`.
+
 ## 6.0.30
 
 - Fix: `gauntlet-context-takeover` herda workers já `PREPARED` depois de comprovar que o líder anterior terminou, eliminando o ciclo em que esses workers bloqueavam a tomada mas somente o líder encerrado podia avançá-los. Outros estados ativos, atividades e observações desconhecidas continuam bloqueando; a lista herdada integra o hash da prévia e os retornos de preview/apply.

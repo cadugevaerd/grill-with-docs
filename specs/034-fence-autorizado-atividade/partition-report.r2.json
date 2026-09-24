@@ -1,0 +1,128 @@
+{
+  "accepted_tasks": [],
+  "deferred_to_leader": [],
+  "dispatchable_tasks": 6,
+  "feature": "034-fence-autorizado-atividade",
+  "max_workers": 2,
+  "nodes": [
+    {
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "specs/034-fence-autorizado-atividade/implement/T001.tasks.json",
+        "tests/validate_orchestrator_store_contract.py"
+      ],
+      "id": "p01-a",
+      "phase": 1,
+      "result_files": {
+        "T001": "specs/034-fence-autorizado-atividade/implement/T001.tasks.json"
+      },
+      "task_ids": [
+        "T001"
+      ]
+    },
+    {
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/034-fence-autorizado-atividade/implement/T002.tasks.json",
+        "specs/034-fence-autorizado-atividade/implement/T003.tasks.json",
+        "specs/034-fence-autorizado-atividade/implement/T004.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p02-a",
+      "phase": 2,
+      "result_files": {
+        "T002": "specs/034-fence-autorizado-atividade/implement/T002.tasks.json",
+        "T003": "specs/034-fence-autorizado-atividade/implement/T003.tasks.json",
+        "T004": "specs/034-fence-autorizado-atividade/implement/T004.tasks.json"
+      },
+      "task_ids": [
+        "T002",
+        "T003",
+        "T004"
+      ]
+    },
+    {
+      "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "CHANGELOG.md",
+        "README.md",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "specs/034-fence-autorizado-atividade/implement/T005.tasks.json",
+        "specs/034-fence-autorizado-atividade/implement/T006.tasks.json",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p02-b",
+      "phase": 2,
+      "result_files": {
+        "T005": "specs/034-fence-autorizado-atividade/implement/T005.tasks.json",
+        "T006": "specs/034-fence-autorizado-atividade/implement/T006.tasks.json"
+      },
+      "task_ids": [
+        "T005",
+        "T006"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "accepted_tasks": [],
+      "deferred_to_leader": [],
+      "node_ids": [
+        "p01-a"
+      ],
+      "phase": 1,
+      "read_only_tasks": [],
+      "task_ids": [
+        "T001"
+      ],
+      "title": "Aresta nova no contrato de atividade"
+    },
+    {
+      "accepted_tasks": [],
+      "deferred_to_leader": [],
+      "node_ids": [
+        "p02-a",
+        "p02-b"
+      ],
+      "phase": 2,
+      "read_only_tasks": [],
+      "task_ids": [
+        "T002",
+        "T003",
+        "T004",
+        "T005",
+        "T006"
+      ],
+      "title": "Verbo de fence, testes de contrato, documentação e distribuição"
+    },
+    {
+      "accepted_tasks": [],
+      "deferred_to_leader": [],
+      "node_ids": [],
+      "phase": 3,
+      "read_only_tasks": [
+        "T007",
+        "T008"
+      ],
+      "task_ids": [
+        "T007",
+        "T008"
+      ],
+      "title": "Verificação read-only"
+    }
+  ],
+  "read_only_tasks": [
+    "T007",
+    "T008"
+  ],
+  "requested_groups": 3,
+  "schema": "grill-partition-report/v2",
+  "tasks": 8,
+  "tasks_contract": "task-files/v1",
+  "tasks_semantic_sha256": "c298d8219d9e650e3e5c43650ae7a42f72a674407b6fbf6021b65cc7116424c6",
+  "verdict": "PARTITION-DEGRADED"
+}

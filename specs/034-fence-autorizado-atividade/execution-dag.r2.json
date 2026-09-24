@@ -1,0 +1,81 @@
+{
+  "accepted_tasks": {},
+  "feature": "034-fence-autorizado-atividade",
+  "max_workers": 2,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "specs/034-fence-autorizado-atividade/implement/T001.tasks.json",
+        "tests/validate_orchestrator_store_contract.py"
+      ],
+      "id": "p01-a",
+      "parallel": true,
+      "result_files": {
+        "T001": "specs/034-fence-autorizado-atividade/implement/T001.tasks.json"
+      },
+      "task_ids": [
+        "T001"
+      ],
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/034-fence-autorizado-atividade/implement/T002.tasks.json",
+        "specs/034-fence-autorizado-atividade/implement/T003.tasks.json",
+        "specs/034-fence-autorizado-atividade/implement/T004.tasks.json",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "result_files": {
+        "T002": "specs/034-fence-autorizado-atividade/implement/T002.tasks.json",
+        "T003": "specs/034-fence-autorizado-atividade/implement/T003.tasks.json",
+        "T004": "specs/034-fence-autorizado-atividade/implement/T004.tasks.json"
+      },
+      "task_ids": [
+        "T002",
+        "T003",
+        "T004"
+      ],
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p01-a"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "CHANGELOG.md",
+        "README.md",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "specs/034-fence-autorizado-atividade/implement/T005.tasks.json",
+        "specs/034-fence-autorizado-atividade/implement/T006.tasks.json",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p02-b",
+      "parallel": true,
+      "result_files": {
+        "T005": "specs/034-fence-autorizado-atividade/implement/T005.tasks.json",
+        "T006": "specs/034-fence-autorizado-atividade/implement/T006.tasks.json"
+      },
+      "task_ids": [
+        "T005",
+        "T006"
+      ],
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v2",
+  "tasks_contract": "task-files/v1",
+  "tasks_semantic_sha256": "c298d8219d9e650e3e5c43650ae7a42f72a674407b6fbf6021b65cc7116424c6"
+}

@@ -20,7 +20,7 @@ from typing import NamedTuple
 VERSION = "v2"
 MARKER = "grill-with-docs-workflow:v2"
 HERE = Path(__file__).resolve()
-TEMPLATE = HERE.parents[1] / "assets/WORKFLOW.v4.template.md"
+TEMPLATE = HERE.parents[1] / "assets/WORKFLOW.v5.template.md"
 # LD-004 item 3/4: a NEW, additive marker recognised alongside VERSION ("v2").
 # VERSION and the v2 ESSENTIAL tuple stay untouched so already materialised v2
 # documents retain their original read contract; BOOTSTRAP_VERSION below owns
@@ -34,10 +34,11 @@ V4_MARKER_VERSION = "v4"
 # a fresh project must start on the executable frontier.  Keeping these names
 # separate is what lets bootstrap advance without silently reinterpreting an
 # already-materialised v2 document as v4.
-BOOTSTRAP_VERSION = V4_MARKER_VERSION
+V5_MARKER_VERSION = "v5"
+BOOTSTRAP_VERSION = V5_MARKER_VERSION
 #: Marker versions this build can execute against, newest last. v2 remains
 #: readable through its frozen legacy contract but was never executable.
-EXECUTABLE_MARKER_VERSIONS = (V3_MARKER_VERSION, V4_MARKER_VERSION)
+EXECUTABLE_MARKER_VERSIONS = (V3_MARKER_VERSION, V4_MARKER_VERSION, V5_MARKER_VERSION)
 # Same path grill_core/workflow_v3.py resolves REGISTRY to (its ASSETS is
 # HERE.parents[2] / "assets" from one directory deeper); kept as a literal
 # here rather than imported so this module has no load-time dependency on
@@ -48,11 +49,14 @@ REGISTRY = HERE.parents[1] / "assets/workflow-step-skills.json"
 #: one -- publishing the active build's digest to a v3 repository would make
 #: every v3 document look REGISTRY-PIN-DIVERGENT to whoever reads the hook.
 REGISTRY_BY_VERSION = {
+    V5_MARKER_VERSION: HERE.parents[1] / "assets/workflow-step-skills.v5.json",
     V3_MARKER_VERSION: REGISTRY,
     V4_MARKER_VERSION: HERE.parents[1] / "assets/workflow-step-skills.v4.json",
 }
 #: The canonical cycle the hook prints, per marker version.
 FLOW_BY_VERSION = {
+    V5_MARKER_VERSION: ("specify → plan → checklist → tasks → analyze → partition → "
+                        "implement-parallel → converge → verify → review → ship"),
     V3_MARKER_VERSION: ("specify → plan → checklist → tasks → analyze → agent-assign → "
                         "agent-execute → converge → verify → review → ship"),
     V4_MARKER_VERSION: ("specify → plan → checklist → tasks → analyze → partition → "
@@ -200,14 +204,14 @@ def _v3_ready(text: str) -> bool:
 
 def bootstrap_document() -> tuple[bytes, str] | None:
     """Render the active bootstrap document through its owning version module."""
-    if BOOTSTRAP_VERSION != V4_MARKER_VERSION:
+    if BOOTSTRAP_VERSION != V5_MARKER_VERSION:
         return None
-    module = _load_grill_core("workflow_v4")
-    if module is None or not hasattr(module, "render_v4"):
+    module = _load_grill_core("workflow_v5")
+    if module is None or not hasattr(module, "render_v5"):
         return None
     try:
         _, template_text = read_regular(TEMPLATE)
-        content = module.render_v4(template_text)
+        content = module.render_v5(template_text)
         text = content.decode("utf-8")
         if managed_version(text) != BOOTSTRAP_VERSION or module.execution_gate(text).status != "OK":
             return None
@@ -303,6 +307,10 @@ def resolve_workflow(root_argument: str | Path) -> WorkflowResult:
             # v3 content. Falling through here is impossible -- both arms
             # return -- so a v2/unmarked/human-equivalent file takes the
             # unmodified path below, byte for byte.
+            if version == V5_MARKER_VERSION:
+                if _v5_ready(text):
+                    return WorkflowResult("REUSED", target, content, None)
+                return WorkflowResult("BLOCKED", None, b"", "incompatible workflow")
             if version == V4_MARKER_VERSION:
                 # Same shape as the v3 arm below, for the same reason: a
                 # v4-marked file must never be judged by the v2 ESSENTIAL
@@ -335,7 +343,7 @@ def resolve_workflow(root_argument: str | Path) -> WorkflowResult:
             return WorkflowResult("BLOCKED", None, b"", "unsafe target after create")
         content, text = read_regular(target)
         version = managed_version(text)
-        if version != BOOTSTRAP_VERSION or not _v4_ready(text):
+        if version != BOOTSTRAP_VERSION or not _v5_ready(text):
             return WorkflowResult("BLOCKED", None, b"", "read-back validation failed")
         return WorkflowResult("CREATED" if created else "REUSED", target, content, None)
     except UnicodeError:
@@ -421,9 +429,21 @@ def _v4_ready(text: str) -> bool:
         return False
 
 
+def _v5_ready(text: str) -> bool:
+    module = _load_grill_core("workflow_v5")
+    if module is None:
+        return False
+    try:
+        return module.execution_gate(text).status == "OK"
+    except Exception:
+        return False
+
+
 def _execution_ready(text: str) -> bool:
     """True when ``text`` is a materialised workflow the hook can safely project status for."""
     version = managed_version(text)
+    if version == V5_MARKER_VERSION:
+        return _v5_ready(text)
     if version == V4_MARKER_VERSION:
         return _v4_ready(text)
     if version == V3_MARKER_VERSION:

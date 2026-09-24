@@ -590,8 +590,9 @@ class ResolverFailsClosed(Base):
 # --------------------------------------------------------------------------
 class TrustedCatalogDefault(Base):
     def test_asset_exists_and_pins_the_frozen_fixture_digest(self):
-        trusted = ss.load_trusted_catalogs()
+        trusted = ss.load_trusted_catalogs(REGISTRY.parent / "workflow-trusted-catalogs.v4.json")
         self.assertEqual(trusted[TRUSTED], catalog()["catalog_sha256"])
+        self.assertIn("grill-v5-local-skills", ss.load_trusted_catalogs())
 
     def test_default_trust_comes_from_the_versioned_asset_with_no_override(self):
         """No `trusted_catalogs_path=` at all -- exercises resolve_workflow_skill's

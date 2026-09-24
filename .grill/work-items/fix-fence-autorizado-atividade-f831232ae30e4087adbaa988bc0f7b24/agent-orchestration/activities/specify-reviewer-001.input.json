@@ -1,0 +1,72 @@
+{
+ "files": [
+  {
+   "path": "specs/034-fence-autorizado-atividade/spec.md",
+   "sha256": "fecb42bf62aef28e82bacae61e658a43899c1d83a48da25156c72b86b34ef41d",
+   "size": 12476,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/checklists/requirements.md",
+   "sha256": "f54ba751145c01840a17607f5e82fb5be042f174cf3ab52afb0ec1452885cffd",
+   "size": 1494,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+   "sha256": "e669f12692159cc280a0ef52dbbbf50873e7c4ac2e0001b971c89002bfc3d82e",
+   "size": 6377,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/CONTEXT.md",
+   "sha256": "bdf2baddc037ab0e00e5828dbb87e0f6beaca713ca651fd07268252d5baf69d3",
+   "size": 4332,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/ROADMAP.md",
+   "sha256": "ac7b53f72ef56ea4a85cbb902eeb89468633aa8603655689445b59f1da91a0ce",
+   "size": 4696,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DECISION-FRONTIER.md",
+   "sha256": "f919b2d334a3d873a3690886366bed68081e6a8aeef987129d4be63a2f0957b2",
+   "size": 14405,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/docs/adr/ADR-0001.md",
+   "sha256": "ae0881fdedcdc26313edda16248218a9a42a3346c8bc4e330847663058342980",
+   "size": 10113,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/interview-author-001.result.md",
+   "sha256": "9fc290227009c9541f0ca8f64a7000f2dc88be9f6d12617dd4b6372c15da8bb1",
+   "size": 84012,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".specify/memory/constitution.md",
+   "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+   "size": 4787,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".specify/templates/spec-template.md",
+   "sha256": "3945437fc35cd30a5b2bf7beea680337c3516826d3efa5a6b92c4a7eca1ba28e",
+   "size": 4556,
+   "media_type": "text/markdown"
+  }
+ ],
+ "required_activity_ids": [
+  "interview-author-001"
+ ],
+ "author_activity_ids": [
+  "interview-author-001"
+ ],
+ "task_binding": null,
+ "human_authorization": null
+}

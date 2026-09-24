@@ -1,0 +1,176 @@
+{
+ "files": [
+  {
+   "path": "specs/034-fence-autorizado-atividade/plan.md",
+   "sha256": "91b26d7f18404846378d80c1764d633136f453e0bdf221eb596ebe359fba13cd",
+   "size": 8854,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/research.md",
+   "sha256": "64e79d8d23305b8d08df268e217e07a7c2646b795275f9613c00557bb5e750af",
+   "size": 33905,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/data-model.md",
+   "sha256": "cfa4c4e2c32822cb692478c63391996b35b0db72445e5367f32ab70eaa85ab2b",
+   "size": 7764,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/quickstart.md",
+   "sha256": "037cd5934467d8be29d0aaa21ef0bddeeb90247efddf389787c2d433b6f6fb7b",
+   "size": 2097,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/contracts/activity-fence.md",
+   "sha256": "f8aa5fcae474395094d567d7becf5725087418d9729ea29da6b51c8ee05ac3dd",
+   "size": 5860,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/spec.md",
+   "sha256": "23b2942533c5dbd3de35ecddfc8645e790e48e6438bcbed1309cd88d6ede0834",
+   "size": 11876,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/PLAN-CONTEXT.md",
+   "sha256": "b091edc4d135618c247ab0b9fd98fe2cf80351afa055f8261081fc79e92bd109",
+   "size": 19741,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/docs/adr/ADR-0001.md",
+   "sha256": "ae0881fdedcdc26313edda16248218a9a42a3346c8bc4e330847663058342980",
+   "size": 10113,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DECISION-FRONTIER.md",
+   "sha256": "95c58c9062e313bb310be031aae36acf94545c46dc4aff94f2f402f5553e68ea",
+   "size": 16578,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/DELIVERY-MAP.md",
+   "sha256": "33a0556c26be29a1e4e4d1dd3350fd813f8f771e9df89aad8d817be2d2521b1c",
+   "size": 3518,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/plan-author-001.payload.md",
+   "sha256": "0e2bae2ecdeb0452e96da34321d085c9987e77daa55f4316bae3e388d7e823d7",
+   "size": 5060,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/plan-author-001.result.md",
+   "sha256": "f0548434724045f37886525b90137a360f542ab7078a9146e1258d85f4a72a48",
+   "size": 5250,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/interview-reviewer-001.result.md",
+   "sha256": "0107b2dfe92699cd9b48715981d9b41cf6ad65db34da4a8412cd02fc0e61dcbe",
+   "size": 20302,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/specify-reviewer-002.result.md",
+   "sha256": "3904bd20ee227bed1a41e75e261c7b9427ab699eda334c90cefc31b71988fabb",
+   "size": 13332,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".specify/memory/constitution.md",
+   "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+   "size": 4787,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "CLAUDE.md",
+   "sha256": "107f4273e63bca63d7e0f7a9c782e55de2d409d62be8e03c4c59779082ce1152",
+   "size": 17981,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/references/session-protocol.md",
+   "sha256": "03f59061b8e7c9bbca9516989442fc93d43bf0c1d5f2e8a67edd6120421691fd",
+   "size": 33178,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+   "sha256": "00c1220ff3fd167149134792a16b9e35d0b2349b431f6e75e818bf3c54822389",
+   "size": 421550,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+   "sha256": "aad0a06e5d8d51c6f75e1126a09410e6fc67b65f72f48083e8731e6eeaca9b1b",
+   "size": 114088,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_runtime.py",
+   "sha256": "2b5e43c77526423ef3b54bf28e98492fab92a800faf617175c4e2c690afd1bfa",
+   "size": 85382,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/attestation.py",
+   "sha256": "7d552a787206d184ad9ed15b00fa5dc8739e0b8cf53a617a76ac6684282bc401",
+   "size": 67651,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/store.py",
+   "sha256": "eb215606b3862804784383c7aabc2f55fb52f4bc73ee1a7b3a881e9111cf5a87",
+   "size": 126465,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "tests/validate_agent_orchestration_contract.py",
+   "sha256": "56c3328eef1b84d83beef2262fa68d7669497c14621546e3e5eb25b2aacdb102",
+   "size": 238808,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "tests/validate_distribution.py",
+   "sha256": "57dc2450fb5bcba4e2df1ae41d3e10aac4878470808952e7d442053a0f36e018",
+   "size": 2908,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/plan-reviewer-001.result.md",
+   "sha256": "cf7a5d44eb873715d3f38ac4ca6ef82942d7df0d48a0fabd5f683823a0513e2f",
+   "size": 20421,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/plan-author-002.payload.md",
+   "sha256": "44e5983b996bcd9dc4bc2cfdada29af8a338a9711817414361d9973bdd56af57",
+   "size": 3343,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": ".grill/work-items/fix-fence-autorizado-atividade-f831232ae30e4087adbaa988bc0f7b24/agent-orchestration/activities/plan-author-002.result.md",
+   "sha256": "38c78fc16509233ee024f14fb883a8b57d2b33198c443095c25bfcca8cda094e",
+   "size": 6495,
+   "media_type": "text/markdown"
+  }
+ ],
+ "required_activity_ids": [
+  "plan-author-001",
+  "plan-author-002"
+ ],
+ "author_activity_ids": [
+  "plan-author-001",
+  "plan-author-002"
+ ],
+ "task_binding": null,
+ "human_authorization": null
+}

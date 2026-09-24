@@ -990,6 +990,8 @@ class AgentOrchestrationContract(unittest.TestCase):
         temp = tempfile.TemporaryDirectory(); root = Path(temp.name).resolve()
         for args in (("init",), ("config", "user.email", "test@example.invalid"), ("config", "user.name", "Test")):
             subprocess.run(["git", "-C", str(root), *args], check=True, stdout=subprocess.DEVNULL)
+        # These scenarios exercise the historical v1 orchestration contract.
+        (root / "WORKFLOW.md").write_bytes(grill_workspace.grill_core_module("workflow_v4").render_v4())
         (root / "README.md").write_text("fixture\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(root), "add", "README.md"], check=True)
         subprocess.run(["git", "-C", str(root), "commit", "-m", "fixture"], check=True, stdout=subprocess.DEVNULL)
@@ -2046,6 +2048,29 @@ class AgentOrchestrationContract(unittest.TestCase):
 
         store_module.transact(root, apply)
 
+    def test_first_campaign_is_born_in_a_pre_campaign_successor(self):
+        """A takeover before any campaign leaves campaign_bridge null; the first
+        checkpoint then stamps the successor's campaign. That must validate, while
+        a successor of a predecessor that already had a campaign still needs a bridge."""
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                "--work-id", "work-x", "--runtime", "codex",
+                "--session-ref", orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, payload)
+            self._graft_succession(root, "work-x", "main")
+            campaign = {"project_id": "sha256:" + "1" * 64, "run_id": "leader-work-x", "runtime": "codex",
+                        "adapter": "codex", "registry_sha256": "sha256:" + "2" * 64,
+                        "recovery_generation_id": "rg-" + "3" * 64, "plan_revision": 1}
+            block = copy.deepcopy(store.read_snapshot(root).document["agent_orchestration"])
+            item = block["work_items"]["work-x"]
+            item["contexts"]["ctx-successor"]["campaign"] = copy.deepcopy(campaign)
+            agent_orchestration.validate_block(block)
+            predecessor = item["contexts"]["ctx-successor"]["predecessor_context_id"]
+            item["contexts"][predecessor]["campaign"] = copy.deepcopy(campaign)
+            with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "no campaign bridge"):
+                agent_orchestration.validate_block(block)
+
     def _finish_phase(self, state_path, *, unbind):
         """Complete every step of the matrix so `phase-turn` is admissible,
         optionally clearing the binding to reach the turn's own minting branch."""
@@ -2620,6 +2645,457 @@ class AgentOrchestrationContract(unittest.TestCase):
                     code, reused = takeover(applied_work_id, applied_session, *tail)
                     self.assertEqual((code, reused.get("verdict")), (0, "TAKEOVER-REUSED"), reused)
             self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+    def test_activity_fence(self):
+        """T002-T004: gauntlet-activity-fence fences an orphaned or retained specialist
+        activity only under exact human authorization and environment-proven
+        terminal dispatches; every refusal writes nothing, preview and apply agree
+        (contracts/activity-fence.md)."""
+        import validate_orchestrator_store_contract as seed_contract  # noqa: F401
+        temp, root = self.fixture()
+        with temp, orchestration_fixture.offline_leader(grill_workspace):
+            leader_ref = orchestration_fixture.SESSION
+            leader_dispatch = leader_ref.removeprefix("orca:")
+            heir = "orca:ctx-heir"
+            specialist = "ctx-spec"
+            real_run = subprocess.run
+            seen = []
+
+            def guarded_run(raws):
+                # Only worker-show is synthetic; raws maps dispatch id -> raw (None forbids
+                # every observation). A dispatch outside the map is a forbidden observation.
+                def run(cmd, **kwargs):
+                    if isinstance(cmd, list) and "worker-show" in cmd:
+                        dispatch = cmd[cmd.index("--dispatch") + 1]
+                        seen.append(dispatch)
+                        if raws is None or dispatch not in raws:
+                            raise AssertionError(f"observation must not run for {dispatch}")
+                        return subprocess.CompletedProcess(cmd, 0, stdout=raws[dispatch])
+                    return real_run(cmd, **kwargs)
+                return mock.patch.object(subprocess, "run", side_effect=run)
+
+            @contextlib.contextmanager
+            def observing(raws, handle=True):
+                env = {"ORCA_TERMINAL_HANDLE": "term-fixture"} if handle else {}
+                with mock.patch.dict(os.environ, env), guarded_run(raws):
+                    if not handle:
+                        os.environ.pop("ORCA_TERMINAL_HANDLE", None)
+                    yield
+
+            def fence(work_id, activity_id, session_ref, authorization, *tail):
+                args = ["gauntlet-activity-fence", str(root), "--work-id", work_id,
+                        "--activity-id", activity_id, "--session-ref", session_ref]
+                if authorization is not None:
+                    args += ["--authorization", authorization]
+                return self.run_cli(*args, *tail)
+
+            def assert_refused_and_unwritten(work_id, activity_id, session_ref, authorization, code_, raws=None, handle=True):
+                with observing(raws, handle):
+                    before = store.read_snapshot(root).content_sha256
+                    for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                        with self.subTest(work_id=work_id, code=code_, apply=bool(tail)):
+                            status, blocked = fence(work_id, activity_id, session_ref, authorization, *tail)
+                            self.assertEqual((status, blocked.get("code")), (2, code_), blocked)
+                    self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            def authorization(work_id, context_id, activity_id, name="auth.json", **override):
+                bundle = {"schema": "human-authorization/v1", "scope": f"{work_id}:{context_id}:{activity_id}",
+                          "decision": "APPROVED", "authorized_by": "human:carlos", "receipt_ref": "receipt/human-1",
+                          "content_sha256": "sha256:" + "a" * 64, **override}
+                (root / name).write_text(json.dumps(bundle), encoding="utf-8")
+                return name
+
+            def seed(work_id, *, retained=False, activity_id="orphan-author", owner=specialist, state=None,
+                     resource_state=None, recorded=None):
+                code, created = self.run_cli("init", str(root), "--work-id", work_id, "--type", "feature",
+                    "--slug", work_id, "--runtime", "codex", "--session-ref", leader_ref, "--skip-backlog")
+                self.assertEqual(code, 0, created)
+                item = store.read_snapshot(root).document["agent_orchestration"]["work_items"][work_id]
+                context_id = item["current_context_id"]
+                adapter, show, _ = orchestration_fixture.boundary(
+                    grill_workspace, root, "codex", "orca:" + specialist, work_id)
+                for launch in (show["result"]["worker"]["startOptions"]["launch"]["requested"],
+                               show["result"]["worker"]["startOptions"]["launch"]["effective"]):
+                    launch.update(model="gpt-6-astra", effort="xhigh")
+                manifest = {"files": [], "required_activity_ids": [], "author_activity_ids": [],
+                            "task_binding": None, "human_authorization": None}
+                activity = agent_orchestration.new_activity(activity_id=activity_id, context_id=context_id,
+                    step_id="specify", activity_scope="cycle", activity_type="author", attempt=1,
+                    input_manifest=manifest, policy_sha256=item["policy_sha256"], write_files=[])
+                activity = agent_orchestration.prepare_activity(activity, item["contexts"][context_id])
+                observed = adapter.observe()
+                observed["resolved_model_id"] = "gpt-6-astra"
+                activity = agent_orchestration.record_verified_activity(activity, observed)
+                resource_id, resource = agent_orchestration.session_resource(
+                    activity, observed, collected_at="2026-01-01T00:00:00Z")
+                activity, _ = agent_orchestration.dispatch_activity(activity, item["contexts"][context_id])
+                if retained or recorded:
+                    activity = agent_orchestration.record_activity_result(activity, result_ref="results/orphan.md",
+                        result_sha256="b" * 64, output_manifest={"files": [],
+                            "return_ref": {"ref": "results/orphan.md", "sha256": "b" * 64}, "effect_ref": None})
+                    resource["state"] = "CLOSE_PENDING"
+                if state:
+                    activity.update(state=state)
+                    if state == "FAILED":
+                        activity["diagnostic_ref"] = "diag/failed.md"
+                    if state == "ACCEPTED":
+                        activity.update(accepted_by_context=context_id, acceptance_ref="accept/1",
+                                        review_verdict="APPROVED", released_at="orca:ctx-spec")
+                if resource_state:
+                    resource["state"] = resource_state
+                if owner is None:
+                    for holder in (resource["identity"], resource["creation_observation"]["identity"]):
+                        holder.update(owner_dispatch=None, task_id=None, dispatch_incarnation=None)
+                self.assertEqual(observed["source_ref"].removeprefix("orca:"), specialist)
+                def add(document):
+                    target = document["agent_orchestration"]["work_items"][work_id]
+                    target["activities"][activity_id] = copy.deepcopy(activity)
+                    target["resources"][resource_id] = copy.deepcopy(resource)
+                    return document
+                store.transact(root, add)
+                return context_id, activity_id, resource_id
+
+            spec_done = takeover_show(specialist, status="completed", revoked="2026-01-01T00:00:00Z")
+            leader_done = takeover_show(leader_dispatch, status="completed")
+            live = {"verdict": "live", "source": "agent_status"}
+            leader_live = takeover_show(leader_dispatch, status="dispatched", liveness=live)
+            both_done = {specialist: spec_done, leader_dispatch: leader_done}
+
+            # -- T002: authorization is checked before any observation (n1, n2, n2d). --
+            wid = "work-auth"
+            context_id, aid, _ = seed(wid)
+            good = authorization(wid, context_id, aid)
+            (root / "garbage.json").write_bytes(b"\xff\xfe\x00")
+            (root / "malformed.json").write_text("{not json", encoding="utf-8")
+            (root / "unreadable").mkdir()
+            for label, name in (("omitted", None), ("missing", "nope.json"), ("illegible", "garbage.json"),
+                                ("malformed", "malformed.json"), ("directory", "unreadable"),
+                                ("denied", authorization(wid, context_id, aid, "denied.json", decision="DENIED"))):
+                with self.subTest(n1=label):
+                    assert_refused_and_unwritten(wid, aid, heir, name, "FENCE-AUTHORIZATION-INVALID")
+            for label, scope in (("context", f"{wid}:other-ctx:{aid}"), ("activity", f"{wid}:{context_id}:other-activity"),
+                                 ("run", "run-73cfb26345ca6cc45d9789ae"), ("work", f"other-work:{context_id}:{aid}")):
+                with self.subTest(n2=label):
+                    assert_refused_and_unwritten(wid, aid, heir, authorization(wid, context_id, aid, "scope.json", scope=scope),
+                                                 "FENCE-AUTHORIZATION-INVALID")
+            self.assertEqual(seen, [])
+
+            # -- n0 and n8/n8b: state refusals come before authorization. --
+            assert_refused_and_unwritten(wid, "no-such-activity", heir, good, "FENCE-ACTIVITY-NOT-FOUND")
+            for label, kwargs in (("accepted", {"retained": True, "state": "ACCEPTED", "resource_state": "CLOSED"}),
+                                  ("failed", {"state": "FAILED", "resource_state": "CLOSED"}),
+                                  ("recorded-registered", {"retained": True, "resource_state": "REGISTERED"}),
+                                  ("dispatched-close-pending", {"resource_state": "CLOSE_PENDING"}),
+                                  ("recorded-closed", {"retained": True, "resource_state": "CLOSED"})):
+                state_wid = "work-state-" + label
+                _, state_aid, _ = seed(state_wid, **kwargs)
+                with self.subTest(n8=label):
+                    assert_refused_and_unwritten(state_wid, state_aid, heir, None, "FENCE-ACTIVITY-STATE")
+            self.assertEqual(seen, [])
+
+            # -- T003: proofs come from the environment, in a fixed order. --
+            wid = "work-proofs"
+            context_id, aid, resource_id = seed(wid)
+            good = authorization(wid, context_id, aid, "proofs.json")
+            assert_refused_and_unwritten(wid, aid, heir, good, "FENCE-LEADER-ACTIVE",
+                                         {specialist: spec_done, leader_dispatch: leader_live})          # n3
+            failure = grill_workspace.CliFailure(2, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "heir not proven")
+            with mock.patch.object(grill_workspace, "_session_readiness", side_effect=failure):        # n3c
+                assert_refused_and_unwritten(wid, aid, heir, good, "LEADER-AUTHORITY-UNPROVEN", both_done)
+            # n4: an active specialist refuses whatever the liveness, and the leader is never consulted.
+            assert_refused_and_unwritten(wid, aid, heir, good, "FENCE-SPECIALIST-ACTIVE",
+                {specialist: takeover_show(specialist, status="dispatched", liveness=live)})
+            # n5d: dispatched with unverifiable liveness is alive by definition, not inconclusive.
+            assert_refused_and_unwritten(wid, aid, heir, good, "FENCE-SPECIALIST-ACTIVE",
+                {specialist: takeover_show(specialist, status="dispatched", liveness={"verdict": "unverifiable"})})
+            inconclusive = {"unverifiable": takeover_show(specialist, status=None, liveness={"verdict": "unverifiable"}),
+                            "uncorrelated": takeover_show("some-other-dispatch", status="dispatched"),
+                            "illegible": b"\xff\xfe\x00not-utf8"}
+            for label, raw in inconclusive.items():                                                      # n5
+                with self.subTest(n5=label):
+                    assert_refused_and_unwritten(wid, aid, heir, good, "FENCE-SPECIALIST-UNPROVEN", {specialist: raw})
+            for label, raw in inconclusive.items():                                                      # n5b
+                raw = raw.replace(specialist.encode(), leader_dispatch.encode()) if label == "unverifiable" else raw
+                with self.subTest(n5b=label):
+                    assert_refused_and_unwritten(wid, aid, heir, good, "FENCE-LEADER-UNPROVEN",
+                                                 {specialist: spec_done, leader_dispatch: raw})
+            assert_refused_and_unwritten(wid, aid, heir, good, "FENCE-SPECIALIST-UNPROVEN", {}, handle=False)  # n5c
+            owner_wid = "work-no-owner"                                                                  # n6
+            owner_context, owner_aid, _ = seed(owner_wid, owner=None)
+            assert_refused_and_unwritten(owner_wid, owner_aid, heir, authorization(owner_wid, owner_context, owner_aid, "owner.json"),
+                                         "FENCE-NOT-OBSERVABLE")
+            # n7 and pv1: the preview writes nothing and pins the inputs including the requester.
+            with observing(both_done):
+                before = store.read_snapshot(root).content_sha256
+                code, preview = fence(wid, aid, heir, good)
+                self.assertEqual((code, preview.get("verdict"), preview.get("hops")), (0, "FENCE-PREVIEW", 2), preview)
+                self.assertEqual(store.read_snapshot(root).content_sha256, before)
+                self.assertEqual(preview["requester"]["role"], "successor")
+                self.assertEqual(sorted(preview["evidence"]), ["leader", "specialist"])
+                for side, dispatch in (("specialist", specialist), ("leader", leader_dispatch)):
+                    entry = preview["evidence"][side]
+                    self.assertEqual(entry["observation_ref"], "orca:" + dispatch)
+                    self.assertEqual(entry["verdict"], "terminal")
+                    self.assertEqual(entry["observation_sha256"], hashlib.sha256(both_done[dispatch]).hexdigest())
+                    self.assertEqual(entry["dispatch_status"], "completed")
+                    self.assertIn("liveness", entry)
+                code, stale = fence(wid, aid, heir, good, "--apply", "--expected-sha256", "0" * 64)
+                self.assertEqual((code, stale.get("code")), (2, "FENCE-INPUTS-STALE"), stale)
+                code, stale = fence(wid, aid, "orca:ctx-heir-2", good, "--apply", "--expected-sha256", preview["expected_sha256"])
+                self.assertEqual((code, stale.get("code")), (2, "FENCE-INPUTS-STALE"), stale)
+                self.assertEqual(store.read_snapshot(root).content_sha256, before)
+            # pv2: retained form, live leader acting as itself.
+            retained_wid = "work-retained-preview"
+            retained_context, retained_aid, _ = seed(retained_wid, retained=True)
+            retained_auth = authorization(retained_wid, retained_context, retained_aid, "retained.json")
+            with observing({specialist: spec_done, leader_dispatch: leader_live}):
+                before = store.read_snapshot(root).content_sha256
+                code, preview = fence(retained_wid, retained_aid, leader_ref, retained_auth)
+                self.assertEqual((code, preview.get("verdict"), preview.get("hops")), (0, "FENCE-PREVIEW", 1), preview)
+                self.assertEqual(preview["requester"]["role"], "current-leader")
+                self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            # -- T004: the mutation, replay, resume and what the fence leaves behind. --
+            store_module = grill_workspace.grill_core_module("store")
+            spec_unverifiable = takeover_show(specialist, status="completed", revoked="2026-01-01T00:00:00Z",
+                                              liveness={"verdict": "unverifiable"})
+
+            def item_of(work_id):
+                return store.read_snapshot(root).document["agent_orchestration"]["work_items"][work_id]
+
+            def preview_and_apply(work_id, activity_id, session_ref, auth, raws):
+                with observing(raws):
+                    code, preview = fence(work_id, activity_id, session_ref, auth)
+                    self.assertEqual((code, preview.get("verdict")), (0, "FENCE-PREVIEW"), preview)
+                    code, applied = fence(work_id, activity_id, session_ref, auth, "--apply",
+                                          "--expected-sha256", preview["expected_sha256"])
+                    self.assertEqual((code, applied.get("verdict")), (0, "FENCE-APPLIED"), applied)
+                return preview, applied
+
+            def apply_interrupted(work_id, activity_id, session_ref, auth, raws):
+                """Hop 1 commits, hop 2 fails: the only exit of the verb with a refusal code and an effect."""
+                real, calls = store_module.transact, []
+                def flaky(root_, mutate):
+                    calls.append(1)
+                    if len(calls) == 2:
+                        raise store_module.StoreError(store_module.STATE_DIVERGENCE, "interrupted")
+                    return real(root_, mutate)
+                with observing(raws):
+                    code, preview = fence(work_id, activity_id, session_ref, auth)
+                    self.assertEqual((code, preview.get("hops")), (0, 2), preview)
+                    with mock.patch.object(store_module, "transact", side_effect=flaky):
+                        code, conflict = fence(work_id, activity_id, session_ref, auth, "--apply",
+                                               "--expected-sha256", preview["expected_sha256"])
+                self.assertEqual((code, conflict.get("code")), (2, "FENCE-CAS-CONFLICT"), conflict)
+                return preview, conflict
+
+            # p1: orphan form, two hops, successor requester; the fenced resource does not pin the takeover.
+            wid = "work-p1"
+            context_id, aid, resource_id = seed(wid)
+            auth = authorization(wid, context_id, aid, "p1.json")
+            before = store.read_snapshot(root).content_sha256
+            preview, applied = preview_and_apply(wid, aid, heir, auth, both_done)
+            self.assertEqual((applied["activity_state"], applied["resource_state"], applied["requester"]["role"]),
+                             ("FAILED", "CLOSED", "successor"))
+            self.assertEqual(applied["store_revision"], store.read_snapshot(root).revision)
+            item = item_of(wid)
+            operation = item["operations"][applied["operation_id"]]
+            activity, resource = item["activities"][aid], item["resources"][resource_id]
+            self.assertEqual((operation["kind"], operation["state"], operation["subject_ids"]),
+                             ("activity-fence", "CONFIRMED", [aid, resource_id]))
+            self.assertEqual(operation["input_sha256"], preview["expected_sha256"])
+            self.assertEqual(operation["intended_after"]["authorization"], json.loads((root / auth).read_text()))
+            self.assertEqual(operation["intended_after"]["evidence"], applied["evidence"])
+            readiness = grill_workspace._session_readiness(root, "codex", heir, work_id=wid)
+            self.assertEqual(operation["intended_after"]["requester"], {"role": "successor", "ref": readiness["ref"],
+                "sha256": readiness["sha256"], "incarnation": readiness["incarnation"]})
+            self.assertEqual((activity["state"], activity["diagnostic_ref"]), ("FAILED", operation["result_ref"]))
+            self.assertEqual(operation["result_ref"], f"activity-fence/{applied['operation_id']}.json")
+            self.assertEqual(resource["state"], "CLOSED")
+            fence_ref = "orca:" + specialist + ":fence"
+            self.assertIn({"ref": fence_ref, "sha256": hashlib.sha256(spec_done).hexdigest()},
+                          resource["evidence_manifest"]["receipts"])
+            self.assertEqual((resource["last_observation"], resource["operation_id"]), (fence_ref, applied["operation_id"]))
+            self.assertIsNone(resource["result_acceptance_ref"])
+            # p3: replay by the same requester is read-only and observes nothing.
+            fenced = store.read_snapshot(root).content_sha256
+            seen.clear()
+            with observing(None):
+                for tail in ((), ("--apply", "--expected-sha256", "0" * 64)):
+                    code, reused = fence(wid, aid, heir, auth, *tail)
+                    self.assertEqual((code, reused.get("verdict")), (0, "FENCE-REUSED"), reused)
+            self.assertEqual(seen, [])
+            self.assertEqual(store.read_snapshot(root).content_sha256, fenced)
+            # p3b: another requester is neither replay nor resume.
+            assert_refused_and_unwritten(wid, aid, "orca:ctx-heir-2", auth, "FENCE-ACTIVITY-STATE")
+            # p4: only the fence walks the new edge; acceptance refuses on both forms.
+            (root / "manifest.json").write_text(json.dumps({"files": [], "required_activity_ids": [],
+                "author_activity_ids": [], "task_binding": None, "human_authorization": None}), encoding="utf-8")
+            def accept(work_id, context, activity_id, *tail):
+                return self.run_cli("gauntlet-activity", str(root), "--work-id", work_id, "--context-id", context,
+                    "--epoch", "1", "--session-ref", leader_ref, "--activity-id", activity_id, "--step", "specify",
+                    "--kind", "author", "--phase", "accept", "--input-manifest", "manifest.json", *tail)
+            # p1 then hands over to the takeover: the fenced resource is not retained.
+            with observing({leader_dispatch: leader_done}):
+                code, taken = self.run_cli("gauntlet-context-takeover", str(root), "--work-id", wid, "--session-ref", heir)
+                self.assertEqual((code, taken.get("verdict")), (0, "TAKEOVER-PREVIEW"), taken)
+                code, taken = self.run_cli("gauntlet-context-takeover", str(root), "--work-id", wid, "--session-ref", heir,
+                                           "--apply", "--expected-sha256", taken["expected_sha256"])
+                self.assertEqual((code, taken.get("verdict")), (0, "TAKEOVER-APPLIED"), taken)
+            self.assertNotIn(resource_id, taken["preserved_resources"])
+
+            # p2: retained form, live leader as itself, one hop; nothing is accepted or inherited.
+            wid = "work-p2"
+            context_id, aid, resource_id = seed(wid, retained=True)
+            auth = authorization(wid, context_id, aid, "p2.json")
+            before_item = item_of(wid)
+            preview, applied = preview_and_apply(wid, aid, leader_ref, auth,
+                                                 {specialist: spec_unverifiable, leader_dispatch: leader_live})
+            self.assertEqual((preview["hops"], applied["requester"]["role"]), (1, "current-leader"))
+            item = item_of(wid)
+            activity, resource = item["activities"][aid], item["resources"][resource_id]
+            for key in ("result_ref", "result_sha256", "output_manifest"):
+                self.assertEqual(activity[key], before_item["activities"][aid][key])
+            self.assertEqual((activity["state"], activity["diagnostic_ref"]),
+                             ("FAILED", item["operations"][applied["operation_id"]]["result_ref"]))
+            for key in ("accepted_by_context", "acceptance_ref", "review_verdict"):
+                self.assertIsNone(activity[key])
+            self.assertEqual((resource["state"], resource["last_observation"]), ("CLOSED", "orca:" + specialist + ":fence"))
+            self.assertIsNone(resource["result_acceptance_ref"])
+            self.assertEqual(item["operations"][applied["operation_id"]]["intended_after"]["requester"]["ref"], leader_ref)
+            before = store.read_snapshot(root).content_sha256
+            code, cleaned = self.run_cli("gauntlet-cleanup", str(root), "--work-id", wid, "--context-id", context_id,
+                                         "--epoch", "1", "--session-ref", leader_ref)
+            self.assertEqual((code, cleaned.get("verdict")), (2, "UNKNOWN"), cleaned)
+            listed = [entry for entry in json.dumps(cleaned).split('"') if entry == "SESSION-CLOSE-UNPROVEN"]
+            self.assertTrue(listed, cleaned)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+            # p4 (fenced): the live leader cannot accept the fenced activity, and a diagnostic does not walk the edge either.
+            for tail in (("--result", "results/orphan.md"), ("--diagnostic", "diag.md")):
+                code, refused = accept(wid, context_id, aid, *tail)
+                self.assertEqual((code, refused.get("code")), (2, "ACTIVITY-STATE-DIVERGENCE"), refused)
+            unfenced_wid = "work-p4-unfenced"
+            unfenced_context, unfenced_aid, _ = seed(unfenced_wid, retained=True)
+            code, refused = accept(unfenced_wid, unfenced_context, unfenced_aid, "--diagnostic", "diag.md")
+            self.assertEqual((code, refused.get("code")), (2, "ACTIVITY-STATE-DIVERGENCE"), refused)
+            # p6: the fenced activity no longer counts as active work for a switch.
+            active, unknown = grill_workspace._continuity_quiescence(store.read_snapshot(root).document, item_of(wid), wid)
+            self.assertNotIn(aid, active)
+            code, prepared = self.run_cli("gauntlet-prepare-switch", str(root), "--work-id", wid, "--session-ref", leader_ref,
+                                          "--context-id", context_id, "--epoch", "1", "--to-runtime", "claude")
+            self.assertNotEqual(prepared.get("code"), "CONTINUITY-ACTIVE-WORK", prepared)
+
+            # p2b: retained form, terminal leader, successor requester.
+            wid = "work-p2b"
+            context_id, aid, _ = seed(wid, retained=True)
+            _, applied = preview_and_apply(wid, aid, heir, authorization(wid, context_id, aid, "p2b.json"), both_done)
+            self.assertEqual(applied["requester"]["role"], "successor")
+            self.assertEqual(item_of(wid)["activities"][aid]["state"], "FAILED")
+
+            # p5: hop 2 interrupted, then resumed by the same requester with the recorded hash.
+            wid = "work-p5"
+            context_id, aid, resource_id = seed(wid)
+            auth = authorization(wid, context_id, aid, "p5.json")
+            _, conflict = apply_interrupted(wid, aid, heir, auth, both_done)
+            self.assertEqual((conflict["activity_state"], conflict["resource_state"]), ("FAILED", "CLOSE_PENDING"))
+            operation_id = conflict["operation_id"]
+            recorded_hash = item_of(wid)["operations"][operation_id]["input_sha256"]
+            # p3b (resume shape): another requester neither resumes nor replays, and the takeover stays admitted.
+            assert_refused_and_unwritten(wid, aid, "orca:ctx-heir-2", auth, "FENCE-ACTIVITY-STATE")
+            with observing({leader_dispatch: leader_done}):
+                code, taken = self.run_cli("gauntlet-context-takeover", str(root), "--work-id", wid,
+                                           "--session-ref", "orca:ctx-heir-2")
+                self.assertEqual((code, taken.get("verdict")), (0, "TAKEOVER-PREVIEW"), taken)
+            # n10: the resume proves the requester again before hop 2.
+            refusal = grill_workspace.CliFailure(2, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", "heir not proven")
+            before = store.read_snapshot(root).content_sha256
+            with observing(None), mock.patch.object(grill_workspace, "_session_readiness", side_effect=refusal):
+                code, refused = fence(wid, aid, heir, auth, "--apply", "--expected-sha256", recorded_hash)
+                self.assertEqual((code, refused.get("code")), (2, "LEADER-AUTHORITY-UNPROVEN"), refused)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+            with observing(None):
+                code, refused = fence(wid, aid, heir, auth, "--apply", "--expected-sha256", "0" * 64)
+                self.assertEqual((code, refused.get("code")), (2, "FENCE-INPUTS-STALE"), refused)
+                code, resumed = fence(wid, aid, heir, auth)
+                self.assertEqual((code, resumed.get("verdict"), resumed.get("resume"), resumed.get("hops"),
+                                  resumed.get("expected_sha256")), (0, "FENCE-PREVIEW", True, 1, recorded_hash), resumed)
+                self.assertEqual(store.read_snapshot(root).content_sha256, before)
+                with mock.patch.object(grill_workspace, "_session_readiness", wraps=grill_workspace._session_readiness) as proof:
+                    code, done = fence(wid, aid, heir, auth, "--apply", "--expected-sha256", recorded_hash)
+                self.assertEqual((code, done.get("verdict"), done.get("resource_state")), (0, "FENCE-APPLIED", "CLOSED"), done)
+                proof.assert_called_once()
+                self.assertEqual(item_of(wid)["resources"][resource_id]["state"], "CLOSED")
+                code, again = fence(wid, aid, heir, auth, "--apply", "--expected-sha256", recorded_hash)
+                self.assertEqual((code, again.get("verdict")), (0, "FENCE-REUSED"), again)
+            # contraprova: replay is read-only, so a readiness that would refuse is never consulted.
+            with observing(None), mock.patch.object(grill_workspace, "_session_readiness", side_effect=refusal):
+                code, again = fence(wid, aid, heir, auth)
+                self.assertEqual((code, again.get("verdict")), (0, "FENCE-REUSED"), again)
+            # p5 (post hop 1 divergence): the resource moved away, the verb reports what hop 1 left behind.
+            wid = "work-p5b"
+            context_id, aid, resource_id = seed(wid)
+            auth = authorization(wid, context_id, aid, "p5b.json")
+            _, conflict = apply_interrupted(wid, aid, heir, auth, both_done)
+            operation_id = conflict["operation_id"]
+            recorded_hash = item_of(wid)["operations"][operation_id]["input_sha256"]
+            def preserve(document):
+                document["agent_orchestration"]["work_items"][wid]["resources"][resource_id]["state"] = "PRESERVED"
+                document["agent_orchestration"]["work_items"][wid]["resources"][resource_id]["preservation_reasons"] = ["RESULT_NOT_DURABLE"]
+                return document
+            store.transact(root, preserve)
+            before = store.read_snapshot(root).content_sha256
+            with observing(None):
+                code, refused = fence(wid, aid, heir, auth, "--apply", "--expected-sha256", recorded_hash)
+            self.assertEqual((code, refused.get("code"), refused.get("activity_state"), refused.get("resource_state"),
+                              refused.get("operation_id")), (2, "FENCE-CAS-CONFLICT", "FAILED", "PRESERVED", operation_id), refused)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+            # n10 (current-leader): the leader recorded at hop 1 must still be the observed one.
+            wid = "work-n10"
+            context_id, aid, resource_id = seed(wid)
+            auth = authorization(wid, context_id, aid, "n10.json")
+            live_raws = {specialist: spec_done, leader_dispatch: leader_live}
+            _, conflict = apply_interrupted(wid, aid, leader_ref, auth, live_raws)
+            recorded = item_of(wid)["operations"][conflict["operation_id"]]
+            self.assertEqual(recorded["intended_after"]["requester"]["role"], "current-leader")
+            adapter = orchestration_fixture.boundary(grill_workspace, root, "codex", leader_ref, wid)[0]
+            observed = adapter.observe()
+            drifted = SimpleNamespace(observe=lambda: {**observed, "incarnation": "another-incarnation"})
+            before = store.read_snapshot(root).content_sha256
+            with observing(None), mock.patch.object(grill_workspace, "_leader_boundary", return_value=drifted):
+                code, refused = fence(wid, aid, leader_ref, auth, "--apply", "--expected-sha256", recorded["input_sha256"])
+            self.assertEqual((code, refused.get("code")), (2, "LEADER-AUTHORITY-UNPROVEN"), refused)
+            self.assertEqual(store.read_snapshot(root).content_sha256, before)
+
+            # n9: the revision guard of hop 1 is the only CAS; a write that misses the pair does not trip it.
+            wid = "work-n9"
+            context_id, aid, resource_id = seed(wid)
+            auth = authorization(wid, context_id, aid, "n9.json")
+            with observing(both_done):
+                code, preview = fence(wid, aid, heir, auth)
+                real = store_module.read_snapshot(root)
+                stale = store_module.Snapshot(document=real.document, revision=real.revision - 1,
+                    content_sha256=real.content_sha256, project_id=real.project_id, path=real.path)
+                with mock.patch.object(store_module, "read_snapshot", return_value=stale):
+                    code, refused = fence(wid, aid, heir, auth, "--apply", "--expected-sha256", preview["expected_sha256"])
+                self.assertEqual((code, refused.get("code")), (2, "FENCE-CAS-CONFLICT"), refused)
+                self.assertEqual(store.read_snapshot(root).content_sha256, real.content_sha256)
+                seed("work-n9-bystander")                       # a real write elsewhere moves the revision only
+                code, applied = fence(wid, aid, heir, auth, "--apply", "--expected-sha256", preview["expected_sha256"])
+                self.assertEqual((code, applied.get("verdict")), (0, "FENCE-APPLIED"), applied)
+            wid = "work-n9-touched"
+            context_id, aid, resource_id = seed(wid)
+            auth = authorization(wid, context_id, aid, "n9t.json")
+            with observing(both_done):
+                code, preview = fence(wid, aid, heir, auth)
+                def touch(document):
+                    document["agent_orchestration"]["work_items"][wid]["resources"][resource_id]["state"] = "PRESERVED"
+                    document["agent_orchestration"]["work_items"][wid]["resources"][resource_id]["preservation_reasons"] = ["RESULT_NOT_DURABLE"]
+                    return document
+                store.transact(root, touch)
+                before = store.read_snapshot(root).content_sha256
+                code, refused = fence(wid, aid, heir, auth, "--apply", "--expected-sha256", preview["expected_sha256"])
+                self.assertEqual((code, refused.get("code")), (2, "FENCE-ACTIVITY-STATE"), refused)
+                self.assertEqual(store.read_snapshot(root).content_sha256, before)
 
     def test_orchestration_adopt_preview_matches_apply_when_context_fenced(self):
         """T006/T007: a preview against a work item already bound to another
