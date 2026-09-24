@@ -24,7 +24,8 @@
     "attested_executions": {
       "checklist": "se-6b9a7202934276c66908ec2066ec95a570bfa47f4013b7cce086517d8a0304a8",
       "plan": "se-12ebc01b62acdaa5dad133875261caa3d6db2c495107686996d60301885f4e1f",
-      "specify": "se-a59acdd25ab39378cb20e88a3e901eb46883fb8d9189728866aa5f4c2c27bb0d"
+      "specify": "se-a59acdd25ab39378cb20e88a3e901eb46883fb8d9189728866aa5f4c2c27bb0d",
+      "tasks": "se-14a37abc9c6a0a1f7c27df809d52d04a9fd92b28a35d76369992297d9ed5eb4f"
     },
     "attested_outputs": {
       "checklist": {
@@ -44,6 +45,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
         "step_id": "specify"
+      },
+      "tasks": {
+        "output_sha256": "sha256:f70639d839803532422ba28979f8a4475fda225f268c03da6d1f01bca40006a8",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/tasks-tasks-1.terminal.json",
+        "step_id": "tasks"
       }
     },
     "audit": [
@@ -117,9 +124,28 @@
         "reason": "",
         "state": "complete",
         "step": "checklist"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "in-progress",
+        "step": "tasks"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/033-latest-models/tasks.md",
+            "sha256": "f70639d839803532422ba28979f8a4475fda225f268c03da6d1f01bca40006a8"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "complete",
+        "step": "tasks"
       }
     ],
-    "current_step": "tasks",
+    "current_step": "analyze",
     "execution_branch": "cadugevaerd/fix-latest-models",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -146,7 +172,7 @@
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
-      "tasks": "pending",
+      "tasks": "complete",
       "verify": "pending"
     },
     "workflow_version": "v4"
