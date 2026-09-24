@@ -22,10 +22,17 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "checklist": "se-01b2f61cfbc3fa7dd0f80aeb0b3273561b6363ef6bda85fa01a87dfc93478843",
       "plan": "se-f0d41c1064cc16f4ec149c9c547e597a20c833c9b1375691e2943a87ad7f716d",
       "specify": "se-196bd5f1ad3f688b1a8f1115b54bafde41f1a223f362847a3a97484258ad0009"
     },
     "attested_outputs": {
+      "checklist": {
+        "output_sha256": "sha256:686b3d4a71def2d1f0c1a9f6b3a03782009e3cc014548b04cfafe9c3f111dd9b",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
       "plan": {
         "output_sha256": "sha256:f2a60ba87959e841277782d12d1685cdc78d56d9210e9f20d3ebbbd0fa0ab844",
         "provenance": "current-generation",
@@ -77,9 +84,28 @@
         "reason": "plan r3: autor fable xhigh, revisoes independentes R1 e R2 (fable high) aplicadas; R2 aprova condicionado a I1/I2, conferidos",
         "state": "complete",
         "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "invoke /speckit-checklist",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/033-presentation-suspension/checklists/suspension.md",
+            "sha256": "686b3d4a71def2d1f0c1a9f6b3a03782009e3cc014548b04cfafe9c3f111dd9b"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "26 itens, todos passam na spec r2; nenhum gap exige alterar a spec",
+        "state": "complete",
+        "step": "checklist"
       }
     ],
-    "current_step": "checklist",
+    "current_step": "tasks",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -98,7 +124,7 @@
     ],
     "steps": {
       "analyze": "pending",
-      "checklist": "pending",
+      "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
