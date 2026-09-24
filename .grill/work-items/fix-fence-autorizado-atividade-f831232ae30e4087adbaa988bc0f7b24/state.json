@@ -22,10 +22,17 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "checklist": "se-1156e1ab07e910ead8890b8011bc876f048c7ab9b354586484211a146d3e264f",
       "plan": "se-8d05e1f914c0ee79dd71246b3b2a236df13ca7be6c838821ec9caa782b491685",
       "specify": "se-9266a8dccfb19b1f2b821c7a80fdef8051ede658d8496f561931e5b78f28136e"
     },
     "attested_outputs": {
+      "checklist": {
+        "output_sha256": "sha256:b6f5dd7b8211dad4ca8a36dd7aae2332f151decdecc590033b70f81cb413aa08",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
+        "step_id": "checklist"
+      },
       "plan": {
         "output_sha256": "sha256:9710cb5ccd81648ffec72b6688e3955feb10c40c26406031291366765ef2b6a6",
         "provenance": "current-generation",
@@ -77,9 +84,28 @@
         "reason": "",
         "state": "complete",
         "step": "plan"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "in-progress",
+        "step": "checklist"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/034-fence-autorizado-atividade/checklists/release-gate.md",
+            "sha256": "b6f5dd7b8211dad4ca8a36dd7aae2332f151decdecc590033b70f81cb413aa08"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "complete",
+        "step": "checklist"
       }
     ],
-    "current_step": "checklist",
+    "current_step": "tasks",
     "execution_branch": "cadugevaerd/fix-leader",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -98,7 +124,7 @@
     ],
     "steps": {
       "analyze": "pending",
-      "checklist": "pending",
+      "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
