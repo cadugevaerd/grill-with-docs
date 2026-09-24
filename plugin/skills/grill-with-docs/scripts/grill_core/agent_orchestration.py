@@ -1390,6 +1390,9 @@ def validate_block(block: Any) -> dict[str, Any]:
                 if bridge is not None:
                     _fail("pre-campaign continuity has a fictitious bridge")
                 continue
+            if bridge is None and item["contexts"][context["predecessor_context_id"]]["campaign"] is None:
+                # Pre-campaign succession: nothing to bridge, the first campaign is born here.
+                continue
             if not isinstance(bridge, dict):
                 _fail("successor context has no campaign bridge")
             required_bridge = {"from_campaign", "to_campaign", "accepted_outputs", "worktree_identity"}
