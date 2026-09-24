@@ -34,10 +34,10 @@ Validado por `presentation_state` (`valid_suspension`) e persistido tal qual no 
 | Campo | Regra |
 |---|---|
 | `message["role"]` | `user`, e só `user` |
-| `message["id"]` | `str` não vazio; sem `id` a mensagem é ignorada (espelha `_tool_results`, M1) |
-| `message["blocks"]` | exatamente um bloco |
+| `message["id"]` | `str` não vazio; sem `id` a mensagem é ignorada (espelha a guarda `isinstance(event_id, str)` de `_full_read`, `agent_runtime.py:1094`; M1 da R1, M3 da R2) |
+| `message["blocks"]` | lista com exatamente um dict: `isinstance(blocks, list) and len(blocks) == 1 and isinstance(blocks[0], dict)`; `None`, string, lista vazia, dois itens ou item não-dict → mensagem ignorada, nunca `TypeError` (M4 da R2) |
 | `blocks[0]["type"]` | `text` |
-| `blocks[0]["text"].strip()` | igual a `stop adhd mode` ou `start adhd mode`, sensível a caixa |
+| `blocks[0]["text"]` | `str`; após `strip()`, igual a `stop adhd mode` ou `start adhd mode`, sensível a caixa |
 | posição | vale a mais recente entre as duas; a varredura não corta na compactação |
 
 Resultado de `_presentation_control(messages)`: `(stop_index, start_index, message)`, com `-1` para ausência.

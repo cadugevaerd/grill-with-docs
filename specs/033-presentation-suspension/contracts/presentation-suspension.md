@@ -4,10 +4,10 @@
 
 | Frase | Efeito | Condições |
 |---|---|---|
-| `stop adhd mode` | suspende | mensagem `role=user` da própria sessão, com `id` string não vazio; bloco único `text`; igualdade exata após `strip()` |
+| `stop adhd mode` | suspende | mensagem `role=user` da própria sessão, com `id` string não vazio; `blocks` lista de exatamente um dict, de `type` `text` e `text` string; igualdade exata após `strip()` |
 | `start adhd mode` | reativa | as mesmas; só tem efeito se houve `stop` anterior na sessão |
 
-Entre as duas, vale a mais recente. Fala do agente, resumo de compactação, mensagem sintética/meta (Claude) e mensagens `tool`, `developer`, `reasoning` nunca mudam o estado. Caixa diferente, texto extra ou bloco extra não contam; mensagem `user` sem `id` é ignorada.
+Entre as duas, vale a mais recente. Fala do agente, resumo de compactação, mensagem sintética/meta (Claude) e mensagens `tool`, `developer`, `reasoning` nunca mudam o estado. Caixa diferente, texto extra ou bloco extra não contam; mensagem `user` sem `id` ou com `blocks` malformado (`None`, não-lista, item não-dict) é ignorada, nunca erro.
 
 Limitações declaradas (research R2, R3, R14):
 
@@ -52,7 +52,7 @@ Quem recusa `STYLE-LOAD-UNCONFIRMED` é `_session_readiness` (`grill_workspace.p
 | `config_fingerprint` ou `gwd_skill_sha256`, apresentação não lida | `STYLE-LOAD-UNCONFIRMED` por `_session_readiness`, antes do gate (inalterado) | **liberado**: `_session_readiness` devolve `work_ready=true`; o gate não recusa e o refresh grava a apresentação nova com `application=suspended_by_user` e o registro com a configuração nova |
 | `config_fingerprint` ou `gwd_skill_sha256`, apresentação lida (`use_ready=true`) | liberado; refresh grava a apresentação nova (inalterado) | — |
 
-Teste do gate: caso existente em `tests/validate_task_import_contract.py` (`test_same_context_presentation_refresh_preserves_imported_history`, l.179-185), invertido e movido para o fim do método: readiness suspensa com `config_fingerprint` novo entra (`ENTERED`), é persistida com `application=suspended_by_user` e o registro novo, `revision` avança em um.
+Teste do gate: caso existente em `tests/validate_task_import_contract.py` (`test_same_context_presentation_refresh_preserves_imported_history`, l.179-185), invertido e movido para o fim do método, depois da l.217 (`self.assertEqual(self.footprint(), stable)`), como último bloco do `with`: readiness suspensa com `config_fingerprint` novo e registro completo → `wrapped(args) == ({'verdict': 'ENTERED'}, 0)`, `entered == [True, True, True]`, contexto persistido com `application=suspended_by_user` e o registro novo, `revision == prior.revision + 1` com `prior = store.read_snapshot(self.root)` lido imediatamente antes do caso (research R7; I1 da R2).
 
 ## Códigos
 
