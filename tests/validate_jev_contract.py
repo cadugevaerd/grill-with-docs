@@ -85,6 +85,12 @@ class ProviderShape(unittest.TestCase):
         self.assertEqual(doubtful["hint"]["team"], "payments")
         self.assertIs(doubtful["hint"]["is_bug"], True)
 
+    def test_live_probe_response_is_read_like_the_documented_one(self):
+        live = json.loads((REPO / "tests/fixtures/jev/live-response.json").read_text(encoding="utf-8"))["response"]
+        decision = jev.interpret("fixture", FIXTURE["request"]["questions"], live, 0.7, [])
+        self.assertEqual(decision["decided_by"], "jev")
+        self.assertEqual(set(decision["confidence"]), set(FIXTURE["request"]["questions"]))
+
     def test_catalog_questions_use_the_request_shape_of_the_example(self):
         catalog = jev.load_catalog()
         allowed = {"type", "instructions", "criteria"}
