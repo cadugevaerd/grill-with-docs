@@ -22,9 +22,16 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "plan": "se-8d05e1f914c0ee79dd71246b3b2a236df13ca7be6c838821ec9caa782b491685",
       "specify": "se-9266a8dccfb19b1f2b821c7a80fdef8051ede658d8496f561931e5b78f28136e"
     },
     "attested_outputs": {
+      "plan": {
+        "output_sha256": "sha256:9710cb5ccd81648ffec72b6688e3955feb10c40c26406031291366765ef2b6a6",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
       "specify": {
         "output_sha256": "sha256:23b2942533c5dbd3de35ecddfc8645e790e48e6438bcbed1309cd88d6ede0834",
         "provenance": "current-generation",
@@ -51,9 +58,28 @@
         "reason": "",
         "state": "complete",
         "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "in-progress",
+        "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/034-fence-autorizado-atividade/plan.md",
+            "sha256": "9710cb5ccd81648ffec72b6688e3955feb10c40c26406031291366765ef2b6a6"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-leader",
+        "reason": "",
+        "state": "complete",
+        "step": "plan"
       }
     ],
-    "current_step": "plan",
+    "current_step": "checklist",
     "execution_branch": "cadugevaerd/fix-leader",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -76,7 +102,7 @@
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
-      "plan": "pending",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
