@@ -22,9 +22,16 @@
       "runtime": "claude"
     },
     "attested_executions": {
+      "plan": "se-f0d41c1064cc16f4ec149c9c547e597a20c833c9b1375691e2943a87ad7f716d",
       "specify": "se-196bd5f1ad3f688b1a8f1115b54bafde41f1a223f362847a3a97484258ad0009"
     },
     "attested_outputs": {
+      "plan": {
+        "output_sha256": "sha256:f2a60ba87959e841277782d12d1685cdc78d56d9210e9f20d3ebbbd0fa0ab844",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/plan-plan-1.terminal.json",
+        "step_id": "plan"
+      },
       "specify": {
         "output_sha256": "sha256:0c7d3be6a2e73e53584c64c4b9a38bc5c0fb7c79057c145124e2f0d2081c133e",
         "provenance": "current-generation",
@@ -58,9 +65,21 @@
         "reason": "plan: autor fable xhigh via Orca, invocacao /speckit-plan",
         "state": "in-progress",
         "step": "plan"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/033-presentation-suspension/plan.md",
+            "sha256": "f2a60ba87959e841277782d12d1685cdc78d56d9210e9f20d3ebbbd0fa0ab844"
+          }
+        ],
+        "execution_branch": "cadugevaerd/feat-new-subagents",
+        "reason": "plan r3: autor fable xhigh, revisoes independentes R1 e R2 (fable high) aplicadas; R2 aprova condicionado a I1/I2, conferidos",
+        "state": "complete",
+        "step": "plan"
       }
     ],
-    "current_step": "plan",
+    "current_step": "checklist",
     "execution_branch": "cadugevaerd/feat-new-subagents",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -83,7 +102,7 @@
       "converge": "pending",
       "implement-parallel": "pending",
       "partition": "pending",
-      "plan": "in-progress",
+      "plan": "complete",
       "review": "pending",
       "ship": "pending",
       "specify": "complete",
