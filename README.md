@@ -1,6 +1,6 @@
 # grill-with-docs
 
-**v8.0.0 · MIT**
+**v8.1.0 · MIT**
 
 Workflow v5: duas revisões fixas (plan/review), exceções de risco verificadas por etapa,
 dois grupos de workers e entrevista em lotes de até três perguntas independentes.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 8.1.0
+
+- Feature: decisão por pergunta no `decide`. Cada pergunta acima do limiar é decidida pelo Jev (`decided`); o agente responde só as `pending`, com o valor sugerido em `hint`. `decided_by` passa a ser `jev`, `partial` ou `agent`, e `result` continua completo apenas quando tudo foi decidido, então `step-assessment --apply` segue gravando só classificações inteiras. Em `spec-coverage`, um requisito decidido como não coberto basta para NO-GO. Nos dados da calibração da 8.0.0, os casos com pelo menos uma pergunta decidida sobem de 0 para 3/8 triagens, 8/8 lotes de DQ, 34/34 specs e 34/34 planos (40% das perguntas de risco por etapa).
+- Calibração: `dq-batch` 0,75 → 0,90. Por pergunta, a 0,75 o Jev descartaria DQs materiais (acurácia de 64% nas decididas, erros com confiança até 0,86); a 0,90, 21/80 decididas com 100% de acerto.
+
 ## 8.0.0
 
 - Feature: decisões tipadas via Jev (TypeSafe) no OpenRouter. O novo subcomando `decide ROOT --kind K` responde, numa única chamada de 70–500 ms a `typesafe/jev-1.13` (`POST /api/alpha/decisions`), as perguntas estreitas que antes custavam um turno de LLM: `step-assessment` (grava `step-inputs/<step>.json` com `--apply` e, portanto, decide se reviewer/autor extra são exigidos), `triage` (rota e severidade), `dq-batch` (até três DQs materiais), `partition-groups` e `spec-coverage` (NO-GO antecipado por FR/SC). As perguntas vivem em `assets/jev-questions.json`. Todas acima do limiar → `decided_by: jev`; qualquer uma abaixo → `decided_by: agent` e o agente decide como antes.

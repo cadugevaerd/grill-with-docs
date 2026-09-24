@@ -10,8 +10,9 @@ This is the core's only network call. It never downloads bytes, and it lives
 behind one replaceable :class:`Transport` so no test ever touches the network.
 The API key is read from the environment only, and never written, logged or
 echoed into a payload. Every transport or contract failure is fail-closed
-(``JevError``); a response below the kind's confidence threshold is not a
-failure, it is ``decided_by: agent`` and the agent decides as before.
+(``JevError``); an answer below the kind's confidence threshold is not a
+failure: confident questions land in ``decided``, the agent answers only the
+``pending`` ones, and ``decided_by`` is ``jev``, ``partial`` or ``agent``.
 
 Pure except for :class:`Transport`: callers pass state already read through
 ``grill_workspace.safe_read_regular_fd``.
@@ -140,18 +141,27 @@ def interpret(kind: str, questions: dict[str, Any], response: Any, threshold: fl
         values[key], confidence[key] = read_answer(question, answer)
         if question["type"] == "noul":
             raw[key] = float(answer["noul"])
-    confident = all(c >= threshold for c in confidence.values())
+    # Each question stands alone: the confident ones are decided, the agent
+    # answers only the rest. Below threshold a value is a hint, never an answer.
+    decided = {k: v for k, v in values.items() if confidence[k] >= threshold}
+    pending = [k for k in values if k not in decided]
     decision: dict[str, Any] = {
         "kind": kind,
         "model": response.get("model"),
-        "decided_by": "jev" if confident else "agent",
+        "decided_by": "agent" if not decided else "partial" if pending else "jev",
         "threshold": threshold,
         "confidence": confidence,
+        "decided": decided,
+        "pending": pending,
+        "hint": {k: values[k] for k in pending},
         "result": None,
     }
-    if not confident:
-        # Below threshold the probabilities are a hint, never an answer.
-        decision["hint"] = values
+    if pending:
+        if kind == "spec-coverage":
+            # One confidently uncovered requirement is already a NO-GO.
+            uncovered = [i for i in items if decided.get(item_key(prefix, i)) is False]
+            if uncovered:
+                decision["result"] = {"uncovered": uncovered, "verdict": "NO-GO"}
         return decision
     by_item = {item: values[item_key(prefix, item)] for item in items}
     if kind == "step-assessment":
