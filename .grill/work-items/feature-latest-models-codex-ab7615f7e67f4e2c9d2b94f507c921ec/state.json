@@ -12,8 +12,31 @@
     "state": "present"
   },
   "development": {
-    "audit": [],
+    "audit": [
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "STYLE-DEPENDENCY-UNDETERMINED in reviewer R2; diagnostic recorded, cleanup SESSION-CLOSE-UNPROVEN",
+        "state": "blocked",
+        "step": "specify"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "in-progress",
+        "step": "specify"
+      }
+    ],
     "current_step": "specify",
+    "execution_branch": "cadugevaerd/fix-latest-models",
     "renamed_from": {},
     "schema": "grill-development/v2",
     "sequence": [
@@ -38,7 +61,7 @@
       "plan": "pending",
       "review": "pending",
       "ship": "pending",
-      "specify": "pending",
+      "specify": "in-progress",
       "tasks": "pending",
       "verify": "pending"
     },

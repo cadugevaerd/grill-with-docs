@@ -1,0 +1,57 @@
+{
+  "activity_id": "specify-reviewer-latest-models",
+  "context_id": "ctx-e7a6afd156d2dd3e657106db",
+  "fence": 2,
+  "input_manifest": {
+    "author_activity_ids": [
+      "interview-author-latest-models"
+    ],
+    "files": [
+      {
+        "media_type": "text/plain",
+        "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/handoffs/FASE-001-SPECIFY-HANDOFF.md",
+        "sha256": "bc6ae0e3c765adbdc779ed63db352e47d55c7b384a7aa7528ceb6fdd5eaf1c55",
+        "size": 4772
+      },
+      {
+        "media_type": "text/plain",
+        "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/docs/adr/ADR-0001.md",
+        "sha256": "d52fcc97e32192015aef21fef662f12862edcfd942e2341fc88acd2fcf67bd2e",
+        "size": 4232
+      },
+      {
+        "media_type": "text/plain",
+        "path": ".grill/work-items/feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec/docs/adr/ADR-0002.md",
+        "sha256": "d688e624871463f1ee4fbda6402c3b33dcededebea3b9a53c2a0f6f8d6718142",
+        "size": 3940
+      },
+      {
+        "media_type": "text/plain",
+        "path": ".specify/memory/constitution.md",
+        "sha256": "54d5522b18e43efa05311dbf13ed79694b79ccfcb01509384b3572b2d5667569",
+        "size": 4787
+      },
+      {
+        "media_type": "text/plain",
+        "path": "specs/033-latest-models/spec.md",
+        "sha256": "64d14561255d12585587d652f91951636de939aae9730c61b3a165561f8330da",
+        "size": 7599
+      },
+      {
+        "media_type": "text/plain",
+        "path": "specs/033-latest-models/checklists/requirements.md",
+        "sha256": "7a3cb63dcd9ee08f615be862094267e80d9eeb342bc1028c6e713aeae296e5ad",
+        "size": 1167
+      }
+    ],
+    "human_authorization": null,
+    "required_activity_ids": [
+      "interview-author-latest-models"
+    ],
+    "task_binding": null
+  },
+  "input_sha256": "88bedc58f37b4fb34e533458b1d2f0e8788c988fa37d7383bbf08400c2f66b56",
+  "runtime": "codex",
+  "schema": "grill-activity-payload/v1",
+  "write_files": []
+}

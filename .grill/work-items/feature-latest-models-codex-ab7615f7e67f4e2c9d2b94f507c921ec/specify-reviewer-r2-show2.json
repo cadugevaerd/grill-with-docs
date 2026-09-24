@@ -1,0 +1,210 @@
+{
+  "id": "ca65ba86-d301-48fb-8bc9-255e45dc21da",
+  "ok": true,
+  "result": {
+    "dispatch": {
+      "id": "ctx_c37c6c5fe82c",
+      "runId": "run_0b1a6188850b",
+      "taskId": "task_05e1a9b18a0c",
+      "task_id": "task_05e1a9b18a0c",
+      "contractVersion": 1,
+      "assigneeHandle": "term_61caf210-e487-4fa4-a48c-88ab84c62fe6",
+      "assigneePaneKey": "e3f35706-8cf2-430f-9e3e-8b22c38a8f41:8eede5ca-d20c-4e27-96e9-048de8ccc6aa",
+      "processIncarnation": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models@@67d7486d:25aad5fc-1a04-4b1d-808a-4e2dfe2d144b",
+      "capabilityRevokedAt": null,
+      "retryOfDispatchId": null,
+      "creatorDispatchId": null,
+      "hostScope": {
+        "kind": "local",
+        "hostId": "local"
+      },
+      "status": "dispatched",
+      "failureCount": 0,
+      "lastFailure": null,
+      "terminationReason": null,
+      "depth": 1,
+      "dispatchedAt": "2026-09-24 13:26:09",
+      "completedAt": null,
+      "createdAt": "2026-09-24 13:26:09",
+      "lastHeartbeatAt": null
+    },
+    "worker": {
+      "dispatchId": "ctx_c37c6c5fe82c",
+      "runtimeEpoch": "a1e53186-1808-4006-af41-a29ec02a0d0c",
+      "state": "ready",
+      "stage": "input_accepted",
+      "worktreeId": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models",
+      "agentTerminalHandle": "term_61caf210-e487-4fa4-a48c-88ab84c62fe6",
+      "setupState": "not_applicable",
+      "effects": [
+        {
+          "kind": "worktree",
+          "action": "reused",
+          "id": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models"
+        },
+        {
+          "kind": "setup",
+          "action": "not_applicable",
+          "state": "not_applicable"
+        },
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "created",
+          "id": "term_61caf210-e487-4fa4-a48c-88ab84c62fe6",
+          "surface": "visible"
+        },
+        {
+          "kind": "dispatch_input",
+          "role": "agent",
+          "id": "term_61caf210-e487-4fa4-a48c-88ab84c62fe6",
+          "state": "accepted"
+        }
+      ],
+      "residualResources": [
+        {
+          "kind": "terminal",
+          "role": "agent",
+          "action": "created",
+          "id": "term_61caf210-e487-4fa4-a48c-88ab84c62fe6",
+          "surface": "visible"
+        }
+      ],
+      "startOptions": {
+        "worktree": "current",
+        "mode": {
+          "mode": "terminal",
+          "preferred": "terminal",
+          "reason": "user_default",
+          "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+        },
+        "resolvedWorktreeId": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models",
+        "name": null,
+        "repo": null,
+        "baseBranch": null,
+        "terminal": null,
+        "agent": "codex",
+        "launch": {
+          "requested": {
+            "agent": "codex",
+            "model": "gpt-6-astra",
+            "effort": "high"
+          },
+          "effective": {
+            "agent": "codex",
+            "model": "gpt-6-astra",
+            "effort": "high"
+          }
+        },
+        "timeoutMs": 60000,
+        "setup": "not_applicable",
+        "setupSource": "existing_worktree"
+      },
+      "lastError": null,
+      "createdAt": "2026-09-24 13:26:09",
+      "updatedAt": "2026-09-24 13:26:11"
+    },
+    "projection": {
+      "id": "ctx_c37c6c5fe82c",
+      "dispatchId": "ctx_c37c6c5fe82c",
+      "taskId": "task_05e1a9b18a0c",
+      "runId": "run_0b1a6188850b",
+      "role": "worker",
+      "parent": null,
+      "provider": {
+        "id": "codex",
+        "model": "gpt-6-astra"
+      },
+      "host": {
+        "kind": "local",
+        "id": "local"
+      },
+      "workspace": {
+        "id": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models",
+        "kind": "folder_or_worktree"
+      },
+      "stage": {
+        "worker": "ready",
+        "dispatch": "dispatched",
+        "detail": "input_accepted",
+        "activity": "working"
+      },
+      "outcome": "in_progress",
+      "liveness": {
+        "verdict": "live",
+        "observedAt": 1790256382560,
+        "source": "agent_status"
+      },
+      "evidence": {
+        "durable": true,
+        "liveStatus": "fresh",
+        "lastObservedAt": 1790256382560
+      },
+      "resource": {
+        "state": "owned",
+        "id": "wtr_07c2a7f18f2d",
+        "ownerDispatchId": "ctx_c37c6c5fe82c",
+        "releaseState": "not_requested",
+        "terminalState": "active"
+      },
+      "nextAction": {
+        "kind": "none",
+        "argv": []
+      },
+      "attention": {
+        "categories": [],
+        "requiresAction": false
+      }
+    },
+    "terminal": {
+      "handle": "term_61caf210-e487-4fa4-a48c-88ab84c62fe6",
+      "ptyId": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models@@67d7486d",
+      "incarnationId": "25aad5fc-1a04-4b1d-808a-4e2dfe2d144b",
+      "orphaned": false,
+      "worktreeId": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models",
+      "worktreePath": "/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models",
+      "branch": "refs/heads/cadugevaerd/fix-latest-models",
+      "tabId": "e3f35706-8cf2-430f-9e3e-8b22c38a8f41",
+      "leafId": "8eede5ca-d20c-4e27-96e9-048de8ccc6aa",
+      "title": "⠙ Report task outcome | fix-latest-models",
+      "connected": true,
+      "writable": true,
+      "lastOutputAt": 1790256389426,
+      "preview": " lines (ctrl + t to view transcript)\n}\n}•                   10s • esc to interupt)                 •   •   •   •   • 1  •   •   •   •   •                 2                 •   •   •   •   • 3 •   •   •   •   •                 4                  •   •   •   •   • 5 •   •   •   •   •                 6",
+      "executionHostId": "local",
+      "agentIdentity": "codex",
+      "paneRuntimeId": -1,
+      "rendererGraphEpoch": 0,
+      "agentWait": null
+    },
+    "observation": {
+      "status": "live",
+      "exactWorker": true,
+      "agentWait": null
+    },
+    "terminalResource": {
+      "id": "wtr_07c2a7f18f2d",
+      "ownershipState": "owned",
+      "releaseState": "not_requested",
+      "retainedReason": null,
+      "terminalHandle": "term_61caf210-e487-4fa4-a48c-88ab84c62fe6",
+      "worktreeId": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models",
+      "endpointId": "a1e53186-1808-4006-af41-a29ec02a0d0c",
+      "endpointIncarnation": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/carlosaraujo/orca/workspaces/grill-with-docs/fix-latest-models@@67d7486d:25aad5fc-1a04-4b1d-808a-4e2dfe2d144b",
+      "originDispatchId": "ctx_c37c6c5fe82c",
+      "ownerDispatchId": "ctx_c37c6c5fe82c",
+      "releaseRequestedAt": null,
+      "releaseCompletedAt": null,
+      "releaseError": null,
+      "recoveryAttemptCount": 0,
+      "lastRecoveryAt": null,
+      "archive": {
+        "source": null,
+        "status": null
+      }
+    }
+  },
+  "_meta": {
+    "runtimeId": "a1e53186-1808-4006-af41-a29ec02a0d0c"
+  }
+}
