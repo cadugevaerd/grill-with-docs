@@ -21,7 +21,7 @@ Todos os demais campos (`installation`, `compatibility`, `enablement`, `trust`, 
 | Chave | Tipo | Origem | Regra |
 |---|---|---|---|
 | `command` | `str` | literal | sempre `stop adhd mode` |
-| `source_ref` | `str` | `observed["source_ref"] + ":" + message["id"]` | id normalizado da mensagem de usuário (Claude `uuid`; Codex `payload.id` ou `native:<n>`) |
+| `source_ref` | `str` | `observed["source_ref"] + ":" + message["id"]` | id normalizado da mensagem de usuário (Claude `uuid`; Codex `payload.id` ou `native:<n>`); só existe porque a frase só conta em mensagem com `id` string não vazio |
 | `source_sha256` | `str` hex 64 | `sha256(block["text"].encode("utf-8"))` | digest do texto observado no bloco, antes de `strip()` |
 | `session_identity` | `str` | `leader_session_identity(observed)` | igual ao da projeção; outra sessão/incarnation invalida |
 | `config_fingerprint` | `str` | `_presentation_config_fingerprint(...)` corrente | reconstruído a cada observação: depois de upgrade aponta a configuração nova (FR-007) |
@@ -34,12 +34,15 @@ Validado por `presentation_state` (`valid_suspension`) e persistido tal qual no 
 | Campo | Regra |
 |---|---|
 | `message["role"]` | `user`, e só `user` |
+| `message["id"]` | `str` não vazio; sem `id` a mensagem é ignorada (espelha `_tool_results`, M1) |
 | `message["blocks"]` | exatamente um bloco |
 | `blocks[0]["type"]` | `text` |
 | `blocks[0]["text"].strip()` | igual a `stop adhd mode` ou `start adhd mode`, sensível a caixa |
 | posição | vale a mais recente entre as duas; a varredura não corta na compactação |
 
 Resultado de `_presentation_control(messages)`: `(stop_index, start_index, message)`, com `-1` para ausência.
+
+Consequência declarada: no Codex, a primeira mensagem digitada da sessão chega com dois blocos `input_text` (frase + `<environment_context>`) e não passa na regra de bloco único (research R2).
 
 ## Decisão em `project_leader_presentation`
 
@@ -52,24 +55,29 @@ stop_index == -1                    -> fluxo atual, inalterado (inclui "start" s
 
 ## Contexto de orquestração (existente, inalterado)
 
-`contexts[id].presentation` recebe a projeção suspensa pelo refresh existente (`grill_workspace.py`, bloco `if context["presentation"] != readiness["presentation"]`). Nenhuma chave nova no Store, no checkpoint (`grill-continuity-checkpoint/v2`) nem no `state.json` do work item.
+`contexts[id].presentation` recebe a projeção suspensa pelo refresh existente (`grill_workspace.py`, bloco `if context["presentation"] != readiness["presentation"]`). O bloco imediatamente anterior, que recusaria `STYLE-LOAD-UNCONFIRMED` por mudança de `config_fingerprint`/`gwd_skill_sha256` sem `use_ready`, é removido (research R7): a recusa para apresentação ativa já vem de `_session_readiness`. Nenhuma chave nova no Store, no checkpoint (`grill-continuity-checkpoint/v2`) nem no `state.json` do work item.
 
-## Marcador de compactação (existente, agora testado com forma real)
+## Registros nativos usados nos testes (forma capturada; FR-011)
 
-| Runtime | Registro nativo | Normalizado |
-|---|---|---|
-| Claude Code | `type="system"`, `subtype="compact_boundary"` | `{"role": "system", "blocks": [{"type": "compaction"}]}` |
-| Claude Code | `type="user"`, `isCompactSummary=true` | `role="system"` (nunca `user`) |
-| Codex | `type="compacted"` | `{"role": "system", "blocks": [{"type": "compaction"}]}`; `replacement_history`, `guardian_history` e `retained_context` descartados |
+Toda mensagem injetada nos cenários é o resultado de `_native_messages(raw, runtime, session_id)` sobre registros mínimos na forma do contrato, construídos pelo helper `native(runtime, records)` do validador (research R10). Nenhuma mensagem de cenário é escrita como literal `{"role": ..., "blocks": [...]}`.
+
+| Papel no cenário | Claude Code (registro) | Codex (registro) | Normalizado |
+|---|---|---|---|
+| frase do usuário | `type="user"`, `message.content: str` | `response_item` message `role=user`, um `input_text` | `role=user`, um bloco `text` — **conta** |
+| primeira mensagem Codex | — | `response_item` message `role=user`, dois `input_text` (`plain`, `<environment_context>…`) | `role=user`, dois blocos `text` — não conta |
+| fala do agente | `type="assistant"`, `message.content: [{type: "text"}]` | `response_item` message `role=assistant`, um `output_text` | `role=assistant` — não conta |
+| resumo de compactação | `type="user"`, `isCompactSummary=true` | frase só dentro de `compacted.payload.replacement_history` / `retained_context.user_messages` | `role=system` (Claude); descartado (Codex) — não conta |
+| sintética | `type="user"`, `isMeta=true` ou `isSynthetic=true` | `response_item` message `role=user`, um `input_text` iniciado por tag XML | `role=system` (Claude); `role=user` com texto ≠ frase (Codex) — não conta |
+| marcador de compactação | `type="system"`, `subtype="compact_boundary"` | `type="compacted"` | `{"role": "system", "blocks": [{"type": "compaction"}]}` |
 
 Formas completas (chaves e tipos) em `contracts/native-compaction-records.md`.
 
 ## Transições
 
 ```text
-ativa --(stop adhd mode, user, bloco único)--> suspensa
+ativa --(stop adhd mode, user com id, bloco único)--> suspensa
 suspensa --(compactação, upgrade de plugin ou de configuração)--> suspensa (registro reconstruído)
-suspensa --(start adhd mode, user, bloco único)--> ativa sem leitura (load_request pedido)
+suspensa --(start adhd mode, user com id, bloco único)--> ativa sem leitura (load_request pedido)
 ativa sem leitura --(preflight BLOCKED + cat posterior à frase)--> ativa loaded
 qualquer --(nova sessão, runtime ou incarnation)--> ativa (transcript novo, sem frase)
 qualquer --(pré-requisito ausente)--> work_ready=false, diagnóstico nomeia o pré-requisito
