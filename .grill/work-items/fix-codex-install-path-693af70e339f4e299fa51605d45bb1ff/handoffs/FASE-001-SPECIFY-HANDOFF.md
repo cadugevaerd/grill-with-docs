@@ -1,7 +1,7 @@
 # FASE-001 — Observar a instalação Codex do i-have-adhd
 
 - phase: FASE-001
-- state: ready-for-specify
+- state: complete
 - roadmap: ROADMAP.md#FASE-001
 - context-refs: observer de instalação, listagem nativa, layout do cache Codex
 - ADRs: ADR-0001

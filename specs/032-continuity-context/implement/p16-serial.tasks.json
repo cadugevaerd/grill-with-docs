@@ -1,0 +1,19 @@
+{
+  "worker_id": "p16-serial",
+  "executed_by": "coordinator",
+  "work_id": "fix-continuity-context-2babd3080cc84b59a4404d6514f948c2",
+  "run_id": "run-07401dfed0e0a820b14f27ec",
+  "completed": ["T065"],
+  "why_coordinator": "A partição é léxica e só extrai caminhos com barra. `CHANGELOG.md` está na raiz e não contém barra, então T065 saiu como tarefa não mapeada e caiu neste nó -- cujo grant, por consequência, não inclui `CHANGELOG.md`. Um worker despachado aqui reprovaria o merge com GRANT-SCOPE-VIOLATION ao tocar o único arquivo que a tarefa manda tocar. Editar o DAG à mão é o remédio que o projeto proíbe. O conserto é da própria resolução de merge do coordenador (achado R10-2), da mesma natureza da correção retroativa feita no sidecar do p14-b na rodada 20.",
+  "tasks": [
+    {
+      "id": "T065",
+      "status": "completed",
+      "file": "CHANGELOG.md",
+      "summary": "Restaurada a seção `## 6.0.12`, que a resolução do merge dba49b2 renomeou para `## 6.0.13` em vez de preservar. O item `ownership-transfer`, que shipou na 6.0.12, voltou para a seção dela; a seção 6.0.13 ficou apenas com os itens desta entrega. Removida também a linha em branco solta deixada no meio da lista.",
+      "why": "A 6.0.12 tem tag anotada e GitHub Release publicados. A cláusula constitucional `Release obrigatória por versão` faz do CHANGELOG o registro público do que cada versão entregou, então perder a seção fazia um item já entregue reaparecer como novidade da versão seguinte.",
+      "verification": "python3 tests/validate_distribution.py -> distribution: OK; sequência de headings conferida: 6.0.13, 6.0.12, 6.0.11, 6.0.10, 6.0.9"
+    }
+  ],
+  "commit": "T065 — restaura a secao 6.0.12 do CHANGELOG"
+}

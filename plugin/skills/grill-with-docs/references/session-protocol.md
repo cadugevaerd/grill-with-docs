@@ -1,4 +1,4 @@
-# Protocolo de sessão v6.0.27
+# Protocolo de sessão v6.0.28
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -131,7 +131,7 @@ As famílias abaixo descrevem o contrato obrigatório; superfície sem capacidad
 |---|---|
 | Autoridade | `ORCHESTRATION-MIGRATION-REQUIRED`, `ORCHESTRATION-POLICY-STALE`, `LEADER-AUTHORITY-UNPROVEN`, `CONTEXT-FENCED`: revalidar contexto/policy ou adotar explicitamente; não inventar identidade. |
 | Especialistas | `SPECIALIST-CAPABILITY-UNPROVEN`, `SPECIALIST-MODEL-DIVERGENT`, `SPECIALIST-EFFORT-DIVERGENT`, `REVIEWER-NOT-INDEPENDENT`, `ACTIVITY-REQUIRED`: corrigir capacidade/configuração observada ou usar outra sessão independente antes do payload. |
-| Recursos | `SESSION-CLOSE-UNPROVEN`, `RESOURCE-IDENTITY-DIVERGENT`, `WORKSPACE-PRESERVED`, `CLEANUP-UNKNOWN`, `STEP-ACCEPTED-CLEANUP-PENDING`: preservar e reconciliar a mesma intenção; não repetir resultado aceito. |
+| Recursos | `SESSION-CLOSE-UNPROVEN`, `RESOURCE-IDENTITY-DIVERGENT`, `WORKSPACE-PRESERVED`, `CLEANUP-UNKNOWN`, `STEP-ACCEPTED-CLEANUP-PENDING`: preservar e reconciliar a mesma intenção; não repetir resultado aceito. `RESOURCE-RETAINED-ELSEWHERE`, listado por item no campo `retained` de um veredito `PRESERVED`, sinaliza recurso preso a um contexto já **encerrado** — fora do alcance e do fechamento da seleção corrente. É relato, não recusa: não bloqueia a ação do contexto corrente, e o veredito deixar de ser `CLEANED` é informação honesta sobre o store, não falha da operação pedida. |
 | Checkpoint | `OPERATION-ID-REQUIRED`, `OPERATION-ID-COLLISION`, `OPERATION-RECOVERY-REQUIRED`: fornecer identidade estável, conferir o request original e reconciliar a mesma operação antes de retry; uma sucessão nova recebe ID próprio. |
 | Troca | `CONTINUITY-CHECKPOINT-MISSING`, `CONTINUITY-STATE-DIVERGENCE`, `CONTINUITY-ACTIVE-WORK`, `CONTINUITY-QUIESCENCE-UNPROVEN`, `CONTINUITY-CAS-CONFLICT`, `EFFECT-OUTCOME-UNKNOWN`: comprovar checkpoint/quiescência/outcome antes de retomar. |
 | Visual | `FRONTEND-CLASSIFICATION-DIVERGENT`, `IMPECCABLE-CAPABILITY-UNPROVEN`, `PREVIEW-MISSING`, `PREVIEW-NOT-VISUAL`, `PREVIEW-APPROVAL-REQUIRED`, `PREVIEW-STALE`: corrigir classificação/capacidade e apresentar a prévia corrente para revisão/aprovação. |

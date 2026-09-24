@@ -40,6 +40,86 @@ def ORCHESTRATION_CHECKPOINT(checkpoint_id='checkpoint-1', previous=None, revisi
  checkpoint={'schema':'grill-continuity-checkpoint/v1','checkpoint_id':checkpoint_id,'context_id':'ctx-1','previous_checkpoint_id':previous,'worktree_identity':{},'created_at':CLOCK(),'store_revision':revision,'journal_anchor':{},'state_sha256':'7'*64,'inputs_manifest':{},'workflow_sha256':'8'*64,'constitution_sha256':'9'*64,'policy_sha256':'a'*64,'activation':None,'campaign':None,'development_sequence':{},'current_step':None,'step_states':{},'accepted_outputs':{},'accepted_executions':{},'pending_attempts':{},'scheduler_runs':{},'operations':{},'cleanup_obligations':{},'preserved_resources':{},'blocking_activity':None,'visual_state':{},'presentation':None,'checkpoint_sha256':''}
  checkpoint['checkpoint_sha256']=store.jcs_sha256({key:value for key,value in checkpoint.items() if key!='checkpoint_sha256'})
  return checkpoint
+# T008: v2 checkpoint -- same shape as v1, only workflow_sha256/constitution_sha256
+# renamed to context_inputs_sha256/origin_metadata_sha256 (continuity-checkpoint-v2.md).
+# T020: development_sequence is a LIST here, as every v2 emitter produces
+# (grill_workspace._initial_continuity_checkpoint / checkpoint_command).
+def ORCHESTRATION_CHECKPOINT_V2(checkpoint_id='checkpoint-1', previous=None, revision=0):
+ checkpoint={'schema':'grill-continuity-checkpoint/v2','checkpoint_id':checkpoint_id,'context_id':'ctx-1','previous_checkpoint_id':previous,'worktree_identity':{},'created_at':CLOCK(),'store_revision':revision,'journal_anchor':{},'state_sha256':'7'*64,'inputs_manifest':{},'context_inputs_sha256':'8'*64,'origin_metadata_sha256':'9'*64,'policy_sha256':'a'*64,'activation':None,'campaign':None,'development_sequence':[],'current_step':None,'step_states':{},'accepted_outputs':{},'accepted_executions':{},'pending_attempts':{},'scheduler_runs':{},'operations':{},'cleanup_obligations':{},'preserved_resources':{},'blocking_activity':None,'visual_state':{},'presentation':None,'checkpoint_sha256':''}
+ checkpoint['checkpoint_sha256']=store.jcs_sha256({key:value for key,value in checkpoint.items() if key!='checkpoint_sha256'})
+ return checkpoint
+# T008/T020: a HAND-BUILT approximation of gauntlet_context_takeover_command's
+# mutate() (grill_workspace.py). It is NOT the product and is NOT kept in sync
+# with it: the real mutate() also copies worktree_identity to the successor,
+# always puts checkpoint_id in expected_before, puts to_runtime in
+# intended_after, applies four preflight guards the fixture has none of, and
+# since f628c20 also runs a review guard, observes the incoming session on the
+# successor's leader and returns preserved_resources/operations_to_reconcile.
+# Every case below that calls it therefore proves only one thing: that
+# agent_orchestration.validate_block ACCEPTS this document shape. None of them
+# would fail if mutate() were reverted. The CLI's own behaviour is covered in
+# tests/validate_agent_orchestration_contract.py (T007).
+# Shape being approximated:
+# the previous context is SUPERSEDED, its leader advances one step toward RELEASED,
+# and a successor is born at the next epoch carrying a deep copy of activation/
+# campaign/scheduler_runs. The succession facts (reason/evidence/taken_at) live in
+# the continuity-switch operation's intended_after, exactly as the CLI records them;
+# 'kind' stays 'continuity-switch' because validate_block only accepts that kind for
+# a successor's continuity_ref (T004 in p02-a.tasks.json). Raising STATE_DIVERGENCE
+# when the source already moved is the same defence-in-depth the CLI mutate() applies,
+# used here to drive the concurrent-takeover test below.
+# T028: evidence['liveness'] used to be the bare string 'exited' -- a TYPE the
+# product never emits: grill_workspace._takeover_observation returns either
+# {'verdict': ..., 'source': ...} or None (grill_workspace.py ~1552-1570), and
+# agent_orchestration does not validate the field, so validate_block accepted
+# the string and this file froze a shape no emitter produces. The divergence is
+# now gone rather than documented: the default below is the product's mapping.
+def CONTEXT_TAKEOVER(document, work_id='orchestration-work', from_context='ctx-1', to_context='ctx-2',
+                      to_session_ref='session-2', operation_id='takeover-1', taken_at='2026-01-02T00:00:00Z',
+                      dispatch_status='completed', liveness=None,
+                      observation_ref='receipts/dispatch-observation', observation_sha256='c'*64):
+ item=document['agent_orchestration']['work_items'][work_id]
+ source=item['contexts'][from_context]
+ if source['state'] not in {'ACTIVE','QUIESCING'}: raise store.StoreError(store.STATE_DIVERGENCE,'takeover source changed')
+ leader_advance={'ACTIVE':'RELEASING','RELEASING':'RELEASED','RELEASED':'RELEASED'}
+ old_session_ref=source['leader']['session_ref']
+ if liveness is None: liveness={'verdict':'exited','source':'agent_status'}
+ evidence={'observation_ref':observation_ref,'observation_sha256':observation_sha256,'dispatch_status':dispatch_status,'liveness':liveness}
+ source['state']='SUPERSEDED'; source['leader']['state']=leader_advance[source['leader']['state']]
+ new_context={
+  'context_id':to_context,'epoch':source['epoch']+1,'predecessor_context_id':from_context,'continuity_ref':operation_id,
+  'runtime':source['runtime'],'adapter':source['adapter'],
+  'activation':copy.deepcopy(source['activation']),'campaign':copy.deepcopy(source['campaign']),
+  'scheduler_runs':copy.deepcopy(source['scheduler_runs']),
+  'leader':{'owner_id':to_context,'session_ref':to_session_ref,'incarnation':None,'fence':source['epoch']+1,'epoch':source['epoch']+1,
+            'state':'ACTIVE','observation_ref':None,'observation_sha256':None},
+  'state':'ACTIVE','policy_sha256':source['policy_sha256'],'inputs_sha256':source['inputs_sha256'],
+ }
+ item['contexts'][to_context]=new_context
+ # validate_block requires a campaign bridge (anchored on the current checkpoint's
+ # accepted_outputs) for any successor born with a bound campaign; a pre-campaign
+ # successor must carry none (agent_orchestration.py ~1386-1403). Same branch the
+ # real mutate() takes on old_campaign is/isn't None.
+ checkpoint_id=item.get('checkpoint_head')
+ bridge=None if source['campaign'] is None else {
+  'from_campaign':copy.deepcopy(source['campaign']),'to_campaign':copy.deepcopy(source['campaign']),
+  'accepted_outputs':copy.deepcopy(item['checkpoints'][checkpoint_id]['accepted_outputs']),
+  'worktree_identity':copy.deepcopy(source.get('worktree_identity') or {}),
+ }
+ expected_before={'context_id':from_context,'session_ref':old_session_ref}
+ if source['campaign'] is not None: expected_before['checkpoint_id']=checkpoint_id
+ item['operations'][operation_id]={
+  'kind':'continuity-switch','context_id':from_context,'fence':source['leader']['fence'],
+  'subject_ids':[from_context,to_context],'input_sha256':'3'*64,
+  'expected_before':expected_before,
+  'intended_after':{'reason':'takeover','from_session_ref':old_session_ref,'to_session_ref':to_session_ref,
+                     'evidence':evidence,'taken_at':taken_at,'campaign_bridge':bridge},
+  'idempotency_key':operation_id,'state':'CONFIRMED',
+  'result_ref':f'context-takeover/{operation_id}.json','result_sha256':'d'*64,
+  'observation_ref':f'context-takeover/{operation_id}.json','error':None,
+ }
+ item['current_context_id']=to_context
+ return document
 def WORK_ITEM(lifecycle='ACTIVE',slug='auth',type_='feature',worktree=None,monitoring=None):
  return {'type':type_,'slug':slug,'lifecycle':lifecycle,'worktree':worktree,'monitoring':monitoring}
 def GAUNTLET_RECEIPT(input_sha256='1'*64,name='gauntlet-run-alpha-1',base_commit='e'*40,wave_id='wave-0001'):
@@ -429,6 +509,139 @@ class StoreContract(unittest.TestCase):
    with self.subTest(checkpoint=checkpoint['previous_checkpoint_id'],revision=checkpoint['store_revision']), self.assertRaises(store.StoreError): store.transact(self.r,lambda document, checkpoint=checkpoint: (document['agent_orchestration']['work_items']['orchestration-work']['checkpoints'].update({'checkpoint-3':checkpoint}),document)[1],now=CLOCK)
   digest=ORCHESTRATION_CHECKPOINT('checkpoint-3','checkpoint-2'); digest['checkpoint_sha256']='0'*64
   with self.assertRaises(store.StoreError): store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['checkpoints'].update({'checkpoint-3':digest}),document)[1],now=CLOCK)
+
+ # T008/T020: format-acceptance cases for a context takeover (spec 032,
+ # US1/US3/US5). They feed the store the HAND-BUILT CONTEXT_TAKEOVER document
+ # (see its header) and assert validate_block accepts it. They are named for
+ # what they prove -- store acceptance -- and not for takeover behaviour, which
+ # none of them would catch a regression in: the product's mutate() never runs
+ # here. CLI behaviour lives in tests/validate_agent_orchestration_contract.py.
+ def test_store_accepts_hand_built_takeover_document_and_leaves_item_state_untouched(self):
+  self.register(); campaign={'project_id':'sha256:'+'1'*64,'run_id':'first','runtime':'codex','adapter':'orca','registry_sha256':'sha256:'+'2'*64,'recovery_generation_id':'rg-'+'3'*64,'plan_revision':1}
+  context=ORCHESTRATION_CONTEXT(); context['campaign']=campaign
+  store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':context})},now=CLOCK)
+  # A takeover with a bound campaign needs a campaign bridge anchored on the
+  # current checkpoint (agent_orchestration.py's campaign-bridge invariant).
+  def checkpoint(document):
+   item=document['agent_orchestration']['work_items']['orchestration-work']; item['checkpoints']['checkpoint-1']=ORCHESTRATION_CHECKPOINT(); item['checkpoint_head']='checkpoint-1'; return document
+  store.transact(self.r,checkpoint,now=CLOCK)
+  before=store.read_snapshot(self.r).document['agent_orchestration']['work_items']['orchestration-work']
+  applied=store.transact(self.r,lambda document: CONTEXT_TAKEOVER(document),now=CLOCK)
+  item=applied.document['agent_orchestration']['work_items']['orchestration-work']
+  self.assertEqual(item['current_context_id'],'ctx-2')
+  self.assertEqual((item['contexts']['ctx-1']['state'],item['contexts']['ctx-1']['leader']['state']),('SUPERSEDED','RELEASING'))
+  self.assertEqual((item['contexts']['ctx-2']['state'],item['contexts']['ctx-2']['epoch'],item['contexts']['ctx-2']['predecessor_context_id']),('ACTIVE',2,'ctx-1'))
+  self.assertEqual(item['contexts']['ctx-2']['campaign'],campaign)
+  # Item-level fields a takeover never touches round-trip byte-for-byte: scope,
+  # the checkpoint chain, and origin/policy identity. 'development' and its
+  # attested_outputs/attested_executions live in the per-work-item state.json,
+  # a file the takeover mutate() never opens -- outside this store's document
+  # model and this file's reach; CLI-side evidence is in p02-a.tasks.json T004.
+  for key in ('scope_files','scope_revision','scope_history','checkpoints','checkpoint_head','policy_ref','policy_sha256','origin','activities','resources','visual_decisions'):
+   self.assertEqual(item[key],before[key])
+
+ def test_store_accepts_hand_built_continuity_switch_operation_record(self):
+  self.register()
+  store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
+  applied=store.transact(self.r,lambda document: CONTEXT_TAKEOVER(document,taken_at='2026-03-04T05:06:07Z'),now=CLOCK)
+  operation=applied.document['agent_orchestration']['work_items']['orchestration-work']['operations']['takeover-1']
+  self.assertEqual((operation['kind'],operation['context_id'],operation['subject_ids']),('continuity-switch','ctx-1',['ctx-1','ctx-2']))
+  after=operation['intended_after']
+  self.assertEqual((after['reason'],after['from_session_ref'],after['to_session_ref'],after['taken_at']),('takeover','session-1','session-2','2026-03-04T05:06:07Z'))
+  self.assertEqual(set(after['evidence']),{'observation_ref','observation_sha256','dispatch_status','liveness'})
+  self.assertEqual(after['evidence'],{'observation_ref':'receipts/dispatch-observation','observation_sha256':'c'*64,'dispatch_status':'completed','liveness':{'verdict':'exited','source':'agent_status'}})
+  self.assertEqual(operation['state'],'CONFIRMED'); self.assertIsInstance(operation['observation_ref'],str); self.assertIsInstance(operation['result_sha256'],str)
+
+ # T020: was named "concurrent takeovers on the same revision have one winner"
+ # and ran two threads behind a Barrier. It never tested concurrency:
+ # store.transact serialises every mutate() under orchestrator_lock, so the
+ # second thread only entered the lock after the first had already committed,
+ # and the STATE_DIVERGENCE it got came from CONTEXT_TAKEOVER's own guard --
+ # not from the store's CAS and not from the product. The real race is the
+ # CLI's TAKEOVER-CAS-CONFLICT, which needs a CLI harness this file does not
+ # have. Renamed and run sequentially: refusing a second takeover over a source
+ # already superseded is exactly, and only, what the case proves.
+ def test_takeover_over_an_already_superseded_source_is_refused(self):
+  self.register()
+  store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
+  store.transact(self.r,lambda document: CONTEXT_TAKEOVER(document,to_context='ctx-2',to_session_ref='session-2',operation_id='takeover-a'),now=CLOCK)
+  with self.assertRaises(store.StoreError) as caught:
+   store.transact(self.r,lambda document: CONTEXT_TAKEOVER(document,to_context='ctx-3',to_session_ref='session-3',operation_id='takeover-b'),now=CLOCK)
+  self.assertEqual(caught.exception.code,store.STATE_DIVERGENCE)
+  item=store.read_snapshot(self.r).document['agent_orchestration']['work_items']['orchestration-work']
+  self.assertEqual(item['contexts']['ctx-1']['state'],'SUPERSEDED')
+  self.assertEqual(item['current_context_id'],'ctx-2')
+  self.assertNotIn('ctx-3',item['contexts'])
+
+ def test_store_accepts_a_day_zero_v2_checkpoint_as_head_and_lets_a_later_one_chain_onto_it(self):
+  self.register()
+  store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
+  # T029: this case used to import grill_workspace._initial_continuity_checkpoint,
+  # the emitter gauntlet-prepare-switch calls right after gauntlet-init. The
+  # import was wrong on two counts: it froze a PRIVATE helper of the CLI as a
+  # de facto interface (the same debt already recorded for agent_runtime._object),
+  # and that helper calls _cleanup_checkpoint_projection(root, work_id), which
+  # READS DISK -- so this store contract was exercising CLI I/O. The emitter
+  # belongs in grill_core (pure, parameterised with the cleanup obligations and
+  # preserved resources already read at the CLI boundary, the pattern
+  # grill_core/triage.py sets), but moving it requires editing grill_workspace.py,
+  # outside this node's grant; see specs/032-continuity-context/implement/p08-b.tasks.json.
+  # Until then this file imports grill_core only and proves what a store contract
+  # can prove on its own: the store accepts a day-zero v2 checkpoint as head and
+  # a later checkpoint chains onto it. Emitter fidelity (v2 schema, list sequence,
+  # projected development state) is CLI-level and is exercised through
+  # gauntlet-prepare-switch in tests/validate_agent_orchestration_contract.py.
+  snapshot=store.read_snapshot(self.r)
+  initial=ORCHESTRATION_CHECKPOINT_V2('cp-init',revision=snapshot.revision)
+  self.assertIsNone(initial['previous_checkpoint_id'])
+  def prepare(document):
+   item=document['agent_orchestration']['work_items']['orchestration-work']; item['checkpoints']['cp-init']=initial; item['checkpoint_head']='cp-init'; return document
+  prepared=store.transact(self.r,prepare,now=CLOCK)
+  self.assertEqual(prepared.document['agent_orchestration']['work_items']['orchestration-work']['checkpoint_head'],'cp-init')
+  # Resume from it: a later checkpoint chains onto cp-init and the store accepts
+  # advancing the head, proving the day-zero point is a real resumable anchor.
+  resumed_checkpoint=ORCHESTRATION_CHECKPOINT_V2('cp-resumed','cp-init',revision=prepared.revision)
+  def resume(document):
+   item=document['agent_orchestration']['work_items']['orchestration-work']; item['checkpoints']['cp-resumed']=resumed_checkpoint; item['checkpoint_head']='cp-resumed'; return document
+  resumed=store.transact(self.r,resume,now=CLOCK)
+  item=resumed.document['agent_orchestration']['work_items']['orchestration-work']
+  self.assertEqual(item['checkpoint_head'],'cp-resumed')
+  self.assertEqual(item['checkpoints']['cp-init'],initial)
+  # A day-zero head that declares a predecessor nobody stored is refused, so the
+  # acceptance above is the chain rule holding, not the store taking any document.
+  orphan=ORCHESTRATION_CHECKPOINT_V2('cp-orphan','cp-missing',revision=resumed.revision)
+  with self.assertRaises(store.StoreError):
+   store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['checkpoints'].update({'cp-orphan':orphan}),document)[1],now=CLOCK)
+
+ def test_checkpoint_v1_stays_legible_and_unrewritten_once_a_v2_checkpoint_chains_onto_it(self):
+  self.register()
+  store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
+  v1=ORCHESTRATION_CHECKPOINT('checkpoint-1')
+  def first(document):
+   item=document['agent_orchestration']['work_items']['orchestration-work']; item['checkpoints']['checkpoint-1']=v1; item['checkpoint_head']='checkpoint-1'; return document
+  store.transact(self.r,first,now=CLOCK)
+  # An unrelated write (a legal context transition) leaves the v1 checkpoint
+  # byte-identical: nothing migrates or reseals it in place.
+  unrelated=store.transact(self.r,lambda document: (document['agent_orchestration']['work_items']['orchestration-work']['contexts']['ctx-1'].update(state='QUIESCING'),document)[1],now=CLOCK)
+  self.assertEqual(unrelated.document['agent_orchestration']['work_items']['orchestration-work']['checkpoints']['checkpoint-1'],v1)
+  v2=ORCHESTRATION_CHECKPOINT_V2('checkpoint-2','checkpoint-1',revision=unrelated.revision)
+  def second(document):
+   item=document['agent_orchestration']['work_items']['orchestration-work']; item['checkpoints']['checkpoint-2']=v2; item['checkpoint_head']='checkpoint-2'; return document
+  store.transact(self.r,second,now=CLOCK)
+  item=store.read_snapshot(self.r).document['agent_orchestration']['work_items']['orchestration-work']
+  self.assertEqual(item['checkpoints']['checkpoint-1'],v1)  # v1: still legible, still unrewritten
+  self.assertEqual(item['checkpoints']['checkpoint-2'],v2)  # v2: legible and usable as head
+  self.assertEqual(item['checkpoint_head'],'checkpoint-2')
+
+ def test_checkpoint_with_unknown_schema_is_rejected(self):
+  self.register()
+  store.transact(self.r,lambda document: {**document,'agent_orchestration':self._orchestration_doc({'ctx-1':ORCHESTRATION_CONTEXT()})},now=CLOCK)
+  unknown=ORCHESTRATION_CHECKPOINT('checkpoint-1'); unknown['schema']='grill-continuity-checkpoint/v3'
+  unknown['checkpoint_sha256']=store.jcs_sha256({key:value for key,value in unknown.items() if key!='checkpoint_sha256'})
+  def adopt(document):
+   item=document['agent_orchestration']['work_items']['orchestration-work']; item['checkpoints']['checkpoint-1']=unknown; item['checkpoint_head']='checkpoint-1'; return document
+  with self.assertRaises(store.StoreError) as caught: store.transact(self.r,adopt,now=CLOCK)
+  self.assertEqual(caught.exception.code,'ORCHESTRATOR_INVALID')
 
  def test_orchestration_event_operation_id_replays_and_recovery_keeps_origin_write_once(self):
   class InjectedFault(RuntimeError): pass

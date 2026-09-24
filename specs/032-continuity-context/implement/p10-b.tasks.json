@@ -1,0 +1,52 @@
+{
+  "worker": "p10-b",
+  "feature": "032-continuity-context",
+  "completed": ["T034", "T035"],
+  "tasks": {
+    "T034": {
+      "status": "done",
+      "summary": "R4-1: em gauntlet_cleanup_command, o `retained.append` do recurso de outro contexto acontecia antes de qualquer discriminacao por seletor -- o filtro de activity_id so aparece duas linhas abaixo, no ramo do recurso proprio. Consequencia: `gauntlet-cleanup --context-id <ctx> --epoch N --activity-id A`, com todos os recursos de A fechando corretamente, saia com verdict PRESERVED e exit 2 por causa de qualquer recurso aberto do predecessor, permanentemente, ja que T026 nao implementa reconciliacao de recurso do predecessor. Correcao: um predicado `in_scope = activity_id is None or resource['activity_id'] == activity_id` que guarda a coleta junto com o teste de estado aberto, sem tocar em `candidates` nem no calculo do veredito. Recurso do predecessor pertencente a atividade pedida continua sendo relatado -- isso e escopo da selecao, nao ruido -- e a atividade pedida ja e comprovadamente do contexto corrente pela guarda de posse acima.",
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]
+    },
+    "T035": {
+      "status": "done",
+      "summary": "R4-3: a tupla estrutural (project_id, work_id, du, git_common_dir, real_path) existia como literal local dentro de gauntlet_context_takeover_command, enquanto gauntlet_prepare_switch_command comparava `context.get('worktree_identity') not in (None, identity)` e continuity_resume_command comparava `!= identity` nos dois carimbos -- ou seja, a identidade inteira, incluindo phase e branch. Como nenhum dos dois recarimba (o `setdefault` da preparacao de troca so grava quando o campo esta ausente) e a tomada carimba a fase do instante, a primeira virada de etapa fazia prepare-switch recusar para sempre: o bloqueio nao tinha sido removido, tinha sido adiado. Correcao: `_CONTINUITY_STRUCTURAL` + `_continuity_identity_matches`, um ponto unico consumido pelos tres chamadores; o literal local da tomada foi removido. O helper e fail-closed -- carimbo ausente ou que nao seja mapa nunca casa --, o que preserva a semantica de cada chamador: a tomada e a preparacao de troca tratam `None` explicitamente antes (primeiro carimbo permitido), a retomada nao trata, entao carimbo ausente continua recusando la. `_continuity_identity` NAO foi alterada: phase e branch continuam sendo gravados e o schema de contexto (agent_orchestration.py:632) continua exigindo as sete chaves.",
+      "files": ["plugin/skills/grill-with-docs/scripts/grill_workspace.py"]
+    }
+  },
+  "decisao_sobre_a_ressalva_do_brief": {
+    "pergunta": "Os dois irmaos rodam em janela quiescente por construcao. Alinhar e correto para eles, ou ha razao para manter a comparacao estrita?",
+    "conclusao": "Alinhar. A justificativa que estava no comentario da tomada -- 'sua janela e quiescente por construcao, entao nada pode se mover' -- nao sustenta a comparacao estrita. Quiescencia prova que nada esta RODANDO AGORA (_continuity_quiescence olha atividades e recursos de sessao, no instante da chamada); ela nao diz nada sobre a IDADE do carimbo. O carimbo e escrito numa tomada ou numa preparacao de troca anterior e nunca e reescrito, entao comparar phase e branch significa 'nada mudou desde a primeira vez que se carimbou', que e falso na vida normal do work item: virar de etapa avanca a fase, e trocar de branch e operacao corriqueira. Os campos que de fato provam 'mesma arvore' sao os estruturais. O comentario da tomada foi corrigido no mesmo commit para nao continuar afirmando o contrario.",
+    "efeito_colateral_aceito": "Com a comparacao estrutural, o campo `phase` do carimbo vira puramente informativo e passa a poder ficar permanentemente desatualizado (nada o recarimba). Isso e o estado honesto: antes ele nao era informativo, era uma bomba-relogio. Recarimbar em prepare-switch seria mudanca de gravacao, fora de T035, e teria efeito a jusante no checkpoint emitido -- nao foi feito."
+  },
+  "verificacao_de_vizinhos": {
+    "por_que": "As quatro rodadas de review acharam a mesma forma de defeito: a correcao fecha o caso examinado e abre o vizinho. Antes de commitar, os compartilhadores de logica foram varridos um a um.",
+    "T034": [
+      {"vizinho": "ramo por run (`--run-id`)", "veredito": "nao afetado, e ja estava fora do escopo antes da minha mudanca", "prova": "o laco de recursos inteiro esta sob `if item is not None and args.run_id is None:`, entao com `--run-id` `retained` nunca e populado. Consequencia pre-existente, nao introduzida aqui: uma limpeza por run pode sair CLEANED com recurso do predecessor aberto. E coerente com 'escopar ao seletor' -- o seletor de run nao alcanca recursos -- mas fica registrado."},
+      {"vizinho": "caminho de worker unico nao selecionado (`--run-id` + `--worker-id`)", "veredito": "nao alcanca o codigo mudado", "prova": "`selected` e False nesse caso e o laco de workers retorna de dentro, com o veredito do proprio `cleanup_worker`, antes de qualquer leitura de `retained` ou do veredito compartilhado."},
+      {"vizinho": "contador `candidates` e a guarda `if selected and candidates and not results`", "veredito": "intocados", "prova": "recurso de outro contexto continua com `continue` antes de `candidates += 1` (comportamento de T031); a mudanca so guarda o `append`. Os dois lados da guarda cobertos por p09-b seguem verdes."},
+      {"vizinho": "precedencia do veredito (UNKNOWN > PRESERVED > CLEANED)", "veredito": "intocada", "prova": "a linha do veredito nao foi editada. O achado n1 do R4 (UNKNOWN vindo de `retained` achatado em PRESERVED) segue aberto e fora de T034."}
+    ],
+    "T035": [
+      {"vizinho": "terceiro comparador de identidade -- a tomada", "veredito": "migrado para o mesmo helper", "prova": "o literal `structural = (...)` local foi removido; a regra agora existe em um lugar so, que e o que T035 pede."},
+      {"vizinho": "bridge de campanha em grill_workspace.py:3694", "veredito": "NAO alinhado, deliberadamente, e continua sendo o n3 do R4", "prova": "aquele ponto nao COMPARA identidade, ele CARIMBA `context.get('worktree_identity') or {}` -- a identidade selada do predecessor -- no ledger. E um defeito de proveniencia, nao de comparacao, e mexer nele mudaria payload de campanha; fora do escopo de T035."},
+      {"vizinho": "sitios que so GRAVAM identidade (3331, 3358, 3465, 3612, 3821)", "veredito": "nenhum tocado", "prova": "`_continuity_identity` nao mudou; os sete campos continuam sendo emitidos e o `_object(...)` do schema de contexto continua exigindo os sete. Alterar a gravacao quebraria o schema e o checkpoint emitido."},
+      {"vizinho": "attestation.py / agent_orchestration.py (bridge)", "veredito": "sem comparacao de identidade", "prova": "`grep -n worktree_identity` nos dois modulos devolve apenas presenca de chave no bridge e validacao de schema; nenhuma comparacao campo a campo."}
+    ]
+  },
+  "cobertura": {
+    "alerta": "NENHUM teste existente distingue as duas correcoes. Os dois validadores fecharam verdes ANTES e DEPOIS da mudanca (37 e 136), o que significa que nem o defeito nem a correcao de T034 e T035 tem carga de teste hoje. T036 e T037, na mesma fase, cobrem o lado da recusa da guarda de identidade e o segundo emissor -- nao cobrem estes dois. Fica o pedido explicito ao worker de cobertura: um caso de `--activity-id` com recurso aberto do predecessor exigindo CLEANED/exit 0, e um caso de prepare-switch com carimbo de fase antiga exigindo aceitacao. Arquivos de teste estao fora do meu grant."
+  },
+  "verification": {
+    "commands": [
+      {"command": "python3 tests/validate_agent_orchestration_contract.py", "result": "Ran 37 tests -- OK, exit 0"},
+      {"command": "python3 tests/validate_orchestrator_store_contract.py", "result": "Ran 136 tests -- OK, exit 0"}
+    ],
+    "quebrou": "Nada. Zero casos existentes quebraram e zero casos foram afrouxados -- o diff toca apenas plugin/skills/grill-with-docs/scripts/grill_workspace.py, nenhum arquivo de teste.",
+    "notes": "Rodados um de cada vez em foreground, conforme o brief. tests/run_validators.py NAO foi rodado. tasks.md, .grill/ e .specify/reports/ nao foram tocados."
+  },
+  "files_touched": [
+    "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+    "specs/032-continuity-context/implement/p10-b.tasks.json"
+  ]
+}

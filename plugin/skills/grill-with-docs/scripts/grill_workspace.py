@@ -1562,6 +1562,53 @@ def _leader_boundary(root: Path, runtime: str, session_ref: str, work_id: str | 
     return agent_runtime.LeaderBoundary(session_ref, root, runtime, handle, read)
 
 
+def _takeover_observation(root: Path, runtime: str, session_ref: str) -> tuple[dict[str, Any], str | None, dict[str, Any] | None]:
+    """Observe predecessor termination through the same read transport as _leader_boundary.
+
+    agent_runtime.observe_predecessor_termination (T002) only returns the
+    verdict/reference/digest; U1/T003 need dispatch.status and liveness too,
+    to tell an alive dispatch (TAKEOVER-LEADER-ACTIVE) apart from every other
+    inconclusive case (TAKEOVER-EVIDENCE-UNPROVEN). Capture the raw response
+    as a side effect of the same read() call instead of reading twice.
+    """
+    agent_runtime = grill_core_module("agent_runtime")
+    handle = os.environ.get("ORCA_TERMINAL_HANDLE")
+    captured: dict[str, bytes] = {}
+    def read(argv: list[str]) -> bytes:
+        if not handle:
+            raise agent_runtime.RuntimeError("LEADER-ADAPTER-UNSUPPORTED")
+        executable = os.environ.get("ORCA_CLI_COMMAND") or "orca"
+        try:
+            result = subprocess.run([executable, *argv], cwd=root, capture_output=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise agent_runtime.RuntimeError("LEADER-ADAPTER-UNAVAILABLE") from exc
+        if result.returncode:
+            raise agent_runtime.RuntimeError("LEADER-ADAPTER-UNAVAILABLE")
+        captured["raw"] = result.stdout
+        return result.stdout
+    observation = agent_runtime.observe_predecessor_termination(session_ref, read)
+    status: str | None = None
+    liveness: dict[str, Any] | None = None
+    raw = captured.get("raw")
+    dispatch_id = session_ref.removeprefix("orca:") if isinstance(session_ref, str) else None
+    if raw is not None:
+        try:
+            # Same envelope the adapter already unwraps ({"ok": true, "result": {...}});
+            # reuse it instead of reading show.get(...) off the raw top level.
+            show = agent_runtime._object(raw, "Orca worker-show")
+        except Exception:
+            show = None
+        if isinstance(show, dict):
+            dispatch = show.get("dispatch")
+            if isinstance(dispatch, dict) and dispatch.get("id") == dispatch_id and isinstance(dispatch.get("status"), str):
+                status = dispatch["status"]
+            projection = show.get("projection")
+            candidate = projection.get("liveness") if isinstance(projection, dict) else None
+            if isinstance(candidate, dict) and isinstance(candidate.get("verdict"), str):
+                liveness = {"verdict": candidate["verdict"], "source": candidate.get("source")}
+    return observation, status, liveness
+
+
 def _session_readiness(root: Path, runtime: str, session_ref: str | None, *,
                        work_id: str | None) -> dict[str, Any]:
     """Read one adapter observation and derive presentation at the CLI boundary."""
@@ -1698,10 +1745,48 @@ def _same_observed_leader(current: Any, incoming: dict[str, Any]) -> bool:
                     for key in ("session_ref", "incarnation", "observation_ref", "observation_sha256")))
 
 
+def _adoption_conflict(root: Path, work_id: str, inputs: dict[str, Any], policy_sha256: str,
+                       incoming: dict[str, Any]) -> tuple[Any, dict[str, Any] | None]:
+    """Read the existing binding and enforce the write-once/leader checks the
+    apply mutate() closure already applies. T006/FR-007: the preview must
+    raise the same refusal the apply would, not just when applying."""
+    store = grill_core_module("store")
+    existing_snapshot = store.read_snapshot(root, required=False)
+    if existing_snapshot is None:
+        return None, None
+    existing = existing_snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
+    if not isinstance(existing, dict):
+        return existing_snapshot, None
+    if existing.get("policy_sha256") != policy_sha256:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
+    current = existing.get("contexts", {}).get(existing.get("current_context_id"))
+    if current is not None and not _same_observed_leader(current, incoming):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", "existing context has different runtime or session")
+    # Merge note (main 6.0.11): a changed origin is no longer refused outright.
+    # The apply closure below refreshes `presentation` in place when a current
+    # context exists and the declared scope is unchanged, so mirroring the
+    # refusal here means mirroring that exception too -- otherwise the preview
+    # is stricter than the apply, which is the inversion this helper exists to
+    # prevent. The order matches the apply: policy digest, then leader fence,
+    # then origin.
+    if existing.get("origin") != inputs["origin"] and (
+            current is None or existing.get("scope_files") != inputs["scope_files"]):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "adoption source changed")
+    return existing_snapshot, existing
+
+
 def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     contract, inputs = _orchestration_inputs(root, args.work_id, args.runtime, args.session_ref, args.scope_file or [])
     expected = contract.adoption_sha256(inputs)
+    policy = ASSETS / "agent-orchestration.v1.json"
+    policy_bytes = policy.read_bytes()
+    policy_ref, policy_sha256 = "assets/agent-orchestration.v1.json", hash_bytes(policy_bytes)
+    context_id = f"ctx-{expected[:12]}"
+    candidate = contract.new_work_item(inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
+        adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), context_id=context_id)
+    incoming = candidate["contexts"][candidate["current_context_id"]]
+    existing_snapshot, existing = _adoption_conflict(root, args.work_id, inputs, policy_sha256, incoming)
     preview = {"verdict": "PREVIEW", "work_id": args.work_id, "expected_sha256": expected,
                "origin": inputs["origin"], "scope_files": inputs["scope_files"],
                "presentation": inputs["presentation"],
@@ -1711,24 +1796,23 @@ def orchestration_adopt_command(args: argparse.Namespace) -> tuple[dict[str, Any
     if args.expected_sha256 != expected:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-POLICY-STALE", "expected_sha256 does not match reread adoption inputs")
     store = grill_core_module("store")
-    policy = ASSETS / "agent-orchestration.v1.json"
-    policy_bytes = policy.read_bytes()
-    policy_ref, policy_sha256 = "assets/agent-orchestration.v1.json", hash_bytes(policy_bytes)
-    candidate = contract.new_work_item(inputs, policy_ref=policy_ref, policy_sha256=policy_sha256,
-        adopted_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), context_id=f"ctx-{expected[:12]}")
-    incoming = candidate["contexts"][candidate["current_context_id"]]
-    existing_snapshot = store.read_snapshot(root, required=False)
-    if existing_snapshot is not None:
-        existing = existing_snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
-        current = existing.get("contexts", {}).get(existing.get("current_context_id")) if isinstance(existing, dict) else None
-        if (isinstance(existing, dict) and existing.get("origin") == inputs["origin"]
-                and existing.get("policy_sha256") == policy_sha256 and existing.get("scope_files") == inputs["scope_files"]
-                and _same_observed_leader(current, incoming)
-                and current.get("presentation") == inputs["presentation"]):
+    if isinstance(existing, dict):
+        current = existing.get("contexts", {}).get(existing.get("current_context_id"))
+        # T064/FR-010: origin equality must gate REUSED, matching the apply
+        # closure's precedence below. _adoption_conflict already guarantees
+        # policy_sha256 equality and leader-fence agreement unconditionally
+        # before this point -- neither has the origin-changed exception, so
+        # both always raise on mismatch regardless of scope/current. Origin
+        # is the one check _adoption_conflict now lets through when a changed
+        # origin comes with an existing context and unchanged scope (main
+        # 6.0.11 loosening), so it is the only one this shortcut must repeat:
+        # otherwise that exact input reads as an identical repeat here while
+        # the apply closure below still treats it as a live origin change.
+        if (existing.get("origin") == inputs["origin"] and existing.get("scope_files") == inputs["scope_files"]
+                and current is not None and current.get("presentation") == inputs["presentation"]):
             return {"verdict": "REUSED", "work_id": args.work_id, "context_id": existing["current_context_id"],
                     "expected_sha256": expected, "store_revision": existing_snapshot.revision}, EXIT_OK
     store.bootstrap(root)
-    context_id = f"ctx-{expected[:12]}"
     def mutate(document: dict[str, Any]) -> dict[str, Any]:
         block = document.get("agent_orchestration")
         if block is None or args.work_id not in block["work_items"]:
@@ -1857,12 +1941,12 @@ def _commit_orchestrated_checkpoint(root: Path, state_path: Path, state_before: 
     checkpoint_id = "cp-" + store.jcs_sha256({"store_origin": request["store_origin"], "work_id": args.work_id, "operation_id": args.operation_id})
     cleanup_obligations, preserved_resources = _cleanup_checkpoint_projection(root, args.work_id)
     checkpoint = {
-        "schema": contract.CHECKPOINT_SCHEMA, "checkpoint_id": checkpoint_id, "context_id": context_id,
+        "schema": contract.CHECKPOINT_SCHEMA_V2, "checkpoint_id": checkpoint_id, "context_id": context_id,
         "previous_checkpoint_id": item.get("checkpoint_head"), "worktree_identity": context.get("worktree_identity", {}),
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "store_revision": snapshot.revision + 1,
         "journal_anchor": snapshot.document["journal_head"], "state_sha256": hash_bytes(state_after),
-        "inputs_manifest": {"evidence": evidence}, "workflow_sha256": context["inputs_sha256"],
-        "constitution_sha256": item["origin"]["metadata_sha256"], "policy_sha256": item["policy_sha256"],
+        "inputs_manifest": {"evidence": evidence}, "context_inputs_sha256": context["inputs_sha256"],
+        "origin_metadata_sha256": item["origin"]["metadata_sha256"], "policy_sha256": item["policy_sha256"],
         "activation": context["activation"], "campaign": accepted_campaign,
         "development_sequence": state.get("development", {}).get("sequence", []),
         "current_step": state.get("development", {}).get("current_step"), "step_states": state.get("development", {}).get("steps", {}),
@@ -3490,10 +3574,81 @@ def _continuity_identity(root: Path, work_id: str, state: dict[str, Any]) -> dic
     branch = git_optional(root, "branch", "--show-current")
     if not branch:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "detached HEAD")
-    phase = state.get("active_phase") or state.get("development", {}).get("current_step") or "unassigned"
+    # T055: validate `development`'s shape here, unconditionally -- not only
+    # when `active_phase` is falsy. `_continuity_refuse_branch_contradiction`
+    # carries the same DEVELOPMENT-SCHEMA guard, but it runs *after* this
+    # function in all three continuity verbs; leaving it as the only guard
+    # means a present-but-wrong-type `development` only misses `.get()`
+    # (AttributeError, not the named refusal) when `active_phase` happens to
+    # be falsy -- exactly the terminal-milestone shape audit_decisions.py
+    # requires (`active_phase` null).
+    development = state.get("development")
+    if development is not None and not isinstance(development, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", work_id)
+    phase = state.get("active_phase") or (development or {}).get("current_step") or "unassigned"
     return {"project_id": project["project_id"], "work_id": work_id, "phase": str(phase),
             "du": "work-item", "git_common_dir": project["git_common_dir"],
             "real_path": str(root.resolve()), "branch": branch}
+
+
+# T035: the structural tuple, in one place. `phase` and `branch` are stamped
+# for the record but stay OUT of it: both move in normal life -- a step turn
+# advances the phase, a branch is switched -- and no verb ever re-stamps, so
+# comparing the stamped value would mean "nothing moved since the stamp was
+# first written", which is not what quiescence proves. Quiescence proves
+# nothing is running *now*; it says nothing about how old the stamp is.
+# The live branch *is* compared, just not against this stamp: see
+# `_continuity_refuse_branch_contradiction`, which checks it against
+# `development["execution_branch"]`, the work item's own sealed SSOT.
+_CONTINUITY_STRUCTURAL = ("project_id", "work_id", "du", "git_common_dir", "real_path")
+
+
+def _continuity_identity_matches(sealed: Any, identity: dict[str, str]) -> bool:
+    """Fail-closed: a missing or non-mapping stamp never matches."""
+    if not isinstance(sealed, dict):
+        return False
+    return all(sealed.get(field) == identity[field] for field in _CONTINUITY_STRUCTURAL)
+
+
+def _continuity_refuse_branch_contradiction(state: Any, identity: dict[str, str], work_id: str) -> None:
+    """Refuse when the work item's sealed execution branch contradicts the live one.
+
+    R6-T045: this comparison used to exist only in `continuity-resume`, so
+    `prepare-switch` created the operation, wrote the resume point and released
+    the leader before anything noticed the divergence -- which then surfaced on
+    the resume, with the context already loose. The failure has to be named
+    before mutating, so the single point is called by all three verbs.
+
+    T047: also guards `development`'s own schema -- DEVELOPMENT-SCHEMA when the
+    block is present but not a mapping -- before reading `execution_branch`.
+    Since T055, that is defense in depth, not the effective guard: all three
+    continuity verbs derive `identity` via `_continuity_identity` first, on
+    this same `state`, and it already refuses a malformed `development` block
+    before this function ever runs. No CLI path reaches this raise today. It
+    stays -- the signature accepts a value of any type, the project is
+    fail-closed -- for a future caller that builds `identity` without going
+    through `_continuity_identity`.
+
+    T052: an absent or empty sealed branch passes in silence, on purpose --
+    nothing bound yet is not a contradiction -- so this only refuses an actual
+    contradiction, never a missing requirement; that is why it is named for
+    the refusal, not for a requirement. Each caller also raises
+    CONTINUITY-STATE-DIVERGENCE for a *different* reason right before calling
+    this one: a live worktree/context identity mismatch ("worktree identity
+    changed", "project or worktree changed..."). Both share the code, so tell
+    them apart by message, not by code: this function always names the work
+    item's bound branch ("work item is bound to <branch>"); it never speaks
+    for the context's identity.
+    """
+    development = state.get("development") if isinstance(state, dict) else None
+    if development is None:
+        development = {}
+    if not isinstance(development, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", work_id)
+    sealed = development.get("execution_branch")
+    if isinstance(sealed, str) and sealed and sealed != identity["branch"]:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE",
+                         f"work item is bound to {sealed}")
 
 
 def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_id: str,
@@ -3622,6 +3777,44 @@ def _continuity_checkpoint(item: dict[str, Any], *, operation_id: str, context_i
     return checkpoint_id, checkpoint
 
 
+def _initial_continuity_checkpoint(root: Path, work_id: str, item: dict[str, Any], context: dict[str, Any],
+                                   context_id: str, checkpoint_id: str, identity: dict[str, str],
+                                   state: dict[str, Any], state_bytes: bytes, store_revision: int,
+                                   journal_anchor: dict[str, Any]) -> dict[str, Any]:
+    """T005: project the current state into a first checkpoint instead of
+    refusing switch prep with CONTINUITY-CHECKPOINT-MISSING when no step was
+    confirmed yet. Mirrors the checkpoint shape `checkpoint_command` commits."""
+    contract = grill_core_module("agent_orchestration")
+    store = grill_core_module("store")
+    cleanup_obligations, preserved_resources = _cleanup_checkpoint_projection(root, work_id)
+    development = state.get("development", {})
+    checkpoint = {
+        "schema": contract.CHECKPOINT_SCHEMA_V2, "checkpoint_id": checkpoint_id, "context_id": context_id,
+        "previous_checkpoint_id": None, "worktree_identity": copy.deepcopy(identity),
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "store_revision": store_revision,
+        "journal_anchor": copy.deepcopy(journal_anchor), "state_sha256": hash_bytes(state_bytes),
+        "inputs_manifest": {"evidence": []}, "context_inputs_sha256": context["inputs_sha256"],
+        "origin_metadata_sha256": item["origin"]["metadata_sha256"], "policy_sha256": item["policy_sha256"],
+        "activation": context["activation"], "campaign": context["campaign"],
+        "development_sequence": development.get("sequence", []),
+        "current_step": development.get("current_step"), "step_states": development.get("steps", {}),
+        "accepted_outputs": development.get("attested_outputs", {}),
+        "accepted_executions": development.get("attested_executions", {}),
+        "pending_attempts": {}, "scheduler_runs": copy.deepcopy(context["scheduler_runs"]),
+        "operations": copy.deepcopy(item["operations"]), "cleanup_obligations": cleanup_obligations,
+        "preserved_resources": preserved_resources, "blocking_activity": None, "visual_state": {},
+        "presentation": context.get("presentation"), "checkpoint_sha256": "",
+    }
+    checkpoint["checkpoint_sha256"] = store.jcs_sha256({key: value for key, value in checkpoint.items()
+                                                          if key != "checkpoint_sha256"})
+    try:
+        contract.validate_block({"schema": contract.SCHEMA, "work_items": {"x": {**item,
+            "checkpoints": {**item["checkpoints"], checkpoint_id: checkpoint}, "checkpoint_head": checkpoint_id}}})
+    except contract.OrchestrationError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", str(exc)) from exc
+    return checkpoint
+
+
 def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     root = project_root(args.root)
     store = grill_core_module("store")
@@ -3641,20 +3834,43 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
         _require_current_leader(root, args.work_id, context, args.session_ref)
     released_sessions = _released_activity_sessions(root, item, args.work_id) if released is not None else {}
     transferred_sessions = _transferred_activity_sessions(item) if released is not None else {}
-    identity = _continuity_identity(root, args.work_id, read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1])
-    if context.get("worktree_identity") not in (None, identity):
+    state_path, state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)
+    identity = _continuity_identity(root, args.work_id, state)
+    sealed = context.get("worktree_identity")
+    # An absent stamp is stamped below for the first time; a present one is
+    # judged on the structural tuple only, like the takeover. Merge note (main
+    # 6.0.11): the incoming side compared the whole identity mapping, which is
+    # the J1/H1 defect this delivery closed -- `phase` and `branch` move in
+    # normal life and no verb re-stamps them. The structural comparison is
+    # kept; only the released-leader logic is taken from the incoming side.
+    if sealed is not None and not _continuity_identity_matches(sealed, identity):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "worktree identity changed")
+    _continuity_refuse_branch_contradiction(state, identity, args.work_id)
     operation_entry = _continuity_operation(item, context_id, args.to_runtime)
+    initial_checkpoint = None
+    source_checkpoint = None
     if operation_entry is None:
         source_checkpoint = item.get("checkpoint_head")
-        if not isinstance(source_checkpoint, str) or source_checkpoint not in item.get("checkpoints", {}):
+        if source_checkpoint is not None and source_checkpoint not in item.get("checkpoints", {}):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-CHECKPOINT-MISSING", args.work_id)
+        if source_checkpoint is None:
+            # T005: no confirmed step yet -- project current state into an
+            # initial checkpoint instead of refusing. A declared-but-unknown
+            # head (the branch above) still refuses.
+            source_checkpoint = "cp-init-" + hashlib.sha256(canonical(
+                {"context": context_id, "epoch": args.epoch})).hexdigest()[:24]
+            initial_checkpoint = _initial_continuity_checkpoint(
+                root, args.work_id, item, context, context_id, source_checkpoint, identity, state,
+                safe_read_regular_fd(root, state_path), snapshot.revision + 1, snapshot.document["journal_head"])
         operation_id = "switch-" + hashlib.sha256(canonical({"context": context_id, "checkpoint": source_checkpoint,
             "to_runtime": args.to_runtime})).hexdigest()[:24]
         checkpoint_id = "cp-" + operation_id
         source_campaign = context.get("campaign")
         if source_campaign is None and isinstance(item.get("checkpoints", {}).get(source_checkpoint), dict):
             source_campaign = item["checkpoints"][source_checkpoint].get("campaign")
+        # A fresh initial_checkpoint always carries context["campaign"] verbatim
+        # (T005/_initial_continuity_checkpoint), so source_campaign is already
+        # correct without reading it back from item["checkpoints"].
         bridge = None
         if source_campaign is not None:
             try:
@@ -3688,6 +3904,11 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
         if (not isinstance(source, dict) or target.get("current_context_id") != context_id
                 or source.get("epoch") != args.epoch or source.get("leader", {}).get("session_ref") != args.session_ref):
             raise store.StoreError(store.STATE_DIVERGENCE, "continuity source changed")
+        if initial_checkpoint is not None and source_checkpoint not in target["checkpoints"]:
+            if target.get("checkpoint_head") is not None:
+                raise store.StoreError(store.STATE_DIVERGENCE, "checkpoint head appeared during switch preparation")
+            target["checkpoints"][source_checkpoint] = copy.deepcopy(initial_checkpoint)
+            target["checkpoint_head"] = source_checkpoint
         target["operations"].setdefault(operation_id, copy.deepcopy(operation))
         for activity_id, (resource_id, observation) in released_sessions.items():
             activity = target["activities"].get(activity_id)
@@ -3803,8 +4024,14 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", args.checkpoint)
     state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1]
     identity = _continuity_identity(root, args.work_id, state)
-    if checkpoint.get("worktree_identity") != identity or source.get("worktree_identity") != identity:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "project/worktree/branch changed")
+    if not (_continuity_identity_matches(checkpoint.get("worktree_identity"), identity)
+            and _continuity_identity_matches(source.get("worktree_identity"), identity)):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", "project or worktree changed")
+    # R5-1: `branch` left the structural tuple (T035) because it moves in
+    # normal life and no verb re-stamps it. The compensating control is the
+    # binding the work item already seals, so compare against *that* SSOT --
+    # not against the stamp -- whenever it exists.
+    _continuity_refuse_branch_contradiction(state, identity, args.work_id)
     active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
     if active:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-ACTIVE-WORK", ",".join(active))
@@ -3887,6 +4114,229 @@ def continuity_resume_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         **_coordinator_response(args.runtime)}, EXIT_OK
 
 
+def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """T003/T004: a new session assumes a work item once the environment --
+    not the caller -- proves the previous conductor ended (FR-001..FR-005).
+
+    Preview and apply run the exact same checks (contract context-takeover);
+    the only difference is that apply additionally requires a matching
+    --expected-sha256 and performs the CAS mutation. A refusal is raised the
+    same way in both modes, so the preview never lies about what apply would
+    do (mirrors T006's fix to orchestration-adopt for the same reason).
+    """
+    root = project_root(args.root)
+    if not isinstance(args.session_ref, str) or not args.session_ref:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "gauntlet-context-takeover requires --session-ref")
+    store = grill_core_module("store")
+    snapshot = store.read_snapshot(root, required=True)
+    item = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
+    if not isinstance(item, dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-MIGRATION-REQUIRED", args.work_id)
+    context_id = item.get("current_context_id")
+    context = item.get("contexts", {}).get(context_id)
+    if not isinstance(context, dict) or context.get("state") not in {"ACTIVE", "QUIESCING"}:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEADER-AUTHORITY-UNPROVEN", args.work_id)
+    # Idempotent replay: this session already took over as the current context.
+    continuity_ref = context.get("continuity_ref")
+    prior_operation = item.get("operations", {}).get(continuity_ref) if isinstance(continuity_ref, str) else None
+    if (context.get("leader", {}).get("session_ref") == args.session_ref and isinstance(prior_operation, dict)
+            and prior_operation.get("kind") == "continuity-switch"
+            and prior_operation.get("intended_after", {}).get("reason") == "takeover"):
+        return {"verdict": "TAKEOVER-REUSED", "work_id": args.work_id, "context_id": context_id,
+                "from_context_id": context.get("predecessor_context_id"), "epoch": context["epoch"],
+                "store_revision": snapshot.revision}, EXIT_OK
+    old_session_ref = context["leader"]["session_ref"]
+    observation, status, liveness = _takeover_observation(root, context["runtime"], old_session_ref)
+    if observation["verdict"] == "not_observable":
+        # U1: not_observable is the form of the registered identifier; the
+        # adapter cannot even shape a query out of it.
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-NOT-OBSERVABLE", old_session_ref)
+    if observation["verdict"] != "terminal":
+        if status in {"dispatched", "running"}:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-LEADER-ACTIVE", old_session_ref)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-EVIDENCE-UNPROVEN", old_session_ref)
+    # C1 (analysis.md): refuse while specialist activity is not quiescent,
+    # reusing the same check gauntlet-prepare-switch already applies.
+    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
+    if active or unknown:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-WORK-ACTIVE", ",".join(active + unknown))
+    # T016: the environment proves the predecessor ended, but nobody had
+    # observed the *incoming* session, so its leader was installed with null
+    # incarnation/observation and every @_gauntlet_authorized command refused
+    # it with LEADER-AUTHORITY-UNPROVEN. Same readiness source the resume
+    # sibling uses; it raises when the observation does not conclude, so the
+    # absence of proof never authorizes the takeover.
+    readiness = _session_readiness(root, context["runtime"], args.session_ref, work_id=args.work_id)
+    old_campaign = context.get("campaign")
+    checkpoint_ref, bridge = None, None
+    if old_campaign is not None:
+        head = item.get("checkpoint_head")
+        if not isinstance(head, str) or head not in item.get("checkpoints", {}):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-CHECKPOINT-MISSING", args.work_id)
+        checkpoint_ref = head
+        # Same campaign on both sides: the runtime is not changing, only the
+        # session driving it. validate_block only requires the bridge to
+        # agree with the contexts and the referenced checkpoint's outputs.
+        bridge = {"from_campaign": copy.deepcopy(old_campaign), "to_campaign": copy.deepcopy(old_campaign),
+                  "accepted_outputs": copy.deepcopy(item["checkpoints"][head]["accepted_outputs"]),
+                  "worktree_identity": copy.deepcopy(context.get("worktree_identity") or {})}
+    evidence = {"observation_ref": observation["reference"], "observation_sha256": observation["digest"],
+                "dispatch_status": status, "liveness": liveness}
+    operation_id = "takeover-" + hashlib.sha256(canonical({"context": context_id, "session_ref": args.session_ref,
+        "observation": observation})).hexdigest()[:24]
+    new_context_id = "ctx-" + hashlib.sha256(canonical({"operation": operation_id})).hexdigest()[:24]
+    # T023: the successor used to inherit a blind copy of the predecessor's
+    # worktree_identity. That identity carries `branch`, and LeaderBoundary
+    # only pins the worktree *path* -- so switching branch after the session
+    # died (routine, once nobody is driving the tree) left the successor
+    # holding an identity that lies about the live tree, and every later
+    # continuity-resume refused forever, with no re-stamp verb in the core.
+    # Derive it live from the same helper the resume sibling uses and store
+    # the derived value below. Computed before `expected` so preview and
+    # apply reach the same verdict.
+    #
+    # T030: the divergence guard compares only the *structural* fields. The
+    # other two move during the normal life of a context: `phase` advances
+    # with every cycle step (and with the `development.current_step` fallback
+    # that most work items land on), and `branch` is exactly what the
+    # paragraph above says a dead session's tree is free to change. Comparing
+    # them made the takeover refuse the very scenario it exists to cure, and
+    # refuse it forever, since only a successful takeover rewrites the stamp
+    # and the core has no re-stamp verb. Both are re-stamped from the derived
+    # identity below instead of being asserted here. T035: the resume sibling
+    # and `prepare-switch` now share the same structural tuple. Their window
+    # being quiescent does not justify the strict comparison -- quiescence
+    # proves nothing is running now, not that the stamp is fresh, and since a
+    # takeover stamps the phase of that instant and nothing ever re-stamps,
+    # the first step turn made `prepare-switch` refuse forever.
+    #
+    # When the source carries no stamp at all -- the field is optional in the
+    # context schema -- there is no prior claim to contradict, so the derived
+    # identity is stamped for the first time instead of refusing a takeover
+    # that no verb could ever unblock. Accepted side effect, the same one the
+    # resume already accepts: _continuity_identity refuses on a detached HEAD.
+    #
+    # T048: that same freedom outlives this takeover. The instant this
+    # successor's own session ends, or its branch changes again for any
+    # routine reason, the value just re-stamped here goes exactly as stale as
+    # the one it replaced -- no verb re-stamps it either. A reader elsewhere
+    # in the core must not treat this stamp as a live oracle for "the branch
+    # this work item currently runs on"; only a future takeover or
+    # continuity-resume re-derives it, and only at the moment it runs. That is
+    # why the checkpoint and phase-turn commands mint their own binding from
+    # the live branch instead of comparing against this stamp.
+    state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)[1]
+    identity = _continuity_identity(root, args.work_id, state)
+    sealed = context.get("worktree_identity")
+    if sealed is not None and not _continuity_identity_matches(sealed, identity):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-IDENTITY-DIVERGENT",
+                         "project or worktree changed since the predecessor stamped its identity")
+    _continuity_refuse_branch_contradiction(state, identity, args.work_id)
+    # T018: digest the decision, not the coordinator's raw answer.
+    # observation["digest"] hashes the live worker-show bytes, and preview and
+    # apply are separate CLI invocations: any volatile field there made apply
+    # refuse with TAKEOVER-INPUTS-STALE while nothing in the store had moved.
+    # The response digest stays in `evidence`, where it is succession proof.
+    #
+    # T024: `snapshot.revision` is gone from here for the same reason. It is
+    # the *global* document revision -- transact stamps current.revision + 1
+    # on the whole document, not per work item -- so any write by any work
+    # item invalidated the preview, including the one @_gauntlet_authorized
+    # itself performs whenever the observed presentation differs from the
+    # persisted one. The revision guard inside `mutate` below already pins
+    # the same thing under the lock, strictly stronger and more precise.
+    expected = store.jcs_sha256({"work_id": args.work_id, "from_context_id": context_id,
+        "from_session_ref": old_session_ref, "to_session_ref": args.session_ref,
+        "observation": {"verdict": observation["verdict"], "reference": observation["reference"]},
+        "checkpoint_ref": checkpoint_ref})
+    if not args.apply:
+        return {"verdict": "TAKEOVER-PREVIEW", "work_id": args.work_id, "from_context_id": context_id,
+                "expected_sha256": expected}, EXIT_OK
+    if args.expected_sha256 != expected:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-INPUTS-STALE",
+                         "expected_sha256 does not match reread takeover inputs")
+    next_epoch = context["epoch"] + 1
+    fence = context["leader"]["fence"]
+    # T019/T026: the superseded context never satisfies require_authority
+    # again (current *and* ACTIVE), so gauntlet-cleanup over it refuses
+    # forever and its resources stay pinned in the store. This projection
+    # exists for *auditing* only -- it names what stayed pinned. Reconciling
+    # it is NOT implemented: no path in the core reconciles a resource whose
+    # origin_context_id is the superseded context, since both consumers
+    # (gauntlet_cleanup_command and the acceptance path) filter by the
+    # current context. Same projection shape as the resume.
+    retained = {resource_id: copy.deepcopy(resource) for resource_id, resource in item.get("resources", {}).items()
+                if resource.get("state") not in {"CLOSED", "REMOVED"}}
+    reconcile = {record_id: copy.deepcopy(record) for record_id, record in item.get("operations", {}).items()
+                 if record.get("state") in {"INTENT", "APPLIED", "UNKNOWN"}}
+    taken_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    result_ref = f"context-takeover/{operation_id}.json"
+    result_sha256 = store.jcs_sha256({"from_context": context_id, "to_context": new_context_id,
+        "session_ref": args.session_ref, "evidence": evidence})
+    # kind stays "continuity-switch": validate_block only accepts that kind
+    # for a successor context's continuity_ref (agent_orchestration.py); the
+    # succession facts (reason/evidence/taken_at) live in intended_after.
+    operation = {
+        "kind": "continuity-switch", "context_id": context_id, "fence": fence,
+        "subject_ids": [context_id, new_context_id], "input_sha256": expected,
+        "expected_before": {"context_id": context_id, "session_ref": old_session_ref, "checkpoint_id": checkpoint_ref},
+        "intended_after": {"reason": "takeover", "to_runtime": context["runtime"],
+                            "from_session_ref": old_session_ref, "to_session_ref": args.session_ref,
+                            "evidence": evidence, "taken_at": taken_at, "campaign_bridge": bridge},
+        "idempotency_key": operation_id, "state": "CONFIRMED", "result_ref": result_ref,
+        "result_sha256": result_sha256, "observation_ref": result_ref, "error": None,
+    }
+    leader_advance = {"ACTIVE": "RELEASING", "RELEASING": "RELEASED", "RELEASED": "RELEASED"}
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        # T017: the whole verdict (observation, quiescence, checkpoint_head,
+        # bridge) was computed from `snapshot`, read outside the lock. Without
+        # this guard a worker transitioning DECLARED->PREPARING between the
+        # read and the commit would be committed over, and TAKEOVER-APPLIED
+        # would be returned where TAKEOVER-WORK-ACTIVE was due.
+        if document["revision"] != snapshot.revision:
+            raise store.StoreError(store.STATE_DIVERGENCE, "takeover inputs changed during observation")
+        target = document["agent_orchestration"]["work_items"][args.work_id]
+        source = target["contexts"].get(context_id)
+        if (not isinstance(source, dict) or target.get("current_context_id") != context_id
+                or source.get("state") not in {"ACTIVE", "QUIESCING"}
+                or source.get("leader", {}).get("session_ref") != old_session_ref):
+            raise store.StoreError(store.STATE_DIVERGENCE, "takeover source changed")
+        if new_context_id in target["contexts"] or operation_id in target["operations"]:
+            raise store.StoreError(store.STATE_DIVERGENCE, "takeover already recorded under a different outcome")
+        source["state"] = "SUPERSEDED"
+        source["leader"]["state"] = leader_advance[source["leader"]["state"]]
+        new_context = {
+            "context_id": new_context_id, "epoch": next_epoch,
+            "predecessor_context_id": context_id, "continuity_ref": operation_id,
+            "runtime": source["runtime"], "adapter": source["adapter"],
+            "activation": copy.deepcopy(source["activation"]), "campaign": copy.deepcopy(source["campaign"]),
+            "scheduler_runs": copy.deepcopy(source["scheduler_runs"]),
+            "leader": {"owner_id": new_context_id, "session_ref": args.session_ref,
+                       "incarnation": readiness["incarnation"],
+                       "fence": next_epoch, "epoch": next_epoch, "state": "ACTIVE",
+                       "observation_ref": readiness["ref"], "observation_sha256": readiness["sha256"]},
+            "state": "ACTIVE", "policy_sha256": source["policy_sha256"], "inputs_sha256": source["inputs_sha256"],
+            "presentation": copy.deepcopy(readiness["presentation"]),
+        }
+        # T023: the derived identity, never the predecessor's copy.
+        new_context["worktree_identity"] = copy.deepcopy(identity)
+        target["contexts"][new_context_id] = new_context
+        target["operations"][operation_id] = copy.deepcopy(operation)
+        target["current_context_id"] = new_context_id
+        return document
+    try:
+        committed = store.transact(root, mutate)
+    except store.StoreError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-CAS-CONFLICT", exc.message) from exc
+    return {"verdict": "TAKEOVER-APPLIED", "work_id": args.work_id, "context_id": new_context_id,
+            "from_context_id": context_id, "epoch": next_epoch,
+            "succession": {"from_context_id": context_id, "from_session_ref": old_session_ref,
+                           "reason": "takeover", "evidence": evidence, "taken_at": taken_at},
+            "preserved_resources": retained, "operations_to_reconcile": reconcile,
+            "presentation": readiness["presentation"],
+            "store_revision": committed.revision}, EXIT_OK
+
+
 @_gauntlet_authorized
 def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     activity_id = getattr(args, "activity_id", None)
@@ -3916,7 +4366,12 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
         if activity_id is not None and (activity_id not in item["activities"]
                 or item["activities"][activity_id]["context_id"] != context_id):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", "activity is not owned by the selected context")
-    results = []
+    # T025: candidates counted before the *activity* filters below, so the
+    # guard at the end can tell "there was nothing to do" from "there was
+    # something and the selection never reached it". Zero candidates is a
+    # legitimate no-op. T031: resources owned by another context are not
+    # counted here at all -- see the filter below.
+    results, retained, candidates = [], [], 0
     if activity_id is None:
         if args.run_id is not None:
             run_ids = [args.run_id]
@@ -3932,6 +4387,7 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", code, exc.message) from exc
             for run_id, run in targets.items():
                 worker_ids = [args.worker_id] if args.worker_id else sorted(run["workers"])
+                candidates += len(worker_ids)
                 for worker_id in worker_ids:
                     try:
                         result = runs.cleanup_worker(root, args.work_id, run_id, worker_id, admission)
@@ -3945,7 +4401,36 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
                         results.append({"run_id": run_id, "worker_id": worker_id, "verdict": "PRESERVED", "code": code})
     if item is not None and args.run_id is None:
         for resource_id, resource in item["resources"].items():
-            if (resource["origin_context_id"] != context_id or resource["activity_id"] is None
+            if resource["origin_context_id"] != context_id:
+                # T031: a resource pinned by another context is not something
+                # this selection was ever meant to reach, so counting it as a
+                # candidate made the guard below refuse a successor that owns
+                # nothing -- forever, since T026 leaves no verb to reconcile a
+                # predecessor's resource. The hole the guard exists to close
+                # is one of *reporting*, not of authorization: the caller must
+                # not read success over a resource still open in the store.
+                # So report it and let the verdict stop being CLEANED, instead
+                # of refusing the cleanup of what this context does own.
+                #
+                # T034: and only when the selection would have reached it.
+                # The collection used to happen before any selector
+                # discrimination -- the activity filter is applied further
+                # down -- so a cleanup aimed at one activity came back
+                # downgraded because of a resource that selection was never
+                # meant to touch, and permanently, for the same reason. The
+                # run branch and the unselected single-worker path never get
+                # here: the loop is guarded by `args.run_id is None`, and the
+                # single-worker path returns inside the run loop above, before
+                # `retained` is read by the verdict they share.
+                in_scope = activity_id is None or resource["activity_id"] == activity_id
+                if in_scope and resource["state"] not in {"CLOSED", "REMOVED"}:
+                    retained.append({"resource_id": resource_id, "kind": resource["kind"],
+                                     "state": resource["state"],
+                                     "origin_context_id": resource["origin_context_id"],
+                                     "code": "RESOURCE-RETAINED-ELSEWHERE"})
+                continue
+            candidates += 1
+            if (resource["activity_id"] is None
                     or activity_id is not None and resource["activity_id"] != activity_id):
                 continue
             # No session-close transport is wired here. Preserve the resource until
@@ -3956,10 +4441,27 @@ def gauntlet_cleanup_command(args: argparse.Namespace) -> tuple[dict[str, Any], 
                             "code": None if closed else "SESSION-CLOSE-UNPROVEN"})
         if activity_id is not None and not results:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", "activity has no registered resource")
+    # T025: candidates existed and the selection reached none of them. With
+    # results == [] both any() below are false and the verdict fell through
+    # to CLEANED/exit 0, telling the caller that resources still open in the
+    # store had been closed. The activity branch already refused this way;
+    # the context and run branches get the same code and state. The takeover
+    # case that motivated it is now handled by `retained` above, which keeps
+    # the verdict honest without refusing.
+    #
+    # `candidates` is what keeps this narrow. Cleaning a context that owns no
+    # resource and no run is a legitimate no-op, not a selection failure, so
+    # zero candidates still reaches the verdict below. The unselected
+    # single-worker path never gets here at all: it returns inside the loop
+    # above with cleanup_worker's own verdict.
+    if selected and candidates and not results:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT",
+                         "cleanup selection reached none of the registered runs or resources")
     verdict = ("UNKNOWN" if any(result["verdict"] == "UNKNOWN" for result in results) else
-               "PRESERVED" if any(result["verdict"] not in {"CLEANED", "REUSED"} for result in results) else "CLEANED")
+               "PRESERVED" if retained or any(result["verdict"] not in {"CLEANED", "REUSED"} for result in results)
+               else "CLEANED")
     return {"verdict": verdict, "work_id": args.work_id, "context_id": context_id,
-            "epoch": epoch, "resources": results}, EXIT_OK if verdict == "CLEANED" else EXIT_BLOCKED
+            "epoch": epoch, "resources": results, "retained": retained}, EXIT_OK if verdict == "CLEANED" else EXIT_BLOCKED
 
 
 @_gauntlet_authorized
@@ -6006,6 +6508,23 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         if existing_branch is _MISSING or existing_branch is None:
             # Explicit backfill for legacy/in-between-phase cycles.  It becomes
             # durable only after the requested state transition is valid.
+            #
+            # T048: no comparison against the context's worktree-identity stamp
+            # here. That stamp is written once, at context creation, and no
+            # verb ever re-writes it -- while a phase turn clears this very
+            # binding on purpose, expecting the next phase's first confirmation
+            # to mint a fresh one. Comparing an unrenewed stamp against the
+            # live branch is monotonic and refuses forever, permanently, for
+            # every work item that was ever taken over or resumed. The real
+            # guard against a stale binding is `_continuity_refuse_branch_
+            # contradiction`, and it only fires once `execution_branch` is
+            # set -- exactly the case `existing_branch is _MISSING or None`
+            # excludes. There is no upstream proof that the live branch is
+            # the one the context ran on: `branch` was pulled out of the
+            # structural tuple in T035, and two branches inside the same
+            # worktree look identical on project/path/git_common_dir alone.
+            # This just records the current branch as the first binding; it
+            # does not verify one.
             pass
         elif not isinstance(existing_branch, str) or not existing_branch:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
@@ -6158,6 +6677,19 @@ def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             if not previous_execution_branch:
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DETACHED-HEAD", "phase turn requires an attached execution branch")
             run_git(root, "check-ref-format", "--branch", previous_execution_branch)
+            # T048: no comparison against the context's worktree-identity stamp
+            # here either, for the same reason as the step-confirmation mint:
+            # the stamp is never re-written, this very binding is cleared on
+            # every phase turn by design (see below). The real guard against a
+            # stale binding is `_continuity_refuse_branch_contradiction`, and it
+            # only fires once `execution_branch` is set -- exactly the case
+            # `previous_execution_branch is _MISSING or None` excludes. There is
+            # no upstream proof that the live branch is the one the context ran
+            # on: `branch` was pulled out of the structural tuple in T035, and
+            # two branches inside the same worktree look identical on
+            # project/path/git_common_dir alone. This just records the current
+            # branch as the first binding for the new phase; it does not verify
+            # one.
         elif not isinstance(previous_execution_branch, str) or not previous_execution_branch:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DEVELOPMENT-SCHEMA", args.work_id)
         else:
@@ -6574,6 +7106,12 @@ def build_parser() -> JsonParser:
     prepare_switch_parser.add_argument("--session-ref", required=True)
     prepare_switch_parser.add_argument("--to-runtime", choices=("claude", "codex"), required=True)
     prepare_switch_parser.add_argument("--released-source", action="store_true")
+    context_takeover_parser = subparsers.add_parser("gauntlet-context-takeover")
+    context_takeover_parser.add_argument("root")
+    context_takeover_parser.add_argument("--work-id", required=True)
+    context_takeover_parser.add_argument("--session-ref", required=True)
+    context_takeover_parser.add_argument("--expected-sha256")
+    context_takeover_parser.add_argument("--apply", action="store_true")
     attest_parser = subparsers.add_parser("attest")
     attest_parser.add_argument("root")
     attest_parser.add_argument("--work-id", required=True)
@@ -6649,6 +7187,7 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-run": gauntlet_run_command,
             "gauntlet-resume": gauntlet_resume_command,
             "gauntlet-prepare-switch": gauntlet_prepare_switch_command,
+            "gauntlet-context-takeover": gauntlet_context_takeover_command,
             "gauntlet-prepare-worker": gauntlet_prepare_worker_command,
             "gauntlet-cleanup": gauntlet_cleanup_command,
             "partition-emit": partition_emit_command,

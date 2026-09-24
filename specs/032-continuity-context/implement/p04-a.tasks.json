@@ -1,0 +1,17 @@
+{
+  "worker": "p04-a",
+  "feature": "032-continuity-context",
+  "completed": ["T009", "T012"],
+  "tasks": {
+    "T009": {
+      "status": "done",
+      "summary": "tests/validate_distribution.py: constante VERSION atualizada de 6.0.2 para 6.0.3 (FR-012).",
+      "evidence": "grep -n '^VERSION' tests/validate_distribution.py -> VERSION = \"6.0.3\". Suite completa nao roda neste worker por design: outros 6 pontos de distribuicao (4 manifests via p04-b, heading do SKILL.md via p04-c, README/CHANGELOG via leader) ainda nao subiram, entao python3 tests/validate_distribution.py reprova ate a integracao de todos os workers da wave; comportamento esperado e comunicado no brief."
+    },
+    "T012": {
+      "status": "done",
+      "summary": "plugin/skills/grill-with-docs/references/session-protocol.md: heading atualizado de '# Protocolo de sessão v6.0.2' para '# Protocolo de sessão v6.0.3' (FR-012).",
+      "evidence": "grep -c '^# Protocolo de sessão v' plugin/skills/grill-with-docs/references/session-protocol.md -> 1 (exatamente uma ocorrencia). grep -n mostra linha 1: '# Protocolo de sessão v6.0.3'."
+    }
+  }
+}

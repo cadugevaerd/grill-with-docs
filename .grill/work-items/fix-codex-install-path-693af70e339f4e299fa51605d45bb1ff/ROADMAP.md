@@ -3,7 +3,7 @@
 - execution-order: FASE-001
 
 ## FASE-001 — Observar a instalação Codex do i-have-adhd
-- state: ready-for-specify
+- state: complete
 - objetivo: a entrada GWD no Codex chega a `installation=present` a partir da listagem nativa quando a cópia aprovada está instalada, e continua `undetermined` em qualquer evidência incompleta ou divergente
 - scope-in: observer de instalação do runtime Codex; teste offline pelo seam injetável
 - scope-out: runtime Claude; demais lacunas do T029 (líder morto, preview do adopt, troca antes do checkpoint, suspensão, campos do checkpoint)

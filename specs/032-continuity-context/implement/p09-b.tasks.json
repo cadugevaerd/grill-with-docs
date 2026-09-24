@@ -1,0 +1,70 @@
+{
+  "worker": "p09-b",
+  "feature": "032-continuity-context",
+  "completed": ["T032", "T033"],
+  "tasks": {
+    "T032": {
+      "status": "done",
+      "summary": "R3-4: a guarda `if selected and candidates and not results` de gauntlet_cleanup_command nao tinha teste algum -- o unico RESOURCE-IDENTITY-DIVERGENT exercitado hoje usa o seletor --activity-id e e recusado bem antes, pelo check de posse da atividade, nunca alcancando o contador. Novo caso test_cleanup_candidate_guard_and_resources_retained_elsewhere, no estilo de test_cleanup_public_selectors_preserve_unproven_sessions (snapshot mockado, item montado a mao, zero disco e zero rede), cobrindo os dois lados: (1) existem candidatos e a selecao nao alcanca nenhum -- recurso DO PROPRIO contexto com activity_id=None, contado e depois pulado pelo filtro de atividade -- exige exit 2 e RESOURCE-IDENTITY-DIVERGENT; (2) zero candidato -- item sem recurso e sem scheduler_run -- exige que o veredito continue CLEANED em exit 0, com `resources` e `retained` vazios. Observacao: o texto de T032 pedia semear 'recurso cujo contexto de origem e outro' para o lado da recusa, mas isso deixou de ser candidato justamente por causa de T031 (que entrou na mesma fase); esse cenario virou o caso (3) abaixo, de relato. O candidato inalcancavel passou a ser o recurso proprio sem activity_id, que e o que a guarda realmente protege hoje.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    },
+    "T033": {
+      "status": "done",
+      "summary": "R3-5: em test_every_work_entry_reobserves_authority_and_requires_presentation, o caso que le de volta o ponto de retomada sintetizado por gauntlet-prepare-switch asseria schema, identificadores, ausencia de predecessor e os dois digests -- nada sobre o estado de desenvolvimento projetado. O comentario de tests/validate_orchestrator_store_contract.py:596 afirma que a asserção removida de la e exercida aqui, o que nao era verdade. Acrescentadas asserções sobre development_sequence, current_step, accepted_outputs e accepted_executions, comparando com o state.json vivo lido por grill_workspace.read_development_state/resolve_development_item, mais assertIsInstance(list) e assertTrue sobre development_sequence: validate_block aceita dict OU list naquele campo, entao um emissor regredido ao mapa v1 passava na suite inteira e agora reprova.",
+      "files": ["tests/validate_agent_orchestration_contract.py"]
+    }
+  },
+  "extra_coverage": {
+    "summary": "Duas lacunas sinalizadas pelo worker p09-a (que fez T030/T031 e declarou explicitamente que a cobertura nao existia).",
+    "cases": [
+      {
+        "name": "tomada com phase/branch divergentes e aceita e re-carimbada",
+        "where": "test_context_takeover, bloco work-restamp",
+        "how": "O carimbo e imutavel no Store (worktree_identity e campo imutavel de contexto -- transact recusa com ORCHESTRATOR_INVALID 'context immutable field changed'), entao quem se move e a arvore VIVA, como em producao: apos prepare-switch carimbar a identidade, o teste troca de branch com git checkout -b real no root da fixture e grava active_phase novo em .grill/work-items/work-restamp/state.json. A tomada precisa ser ACEITA (TAKEOVER-APPLIED) e o contexto sucessor precisa ficar com phase/branch VIVOS, com os cinco campos estruturais identicos ao carimbo do predecessor. A branch original e restaurada em finally, para nao contaminar os casos seguintes do mesmo root."
+      },
+      {
+        "name": "limpeza do sucessor devolve veredito rebaixado com retained preenchido",
+        "where": "test_cleanup_candidate_guard_and_resources_retained_elsewhere, casos (3) e (4)",
+        "how": "(3) o sucessor nao possui recurso algum e o recurso aberto pertence ao predecessor SUPERSEDED: exige exit 2 com verdict PRESERVED, payload SEM chave 'code' (ou seja, nao e recusa), resources vazio e retained com uma entrada exata {resource_id, kind, state, origin_context_id, code: RESOURCE-RETAINED-ELSEWHERE}. (4) recurso do predecessor ja CLOSED nao e nada a relatar e nao pode derrubar o veredito: exige CLEANED em exit 0 com retained vazio."
+      }
+    ]
+  },
+  "verification": {
+    "commands": [
+      {"command": "python3 tests/validate_agent_orchestration_contract.py", "result": "Ran 37 tests -- OK"}
+    ],
+    "notes": "Rodado uma vez em foreground, conforme o brief. tests/run_validators.py NAO foi rodado. Nenhum caso existente foi afrouxado: as unicas edicoes em casos ja existentes sao ACRESCIMOS de asserção (T033) e a insercao do bloco work-restamp no fim de test_context_takeover.",
+    "reversions": [
+      {
+        "revert": "T030 -- guarda de identidade da tomada volta a `sealed is not None and sealed != identity`",
+        "result": "FAIL test_context_takeover -- AssertionError: 2 != 0 : {'code': 'TAKEOVER-IDENTITY-DIVERGENT', 'error': 'project or worktree changed since the predecessor stamped its identity', 'verdict': 'BLOCKED'}",
+        "reads": "o caso work-restamp e exatamente o bloqueio permanente que R3-1/R3-2 descrevem"
+      },
+      {
+        "revert": "T031 -- filtro de origin_context_id volta para dentro do bloco depois de `candidates += 1`, sem lista retained",
+        "result": "FAIL test_cleanup_candidate_guard_and_resources_retained_elsewhere -- AssertionError: Tuples differ: (2, 'BLOCKED') != (2, 'PRESERVED')",
+        "reads": "com o recurso do predecessor contado como candidato, o sucessor volta a ser RECUSADO em vez de ter o veredito rebaixado"
+      },
+      {
+        "revert": "guarda de candidatos neutralizada (`if False:` no lugar de `if selected and candidates and not results`)",
+        "result": "FAIL test_cleanup_candidate_guard_and_resources_retained_elsewhere -- AssertionError: Tuples differ: (0, None) != (2, 'RESOURCE-IDENTITY-DIVERGENT')",
+        "reads": "lado 1 da guarda: sem ela, a selecao que nao alcanca nada devolve sucesso -- era exatamente o buraco de R3-4, que a suite inteira deixava passar"
+      },
+      {
+        "revert": "guarda alargada de volta para `selected and not results` (sem o contador)",
+        "result": "FAIL test_every_work_entry_reobserves_authority_and_requires_presentation -- AssertionError: Tuples differ: (2, 'BLOCKED') != (0, 'CLEANED'); ERROR no caso novo",
+        "reads": "lado 2 da guarda: o no-op legitimo de zero candidatos passa a recusar. Os dois lados sao carga real"
+      },
+      {
+        "revert": "T033 -- emissor do ponto de retomada inicial volta a projetar development_sequence={}, current_step=None, accepted_outputs={}, accepted_executions={}",
+        "result": "FAIL test_every_work_entry_reobserves_authority_and_requires_presentation -- AssertionError: {} is not an instance of <class 'list'>",
+        "reads": "a regressao ao mapa v1 passava na suite inteira antes desta asserção"
+      }
+    ],
+    "reversion_protocol": "Cada reversao foi aplicada temporariamente em plugin/skills/grill-with-docs/scripts/grill_workspace.py, a suite foi rodada, e o arquivo foi restaurado com git checkout -- <caminho> imediatamente depois. Ao final, git status mostra apenas os dois caminhos do grant."
+  },
+  "files_touched": [
+    "tests/validate_agent_orchestration_contract.py",
+    "specs/032-continuity-context/implement/p09-b.tasks.json"
+  ]
+}

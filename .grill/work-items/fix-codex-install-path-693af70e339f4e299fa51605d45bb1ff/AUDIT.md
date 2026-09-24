@@ -28,3 +28,7 @@
 - Review R1 (`specs/031-codex-install-path/review.md`, revisor `Code Reviewer`/`fable`, independente dos autores): REQUEST CHANGES. I1: exceções (`RuntimeError`, `PermissionError`) escapavam do ramo Codex, violando o fail-closed. I2: segmento com drive do Windows (`"D:"`) compunha caminho fora do cache, violando FR-009. Minors: frase do CHANGELOG, lacunas de teste, home triplicado (este último opcional, não adotado).
 - Converge R2 anexou a Phase 4 (T009 com worker, T010 com o leader); partition r2 e run `run-f356eea840fae193efdaad68` (DAG-VALID). Os nós das fases 1 e 2 foram re-despachados como workers reais de confirmação, sem diff, porque o nó `p04-a` depende deles.
 - T010: CHANGELOG corrigido (teste novo acrescentado, não substituído; drive recusado; exceção vira indeterminada).
+
+## Fechamento do milestone — 2026-09-19
+
+Ciclo externo completo, 11 etapas `complete`, todas atestadas (com sucessões registradas em specify r3, plan r2, converge r5, partition r3, implement-parallel r3, verify r4 e review r2). Ship `MERGED`: `main` em `f77958166e9ed6347bbee082735daaddbae66153`, tag `v6.0.2` (`21ac1ae3c9cc4b13ddca69d6f8728aa0eba7a335`), release publicada como Latest. FASE-001 `complete`; nenhuma DQ ou BL aberto. Detalhes em `specs/031-codex-install-path/ship.md`.

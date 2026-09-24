@@ -1,0 +1,12 @@
+{
+  "worker": "p04-c",
+  "feature": "032-continuity-context",
+  "completed": ["T011"],
+  "tasks": {
+    "T011": {
+      "status": "done",
+      "summary": "Heading de plugin/skills/grill-with-docs/SKILL.md atualizado de '# Grill with Docs v6.0.2' para '# Grill with Docs v6.0.3' (unica ocorrencia do prefixo). Acrescentada, na secao 'Identidade e inicializacao', logo apos a frase sobre resolver o Git root e o init fixar o workflow project-wide, uma frase declarando que a tomada de contexto de um work item preso a sessao anterior e ato explicito via gauntlet-context-takeover, autorizado somente quando a observacao do dispatch do lider anterior comprova estado terminal (FR-012, ADR-0001); ausencia de prova nunca autoriza a retomada. Nenhum outro trecho do arquivo foi tocado.",
+      "evidence": "grep -n '^# Grill with Docs v' plugin/skills/grill-with-docs/SKILL.md -> 1 match (linha 6, v6.0.3)."
+    }
+  }
+}
