@@ -1,0 +1,188 @@
+{
+  "accepted_tasks": {},
+  "feature": "033-latest-models",
+  "max_workers": 2,
+  "nodes": [
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/assets/workflow-tier-models.json",
+        "plugin/skills/grill-with-docs/scripts/grill_core/tier_models.py",
+        "specs/033-latest-models/implement/T003.tasks.json",
+        "tests/fixtures/orchestration/codex-models-cache-0.155.1.json",
+        "tests/orchestration_fixture.py",
+        "tests/validate_tier_model_binding_contract.py"
+      ],
+      "id": "p02-a",
+      "parallel": true,
+      "result_files": {
+        "T003": "specs/033-latest-models/implement/T003.tasks.json"
+      },
+      "task_ids": [
+        "T003"
+      ],
+      "tier": "medium"
+    },
+    {
+      "depends_on": [],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/store.py",
+        "specs/033-latest-models/implement/T004.tasks.json",
+        "tests/validate_orchestrator_store_contract.py"
+      ],
+      "id": "p02-b",
+      "parallel": true,
+      "result_files": {
+        "T004": "specs/033-latest-models/implement/T004.tasks.json"
+      },
+      "task_ids": [
+        "T004"
+      ],
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p02-a",
+        "p02-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/033-latest-models/implement/T006.tasks.json",
+        "specs/033-latest-models/implement/T007.tasks.json",
+        "tests/validate_gauntlet_run_contract.py",
+        "tests/validate_gauntlet_scheduler_contract.py"
+      ],
+      "id": "p03-a",
+      "parallel": true,
+      "result_files": {
+        "T006": "specs/033-latest-models/implement/T006.tasks.json",
+        "T007": "specs/033-latest-models/implement/T007.tasks.json"
+      },
+      "task_ids": [
+        "T006",
+        "T007"
+      ],
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a"
+      ],
+      "files": [
+        "specs/033-latest-models/implement/T009.tasks.json",
+        "tests/validate_tier_model_binding_contract.py"
+      ],
+      "id": "p04-a",
+      "parallel": true,
+      "result_files": {
+        "T009": "specs/033-latest-models/implement/T009.tasks.json"
+      },
+      "task_ids": [
+        "T009"
+      ],
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p03-a"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/scripts/grill_core/gauntlet_runs.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/033-latest-models/implement/T010.tasks.json",
+        "tests/validate_gauntlet_run_contract.py",
+        "tests/validate_gauntlet_scheduler_contract.py"
+      ],
+      "id": "p04-b",
+      "parallel": true,
+      "result_files": {
+        "T010": "specs/033-latest-models/implement/T010.tasks.json"
+      },
+      "task_ids": [
+        "T010"
+      ],
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p04-a",
+        "p04-b"
+      ],
+      "files": [
+        "plugin/skills/grill-with-docs/assets/agent-orchestration.v2.json",
+        "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+        "plugin/skills/grill-with-docs/scripts/grill_workspace.py",
+        "specs/033-latest-models/implement/T012.tasks.json",
+        "specs/033-latest-models/implement/T013.tasks.json",
+        "specs/033-latest-models/implement/T014.tasks.json",
+        "tests/orchestration_fixture.py",
+        "tests/validate_agent_orchestration_contract.py"
+      ],
+      "id": "p05-a",
+      "parallel": true,
+      "result_files": {
+        "T012": "specs/033-latest-models/implement/T012.tasks.json",
+        "T013": "specs/033-latest-models/implement/T013.tasks.json",
+        "T014": "specs/033-latest-models/implement/T014.tasks.json"
+      },
+      "task_ids": [
+        "T012",
+        "T013",
+        "T014"
+      ],
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p05-a"
+      ],
+      "files": [
+        ".agents/plugins/marketplace.json",
+        ".claude-plugin/marketplace.json",
+        "CHANGELOG.md",
+        "README.md",
+        "docs/adr/0013-worker-model-floor.md",
+        "plugin/.claude-plugin/plugin.json",
+        "plugin/.codex-plugin/plugin.json",
+        "plugin/skills/grill-with-docs/SKILL.md",
+        "plugin/skills/grill-with-docs/references/session-protocol.md",
+        "specs/033-latest-models/implement/T017.tasks.json",
+        "tests/validate_distribution.py"
+      ],
+      "id": "p06-a",
+      "parallel": true,
+      "result_files": {
+        "T017": "specs/033-latest-models/implement/T017.tasks.json"
+      },
+      "task_ids": [
+        "T017"
+      ],
+      "tier": "medium"
+    },
+    {
+      "depends_on": [
+        "p05-a"
+      ],
+      "files": [
+        "specs/033-latest-models/implement/T018.tasks.json",
+        "tests/orchestration_fixture.py",
+        "tests/validate_gauntlet_converge_contract.py",
+        "tests/validate_gauntlet_scheduler_contract.py",
+        "tests/validate_status_contract.py"
+      ],
+      "id": "p06-b",
+      "parallel": true,
+      "result_files": {
+        "T018": "specs/033-latest-models/implement/T018.tasks.json"
+      },
+      "task_ids": [
+        "T018"
+      ],
+      "tier": "medium"
+    }
+  ],
+  "schema": "grill-gauntlet-execution-dag/v2",
+  "tasks_contract": "task-files/v1",
+  "tasks_semantic_sha256": "f70639d839803532422ba28979f8a4475fda225f268c03da6d1f01bca40006a8"
+}

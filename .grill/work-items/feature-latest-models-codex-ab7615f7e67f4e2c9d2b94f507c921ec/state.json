@@ -24,6 +24,7 @@
     "attested_executions": {
       "analyze": "se-92ba2363695b0fde63b0d5763e0a644eedfef6a9f4430e7fbacd8e5e90a17f19",
       "checklist": "se-6b9a7202934276c66908ec2066ec95a570bfa47f4013b7cce086517d8a0304a8",
+      "partition": "se-31d7c552dae7285552ab3aa2acc42f5505833ed50fb62eb09f0d706d11f22f1a",
       "plan": "se-12ebc01b62acdaa5dad133875261caa3d6db2c495107686996d60301885f4e1f",
       "specify": "se-a59acdd25ab39378cb20e88a3e901eb46883fb8d9189728866aa5f4c2c27bb0d",
       "tasks": "se-14a37abc9c6a0a1f7c27df809d52d04a9fd92b28a35d76369992297d9ed5eb4f"
@@ -40,6 +41,12 @@
         "provenance": "current-generation",
         "receipt_ref": "receipts/skill-invocation/checklist-checklist-1.terminal.json",
         "step_id": "checklist"
+      },
+      "partition": {
+        "output_sha256": "sha256:da417bbd132c19557ba7d2f4a676db8d1b47f27b4bf7427d6ed173b09caf7466",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/partition-partition-1.terminal.json",
+        "step_id": "partition"
       },
       "plan": {
         "output_sha256": "sha256:bee1724dfd5c56441faf3d23d3d4a9dd953294d585c63caa7e4abf6763fe4e7c",
@@ -169,9 +176,28 @@
         "reason": "",
         "state": "complete",
         "step": "analyze"
+      },
+      {
+        "evidence": [],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "in-progress",
+        "step": "partition"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/033-latest-models/execution-dag.r2.json",
+            "sha256": "da417bbd132c19557ba7d2f4a676db8d1b47f27b4bf7427d6ed173b09caf7466"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "complete",
+        "step": "partition"
       }
     ],
-    "current_step": "partition",
+    "current_step": "implement-parallel",
     "execution_branch": "cadugevaerd/fix-latest-models",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -193,7 +219,7 @@
       "checklist": "complete",
       "converge": "pending",
       "implement-parallel": "pending",
-      "partition": "pending",
+      "partition": "complete",
       "plan": "complete",
       "review": "pending",
       "ship": "pending",
