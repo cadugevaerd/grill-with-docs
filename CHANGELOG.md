@@ -1,5 +1,13 @@
 # Changelog
 
+## 6.0.30
+
+- Fix: `gauntlet-context-takeover` herda workers já `PREPARED` depois de comprovar que o líder anterior terminou, eliminando o ciclo em que esses workers bloqueavam a tomada mas somente o líder encerrado podia avançá-los. Outros estados ativos, atividades e observações desconhecidas continuam bloqueando; a lista herdada integra o hash da prévia e os retornos de preview/apply.
+
+## 6.0.29
+
+- Fix: `gauntlet-tasks-reconcile` resolve a proveniência por tarefa em rebases encadeados com origens mistas, sem exigir que o import ancestral de outra tarefa contenha o aceite corrente.
+
 ## 6.0.28
 
 - Fix: `status` deixa de estourar `STATUS-TIMEOUT`. `item_payload` chamava `store.read_snapshot` duas vezes por work item (via `cleanup_projection → _read_runs` e direto), e cada leitura revalida o journal inteiro do Store por repositório (`.git/grill/events.jsonl`). Com 174 bundles em 38 worktrees eram 348 validações idênticas (~161 s) contra o teto de 30 s. Agora `build_status` lê o snapshot uma vez e o injeta em `item_payload`, `cleanup_projection` e `_read_runs` (parâmetro opcional; o default preserva o comportamento anterior). O workspace inteiro cai para ~4 s. O timeout e a validação do Store não mudam; o custo por leitura segue O(journal).

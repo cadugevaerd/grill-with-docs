@@ -3672,6 +3672,15 @@ def _continuity_quiescence(document: dict[str, Any], item: dict[str, Any], work_
     return sorted(active + worker_active), sorted(unknown + worker_unknown)
 
 
+def _takeover_prepared_workers(document: dict[str, Any], work_id: str) -> list[str]:
+    """Prepared workers survive a proven-terminal leader and pass to its successor."""
+    runs = document.get("work_items", {}).get(work_id, {}).get("gauntlet", {}).get("runs", {})
+    return sorted(f"worker:{run_id}:{worker_id}"
+                  for run_id, run in runs.items() if run.get("state") != "BLOCKED"
+                  for worker_id, worker in run.get("workers", {}).items()
+                  if worker.get("state") == "PREPARED")
+
+
 def _released_activity_sessions(root: Path, item: dict[str, Any], work_id: str) -> dict[str, tuple[str, dict[str, Any]]]:
     """Return pending result sessions whose exact Orca release archive is current."""
     runtime = grill_core_module("agent_runtime")
@@ -4155,11 +4164,14 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
         if status in {"dispatched", "running"}:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-LEADER-ACTIVE", old_session_ref)
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-EVIDENCE-UNPROVEN", old_session_ref)
-    # C1 (analysis.md): refuse while specialist activity is not quiescent,
-    # reusing the same check gauntlet-prepare-switch already applies.
+    # A proven-terminal predecessor cannot advance workers it fully prepared.
+    # The successor inherits only that exact state; activities, unknown workers
+    # and every earlier worker state still block the takeover.
     active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
-    if active or unknown:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-WORK-ACTIVE", ",".join(active + unknown))
+    inherited_prepared_workers = _takeover_prepared_workers(snapshot.document, args.work_id)
+    blocking_active = sorted(set(active) - set(inherited_prepared_workers))
+    if blocking_active or unknown:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-WORK-ACTIVE", ",".join(blocking_active + unknown))
     # T016: the environment proves the predecessor ended, but nobody had
     # observed the *incoming* session, so its leader was installed with null
     # incarnation/observation and every @_gauntlet_authorized command refused
@@ -4248,9 +4260,10 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     expected = store.jcs_sha256({"work_id": args.work_id, "from_context_id": context_id,
         "from_session_ref": old_session_ref, "to_session_ref": args.session_ref,
         "observation": {"verdict": observation["verdict"], "reference": observation["reference"]},
-        "checkpoint_ref": checkpoint_ref})
+        "checkpoint_ref": checkpoint_ref, "inherited_prepared_workers": inherited_prepared_workers})
     if not args.apply:
         return {"verdict": "TAKEOVER-PREVIEW", "work_id": args.work_id, "from_context_id": context_id,
+                "inherited_prepared_workers": inherited_prepared_workers,
                 "expected_sha256": expected}, EXIT_OK
     if args.expected_sha256 != expected:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-INPUTS-STALE",
@@ -4333,6 +4346,7 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
             "succession": {"from_context_id": context_id, "from_session_ref": old_session_ref,
                            "reason": "takeover", "evidence": evidence, "taken_at": taken_at},
             "preserved_resources": retained, "operations_to_reconcile": reconcile,
+            "inherited_prepared_workers": inherited_prepared_workers,
             "presentation": readiness["presentation"],
             "store_revision": committed.revision}, EXIT_OK
 
@@ -4730,13 +4744,6 @@ def _gauntlet_tasks_reconcile_locked(args: argparse.Namespace) -> tuple[dict[str
         runs = grill_core_module("gauntlet_runs")
         try:
             imported = runs.verified_task_import(root, args.work_id, args.run_id) if args.run_id else None
-            original = imported
-            # Rebase receipts name the accepting run; sidecars keep their
-            # original worker run/node. Revalidate each historical import.
-            # ponytail: O(depth^2); project verified origins if chains grow.
-            while original and original["schema"] == "grill-task-import/v2":
-                original = runs.verified_task_import(root, args.work_id, original["source_run_id"],
-                    tasks_commit=original["source_commit"])
         except (runs.GauntletRunError, runs.store.StoreError) as error:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
         if imported and imported["dag_content_sha256"] != runs.store.jcs_sha256(dag):
@@ -4755,10 +4762,25 @@ def _gauntlet_tasks_reconcile_locked(args: argparse.Namespace) -> tuple[dict[str
                 result = _read_json_document(root, result_path, "TASK-RESULT-MISSING")
                 accepted = imported["tasks"].get(task_id) if imported else None
                 if accepted:
-                    accepted = original["tasks"].get(task_id) if original else None
-                    if accepted is None:
-                        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-IMPORT-EVIDENCE-MISSING",
-                                         f"original task result acceptance is absent: {task_id}")
+                    origin, seen = imported, set()
+                    # A successor can mix tasks created locally in an
+                    # intermediate run with tasks inherited from its import.
+                    # Follow only this task while revalidating every receipt.
+                    while origin["schema"] == "grill-task-import/v2":
+                        source_run_id = origin["source_run_id"]
+                        if source_run_id in seen:
+                            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TASK-IMPORT-DIVERGENT",
+                                             "task import ancestry is cyclic")
+                        seen.add(source_run_id)
+                        try:
+                            source = runs.verified_task_import(root, args.work_id, source_run_id,
+                                tasks_commit=origin["source_commit"])
+                        except (runs.GauntletRunError, runs.store.StoreError) as error:
+                            raise CliFailure(EXIT_BLOCKED, "BLOCKED", error.code, error.message) from error
+                        inherited = source["tasks"].get(task_id) if source else None
+                        if inherited is None:
+                            break
+                        origin, accepted = source, inherited
                 expected_run = accepted["source_run_id"] if accepted else args.run_id
                 try:
                     runs.validate_task_result(result, work_id=args.work_id, task_id=task_id,

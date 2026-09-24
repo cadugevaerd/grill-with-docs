@@ -360,6 +360,56 @@ class TaskImportContract(unittest.TestCase):
             apply=True, expected_sha256=preview['expected_sha256'])
         self.assertEqual(applied['verdict'], 'APPLIED')
 
+    def test_nested_rebase_resolves_each_task_through_its_own_origin(self):
+        preview = runs.import_task_results(self.root, WORK, self.target, self.dag_ref,
+            {'T009': self.source_runs[1]}, self.admission)
+        runs.import_task_results(self.root, WORK, self.target, self.dag_ref,
+            {'T009': self.source_runs[1]}, self.admission, apply=True,
+            expected_sha256=preview['expected_sha256'])
+
+        node = next(node for node in self.dag['nodes'] if node['id'] == 'p03-a')
+        runs.declare_wave(self.root, WORK, self.target, self.dag_ref, ['p03-a'], self.admission,
+                          activation_max_workers=2, **FLOORS)
+        runs.declare_worker(self.root, WORK, self.target, 'p03-a', 'wave-0001', 'medium',
+                            node['files'], self.dag_ref, self.admission, **FLOORS)
+        workspace = runs._workspace_identity(self.root, WORK, self.target, 'p03-a', self.admission)[0]
+        for task in node['task_ids']:
+            result = dict(schema='grill-task-result/v1', work_id=WORK, scheduler_run_id=self.target,
+                          node_id='p03-a', task_id=task, attempt_id='attempt-1', status='completed',
+                          diagnostic_ref=None)
+            path = workspace / self.result(task)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(result))
+        subprocess.run(['git', '-C', str(workspace), 'add', '.'], check=True, capture_output=True)
+        subprocess.run(['git', '-C', str(workspace), 'commit', '-qm', 'newer local results'],
+                       check=True, capture_output=True)
+        runs.terminate_worker(self.root, WORK, self.target, 'p03-a', 'completed', None, self.admission)
+        runs.converge_wave(self.root, WORK, self.target, self.dag_ref, 'wave-0001', self.admission,
+                          execution_branch=self.git('branch', '--show-current'), **FLOORS)
+
+        source_run, source_commit = self.target, self.git('rev-parse', 'HEAD')
+        text = (self.root / self.tasks_ref).read_text()
+        text += (f'## Phase 5: New work\n- [ ] T012 New\n'
+                 f'  Files: ["new.py", "{self.result("T012")}"]\n'
+                 f'  Result: "{self.result("T012")}"\n')
+        self.write(self.tasks_ref, text)
+        target_dag, _ = partition.partition_task_files(text, feature='demo', groups=2, root=self.root)
+        target_ref = 'specs/demo/execution-dag.r4.json'
+        self.write(target_ref, json.dumps(target_dag))
+        self.git('add', '.')
+        self.git('commit', '-qm', 'mixed-origin successor dag')
+        self.admission = self.identity('4')
+        self.target = runs.admit_or_reuse_run(self.root, WORK, self.admission)['run_id']
+        rebased = runs.rebase_task_results(self.root, WORK, self.target, target_ref, source_run,
+            self.dag_ref, ['T007', 'T008', 'T009'], self.admission, source_commit=source_commit)
+        runs.rebase_task_results(self.root, WORK, self.target, target_ref, source_run,
+            self.dag_ref, ['T007', 'T008', 'T009'], self.admission, source_commit=source_commit,
+            apply=True, expected_sha256=rebased['expected_sha256'])
+        self.dag_ref = target_ref
+
+        code, reconciled = self.command(verb='gauntlet-tasks-reconcile')
+        self.assertEqual((code, reconciled.get('completed')), (0, ['T007', 'T008', 'T009']), reconciled)
+
     def test_nested_rebase_ignores_unrequested_local_worker_sidecars(self):
         self.complete_import_sources()
         source_run, source_commit = self.sources['T011'], self.git('rev-parse', 'HEAD')

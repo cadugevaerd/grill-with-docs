@@ -1171,6 +1171,10 @@ class AgentOrchestrationContract(unittest.TestCase):
                 "w": {"state": "PREPARED", "lease": {"expires_at": "2000-01-01T00:00:00Z"}}}}}}}}},
             {"activities": {}, "resources": {}}, "work-x")
         self.assertEqual(active, ["worker:run-1:w"]); self.assertEqual(unknown, [])
+        self.assertEqual(grill_workspace._takeover_prepared_workers(
+            {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"workers": {
+                "prepared": {"state": "PREPARED"}, "preparing": {"state": "PREPARING"}}}}}}}},
+            "work-x"), ["worker:run-1:prepared"])
         active, unknown = grill_workspace._continuity_quiescence(
             {"work_items": {"work-x": {"gauntlet": {"runs": {"run-1": {"state": "BLOCKED", "workers": {
                 "w": {"state": "PREPARED", "lease": {"expires_at": "2000-01-01T00:00:00Z"}}}}}}}}},
@@ -2544,6 +2548,21 @@ class AgentOrchestrationContract(unittest.TestCase):
             store.transact(root, add_activity)
             assert_refused_and_unwritten("work-active", "orca:ctx-new-work", "TAKEOVER-WORK-ACTIVE",
                 takeover_show(old_dispatch, status="completed"))
+
+            # -- a fully prepared worker passes to the successor instead of
+            # deadlocking behind the terminal predecessor's authority. --
+            spawn("work-prepared-worker")
+            inherited = ["worker:run-1:worker-a"]
+            env, transport = observing(takeover_show(old_dispatch, status="completed"))
+            with env, transport, \
+                 mock.patch.object(grill_workspace, "_continuity_quiescence", return_value=(inherited, [])), \
+                 mock.patch.object(grill_workspace, "_takeover_prepared_workers", return_value=inherited):
+                code, preview = takeover("work-prepared-worker", "orca:ctx-new-prepared")
+                self.assertEqual((code, preview.get("inherited_prepared_workers")), (0, inherited), preview)
+                code, applied = takeover("work-prepared-worker", "orca:ctx-new-prepared", "--apply",
+                                         "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, applied.get("verdict")), (0, "TAKEOVER-APPLIED"), applied)
+            self.assertEqual(applied["inherited_prepared_workers"], inherited)
 
             # -- a reread hash mismatch on --apply refuses without writing. --
             spawn("work-stale")
