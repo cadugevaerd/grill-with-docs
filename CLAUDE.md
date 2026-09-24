@@ -16,7 +16,7 @@ Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfood
 python3 tests/run_validators.py
 ```
 
-A suíte completa roda por `tests/run_validators.py`; conte os validadores pelo marcador `==>`, pois `validate_distribution.py` usa asserções diretas e não imprime `Ran N tests`. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais — a matriz de CI (ubuntu/windows/macos, Python 3.10 e 3.13) não tem nenhum deles. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
+A suíte completa roda por `tests/run_validators.py`; conte os validadores pelo marcador `==>`, pois `validate_distribution.py` usa asserções diretas e não imprime `Ran N tests`. No CI, `--suite essential` executa contratos selecionados e oito smoke tests de workspace no Ubuntu/Python 3.10; `--suite portability` executa distribuição e os mesmos smoke tests no Windows e macOS/Python 3.13. Cada job tem limite de cinco minutos. Os perfis imprimem a duração de cada validador e do total. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
 
 ## Restrições do core
 
@@ -93,7 +93,7 @@ Este repositório está vinculado ao backlog `SGD` (`spec-kit-grill-with-docs`),
 
 São dois workflows, e a separação é deliberada:
 
-- `.github/workflows/ci.yml` — matriz de portabilidade (3 SOs × Python), com `paths:` restrito ao que ela cobre. Tem guarda que pula a matriz em merge de PR, porque o evento `pull_request` já testou a mesma árvore.
+- `.github/workflows/ci.yml` — validação essencial no Ubuntu/Python 3.10 e smoke de portabilidade no Windows e macOS/Python 3.13, com limite de cinco minutos por job e `paths:` restrito ao que cobre. A suíte completa permanece disponível localmente. Tem guarda que pula a matriz em merge de PR, porque o evento `pull_request` já testou a mesma árvore.
 - `.github/workflows/bump-gate.yml` — o gate de versão, **sem** `paths:`. Ele roda em toda PR e sempre reporta.
 - `.github/workflows/publish.yml` — publica no push para `main` que toca `plugin/**`. O job `release` exige o bump, cria a tag anotada imutável e, desde a cláusula `Release obrigatória por versão`, cria também a GitHub Release ancorada nessa tag. Release preexistente é sucesso; tag ausente ou ancoragem divergente reprovam. Só depois o job `publish` aponta os marketplaces.
   O job resolve um `anchor` — o commit em que a versão está publicada — e **tudo a jusante ancora nele, nunca em `github.sha`**. No push os dois coincidem. Fora do push (`workflow_dispatch`) a execução é *reconciliação*: se a tag daquela versão já existe em commit anterior, o job não remarca e também não morre — segue e garante release e marketplaces ancorados na tag. É o que permite reparar uma release perdida sem criar release à mão, que a cláusula trata como contorno. A imutabilidade segue intacta: remarcação só é tentada quando a tag não existe, e um push divergente continua reprovando.

@@ -2,7 +2,7 @@
 """Executable contract for the plugin version bump gate.
 
 Runs with no git repository and no pull request context, because it is collected by
-``tests/run_validators.py`` on every supported OS and Python version.
+the essential and full ``tests/run_validators.py`` suites.
 """
 from __future__ import annotations
 
