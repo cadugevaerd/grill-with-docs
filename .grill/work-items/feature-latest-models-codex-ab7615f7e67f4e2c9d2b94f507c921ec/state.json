@@ -12,6 +12,26 @@
     "state": "present"
   },
   "development": {
+    "attestation_campaign": {
+      "adapter": "codex-skill/v1",
+      "plan_revision": 0,
+      "project_id": "sha256:25a73a0c5c6dd8a0e9e55c8d69b7a51cc40abd5faf88df2ec5cbf0fa35357686",
+      "recovery_generation_id": "rg-8cbfb8d4e7caa6a5d3d9f4211027c731aa53c0f79a3428e13800d6c6b0a8979c",
+      "registry_sha256": "sha256:f514df103b3d2dbf0cf786e95c9b59e7b1dc79e08b2ce7fe30b99f8b8bb3e35c",
+      "run_id": "leader-feature-latest-models-codex-ab7615f7e67f4e2c9d2b94f507c921ec",
+      "runtime": "codex"
+    },
+    "attested_executions": {
+      "specify": "se-a59acdd25ab39378cb20e88a3e901eb46883fb8d9189728866aa5f4c2c27bb0d"
+    },
+    "attested_outputs": {
+      "specify": {
+        "output_sha256": "sha256:96033b87503c3db544d33913baaf81df7b6e262fde3f2be8f5a8d625825a9fee",
+        "provenance": "current-generation",
+        "receipt_ref": "receipts/skill-invocation/specify-specify-1.terminal.json",
+        "step_id": "specify"
+      }
+    },
     "audit": [
       {
         "evidence": [],
@@ -33,9 +53,21 @@
         "reason": "",
         "state": "in-progress",
         "step": "specify"
+      },
+      {
+        "evidence": [
+          {
+            "path": "specs/033-latest-models/spec.md",
+            "sha256": "96033b87503c3db544d33913baaf81df7b6e262fde3f2be8f5a8d625825a9fee"
+          }
+        ],
+        "execution_branch": "cadugevaerd/fix-latest-models",
+        "reason": "",
+        "state": "complete",
+        "step": "specify"
       }
     ],
-    "current_step": "specify",
+    "current_step": "plan",
     "execution_branch": "cadugevaerd/fix-latest-models",
     "renamed_from": {},
     "schema": "grill-development/v2",
@@ -61,7 +93,7 @@
       "plan": "pending",
       "review": "pending",
       "ship": "pending",
-      "specify": "in-progress",
+      "specify": "complete",
       "tasks": "pending",
       "verify": "pending"
     },
