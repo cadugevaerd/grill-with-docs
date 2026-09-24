@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v6.0.30
+# Grill with Docs v6.0.31
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -92,6 +92,8 @@ O registro é evidência e **deve ser commitado**: `reconcile --apply` exige wor
 Resolva o Git root real e trabalhe em branch/worktree dedicada. O `init` fixa o workflow project-wide sozinho; `ensure_workflow.py --ensure ROOT` continua disponível para uso isolado.
 
 A tomada de contexto de um work item preso a sessão anterior é ato explícito, via `gauntlet-context-takeover`, e só é autorizada quando a observação do dispatch do líder anterior comprova estado terminal; ausência de prova nunca autoriza a retomada. Workers já `PREPARED` passam ao sucessor; atividades, workers em outros estados e observações desconhecidas continuam bloqueando.
+
+Atividade de especialista órfã ou de sessão retida é encerrada sem aceite por `gauntlet-activity-fence`, sob prova terminal do especialista e do líder e autorização humana exata; nada do resultado cercado migra.
 
 Crie o namespace isolado:
 
