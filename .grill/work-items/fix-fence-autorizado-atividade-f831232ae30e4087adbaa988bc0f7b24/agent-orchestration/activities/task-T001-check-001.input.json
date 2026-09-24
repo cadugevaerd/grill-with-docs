@@ -1,0 +1,43 @@
+{
+ "files": [
+  {
+   "path": "specs/034-fence-autorizado-atividade/tasks.md",
+   "sha256": "5fb1d5e441ad952c94fae5d0de04641a8a0bf777188f09d24616d34f02f8ac14",
+   "size": 37211,
+   "media_type": "text/markdown"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/execution-dag.r2.json",
+   "sha256": "69fc6fc2f5e1bff38d295a4a35be8cd6111898b5967dfc09772d7c65782e40b2",
+   "size": 2589,
+   "media_type": "application/json"
+  },
+  {
+   "path": "specs/034-fence-autorizado-atividade/implement/T001.tasks.json",
+   "sha256": "bf78271c9c03d4da3f2d89e1137c9909e1d7f20baf93c939bfc31421e9e941e4",
+   "size": 278,
+   "media_type": "application/json"
+  },
+  {
+   "path": "plugin/skills/grill-with-docs/scripts/grill_core/agent_orchestration.py",
+   "sha256": "b899bec0e299ee6d8e1bcc4dcc2f5bb78da5cdbc9c408d9f740ab532a0b85e92",
+   "size": 114098,
+   "media_type": "text/x-python"
+  },
+  {
+   "path": "tests/validate_orchestrator_store_contract.py",
+   "sha256": "56fddbda97eabf6c9592f6e828737033f86d7f41fa400b0aca166c11d5a3752f",
+   "size": 159254,
+   "media_type": "text/x-python"
+  }
+ ],
+ "required_activity_ids": [],
+ "author_activity_ids": [],
+ "task_binding": {
+  "task_id": "T001",
+  "phase": "1",
+  "tasks_semantic_sha256": "c298d8219d9e650e3e5c43650ae7a42f72a674407b6fbf6021b65cc7116424c6",
+  "dag_content_sha256": "d0e8489b5ccfdef8e8f23c7e21249d300b39e6818dcdb0f8a043c64b0d942759"
+ },
+ "human_authorization": null
+}
