@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -37,6 +39,10 @@ _DOCUMENT_KEYS = frozenset(
 _RESOLVED_RUNTIME_KEYS = frozenset({"resolved", "adapter", "selection", "tiers"})
 _UNRESOLVED_RUNTIME_KEYS = frozenset({"resolved", "unresolved_reason"})
 _TIER_KEYS = frozenset({"model", "frontier"})
+#: A Codex tier names a model *family*; the concrete slug is read from the
+#: local Codex catalog at dispatch time (ADR-0001 of feature-latest-models).
+_FAMILY_TIER_KEYS = frozenset({"family", "frontier"})
+_FAMILY_RE = re.compile(r"[a-z][a-z0-9]*")
 #: A placeholder that survived into a resolved runtime means the asset was
 #: shipped half-filled. Falling back to a default here would silently dispatch
 #: some other model, so it is a refusal instead.
@@ -110,6 +116,12 @@ def load_binding(path: Path | None = None) -> dict[str, Any]:
         if not isinstance(tiers, dict) or set(tiers) != set(order):
             _fail("BINDING-MALFORMED", f"runtime does not cover every tier: {name}")
         for tier, entry in tiers.items():
+            if isinstance(entry, dict) and set(entry) == _FAMILY_TIER_KEYS and name == "codex":
+                if not isinstance(entry["family"], str) or not _FAMILY_RE.fullmatch(entry["family"]):
+                    _fail("BINDING-MALFORMED", f"tier family is invalid: {name}/{tier}")
+                if entry["frontier"] not in (True, False):
+                    _fail("BINDING-MALFORMED", f"tier frontier flag is invalid: {name}/{tier}")
+                continue
             if not isinstance(entry, dict) or set(entry) != _TIER_KEYS:
                 _fail("BINDING-MALFORMED", f"tier entry is invalid: {name}/{tier}")
             if not isinstance(entry["model"], str) or not entry["model"]:
@@ -150,15 +162,49 @@ def resolve_model(runtime: str, tier: str, *, actor_class: str,
     if resolved["frontier"] and not actors[actor_class]["frontier_allowed"]:
         _fail("FRONTIER-MODEL-FORBIDDEN",
               f"actor class {actor_class} may not run a frontier model",
-              runtime=runtime, tier=tier, model=resolved["model"], actor_class=actor_class)
-    return {
+              runtime=runtime, tier=tier, model=resolved.get("model", resolved.get("family")),
+              actor_class=actor_class)
+    result = {
         "runtime": runtime,
         "tier": tier,
         "actor_class": actor_class,
         "adapter": entry["adapter"],
-        "model": resolved["model"],
+        "model": resolved["model"] if "model" in resolved else resolve_codex_family(resolved["family"]),
         "frontier": resolved["frontier"],
     }
+    if "family" in resolved:
+        result["family"] = resolved["family"]
+    return result
+
+
+def codex_catalog_path() -> Path:
+    """The local catalog the Codex CLI itself caches; ``CODEX_HOME`` is the seam."""
+    return Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "models_cache.json"
+
+
+def resolve_codex_family(family: str, catalog: Path | None = None) -> str:
+    """Newest listed slug of a family: the lowest ``priority`` in the local catalog.
+
+    Codex has no local alias (a short name is sent to the API verbatim), so the
+    family is resolved here, offline. No catalog, or no slug of that family, is
+    a refusal -- never a fallback to an older pinned slug, which is the bug this
+    replaces.
+    """
+    target = Path(catalog) if catalog is not None else codex_catalog_path()
+    try:
+        document = json.loads(target.read_bytes())
+    except (OSError, ValueError):
+        _fail("TIER-MODEL-UNRESOLVED", "Codex model catalog is unavailable or unreadable",
+              family=family, catalog=str(target))
+    rows = document.get("models") if isinstance(document, dict) else None
+    pattern = re.compile(r"gpt-\d+(?:\.\d+)*-" + re.escape(family))
+    candidates = [row for row in rows if isinstance(row, dict) and isinstance(row.get("slug"), str)
+                  and pattern.fullmatch(row["slug"]) and type(row.get("priority")) is int] \
+        if isinstance(rows, list) else []
+    if not candidates:
+        _fail("TIER-MODEL-UNRESOLVED", f"no Codex model of family {family} in the local catalog",
+              family=family, catalog=str(target))
+    return min(candidates, key=lambda row: row["priority"])["slug"]
 
 
 def resolved_runtimes(binding: Mapping[str, Any] | None = None) -> tuple[str, ...]:

@@ -1126,7 +1126,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertEqual(response, {"active_model": None, "coordinator_recommendation": expected,
                                             "active_model_changed": False})
         self.assertEqual(agent_orchestration.specialist_pair("codex", "author"), ("gpt-6-astra", "xhigh"))
-        self.assertEqual(agent_orchestration.specialist_pair("claude", "reviewer"), ("fable", "high"))
+        self.assertEqual(agent_orchestration.specialist_pair("claude", "reviewer"), ("opus", "high"))
         old = {"project_id": "sha256:" + "1" * 64, "run_id": "leader-work-x", "runtime": "codex",
                "adapter": "codex", "registry_sha256": "sha256:" + "2" * 64,
                "recovery_generation_id": "rg-" + "3" * 64, "plan_revision": 7}
