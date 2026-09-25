@@ -6629,74 +6629,12 @@ def _replace_activity(document: dict[str, Any], work_id: str, activity_id: str,
     return document
 
 
-@_gauntlet_authorized
-def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    """Mint the attestation chain for one leader-executed step.
-
-    The core knew how to judge a chain and not how to mint one, so every step
-    was unreachable by checkpoint once the gate started firing. This is the
-    other half.
-
-    What it writes is a bundle file; it never advances a step by itself. The
-    caller still runs ``checkpoint --state complete --attestation <path>``, and
-    the judge still has to accept it. Minting and advancing stay separate on
-    purpose: a command that did both would make "the chain was accepted"
-    indistinguishable from "the chain was written by the thing that wanted it
-    accepted".
-    """
-    root = project_root(args.root)
-    if args.step == "tasks":
-        _require_visual_gate(root, args.work_id)
-    item = resolve_development_item(root, args.work_id)
-    attestation = grill_core_module("attestation")
-    coverage = _step_activity_coverage(root, args.work_id, args.step)
-    if coverage is not None:
-        try:
-            attestation.require_activity_coverage(coverage, step_id=args.step)
-        except attestation.AttestationError as exc:
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", exc.reason) from exc
+def _attest_resolution(root: Path, args: argparse.Namespace, item: Path, step: str, workflow_version: str,
+                       orchestration_context: dict[str, Any] | None) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    """Resolve the runtime, the step's shipped skill and its catalog for minting."""
     versions = grill_core_module("workflow_versions")
     step_skills_module = grill_core_module("step_skills")
-    store = grill_core_module("store")
     gauntlet = grill_core_module("gauntlet")
-    orchestration_context = None
-    snapshot = store.read_snapshot(root, required=False)
-    if snapshot is not None:
-        item_record = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
-        if isinstance(item_record, dict):
-            candidate = item_record.get("contexts", {}).get(item_record.get("current_context_id"))
-            if isinstance(candidate, dict):
-                orchestration_context = candidate
-
-    _, state = read_development_state(root, item, args.work_id)
-    development = state.get("development") or {}
-    workflow_version = development_workflow_version(development)
-    if workflow_version is None:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-UNTRACKED", args.work_id)
-
-    # A ``worker-required`` step may be attested by the leader -- the step
-    # receipt is always the leader's -- but only against proof that dispatched
-    # workers actually did the work. That proof is converged waves on the run,
-    # read from durable state rather than declared by the caller: a flag the
-    # operator sets would be the self-certification the class exists to prevent.
-    worker_execution_proven = _converged_waves_exist(root, args.work_id)
-    try:
-        # Refuse before reading anything: without the proof, a step whose
-        # isolation is its safety mechanism must not even get as far as hashing
-        # an artefact.
-        execution_class = attestation.require_emission_allowed(
-            args.step, workflow_version, versions,
-            worker_execution_proven=worker_execution_proven)
-        artefact_sha256, artefact_size = attestation.artefact_digest(
-            lambda rel: safe_read_regular_fd(root, root / rel), args.artifact,
-        )
-    except attestation.AttestationError as error:
-        raise CliFailure(EXIT_NO_GO, "NO-GO", error.reason,
-                         f"{error.code}: {error.reason}",
-                         extra={"work_id": args.work_id, **error.detail}) from error
-
-    project_id = store.project_identity(root)["project_id"]
-
     if workflow_version in {"v4", "v5"}:
         config_fd: int | None = None
         try:
@@ -6744,7 +6682,7 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         catalog_bytes = (assets / catalog_filename).read_bytes()
         catalog = step_skills_module.parse_strict(catalog_bytes)
         resolutions, trusted_catalogs_bytes = step_skills_module.resolve_shipped_workflow_skills(
-            (args.step,), runtime, step_skills_module.registry_sha256(registry_bytes),
+            (step,), runtime, step_skills_module.registry_sha256(registry_bytes),
             registry=registry_bytes, catalog=catalog,
             trusted_catalogs_path=assets / versions.TRUSTED_CATALOGS_FILENAME_BY_VERSION[workflow_version],
         )
@@ -6753,7 +6691,7 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                          str(workflow_version), extra={"work_id": args.work_id}) from error
     except Exception as error:  # resolution owns its own refusal vocabulary
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SKILL-RESOLUTION-FAILED",
-                         str(error), extra={"work_id": args.work_id, "step": args.step}) from error
+                         str(error), extra={"work_id": args.work_id, "step": step}) from error
     resolution = resolutions[0]
 
     if workflow_version in {"v4", "v5"}:
@@ -6784,19 +6722,84 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 "BLOCKED",
                 "IDENTITY-STALE",
                 "attestation inputs differ from the immutable Gauntlet activation",
-                extra={"work_id": args.work_id, "step": args.step},
+                extra={"work_id": args.work_id, "step": step},
             )
+    return runtime, resolution, catalog
+
+
+def _mint_one(args: argparse.Namespace, step: str, artifact: str, supersedes: str | None,
+              dependency_override: dict[str, Any] | None) -> dict[str, Any]:
+    """Mint one step's chain in memory; the caller decides where it is written.
+
+    ``dependency_override`` names the predecessor output to declare instead of
+    the recorded one: re-chaining mints a step on top of a predecessor that is
+    minted but not yet checkpointed, so its output is not recorded anywhere yet.
+    """
+    root = project_root(args.root)
+    if step == "tasks":
+        _require_visual_gate(root, args.work_id)
+    item = resolve_development_item(root, args.work_id)
+    attestation = grill_core_module("attestation")
+    coverage = _step_activity_coverage(root, args.work_id, step)
+    if coverage is not None:
+        try:
+            attestation.require_activity_coverage(coverage, step_id=step)
+        except attestation.AttestationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", exc.reason) from exc
+    versions = grill_core_module("workflow_versions")
+    step_skills_module = grill_core_module("step_skills")
+    store = grill_core_module("store")
+    orchestration_context = None
+    snapshot = store.read_snapshot(root, required=False)
+    if snapshot is not None:
+        item_record = snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(args.work_id)
+        if isinstance(item_record, dict):
+            candidate = item_record.get("contexts", {}).get(item_record.get("current_context_id"))
+            if isinstance(candidate, dict):
+                orchestration_context = candidate
+
+    _, state = read_development_state(root, item, args.work_id)
+    development = state.get("development") or {}
+    workflow_version = development_workflow_version(development)
+    if workflow_version is None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "LEGACY-UNTRACKED", args.work_id)
+
+    # A ``worker-required`` step may be attested by the leader -- the step
+    # receipt is always the leader's -- but only against proof that dispatched
+    # workers actually did the work. That proof is converged waves on the run,
+    # read from durable state rather than declared by the caller: a flag the
+    # operator sets would be the self-certification the class exists to prevent.
+    worker_execution_proven = _converged_waves_exist(root, args.work_id)
+    try:
+        # Refuse before reading anything: without the proof, a step whose
+        # isolation is its safety mechanism must not even get as far as hashing
+        # an artefact.
+        execution_class = attestation.require_emission_allowed(
+            step, workflow_version, versions,
+            worker_execution_proven=worker_execution_proven)
+        artefact_sha256, artefact_size = attestation.artefact_digest(
+            lambda rel: safe_read_regular_fd(root, root / rel), artifact,
+        )
+    except attestation.AttestationError as error:
+        raise CliFailure(EXIT_NO_GO, "NO-GO", error.reason,
+                         f"{error.code}: {error.reason}",
+                         extra={"work_id": args.work_id, **error.detail}) from error
+
+    project_id = store.project_identity(root)["project_id"]
+    runtime, resolution, catalog = _attest_resolution(
+        root, args, item, step, workflow_version, orchestration_context)
 
     # The authorization is read, not minted: it is a human artefact that exists
     # before the chain. `ship` is the only step whose resolution demands one,
     # and without this the emitter could mint for ten steps and not the
     # eleventh -- the same shape of gap the emitter itself was built to close.
+    # A re-chain mints several steps at once; the authorization is ship's alone.
     human_authorization = None
-    if args.authorization:
+    if args.authorization and (step == "ship" or not getattr(args, "rechain", False)):
         human_authorization = load_checkpoint_attestation(root, args.authorization)
 
     run_id = args.run_id or f"leader-{args.work_id}"
-    lease_id, fencing_token = attestation.leader_lease(run_id, args.step)
+    lease_id, fencing_token = attestation.leader_lease(run_id, step)
     head = git_optional(root, "rev-parse", "HEAD")
     if not re.fullmatch(r"[0-9a-f]{40}", head):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "BASE-COMMIT-UNAVAILABLE",
@@ -6813,31 +6816,33 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     execution_round = 1
     supersedes_step_execution_id = None
     supersedes_attempt_id = None
-    if args.supersedes:
-        prior = load_checkpoint_attestation(root, args.supersedes)
+    if supersedes:
+        prior = load_checkpoint_attestation(root, supersedes)
         prior_output = prior.get("step_output") if isinstance(prior, dict) else None
-        if not isinstance(prior_output, dict) or prior_output.get("step_id") != args.step:
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-INVALID", args.supersedes,
-                             extra={"work_id": args.work_id, "step": args.step})
+        if not isinstance(prior_output, dict) or prior_output.get("step_id") != step:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-INVALID", supersedes,
+                             extra={"work_id": args.work_id, "step": step})
         supersedes_step_execution_id = prior_output.get("step_execution_id")
         supersedes_attempt_id = prior_output.get("attempt_id")
         prior_round = prior_output.get("execution_round")
         if not isinstance(prior_round, int) or isinstance(prior_round, bool) or prior_round < 1:
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-INVALID", args.supersedes,
-                             extra={"work_id": args.work_id, "step": args.step})
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SUPERSEDE-BUNDLE-INVALID", supersedes,
+                             extra={"work_id": args.work_id, "step": step})
         execution_round = prior_round + 1
 
     sequence = development_sequence(development)
     attested_outputs = development.get("attested_outputs") or {}
-    index = sequence.index(args.step) if args.step in sequence else 0
+    index = sequence.index(step) if step in sequence else 0
     dependency_outputs = []
-    if index > 0:
+    if dependency_override is not None:
+        dependency_outputs = [dependency_override]
+    elif index > 0:
         previous_step = sequence[index - 1]
         previous_output = attested_outputs.get(previous_step)
         if not isinstance(previous_output, dict):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "PREDECESSOR-UNATTESTED",
                              f"{previous_step} has no attested output to depend on",
-                             extra={"work_id": args.work_id, "step": args.step})
+                             extra={"work_id": args.work_id, "step": step})
         dependency_outputs = [previous_output]
 
     jcs = step_skills_module.sha256_jcs
@@ -6846,7 +6851,7 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     # step (or from HEAD, which moves with every commit) makes the second
     # checkpoint of the same run STALE against the first.
     campaign_identity = {"work_id": args.work_id, "run_id": run_id}
-    identity = {"work_id": args.work_id, "step": args.step, "head": head}
+    identity = {"work_id": args.work_id, "step": step, "head": head}
     # Once the first checkpoint of a run is accepted, its campaign is recorded
     # and every later checkpoint must match it. Inherit the recorded values
     # instead of recomputing them: the recorded campaign is the authority, and a
@@ -6859,7 +6864,7 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         recovery_generation_id = recorded.get("recovery_generation_id", derived_generation)
         plan_revision = recorded.get("plan_revision", 0)
         run_id = recorded.get("run_id", run_id)
-        lease_id, fencing_token = attestation.leader_lease(run_id, args.step)
+        lease_id, fencing_token = attestation.leader_lease(run_id, step)
     else:
         recovery_generation_id = derived_generation
         plan_revision = 0
@@ -6869,8 +6874,8 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         work_item_id=args.work_id,
         work_item_revision=int(state.get("version", "0").split(".")[0]) if isinstance(state.get("version"), str) else 0,
         run_id=run_id,
-        step_id=args.step,
-        attempt_id=f"{args.step}-{execution_round}",
+        step_id=step,
+        attempt_id=f"{step}-{execution_round}",
         recovery_generation_id=recovery_generation_id,
         plan_revision=plan_revision,
         wave_index=versions.LEADER_WAVE_INDEX,
@@ -6880,11 +6885,11 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         worker_fencing_token=fencing_token,
         dispatcher_lease_id=lease_id,
         dispatcher_epoch=1,
-        artefact_path=args.artifact,
+        artefact_path=artifact,
         artefact_sha256=artefact_sha256,
         logical_plan_sha256=jcs(identity),
-        executable_plan_sha256=jcs({**identity, "artifact": args.artifact}),
-        input_fingerprint=(_v5_input_fingerprint(root, args.work_id, args.step, head, artefact_sha256)
+        executable_plan_sha256=jcs({**identity, "artifact": artifact}),
+        input_fingerprint=(_v5_input_fingerprint(root, args.work_id, step, head, artefact_sha256)
                            if development.get("workflow_version") == "v5"
                            else jcs({**identity, "artifact_sha256": artefact_sha256})),
         dependency_outputs=dependency_outputs,
@@ -6894,25 +6899,140 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         supersedes_attempt_id=supersedes_attempt_id,
         human_authorization=human_authorization,
     )
+    return {"bundle": bundle, "execution_class": execution_class,
+            "worker_execution_proven": worker_execution_proven, "execution_round": execution_round,
+            "artifact_sha256": artefact_sha256, "artifact_bytes": artefact_size}
 
-    target = Path(args.out)
+
+def _write_attestation(root: Path, out: str, bundle: dict[str, Any]) -> Path:
+    target = Path(out)
     if target.is_absolute() or any(part in {"", ".", ".."} for part in target.parts):
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ATTESTATION-PATH", args.out)
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ATTESTATION-PATH", out)
     full = root / target
     full.parent.mkdir(parents=True, exist_ok=True)
     full.write_text(json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return target
+
+
+def _rechain_prior(root: Path, operations: dict[str, Any], step: str, execution_id: Any) -> tuple[str, dict[str, Any]]:
+    """The bundle this item accepted for ``step``, found through its checkpoint operation."""
+    for operation in operations.values():
+        request = operation.get("request") if isinstance(operation, dict) else None
+        reference = request.get("attestation") if isinstance(request, dict) else None
+        if operation.get("kind") != "checkpoint" or request.get("step") != step or not isinstance(reference, dict):
+            continue
+        try:
+            current = _checkpoint_ref(root, reference.get("ref"))
+            bundle = load_checkpoint_attestation(root, reference["ref"])
+        except CliFailure:
+            continue
+        output = bundle.get("step_output")
+        if (current is not None and current["sha256"] == reference.get("sha256") and isinstance(output, dict)
+                and execution_id is not None and output.get("step_execution_id") == execution_id):
+            return reference["ref"], bundle
+    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RECHAIN-PRIOR-UNKNOWN", step)
+
+
+def _rechain(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Mint successors for every stale step, each on top of the one before it.
+
+    Everything is checked before the first byte is written: a stale step whose
+    accepted bundle cannot be found, or whose artefact changed since, stops the
+    re-chain with nothing minted -- a changed artefact is a new supersession,
+    decided by someone, not a re-chain.
+    """
+    root = project_root(args.root)
+    _, state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)
+    development = state.get("development") or {}
+    sequence = development_sequence(development) or []
+    stale = [step for step in sequence if step in (development.get("chain_stale") or [])]
+    if "ship" in stale and not args.authorization:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "HUMAN-AUTHORIZATION-MISSING", "ship")
+    snapshot = grill_core_module("store").read_snapshot(root, required=False)
+    block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+    record = block.get("work_items", {}).get(args.work_id) if isinstance(block, dict) else None
+    operations = record.get("operations", {}) if isinstance(record, dict) else {}
+    executions = development.get("attested_executions") or {}
+    outputs = development.get("attested_outputs") or {}
+    attestation = grill_core_module("attestation")
+    plan = []
+    for step in stale:
+        prior_ref, prior = _rechain_prior(root, operations, step, executions.get(step))
+        refs = prior["step_output"].get("evidence_refs")
+        artifact = refs[0].get("path") if isinstance(refs, list) and refs and isinstance(refs[0], dict) else None
+        if not isinstance(artifact, str):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RECHAIN-PRIOR-UNKNOWN", step)
+        try:
+            digest, _size = attestation.artefact_digest(lambda rel: safe_read_regular_fd(root, root / rel), artifact)
+        except (attestation.AttestationError, CliFailure):
+            digest = None
+        if digest is None or digest != (outputs.get(step) or {}).get("output_sha256"):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RECHAIN-OUTPUT-CHANGED", step, extra={"artifact": artifact})
+        plan.append((step, artifact, prior_ref))
+    minted: list[dict[str, Any]] = []
+    predicted: dict[str, Any] | None = None
+    for step, artifact, prior_ref in plan:
+        index = sequence.index(step)
+        override = predicted if minted and sequence[index - 1] == minted[-1]["step"] else None
+        try:
+            result = _mint_one(args, step, artifact, prior_ref, override)
+        except CliFailure as failure:
+            failure.extra = {**(failure.extra or {}), "minted": minted}
+            raise
+        target = _write_attestation(root, (Path(args.out) / f"{step}-r{result['execution_round']}.json").as_posix(),
+                                    result["bundle"])
+        predicted = attestation.accepted_output(result["bundle"]["step_output"])
+        minted.append({"step": step, "attestation": target.as_posix(), "supersedes": prior_ref,
+                       "artifact": artifact, "execution_round": result["execution_round"],
+                       "predicted_output": predicted,
+                       "next": (f"checkpoint {args.root} --work-id {args.work_id} --step {step} --state complete"
+                                f" --evidence {artifact} --attestation {target.as_posix()}"
+                                f" --supersedes-attestation {prior_ref} --reason <why>")})
+    return {"verdict": "RECHAINED" if minted else "NOTHING-STALE", "work_id": args.work_id,
+            "minted": minted}, EXIT_OK
+
+
+@_gauntlet_authorized
+def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Mint the attestation chain for one leader-executed step.
+
+    The core knew how to judge a chain and not how to mint one, so every step
+    was unreachable by checkpoint once the gate started firing. This is the
+    other half.
+
+    What it writes is a bundle file; it never advances a step by itself. The
+    caller still runs ``checkpoint --state complete --attestation <path>``, and
+    the judge still has to accept it. Minting and advancing stay separate on
+    purpose: a command that did both would make "the chain was accepted"
+    indistinguishable from "the chain was written by the thing that wanted it
+    accepted".
+
+    ``--rechain`` mints, in order, a successor for every step in ``chain_stale``
+    and writes them under ``--out``; checkpointing each one is still the
+    caller's, with ``--supersedes-attestation``.
+    """
+    if args.rechain:
+        if args.step or args.artifact or args.supersedes:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS",
+                             "--rechain derives steps, artefacts and superseded bundles itself")
+        return _rechain(args)
+    if not args.step or not args.artifact:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "attest needs --step and --artifact")
+    root = project_root(args.root)
+    minted = _mint_one(args, args.step, args.artifact, args.supersedes, None)
+    target = _write_attestation(root, args.out, minted["bundle"])
     return {
         "verdict": "ATTESTED",
         "work_id": args.work_id,
         "step": args.step,
-        "execution_class": execution_class,
-        "worker_execution_proven": worker_execution_proven,
-        "execution_round": execution_round,
+        "execution_class": minted["execution_class"],
+        "worker_execution_proven": minted["worker_execution_proven"],
+        "execution_round": minted["execution_round"],
         "supersedes": args.supersedes,
         "authorization": args.authorization,
         "artifact": args.artifact,
-        "artifact_sha256": artefact_sha256,
-        "artifact_bytes": artefact_size,
+        "artifact_sha256": minted["artifact_sha256"],
+        "artifact_bytes": minted["artifact_bytes"],
         "attestation": str(target),
         "next": (
             f"checkpoint {args.root} --work-id {args.work_id} --step {args.step} --state complete"
@@ -7631,8 +7751,10 @@ def build_parser() -> JsonParser:
     attest_parser = subparsers.add_parser("attest")
     attest_parser.add_argument("root")
     attest_parser.add_argument("--work-id", required=True)
-    attest_parser.add_argument("--step", required=True)
-    attest_parser.add_argument("--artifact", required=True,
+    attest_parser.add_argument("--step")
+    attest_parser.add_argument("--rechain", action="store_true",
+                               help="mint successors for every chain_stale step, in order, under --out")
+    attest_parser.add_argument("--artifact",
                                help="project-relative path to the artefact the step produced")
     attest_parser.add_argument("--out", required=True,
                                help="project-relative path to write the attestation bundle to")
