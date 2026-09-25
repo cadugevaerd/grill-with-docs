@@ -153,7 +153,7 @@ def item_payload(
     development = {"tracking": tracking, "current_step": current, "completed": completed, "blocked": blocked, "steps": steps, "execution_branch": execution_branch}
     closed, operational_status, pending_reasons = classify_item(
         planning=planning, development=development, governance=governance,
-        findings=findings, blockers=blocked, sequence=item_sequence,
+        findings=findings, blockers=blocked, sequence=item_sequence, hotfix=immutable["type"] == "hotfix",
     )
     cleanup = workspace.grill_core_module("gauntlet_runs").cleanup_projection(root, bundle.work_id, snapshot=store_snapshot)
     result = {"work_id": bundle.work_id, "type": immutable["type"], "slug": immutable["slug"], "fingerprint": bundle.fingerprint, "locations": [item_location], "snapshot": snapshot, "recorded": {"branch": immutable.get("branch"), "head": immutable.get("head"), "base_ref": immutable.get("base_ref"), "base_commit": immutable.get("base_commit")}, "planning": planning, "development": development, "governance": governance, "cleanup": cleanup, "blockers": blocked, "findings": sorted(findings), "closed": closed, "operational_status": operational_status, "pending_reasons": pending_reasons, "next_gate": "BLOCKED" if findings or blocked else (item_sequence[len(completed)] if len(completed) < len(item_sequence) else "complete")}
@@ -176,7 +176,7 @@ def item_payload(
     return result
 
 
-def classify_item(*, planning: dict[str, Any], development: dict[str, Any], governance: dict[str, Any], findings: list[str], blockers: list[str], sequence: list[str] | None = None) -> tuple[bool, str, list[str]]:
+def classify_item(*, planning: dict[str, Any], development: dict[str, Any], governance: dict[str, Any], findings: list[str], blockers: list[str], sequence: list[str] | None = None, hotfix: bool = False) -> tuple[bool, str, list[str]]:
     """Classify one item without hiding contradictory terminal markers.
 
     `sequence` is the bundle's OWN canonical sequence. A bundle finished
@@ -194,9 +194,10 @@ def classify_item(*, planning: dict[str, Any], development: dict[str, Any], gove
     if planning.get("status") != "complete": closure_gaps.append("state.status não é complete")
     if planning.get("milestone_status") != "completed": closure_gaps.append("milestone_status não é completed")
     if planning.get("active_phase") is not None: closure_gaps.append("active_phase não é null")
-    if not all_phases_terminal: closure_gaps.append("fases não são todas terminais")
+    # A hotfix has no roadmap phases nor GWD steps; hotfix-close seals its closure.
+    if not all_phases_terminal and not hotfix: closure_gaps.append("fases não são todas terminais")
     if governance.get("audit", {}).get("verdict") != "GO": closure_gaps.append("auditoria não é GO")
-    if not all_steps_complete: closure_gaps.append("etapas GWD incompletas")
+    if not all_steps_complete and not hotfix: closure_gaps.append("etapas GWD incompletas")
     closed = not findings and not blockers and not closure_gaps
     reasons: list[str] = []
     if findings:

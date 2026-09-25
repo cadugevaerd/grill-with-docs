@@ -847,20 +847,21 @@ def validate_scope(raw: str) -> list[str]:
     return paths
 
 
-def changed_paths_from_base(root: Path, base_commit: str) -> set[str]:
+def changed_paths_from_base(root: Path, base_commit: str, target: str = "HEAD") -> set[str]:
     if not isinstance(base_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", base_commit):
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-BASE-COMMIT", str(base_commit))
-    output = run_git(root, "diff", "--name-only", "--diff-filter=ACDMRTUXB", base_commit, "HEAD")
-    status = run_git(root, "status", "--porcelain=v1", "--untracked-files=all")
+    output = run_git(root, "diff", "--name-only", "--diff-filter=ACDMRTUXB", base_commit, target)
     paths = {line.strip() for line in output.splitlines() if line.strip()}
+    # A shipped commit is a closed range; the live worktree is not part of it.
+    status = run_git(root, "status", "--porcelain=v1", "--untracked-files=all") if target == "HEAD" else ""
     for line in status.splitlines():
         if len(line) >= 4:
             paths.add(line[3:].split(" -> ", 1)[-1])
     return paths
 
 
-def validate_hotfix_scope_changes(root: Path, bundle: ItemBundle) -> None:
-    changed = changed_paths_from_base(root, bundle.metadata.get("immutable", {}).get("base_commit"))
+def validate_hotfix_scope_changes(root: Path, bundle: ItemBundle, target: str = "HEAD") -> None:
+    changed = changed_paths_from_base(root, bundle.metadata.get("immutable", {}).get("base_commit"), target)
     allowed = set(bundle.metadata.get("scope", {}).get("paths", []))
     allowed.add(f".grill/work-items/{bundle.work_id}")
     outside = sorted(path for path in changed if not any(path == item or path.startswith(item.rstrip("/") + "/") for item in allowed))
@@ -2353,15 +2354,23 @@ def hotfix_go_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     hotfix = validated_hotfix(bundle)
     validate_hotfix_scope_changes(root, bundle)
     validate_constitution_check(root, bundle.files, bundle.metadata["immutable"].get("constitution", {}))
+    failure, output = run_correction_test(root, hotfix, args.work_id)
+    if failure is not None:
+        return failure, EXIT_NO_GO
+    return {"verdict": "HOTFIX-GO", "code": "HOTFIX-GO", "work_id": args.work_id, "test": {"returncode": 0, "output": output}}, EXIT_OK
+
+
+def run_correction_test(root: Path, hotfix: dict[str, Any], work_id: str) -> tuple[dict[str, Any] | None, str]:
+    """Run the sealed correction test; return (NO-GO payload or None, output)."""
     command = hotfix.get("test-command")
     if not isinstance(command, str) or not command.strip():
-        raise CliFailure(EXIT_NO_GO, "NO-GO", "TEST-COMMAND-MISSING", args.work_id)
+        raise CliFailure(EXIT_NO_GO, "NO-GO", "TEST-COMMAND-MISSING", work_id)
     try:
         argv = parse_test_command(command)
     except ValueError as exc:
         raise CliFailure(EXIT_NO_GO, "NO-GO", "TEST-COMMAND-INVALID", str(exc)) from exc
     if not argv:
-        raise CliFailure(EXIT_NO_GO, "NO-GO", "TEST-COMMAND-MISSING", args.work_id)
+        raise CliFailure(EXIT_NO_GO, "NO-GO", "TEST-COMMAND-MISSING", work_id)
     timeout = hotfix.get("test-timeout", 30)
     if type(timeout) is not int or not 1 <= timeout <= 300:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-TEST-TIMEOUT", str(timeout))
@@ -2369,11 +2378,75 @@ def hotfix_go_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         process = subprocess.run(argv, cwd=root, capture_output=True, text=True, check=False, timeout=timeout, shell=False)
         output = ((process.stdout or "") + (process.stderr or ""))[:4096]
         if process.returncode != 0:
-            return {"verdict": "NO-GO", "code": "CORRECTION-TEST-FAILED", "returncode": process.returncode, "output": output}, EXIT_NO_GO
+            return {"verdict": "NO-GO", "code": "CORRECTION-TEST-FAILED", "returncode": process.returncode, "output": output}, output
     except subprocess.TimeoutExpired as exc:
         output = ((exc.stdout or "") if isinstance(exc.stdout, str) else "")[:4096]
-        return {"verdict": "NO-GO", "code": "CORRECTION-TEST-TIMEOUT", "output": output}, EXIT_NO_GO
-    return {"verdict": "HOTFIX-GO", "code": "HOTFIX-GO", "work_id": args.work_id, "test": {"returncode": 0, "output": output}}, EXIT_OK
+        return {"verdict": "NO-GO", "code": "CORRECTION-TEST-TIMEOUT", "output": output}, output
+    return None, output
+
+
+def validated_hotfix_ship(bundle: ItemBundle) -> dict[str, Any] | None:
+    """Return the sealed ship record of a closed hotfix, or None while it is only prepared."""
+    ship = bundle.metadata.get("hotfix_ship")
+    if ship is None:
+        return None
+    state = json.loads(bundle.files.get("state.json", b"{}").decode("utf-8"))
+    if (not isinstance(ship, dict) or bundle.metadata.get("hotfix_ship_sha256") != hash_bytes(canonical(ship))
+            or state.get("shipped") != {"commit": ship.get("commit"), "integration_branch": ship.get("integration_branch")}
+            or state.get("status") != "complete" or state.get("audit_verdict") != "GO"):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "HOTFIX-METADATA-TAMPERED", bundle.work_id)
+    return ship
+
+
+def hotfix_close_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Seal a hotfix as shipped only after proving the ship from Git and the correction test."""
+    root = project_root(args.root)
+    item = root / ".grill" / "work-items" / args.work_id
+    lock = acquire_lock(root, args.work_id, item) if args.apply else None
+    try:
+        bundle = read_local_bundle(root, item)
+        validate_bundle_integrity(bundle)
+        hotfix = validated_hotfix(bundle)
+        validate_constitution_check(root, bundle.files, bundle.metadata["immutable"].get("constitution", {}))
+        commit = git_optional(root, "rev-parse", "--verify", "--quiet", f"{args.shipped_commit}^{{commit}}")
+        if not re.fullmatch(r"[0-9a-f]{40}", commit):
+            raise CliFailure(EXIT_NO_GO, "NO-GO", "HOTFIX-NOT-SHIPPED", args.shipped_commit)
+        ship = validated_hotfix_ship(bundle)
+        if ship is not None:
+            if ship["commit"] != commit or ship["integration_branch"] != args.integration_branch:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "HOTFIX-CLOSE-DIVERGENCE", args.work_id)
+            return {"verdict": "REUSED", "code": "HOTFIX-SHIPPED", "work_id": args.work_id, "commit": commit}, EXIT_OK
+        state = json.loads(bundle.files["state.json"].decode("utf-8"))
+        if state.get("status") != "prepared":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STATE-SCHEMA", args.work_id)
+        if git_optional(root, "branch", "--show-current") != args.integration_branch:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WRONG-INTEGRATION-BRANCH", args.integration_branch)
+        base = bundle.metadata["immutable"].get("base_commit")
+        for ancestor, descendant in ((base, commit), (commit, "HEAD")):
+            if subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", str(ancestor), descendant],
+                              capture_output=True, check=False).returncode != 0:
+                raise CliFailure(EXIT_NO_GO, "NO-GO", "HOTFIX-NOT-SHIPPED", f"{ancestor} is not an ancestor of {descendant}")
+        validate_hotfix_scope_changes(root, bundle, commit)
+        failure, output = run_correction_test(root, hotfix, args.work_id)
+        if failure is not None:
+            return failure, EXIT_NO_GO
+        if not args.apply:
+            return {"verdict": "PREVIEW", "code": "HOTFIX-CLOSE-READY", "work_id": args.work_id, "commit": commit}, EXIT_OK
+        ship = {"commit": commit, "integration_branch": args.integration_branch, "base_commit": base,
+                "test_output_sha256": hash_bytes(output.encode("utf-8"))}
+        state.update({"status": "complete", "milestone_status": "completed", "active_phase": None, "audit_verdict": "GO",
+                      "shipped": {"commit": commit, "integration_branch": args.integration_branch}})
+        files = {path: data for path, data in bundle.files.items() if path != "WORK-ITEM.json"}
+        files["state.json"] = (json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+        metadata = copy.deepcopy(bundle.metadata)
+        metadata["hotfix_ship"] = ship
+        metadata["hotfix_ship_sha256"] = hash_bytes(canonical(ship))
+        metadata["initial_artifacts"]["state.json"] = hash_bytes(files["state.json"])
+        replace_work_item_bundle(root, item, metadata, files)
+        return {"verdict": "APPLIED", "code": "HOTFIX-SHIPPED", "work_id": args.work_id, "commit": commit}, EXIT_OK
+    finally:
+        if lock is not None:
+            shutil.rmtree(lock, ignore_errors=True)
 
 
 def reconcile_resealed_activation(root: Path, bundle: ItemBundle, args: argparse.Namespace) -> dict[str, bool]:
@@ -2511,6 +2584,7 @@ def audit_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
             try:
                 validate_bundle_integrity(bundle)
                 hotfix = validated_hotfix(bundle)
+                ship = validated_hotfix_ship(bundle)
             except CliFailure as failure:
                 return {"verdict": failure.verdict, "code": failure.code}, failure.exit_code
             required = ("scope", "reproduction", "evidence", "correction-test", "rollback", "constitution-evidence")
@@ -2527,6 +2601,9 @@ def audit_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
                 constitutional = validate_constitution_check(root, bundle.files, bundle.metadata["immutable"].get("constitution", {}))
             except CliFailure as failure:
                 return {"verdict": "BLOCKED-CONSTITUTION", "code": failure.code}, EXIT_CONSTITUTION
+            if ship is not None:
+                return {"verdict": "GO", "code": "HOTFIX-SHIPPED", "work_id": bundle.work_id, "scope": hotfix["scope"],
+                        "constitutional": constitutional, "shipped": ship}, EXIT_OK
             return {"verdict": "HOTFIX-PREPARED", "code": "HOTFIX-PREPARED", "work_id": bundle.work_id,
                     "scope": hotfix["scope"], "constitutional": constitutional,
                     "post_ship": hotfix.get("post_ship", ["reconcile", "full-document-audit"])}, EXIT_OK
@@ -2963,7 +3040,9 @@ def targeted_bundle(root: Path, args: argparse.Namespace, bundles: list[ItemBund
     if (state.get("status") != "complete" or state.get("milestone_status") != "completed"
             or state.get("active_phase") is not None or state.get("audit_verdict") != "GO"):
         raise CliFailure(EXIT_NO_GO, "NO-GO", "STATE-NOT-RECONCILABLE", args.work_id)
-    if not reconciliation_roadmap_is_terminal(target.files):
+    # A shipped hotfix has no roadmap; its terminal proof is the sealed ship record.
+    shipped_hotfix = immutable.get("type") == "hotfix" and validated_hotfix_ship(target) is not None
+    if not shipped_hotfix and not reconciliation_roadmap_is_terminal(target.files):
         raise CliFailure(EXIT_NO_GO, "NO-GO", "ROADMAP-NOT-TERMINAL", args.work_id)
     return target, constitution, normalized_scope(target.metadata, args.work_id), sorted(scan_qualified_ids(target))
 
@@ -7821,6 +7900,12 @@ def build_parser() -> JsonParser:
     go_parser = subparsers.add_parser("hotfix-go")
     go_parser.add_argument("root")
     go_parser.add_argument("--work-id", required=True)
+    close_parser = subparsers.add_parser("hotfix-close")
+    close_parser.add_argument("root")
+    close_parser.add_argument("--work-id", required=True)
+    close_parser.add_argument("--shipped-commit", required=True)
+    close_parser.add_argument("--integration-branch", required=True)
+    close_parser.add_argument("--apply", action="store_true")
     migrate_parser = subparsers.add_parser("migrate")
     migrate_parser.add_argument("root")
     migrate_parser.add_argument("--type", required=True)
@@ -8175,6 +8260,7 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-remediate": gauntlet_remediate_command,
             "hotfix": hotfix_command,
             "hotfix-go": hotfix_go_command,
+            "hotfix-close": hotfix_close_command,
             "attest": attest_command,
             "checkpoint": checkpoint_command,
             "advance": advance_command,

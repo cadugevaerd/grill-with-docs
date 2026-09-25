@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v9.2.0
+# Grill with Docs v9.3.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -22,7 +22,7 @@ worktree C ──> .grill/work-items/<work-id-C>/ ─┘
 5. Nenhum ADR, decisão local ou reconciliação pode dispensar, enfraquecer ou violar a Constituição.
 6. Hooks são read-only e nunca criam work items automaticamente.
 7. Hotfix-fast é uma exceção operacional fechada: exige escopo, reprodução/evidência, teste de correção, rollback e evidência constitucional; não depende de ROADMAP, BL, DQ ou reconciliação para ser seguro.
-8. Feature e fix permanecem plan-only; hotfix só entrega HOTFIX-GO para ship externo e reconciliação/auditoria documental completa são pós-ship.
+8. Feature e fix permanecem plan-only; hotfix só entrega HOTFIX-GO para ship externo. Depois do ship, `hotfix-close` prova o commit na branch de integração e sela o fechamento; só então vêm a reconciliação e a auditoria documental completa.
 9. A sessão de entrevista termina em `PLAN_ONLY_STOP`; nela não se implementa código, não se executa `specify|plan` e não se faz commit/merge. O ciclo externo é outra trilha, aberta por ato humano.
 
 ## Bootstrap de apresentação obrigatório
