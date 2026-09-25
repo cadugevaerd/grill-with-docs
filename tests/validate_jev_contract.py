@@ -354,6 +354,50 @@ class CliContract(unittest.TestCase):
             assessment = workspace._step_assessment(root, work_id, "specify", policy)
             self.assertIn("decided_by=jev", assessment["justification"])
 
+    def test_step_assessment_without_file_reads_the_previous_step_evidence(self):
+        workspace = load("grill_workspace_jev_default", SCRIPT)
+        module = workspace.grill_core_module("jev")
+        with tempfile.TemporaryDirectory() as raw, \
+                mock.patch.object(module.Transport, "post",
+                                  lambda self, url, body: answer_all(body["questions"], noul=0.02)), \
+                mock.patch.dict(os.environ, {jev.KEY_ENV: KEY}):
+            root = git_repo(raw)
+            (root / "spec.md").write_text("**FR-001** thing\n", encoding="utf-8")
+            work_id = "feature-x-1"
+            item = root / ".grill/work-items" / work_id
+            item.mkdir(parents=True)
+            first, second = workspace.SEQUENCE[:2]
+            digest = workspace.hash_bytes((root / "spec.md").read_bytes())
+            development = {"schema": workspace.ACTIVE_DEVELOPMENT_SCHEMA,
+                           "workflow_version": workspace.ACTIVE_WORKFLOW_VERSION,
+                           "sequence": workspace.SEQUENCE, "current_step": second,
+                           "steps": {s: "complete" if s == first else "pending" for s in workspace.SEQUENCE},
+                           "audit": [{"step": first, "state": "in-progress", "evidence": []},
+                                     {"step": first, "state": "complete",
+                                      "evidence": [{"path": "spec.md", "sha256": digest}]}]}
+            (item / "state.json").write_text(json.dumps({"development": development}), encoding="utf-8")
+
+            def decide(step: str) -> tuple[int, dict]:
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = workspace.main(["decide", str(root), "--kind", "step-assessment", "--work-id", work_id,
+                                           "--step", step, "--apply"])
+                return code, json.loads(out.getvalue())
+
+            code, payload = decide(second)
+            self.assertEqual(code, 0, payload)
+            self.assertEqual(payload["files"], [{"path": "spec.md", "sha256": digest}])
+            self.assertEqual(payload["written"], f".grill/work-items/{work_id}/step-inputs/{second}.json")
+            code, payload = decide(first)
+            self.assertEqual((code, payload["code"]), (2, "INVALID-ARGUMENTS"))
+            (root / "spec.md").write_text("changed\n", encoding="utf-8")
+            code, payload = decide(second)
+            self.assertEqual((code, payload["code"]), (2, "STEP-ASSESSMENT-EVIDENCE-STALE"))
+            development["steps"][first] = "in-progress"
+            (item / "state.json").write_text(json.dumps({"development": development}), encoding="utf-8")
+            code, payload = decide(second)
+            self.assertEqual((code, payload["code"]), (2, "STEP-ASSESSMENT-EVIDENCE-MISSING"))
+
 
 class CliLog(unittest.TestCase):
     def test_multi_kind_decide_logs_and_label_appends_without_the_key(self):

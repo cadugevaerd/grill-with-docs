@@ -1221,15 +1221,21 @@ def judge_checkpoint_attestation(
             "PREDECESSOR_OUTPUT_MISMATCH", expected=expected_dependencies,
             actual=step_output["dependency_outputs"],
         )
+    return {**verdict, "campaign": observed, "output": accepted_output(step_output)}
+
+
+def accepted_output(step_output: Mapping[str, Any]) -> dict[str, Any]:
+    """The output record an accepted checkpoint stores for a step.
+
+    Shared by the judge and by re-chaining, which has to name the output a
+    re-minted predecessor *will* have before anyone checkpoints it.  One
+    function, so the prediction cannot drift from what the judge records.
+    """
     return {
-        **verdict,
-        "campaign": observed,
-        "output": {
-            "step_id": step_id,
-            "output_sha256": step_output["output_sha256"],
-            "receipt_ref": step_output["skill_invocation_receipt_ref"],
-            "provenance": "current-generation",
-        },
+        "step_id": step_output["step_id"],
+        "output_sha256": step_output["output_sha256"],
+        "receipt_ref": step_output["skill_invocation_receipt_ref"],
+        "provenance": "current-generation",
     }
 
 
