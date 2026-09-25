@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v8.2.0
+# Grill with Docs v8.2.1
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -78,7 +78,8 @@ Use `decided` sem deliberar e responda só as `pending` (`decided_by` = `jev|par
 Quando: `step-assessment` antes de cada etapa (`--step --apply`); `round-record` após cada
 resposta de DQ; `dq-batch` e `human-or-author` ao montar o lote; `triage`, `bug-type`;
 `delivery-classification` (`context.proposed`, divergência = pergunte ao humano);
-`constitution-check` (só antecipa VIOLATION); `partition-groups`; `finding-severity`
+`constitution-check` (só antecipa VIOLATION); `partition-groups` (só sugere o teto
+`--groups` do `partition-emit`; o agrupamento segue determinístico em código); `finding-severity`
 após analyze/converge/review (`context.findings` com `proposed`; só confirma ou sobe);
 `spec-coverage` e `diff-hygiene` no verify (só NO-GO/sinalização); `learning-route` no ship.
 Depois de decidir as pendentes, registre a resposta final com `decide-label`.

@@ -107,7 +107,8 @@ Uma requisição a `typesafe/jev-1.13` (`POST https://openrouter.ai/api/alpha/de
 | kind | itens | regra de segurança |
 |---|---|---|
 | `step-assessment` | riscos da policy | `--apply` grava `step-inputs/<step>.json` só com tudo decidido |
-| `triage`, `bug-type`, `learning-route`, `partition-groups` | — | direto |
+| `triage`, `bug-type`, `learning-route` | — | direto |
+| `partition-groups` | — | só sugere o teto `--groups N` de `partition-emit`, que já era entrada do operador; com a mesma `tasks.md` e o mesmo `--groups` o DAG é idêntico, então a regra do WORKFLOW ("agrupamento determinístico, vive em código") continua valendo sem versão nova |
 | `round-record` | artefatos (CONTEXT, ADR, ROADMAP…) | voto independente sobre `transition`, `scope_delta`, `progress`, `repeat`, `adr_needed`; `context.dq`, `context.answer`, `context.frontier` |
 | `dq-batch` | `context.candidates` | até três DQs materiais |
 | `human-or-author` | `context.decisions` | `decide_only: human`: nunca tira uma decisão do humano |
