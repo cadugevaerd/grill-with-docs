@@ -51,10 +51,11 @@ def answer_all(questions: dict, noul: float = 0.97, confidence: float = 0.95, pi
     """Build a Decisions response in the provider's shape for the questions asked."""
     answers = {}
     for key, question in questions.items():
+        local = key.split("__", 1)[-1]  # decide_many namespaces keys by kind
         if question["type"] == "noul":
-            answers[key] = {"type": "noul", "noul": noul(key) if callable(noul) else noul}
+            answers[key] = {"type": "noul", "noul": noul(local) if callable(noul) else noul}
         else:
-            choice = (pick or {}).get(key, next(iter(question["criteria"])))
+            choice = (pick or {}).get(local, next(iter(question["criteria"])))
             answers[key] = {"type": "choice", "choice": choice, "confidence": confidence,
                             "probabilities": {c: 0 for c in question["criteria"]}}
     return {"model": "typesafe/jev-1.13-20260917", "answers": answers,
@@ -99,10 +100,13 @@ class ProviderShape(unittest.TestCase):
         allowed = {"type", "instructions", "criteria"}
         for kind, spec in catalog["kinds"].items():
             for question in jev.build_questions(spec, ["security"]).values():
+                question = jev.wire(question)
                 self.assertEqual(set(question), allowed, kind)
                 self.assertIn(question["type"], {"noul", "choice", "score"})
                 if question["type"] == "noul":
                     self.assertEqual(set(question["criteria"]), {"true", "false"})
+                if question["type"] == "choice":
+                    self.assertLessEqual(len(question["criteria"]), 255)
         self.assertEqual(catalog["model"], FIXTURE["request"]["model"])
 
     def test_malformed_answers_fail_closed(self):
@@ -179,7 +183,8 @@ class KindMapping(unittest.TestCase):
         decision = jev.decide("step-assessment", {"files": {}}, risks, transport)
         self.assertEqual(decision["decided_by"], "jev")
         self.assertEqual(decision["result"], {"new_how": True, "risks": ["security"]})
-        self.assertEqual(set(transport.bodies[0]["questions"]), {"new_how", "risk_security", "risk_frontend"})
+        self.assertEqual(set(transport.bodies[0]["questions"]),
+                         {"step_assessment__new_how", "step_assessment__risk_security", "step_assessment__risk_frontend"})
 
     def test_one_doubtful_question_leaves_only_that_question_to_the_agent(self):
         decision = jev.decide("step-assessment", {"files": {}}, ["security"],
@@ -207,7 +212,7 @@ class KindMapping(unittest.TestCase):
         probs = {"dq_dq_1": 0.9, "dq_dq_2": 0.05, "dq_dq_3": 0.99, "dq_dq_4": 0.95, "dq_dq_5": 0.97}
         batch = jev.decide("dq-batch", {}, dqs, FakeTransport(noul=probs.get))
         self.assertEqual(batch["result"], {"selected": ["DQ-3", "DQ-5", "DQ-4"]})
-        reqs = jev.requirements("**FR-001** a\n**FR-002** b\nSC-001 c FR-001")
+        reqs = list(jev.requirements("**FR-001** a\n**FR-002** b\nSC-001 c FR-001"))
         self.assertEqual(reqs, ["FR-001", "FR-002", "SC-001"])
         coverage = jev.decide("spec-coverage", {}, reqs,
                               FakeTransport(noul=lambda k: 0.01 if k == "req_fr_002" else 0.99))
@@ -223,6 +228,80 @@ class KindMapping(unittest.TestCase):
         with self.assertRaises(jev.JevError) as caught:
             jev.decide("dq-batch", {}, [], FakeTransport())
         self.assertEqual(caught.exception.code, "JEV-NO-QUESTIONS")
+
+
+class NewKinds(unittest.TestCase):
+    def test_decide_only_never_lets_jev_loosen_a_gate(self):
+        clauses = ["Rastreabilidade", "Fail-closed"]
+        passing = jev.decide("constitution-check", {}, clauses, FakeTransport(pick={}, confidence=0.99))
+        self.assertEqual(passing["decided"], {})  # PASS is never decided by Jev
+        self.assertIsNone(passing["result"])
+        violation = jev.decide("constitution-check", {}, clauses,
+                               FakeTransport(pick={"clause_fail_closed": "VIOLATION"}, confidence=0.99))
+        self.assertEqual(violation["result"], {"violations": ["Fail-closed"], "verdict": "NO-GO"})
+        author = jev.decide("human-or-author", {}, ["d1", "d2"],
+                            FakeTransport(pick={"decision_d1": "author", "decision_d2": "human"}, confidence=0.99))
+        self.assertEqual(author["decided"], {"decision_d2": "human"})
+        self.assertEqual(author["result"], {"to_human": ["d2"]})
+        hygiene = jev.decide("diff-hygiene", {}, ["a.py", "b.py"],
+                             FakeTransport(noul=lambda k: 0.99 if k == "file_a_py" else 0.01))
+        self.assertEqual(hygiene["result"], {"flagged": ["a.py"]})
+        self.assertEqual(hygiene["pending"], ["file_b_py"])
+
+    def test_finding_severity_only_confirms_or_raises(self):
+        state = {"context": {"findings": {"F1": {"text": "x", "proposed": "high"},
+                                          "F2": {"text": "y", "proposed": "low"}}}}
+        decision = jev.decide("finding-severity", state, ["F1", "F2"],
+                              FakeTransport(pick={"finding_f1": "medium", "finding_f2": "critical"}))
+        self.assertEqual(decision["decided"], {"finding_f2": "critical"})
+        self.assertEqual(decision["pending"], ["finding_f1"])
+        self.assertEqual(decision["result"], {"severities": {"F2": "critical"}})
+
+    def test_delivery_classification_cross_checks_the_agent(self):
+        agree = {"context": {"proposed": {"development_type": "backend", "module_kind": "domain"}}}
+        same = jev.decide("delivery-classification", agree, [],
+                          FakeTransport(pick={"development_type": "backend", "module_kind": "domain"}))
+        self.assertEqual(same["result"], {"verdict": "CONFIRMED"})
+        other = jev.decide("delivery-classification", agree, [],
+                           FakeTransport(pick={"development_type": "frontend", "module_kind": "domain"}))
+        self.assertEqual(other["result"], {"verdict": "ASK-HUMAN", "disagree": ["development_type"]})
+
+    def test_round_record_learning_route_and_bug_type(self):
+        record = jev.decide("round-record", {}, [], FakeTransport(
+            noul=lambda k: 0.99 if k in {"progress", "artifact_context_md"} else 0.01,
+            pick={"transition": "resolved", "scope_delta": "none"}))
+        self.assertEqual(record["result"], {"transition": "resolved", "scope_delta": "none", "progress": True,
+                                            "repeat": False, "adr_needed": False, "artifacts": ["CONTEXT.md"]})
+        route = jev.decide("learning-route", {}, [], FakeTransport(pick={"destination": "adr-docs"}, noul=0.02))
+        self.assertEqual(route["result"], {"destination": "adr-docs", "duplicate": False})
+        bug = jev.decide("bug-type", {}, [], FakeTransport(pick={"bug_type": "untested-flow"}))
+        self.assertEqual(bug["result"], {"bug_type": "untested-flow"})
+
+    def test_many_kinds_share_one_request_with_session_and_trace(self):
+        transport = FakeTransport(pick={"route": "bugfix", "severity": "high", "bug_type": "spec-gap"})
+        decisions = jev.decide_many(["triage", "bug-type"], {"files": {}}, {}, transport, session_id="feature-x-1")
+        self.assertEqual(len(transport.bodies), 1)
+        body = transport.bodies[0]
+        self.assertEqual(body["session_id"], "feature-x-1")
+        self.assertEqual(body["trace"], {"trace_name": "gwd-decide", "span_name": "triage,bug-type"})
+        self.assertEqual(set(body["questions"]), {"triage__route", "triage__severity", "bug_type__bug_type"})
+        self.assertEqual(decisions["triage"]["result"], {"route": "bugfix", "severity": "high"})
+        self.assertEqual(decisions["bug-type"]["result"], {"bug_type": "spec-gap"})
+
+    def test_per_type_threshold_overrides_the_kind_threshold(self):
+        spec = {"threshold": 0.9, "thresholds": {"noul": 0.7}}
+        questions = {"a": {"type": "noul", "instructions": "x"}, "b": {"type": "choice", "instructions": "y",
+                                                                       "criteria": {"p": "", "q": ""}}}
+        response = {"answers": {"a": {"type": "noul", "noul": 0.8},
+                                "b": {"type": "choice", "choice": "p", "confidence": 0.8}}}
+        decision = jev.interpret("fixture", questions, response, spec, [])
+        self.assertEqual(decision["decided"], {"a": True})
+        self.assertEqual(decision["pending"], ["b"])
+
+    def test_clauses_and_requirements_become_named_state(self):
+        text = "# C\n## Core\n### Rule A\nbody a\n### Rule B\nbody b\n"
+        self.assertEqual(jev.clauses(text), {"Core": "", "Rule A": "body a", "Rule B": "body b"})
+        self.assertEqual(jev.requirements("- **FR-001**: must x\n"), {"FR-001": "- **FR-001**: must x"})
 
 
 def git_repo(raw: str) -> Path:
@@ -274,6 +353,34 @@ class CliContract(unittest.TestCase):
             policy = json.loads(workspace._policy_path(root, work_id).read_bytes())
             assessment = workspace._step_assessment(root, work_id, "specify", policy)
             self.assertIn("decided_by=jev", assessment["justification"])
+
+
+class CliLog(unittest.TestCase):
+    def test_multi_kind_decide_logs_and_label_appends_without_the_key(self):
+        workspace = load("grill_workspace_jev_log", SCRIPT)
+        module = workspace.grill_core_module("jev")
+        with tempfile.TemporaryDirectory() as raw, \
+                mock.patch.object(module.Transport, "post",
+                                  lambda self, url, body: answer_all(body["questions"])), \
+                mock.patch.dict(os.environ, {jev.KEY_ENV: KEY}):
+            root = git_repo(raw)
+            (root / "report.md").write_text("# Relatório de debug\n", encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = workspace.main(["decide", str(root), "--kind", "triage,bug-type", "--file", "report.md",
+                                       "--work-id", "fix-x-1"])
+            payload = json.loads(out.getvalue())
+            self.assertEqual(code, 0, payload)
+            self.assertEqual(set(payload["decisions"]), {"triage", "bug-type"})
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = workspace.main(["decide-label", str(root), "--work-id", "fix-x-1", "--kind", "triage",
+                                       "--answers", '{"route": "bugfix"}'])
+            self.assertEqual(code, 0)
+            lines = [json.loads(l) for l in (root / ".grill/jev/decisions.jsonl").read_text().splitlines()]
+            self.assertEqual([l["event"] for l in lines], ["decision", "label"])
+            self.assertEqual(lines[1]["answers"], {"route": "bugfix"})
+            self.assertIn("triage", lines[0]["decisions"])
+            self.assertNotIn(KEY, (root / ".grill/jev/decisions.jsonl").read_text() + out.getvalue())
 
 
 if __name__ == "__main__":

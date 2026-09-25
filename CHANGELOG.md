@@ -1,5 +1,27 @@
 # Changelog
 
+## 8.2.0
+
+- Feature: oito kinds novos no `decide`:
+  - `round-record`: voto independente sobre `transition`, `scope_delta`, progresso, repetição, ADR e artefatos afetados, após cada resposta de DQ. O core não verificava nada disso.
+  - `learning-route`: destino de cada learning no ship.
+  - `bug-type`.
+  - `finding-severity`: só confirma ou sobe a severidade proposta.
+  - `delivery-classification`: cross-check com a proposta do agente; divergência vira `ASK-HUMAN`.
+  - `human-or-author`: só empurra para o humano.
+  - `diff-hygiene`: só sinaliza.
+  - `constitution-check`: só antecipa VIOLATION, nunca concede PASS.
+- Feature: vários kinds numa chamada (`--kind triage,bug-type`). As perguntas rodam em paralelo no Jev; 13 kinds e cerca de 50 perguntas levaram 639 ms ao vivo.
+- Feature: state estruturado. `spec-coverage` recebe `requirements` (id → texto) e `constitution-check` recebe `clauses` (cláusula → texto), em vez de documentos inteiros misturados ao diff, conforme a recomendação da TypeSafe.
+- Feature: `decide_only` no catálogo. Uma pergunta só pode ser decidida pelo Jev com os valores listados, então texto injetado no repositório não afrouxa um gate. O campo nunca é enviado à API.
+- Feature: limiar por tipo de pergunta (`thresholds.noul|choice|score`). Estudos independentes mostram noul subconfiante e choice/score superconfiantes.
+- Feature: `.grill/jev/decisions.jsonl` registra a resposta do Jev a cada `decide --work-id`, e o novo subcomando `decide-label` registra a resposta final do agente. É o gabarito limpo para recalibrar.
+- Feature: `session_id` (= work id) e `trace` em cada chamada, para agrupar custo e logs no OpenRouter.
+- Calibração com gabarito real:
+  - `constitution-check` 0,95. Nas 110 cláusulas dos 10 CONSTITUTION-CHECK reais, houve uma VIOLATION falsa a 0,90 e nenhuma a partir de 0,95.
+  - `delivery-classification` 0,90. Nas 22 classificações dos DELIVERY-MAP reais, a acurácia bruta foi de 68%, e a 0,85 metade das decididas errava.
+  - Os demais kinds novos ainda não têm gabarito e ficam em 0,85–0,90 até o log acumular rótulos.
+
 ## 8.1.0
 
 - Feature: decisão por pergunta no `decide`. Cada pergunta acima do limiar é decidida pelo Jev (`decided`); o agente responde só as `pending`, com o valor sugerido em `hint`. `decided_by` passa a ser `jev`, `partial` ou `agent`, e `result` continua completo apenas quando tudo foi decidido, então `step-assessment --apply` segue gravando só classificações inteiras. Em `spec-coverage`, um requisito decidido como não coberto basta para NO-GO. Nos dados da calibração da 8.0.0, os casos com pelo menos uma pergunta decidida sobem de 0 para 3/8 triagens, 8/8 lotes de DQ, 34/34 specs e 34/34 planos (40% das perguntas de risco por etapa).

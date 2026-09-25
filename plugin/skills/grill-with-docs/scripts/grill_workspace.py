@@ -22,7 +22,7 @@ import sys
 import tempfile
 import time
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, NoReturn
@@ -1349,63 +1349,121 @@ def require_openrouter_key() -> None:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.detail) from exc
 
 
-def decide_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    """Answer one typed workflow decision through Jev.
+JEV_LOG = ".grill/jev/decisions.jsonl"
 
-    Read-only except for ``step-assessment --apply``, which writes the same
-    ``step-inputs/<step>.json`` the agent would otherwise write by hand, and
-    only when Jev cleared the confidence threshold on every question.
+
+def _jev_log(root: Path, record: dict[str, Any]) -> None:
+    """Append one line to the calibration log: Jev's answer, later the agent's final one."""
+    path = root / JEV_LOG
+    reject_symlink_chain(root, path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **record},
+                      ensure_ascii=False, sort_keys=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(line + "\n")
+
+
+def _decide_items(jev: Any, kind: str, state: dict[str, Any], root: Path, work_id: str | None,
+                  step: str | None, has_files: bool) -> tuple[list[str], dict[str, Any] | None]:
+    """Items each kind asks one question about; the state was already shaped by the caller."""
+    context = state.get("context") if isinstance(state.get("context"), dict) else {}
+    if kind == "step-assessment":
+        if not step or not work_id or not WORK_ID_RE.fullmatch(work_id) or not has_files:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS",
+                             "step-assessment needs --work-id, --step and --file")
+        policy = json.loads(_policy_path(root, work_id).read_bytes())
+        return list(policy.get("review_risks", [])), policy
+    keyed = {"dq-batch": "candidates", "finding-severity": "findings", "human-or-author": "decisions"}
+    if kind in keyed:
+        value = context.get(keyed[kind])
+        return (list(value) if isinstance(value, dict) else []), None
+    if kind == "spec-coverage":
+        return list(state.get("requirements", {})), None
+    if kind == "constitution-check":
+        return list(state.get("clauses", {})), None
+    if kind == "diff-hygiene":
+        return list(state["files"]), None
+    return [], None
+
+
+def decide_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Answer typed workflow decisions through Jev, several kinds in one request.
+
+    Read-only except for the calibration log and ``step-assessment --apply``,
+    which writes the same ``step-inputs/<step>.json`` the agent would otherwise
+    write by hand, and only when Jev cleared the threshold on every question.
     """
     jev = grill_core_module("jev")
     root = project_root(args.root)
+    kinds = [k for k in args.kind.split(",") if k]
     refs: list[dict[str, str]] = []
     texts: dict[str, str] = {}
     for relative in args.file or []:
         data = safe_read_regular_fd(root, root / relative)
         refs.append({"path": Path(relative).as_posix(), "sha256": hash_bytes(data)})
         texts[Path(relative).as_posix()] = data.decode("utf-8", errors="replace")
+    # Structured state: the spec and the constitution become named fields the
+    # questions point at, instead of whole documents mixed with the diff.
     state: dict[str, Any] = {"files": texts}
+    if "spec-coverage" in kinds:
+        spec = "".join(texts.pop(p) for p in [p for p in texts if p.endswith("spec.md")])
+        state["requirements"] = jev.requirements(spec)
+    if "constitution-check" in kinds:
+        text = "".join(texts.pop(p) for p in [p for p in texts if p.endswith("constitution.md")])
+        state["clauses"] = {k: v for k, v in jev.clauses(text).items() if v}
     if args.step:
         state["step"] = args.step
     if args.context:
         state["context"] = json.loads(safe_read_regular_fd(root, root / args.context).decode("utf-8"))
-    items: list[str] = []
+    items: dict[str, list[str]] = {}
     policy: dict[str, Any] | None = None
-    if args.kind == "step-assessment":
-        if not args.step or not args.work_id or not WORK_ID_RE.fullmatch(args.work_id) or not refs:
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS",
-                             "step-assessment needs --work-id, --step and --file")
-        policy = json.loads(_policy_path(root, args.work_id).read_bytes())
-        items = list(policy.get("review_risks", []))
-    elif args.kind == "dq-batch":
-        candidates = state.get("context", {}).get("candidates") if isinstance(state.get("context"), dict) else None
-        items = list(candidates) if isinstance(candidates, dict) else []
-    elif args.kind == "spec-coverage":
-        items = jev.requirements("".join(t for p, t in texts.items() if p.endswith("spec.md")))
+    for kind in kinds:
+        items[kind], kind_policy = _decide_items(jev, kind, state, root, args.work_id, args.step, bool(refs))
+        policy = kind_policy or policy
     try:
-        decision = jev.decide(args.kind, state, items, jev.Transport())
+        decisions = jev.decide_many(kinds, state, items, jev.Transport(), session_id=args.work_id)
     except jev.JevError as exc:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.detail) from exc
-    payload = {"schema": "grill-decision/v1", "verdict": "OK", **decision, "files": refs, "written": None}
-    if args.kind == "step-assessment" and decision["decided_by"] == "jev" and args.apply:
-        confidence = ", ".join(f"{k}={v:.2f}" for k, v in sorted(decision["confidence"].items()))
+    if args.work_id and WORK_ID_RE.fullmatch(args.work_id):
+        _jev_log(root, {"event": "decision", "work_id": args.work_id, "step": args.step, "files": refs,
+                        "decisions": {k: {f: d[f] for f in ("model", "confidence", "decided", "hint")}
+                                      for k, d in decisions.items()}})
+    written = None
+    step_decision = decisions.get("step-assessment")
+    if step_decision and step_decision["decided_by"] == "jev" and args.apply:
+        confidence = ", ".join(f"{k}={v:.2f}" for k, v in sorted(step_decision["confidence"].items()))
         assessment = {
             "schema": "grill-step-assessment/v1", "step": args.step,
-            "new_how": decision["result"]["new_how"], "risks": decision["result"]["risks"],
-            "justification": f"decided_by=jev model={decision['model']} confidence: {confidence}",
+            "new_how": step_decision["result"]["new_how"], "risks": step_decision["result"]["risks"],
+            "justification": f"decided_by=jev model={step_decision['model']} confidence: {confidence}",
             "files": refs,
         }
         try:
             grill_core_module("agent_orchestration").validate_step_assessment(assessment, policy, args.step)
         except grill_core_module("agent_orchestration").OrchestrationError as exc:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-INVALID", str(exc)) from exc
-        reference = f".grill/work-items/{args.work_id}/step-inputs/{args.step}.json"
+        written = f".grill/work-items/{args.work_id}/step-inputs/{args.step}.json"
         if not (root / ".grill/work-items" / args.work_id).is_dir():
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORK-ITEM-MISSING", args.work_id)
         data = (json.dumps(assessment, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
-        atomic_write(root, root / reference, data)
-        payload["written"] = reference
-    return payload, EXIT_OK
+        atomic_write(root, root / written, data)
+    base = {"schema": "grill-decision/v1", "verdict": "OK", "files": refs, "written": written}
+    if len(kinds) == 1:
+        return {**base, **decisions[kinds[0]]}, EXIT_OK
+    return {**base, "decisions": decisions}, EXIT_OK
+
+
+def decide_label_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Record the agent's final answer for a kind; the ground truth for recalibration."""
+    root = project_root(args.root)
+    if not WORK_ID_RE.fullmatch(args.work_id):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-WORK-ID", args.work_id)
+    answers = json.loads(args.answers)
+    if not isinstance(answers, dict) or not answers:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "--answers must be a non-empty JSON object")
+    _jev_log(root, {"event": "label", "work_id": args.work_id, "kind": args.kind, "step": args.step,
+                    "answers": answers})
+    return {"schema": "grill-decision-label/v1", "verdict": "OK", "log": JEV_LOG}, EXIT_OK
 
 
 def preflight_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
@@ -7224,6 +7282,12 @@ def build_parser() -> JsonParser:
     decide_parser.add_argument("--work-id", dest="work_id")
     decide_parser.add_argument("--step")
     decide_parser.add_argument("--apply", action="store_true")
+    label_parser = subparsers.add_parser("decide-label")
+    label_parser.add_argument("root")
+    label_parser.add_argument("--work-id", dest="work_id", required=True)
+    label_parser.add_argument("--kind", required=True)
+    label_parser.add_argument("--step")
+    label_parser.add_argument("--answers", required=True)
     backlog_parser = subparsers.add_parser("backlog-sync")
     backlog_parser.add_argument("root")
     backlog_parser.add_argument("--work-id", required=True)
@@ -7626,6 +7690,7 @@ def main(argv: list[str] | None = None) -> int:
             "preflight": preflight_command,
             "triage": triage_command,
             "decide": decide_command,
+            "decide-label": decide_label_command,
             "backlog-sync": backlog_sync_command,
             "backlog-adopt": backlog_adopt_command,
             "backlog-project": backlog_project_command,
