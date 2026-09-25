@@ -6,6 +6,7 @@ are injected; current configuration and startup trust are unavailable in the liv
 """
 from __future__ import annotations
 
+import atexit
 import contextlib
 import copy
 import hashlib
@@ -24,6 +25,36 @@ os.environ["CODEX_HOME"] = str(Path(__file__).resolve().parent / "fixtures/codex
 
 REFERENCE = Path(__file__).parent / "fixtures/orchestration/SKILL.md"
 SESSION = "orca:ctx-fixture"
+
+
+_GOLDEN: dict[str, object] = {}
+_GOLDEN_HOME = Path(tempfile.mkdtemp(prefix="gwd-golden-"))
+atexit.register(shutil.rmtree, _GOLDEN_HOME, True)
+
+
+def _force_remove(function, path, _excinfo):
+    os.chmod(path, 0o700)
+    function(path)
+
+
+def golden_repo(key: str, build) -> tuple[Path, object]:
+    """Build an expensive repository once per process, hand each test a fresh copy.
+
+    The store records absolute paths (control worktree, git common dir,
+    presentation scope), so the copy is restored at the very path it was
+    built on -- a copy elsewhere is a different project. ``build(root)``
+    runs once; its return value is handed back with every copy.
+    """
+    root = _GOLDEN_HOME / hashlib.sha256(key.encode()).hexdigest()[:16] / "repo"
+    backup = root.with_name("golden")
+    if key not in _GOLDEN:
+        root.parent.mkdir(parents=True, exist_ok=True)
+        _GOLDEN[key] = build(root)
+        shutil.copytree(root, backup, symlinks=True)
+    else:
+        shutil.rmtree(root, onerror=_force_remove)
+        shutil.copytree(backup, root, symlinks=True)
+    return root, _GOLDEN[key]
 
 
 def pack(value):
