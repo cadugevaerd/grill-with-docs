@@ -1352,6 +1352,9 @@ class Hygiene(Base):
             "gauntlet-run-abandon": "gauntlet_run_abandon_command",
             "gauntlet-tasks-import": "gauntlet_tasks_import_command",
             "gauntlet-tasks-rebase": "gauntlet_tasks_rebase_command",
+            # `advance` composes checkpoint and gauntlet-step-enter under the
+            # same admission boundary; it resolves nothing of its own.
+            "advance": "advance_command",
         }
 
         parser_commands = {

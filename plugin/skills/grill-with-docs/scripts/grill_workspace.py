@@ -6626,11 +6626,15 @@ def _replace_activity(document: dict[str, Any], work_id: str, activity_id: str,
 
 
 def _attest_resolution(root: Path, args: argparse.Namespace, item: Path, step: str, workflow_version: str,
-                       orchestration_context: dict[str, Any] | None) -> tuple[str, dict[str, Any], dict[str, Any]]:
-    """Resolve the runtime, the step's shipped skill and its catalog for minting."""
+                       orchestration_context: dict[str, Any] | None,
+                       modules: tuple[Any, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    """Resolve the runtime, the step's shipped skill and its catalog for minting.
+
+    ``modules`` is ``(gauntlet, step_skills)`` as loaded by ``attest_command``:
+    only the closed Gauntlet handlers load the resolver themselves.
+    """
     versions = grill_core_module("workflow_versions")
-    step_skills_module = grill_core_module("step_skills")
-    gauntlet = grill_core_module("gauntlet")
+    gauntlet, step_skills_module = modules
     if workflow_version in {"v4", "v5"}:
         config_fd: int | None = None
         try:
@@ -6724,7 +6728,7 @@ def _attest_resolution(root: Path, args: argparse.Namespace, item: Path, step: s
 
 
 def _mint_one(args: argparse.Namespace, step: str, artifact: str, supersedes: str | None,
-              dependency_override: dict[str, Any] | None) -> dict[str, Any]:
+              dependency_override: dict[str, Any] | None, modules: tuple[Any, Any]) -> dict[str, Any]:
     """Mint one step's chain in memory; the caller decides where it is written.
 
     ``dependency_override`` names the predecessor output to declare instead of
@@ -6743,7 +6747,7 @@ def _mint_one(args: argparse.Namespace, step: str, artifact: str, supersedes: st
         except attestation.AttestationError as exc:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-REQUIRED", exc.reason) from exc
     versions = grill_core_module("workflow_versions")
-    step_skills_module = grill_core_module("step_skills")
+    step_skills_module = modules[1]
     store = grill_core_module("store")
     orchestration_context = None
     snapshot = store.read_snapshot(root, required=False)
@@ -6783,7 +6787,7 @@ def _mint_one(args: argparse.Namespace, step: str, artifact: str, supersedes: st
 
     project_id = store.project_identity(root)["project_id"]
     runtime, resolution, catalog = _attest_resolution(
-        root, args, item, step, workflow_version, orchestration_context)
+        root, args, item, step, workflow_version, orchestration_context, modules)
 
     # The authorization is read, not minted: it is a human artefact that exists
     # before the chain. `ship` is the only step whose resolution demands one,
@@ -6929,7 +6933,7 @@ def _rechain_prior(root: Path, operations: dict[str, Any], step: str, execution_
     raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RECHAIN-PRIOR-UNKNOWN", step)
 
 
-def _rechain(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+def _rechain(args: argparse.Namespace, modules: tuple[Any, Any]) -> tuple[dict[str, Any], int]:
     """Mint successors for every stale step, each on top of the one before it.
 
     Everything is checked before the first byte is written: a stale step whose
@@ -6971,7 +6975,7 @@ def _rechain(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         index = sequence.index(step)
         override = predicted if minted and sequence[index - 1] == minted[-1]["step"] else None
         try:
-            result = _mint_one(args, step, artifact, prior_ref, override)
+            result = _mint_one(args, step, artifact, prior_ref, override, modules)
         except CliFailure as failure:
             failure.extra = {**(failure.extra or {}), "minted": minted}
             raise
@@ -7007,15 +7011,16 @@ def attest_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     and writes them under ``--out``; checkpointing each one is still the
     caller's, with ``--supersedes-attestation``.
     """
+    modules = (grill_core_module("gauntlet"), grill_core_module("step_skills"))
     if args.rechain:
         if args.step or args.artifact or args.supersedes:
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS",
                              "--rechain derives steps, artefacts and superseded bundles itself")
-        return _rechain(args)
+        return _rechain(args, modules)
     if not args.step or not args.artifact:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS", "attest needs --step and --artifact")
     root = project_root(args.root)
-    minted = _mint_one(args, args.step, args.artifact, args.supersedes, None)
+    minted = _mint_one(args, args.step, args.artifact, args.supersedes, None, modules)
     target = _write_attestation(root, args.out, minted["bundle"])
     return {
         "verdict": "ATTESTED",
