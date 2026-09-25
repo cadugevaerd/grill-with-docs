@@ -1,5 +1,25 @@
 # Changelog
 
+## 9.0.0
+
+- Breaking: o `goal.md` passa a ser gerenciado pelo plugin e todo `init` o reescreve com o template instalado. Antes, um `goal.md` existente nunca era tocado (`REUSED`/`PRESERVED`), e projetos criados na 5.x ficavam presos no texto daquela época. Agora:
+  - ausente → `CREATED`;
+  - marcador conhecido (`v1`/`v2`) e bytes iguais ao template → `REUSED`;
+  - marcador conhecido com qualquer diferença (versão antiga, edição local, mutilação) → substituição atômica (`os.replace` + fsync), `UPDATED` com `reason: from vN`;
+  - documento sem marcador (humano, inclusive vazio) ou com marcador mais novo que o plugin → `PRESERVED`, para não apagar arquivo alheio nem fazer downgrade.
+  
+  Edições locais no `goal.md` gerenciado são perdidas no próximo `init`.
+- Feature: goal v2 (`grill-with-docs-goal:v2`, tupla `ESSENTIAL` nova e congelada; a v1 segue reconhecida em `ESSENTIAL_V1`):
+  - a trilha "ciclo v4" vira "ciclo externo", já que projetos novos nascem em v5;
+  - a entrevista v5 passa a fazer lotes de até três perguntas;
+  - pontos de parada novos que o core já recusava: `OPENROUTER-KEY-REQUIRED`, `STYLE-LOAD-UNCONFIRMED`, `CONTINUITY-CHECKPOINT-MISSING`, `STEP-ASSESSMENT-*`, `PREVIEW-APPROVAL-REQUIRED`, `LEADER-AUTHORITY-UNPROVEN`, `SPECIALIST-CAPABILITY-UNPROVEN`, `SESSION-CLOSE-UNPROVEN`, `ASK-HUMAN`/`to_human` do `decide` e as falhas do Jev;
+  - seção nova "Decisões tipadas": `pending` é respondido pela sessão condutora e não vira `GOAL-HOLD`;
+  - removido o "caminho degradado sem Orca": especialistas e workers exigem despacho comprovado, e as references atuais não têm alternativa;
+  - verbos de orientação atualizados (`decide`, `decide-label`, `gauntlet-step-enter`, `gauntlet-tasks-import`/`gauntlet-tasks-rebase`, `checkpoint` com `--session-ref` e `--operation-id`);
+  - referências a seções da `SKILL.md` que já não existiam foram corrigidas.
+- O `goal.md` deste repositório foi regenerado pelo próprio verbo (`UPDATED from v1`).
+- Fix: corrida nos leitores do store sem lock (`read_snapshot`, `read_events`). Um append grava a linha do journal antes do `events-head.json`, e um commit ancora o journal antes do `orchestrator.json`. Um leitor que caía nesse intervalo de milissegundos recusava com `ORCHESTRATOR_INVALID: event journal tail does not match the persisted head` ou `STATE_DIVERGENCE: revision N is not the journal-anchored…`. Essa era a causa do flake de `init`/`gauntlet-run` concorrentes, visto no macOS da CI e também no Linux sob carga. Os dois leitores agora releem até 5 vezes, com 50 ms de intervalo, antes de falhar. Estado adulterado continua inconsistente e ainda falha fechado, e os invariantes do store não mudaram.
+
 ## 8.2.1
 
 - Docs: `partition-groups` só sugere o teto `--groups N` de `partition-emit`, que já era entrada do operador. Com a mesma `tasks.md` e o mesmo `--groups`, o DAG é idêntico, então a regra dos WORKFLOW v4/v5 ("o agrupamento é determinístico e vive em código") continua valendo. Não houve workflow v6 nem mudança em `WORKFLOW.md`, template, `ESSENTIAL`, registry ou catálogo. O `SKILL.md` do grill-partition ficou intocado porque os bytes dele estão selados nos catálogos v4/v5.

@@ -114,20 +114,38 @@ def atomic_create(target: Path, content: bytes) -> bool:
             pass
 
 
+def atomic_replace(target: Path, content: bytes) -> None:
+    """Replace target's bytes in one rename; readers see the old or the new file, never half."""
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def resolve_goal(root_argument: str | Path) -> GoalResult:
     """Materialise or validate ``goal.md`` and return the decision without
     printing (contracts/materialization-cli.md).
 
-    Covers the creation path (FR-001) and the reuse path: existing document
-    carrying the ``v1`` marker with ``compatible() is True`` returns
-    ``REUSED`` without writing anything.
+    goal.md is plugin-owned: every ``init`` leaves a managed document equal to
+    the bundled template. Absent -> ``CREATED``; managed (any marker in
+    ``KNOWN_VERSIONS``) and already identical -> ``REUSED``; managed but
+    older, edited or mutilated -> rewritten atomically, ``UPDATED`` with the
+    previous version as reason.
 
-    The ``PRESERVED`` branch -- existing document with no marker (``human
-    document``), with another version's marker (``managed version
-    mismatch``), or with a ``v1`` marker that fails ``compatible()``
-    (``incompatible goal``) -- performs no write, no rename and no auxiliary
-    file of any kind (FR-003, FR-006, FR-007). An existing-but-empty document
-    is classified the same way, never treated as absent (Edge Case).
+    ``PRESERVED`` -- no write, no rename, no auxiliary file -- is kept only
+    where rewriting would destroy something the plugin does not own: a
+    document with no marker (``human document``, including an empty one,
+    never treated as absent) and a marker newer than this build
+    (``newer managed version``), which a downgrade must not clobber.
     """
     candidate = Path(root_argument).expanduser()
     if not candidate.is_dir():
@@ -141,25 +159,21 @@ def resolve_goal(root_argument: str | Path) -> GoalResult:
         if target.is_symlink() or target.resolve(strict=False).parent != root:
             return GoalResult("BLOCKED", None, b"", "unsafe target")
 
+        # Decided once, from the first read: a concurrent init may create the
+        # file between two exists() calls, and then it is that init's to write.
+        existing: bytes | None = None
         if target.exists():
             if target.is_dir():
                 return GoalResult("BLOCKED", None, b"", "unsafe target")
-            content, text = read_regular(target)
+            existing, text = read_regular(target)
+            content = existing
             version = goal_document.managed_version(text)
-            if version == goal_document.VERSION and goal_document.compatible(text):
-                return GoalResult("REUSED", target, content, None)
-            # Three named PRESERVED reasons (FR-003, FR-006). An empty
-            # document has no marker on its first line, so it falls into
-            # "human document" here -- existing-but-empty is PRESERVED, not
-            # treated as absent (Edge Case), because this branch runs before
-            # the creation path below ever sees the target.
+            # An empty document has no marker on its first line, so it falls
+            # into "human document" -- PRESERVED, never treated as absent.
             if version is None:
-                reason = "human document"
-            elif version != goal_document.VERSION:
-                reason = "managed version mismatch"
-            else:
-                reason = "incompatible goal"
-            return GoalResult("PRESERVED", target, content, reason)
+                return GoalResult("PRESERVED", target, content, "human document")
+            if goal_document.is_newer(version):
+                return GoalResult("PRESERVED", target, content, "newer managed version")
 
         template_content, template_text = read_regular(goal_document.TEMPLATE)
         if (
@@ -167,6 +181,14 @@ def resolve_goal(root_argument: str | Path) -> GoalResult:
             or not goal_document.compatible(template_text)
         ):
             return GoalResult("BLOCKED", None, b"", "invalid bundled template")
+        if existing is not None:
+            if existing == template_content:
+                return GoalResult("REUSED", target, content, None)
+            atomic_replace(target, template_content)
+            content, text = read_regular(target)
+            if content != template_content:
+                return GoalResult("BLOCKED", None, b"", "read-back validation failed")
+            return GoalResult("UPDATED", target, content, f"from {version}")
         created = atomic_create(target, template_content)
 
         if target.is_symlink() or target.resolve(strict=False).parent != root:

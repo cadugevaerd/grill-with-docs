@@ -45,6 +45,8 @@ python3 "${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/grill-with-docs/scripts/gr
   --session-ref REF [--allow-install] [--require-dependencies] [--skip-backlog]
 ```
 
+Todo `init` também deixa o `goal.md` da raiz igual ao template do plugin instalado (`goal.status`): ausente → `CREATED`; gerenciado (marcador `grill-with-docs-goal:v1|v2`) e idêntico → `REUSED`; gerenciado mas antigo, editado ou mutilado → reescrito atomicamente, `UPDATED` com `reason: from vN`. Só fica `PRESERVED` o documento sem marcador (humano, inclusive vazio) ou com marcador mais novo que o plugin. Edições locais em `goal.md` gerenciado são sobrescritas; regra de projeto vai na Constituição, no WORKFLOW ou em ADR.
+
 Sem `--work-id`, o core gera uma identidade collision-resistant. `--work-id` explícito serve para retomada/idempotência e deve corresponder à mesma identidade. A criação usa lock, staging e rename atômico; colisão ou integridade divergente bloqueiam.
 
 ## Dependências e backlog

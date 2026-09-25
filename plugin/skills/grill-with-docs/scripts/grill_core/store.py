@@ -1337,9 +1337,28 @@ def _read_paths(paths: StorePaths, *, required: bool) -> Snapshot | None:
     return snapshot
 
 
+# Lock-free readers can land inside a writer's multi-file update: an append
+# writes the journal line before events-head.json, a commit anchors the
+# journal before orchestrator.json. Those windows last milliseconds, so the
+# reader re-reads briefly; tampering stays inconsistent and still fails closed.
+SETTLE_ATTEMPTS = 5
+SETTLE_DELAY = 0.05
+
+
+def _settled(read: Callable[[], Any]) -> Any:
+    for attempt in range(SETTLE_ATTEMPTS):
+        try:
+            return read()
+        except StoreError as error:
+            if error.code not in {ORCHESTRATOR_INVALID, STATE_DIVERGENCE} or attempt == SETTLE_ATTEMPTS - 1:
+                raise
+            time.sleep(SETTLE_DELAY)
+
+
 def read_snapshot(root: str | Path, *, required: bool = True) -> Snapshot | None:
     """Read and fully validate the snapshot.  Read-only: creates nothing."""
-    return _read_paths(store_paths(root), required=required)
+    paths = store_paths(root)
+    return _settled(lambda: _read_paths(paths, required=required))
 
 
 def store_exists(root: str | Path) -> bool:
@@ -2272,7 +2291,7 @@ def read_events(root: str | Path) -> list[dict[str, Any]]:
     paths = store_paths(root)
     _validate_directory(paths.root)
     _validate_regular(paths.events)
-    return _validated_journal_records(paths)
+    return _settled(lambda: _validated_journal_records(paths))
 
 
 def _check_receipt_consistency(paths: StorePaths, snapshot: Snapshot) -> None:
