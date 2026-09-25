@@ -325,6 +325,24 @@ python3 .../grill_workspace.py reconcile ROOT --apply --integration-branch BRANC
 
 Somente `.grill/global/ROADMAP.md` e `.grill/global/AUDIT.md` são gerados. A segunda execução é byte-idêntica/no-op. A projeção global nunca reescreve work items.
 
+## Fechamento pós-ship do hotfix
+
+`state.json` do hotfix nasce `prepared` e está selado em `initial_artifacts`; editá-lo à mão dá `BUNDLE-INTEGRITY`. Depois do ship externo, o fechamento é feito por verbo, preview primeiro:
+
+```text
+python3 .../grill_workspace.py hotfix-close ROOT --work-id ID --shipped-commit SHA --integration-branch BRANCH [--apply]
+```
+
+Antes de gravar qualquer coisa, o verbo prova:
+
+- integridade, identidade e Constituição, como no `hotfix-go`;
+- a branch corrente é `BRANCH` (senão `WRONG-INTEGRATION-BRANCH`);
+- `base_commit` é ancestral de `SHA` e `SHA` é ancestral de `HEAD` (senão `HOTFIX-NOT-SHIPPED`);
+- `diff base_commit..SHA` fica dentro do escopo selado (senão `HOTFIX-SCOPE-VIOLATION`);
+- o `test-command` selado passa no `HEAD` da integração (senão `CORRECTION-TEST-FAILED` ou `CORRECTION-TEST-TIMEOUT`).
+
+O `--apply` grava `state.json` terminal (`complete`, `completed`, `audit_verdict=GO`, `shipped`) e o registro `hotfix_ship` com selo `hotfix_ship_sha256`. Repetir com o mesmo commit devolve `REUSED`; com outro commit, `HOTFIX-CLOSE-DIVERGENCE`. A partir daí `audit` devolve `GO`/`HOTFIX-SHIPPED`, `status` projeta `complete` e `reconcile --work-id ID` aceita o hotfix sem ROADMAP.
+
 ## Migração legada
 
 Sempre execute preview antes de aplicar:

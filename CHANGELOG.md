@@ -1,5 +1,11 @@
 # Changelog
 
+## 9.3.0
+
+- Feature: verbo `hotfix-close ROOT --work-id ID --shipped-commit SHA --integration-branch BRANCH [--apply]`. Fecha o hotfix depois do ship, que antes não tinha caminho: o bundle ficava `prepared` para sempre, e editar `state.json` à mão quebrava o selo ou fabricava prova.
+  - Só sela o fechamento depois de provar que o commit está na branch de integração, que o diff desde a base cabe no escopo selado e que o teste de correção passa no `HEAD`.
+  - Depois do fechamento, `audit` devolve `GO`/`HOTFIX-SHIPPED`, `status` projeta `complete` e `reconcile` aceita o hotfix sem ROADMAP.
+
 ## 9.2.0
 
 - Sessões de workers GWD agora são vinculadas ao Dispatch Orca e exigem resultado salvo, settlement aceito e release confirmado antes de convergência ou substituição. Release incerto fica pendente para read-back da mesma operação; cleanup Git permanece posterior à integração.

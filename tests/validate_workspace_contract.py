@@ -1276,6 +1276,62 @@ class WorkspaceV2Contract(unittest.TestCase):
         tampered, tampered_payload = invoke("hotfix-go", self.root, "--work-id", "hotfix-failure")
         self.assertEqual((tampered.returncode, tampered_payload["code"]), (2, "HOTFIX-METADATA-TAMPERED"))
 
+    def test_hotfix_close_proves_ship_before_sealing_closure(self) -> None:
+        work_id = "hotfix-ship"
+        check = python_test_command("import pathlib, sys; sys.exit(0 if pathlib.Path('src/api.py').is_file() else 1)")
+        created, _ = invoke("hotfix", self.root, "--slug", "ship", "--scope", "src/api.py", "--reproduction", "500",
+                            "--evidence", "incident.log", "--correction-test", "t", "--rollback", "git revert",
+                            "--constitution-evidence", "not-applicable", "--test-command", check, "--work-id", work_id)
+        self.assertEqual(created.returncode, 0)
+        item = self.root / ".grill/work-items" / work_id
+
+        def commit(message: str) -> str:
+            git(self.root, "add", "-A")
+            git(self.root, "commit", "-q", "-m", message)
+            return git(self.root, "rev-parse", "HEAD")
+
+        def close(sha: str, *extra: str) -> tuple[int, dict]:
+            process, payload = invoke("hotfix-close", self.root, "--work-id", work_id, "--shipped-commit", sha,
+                                      "--integration-branch", "main", *extra)
+            return process.returncode, payload
+
+        (self.root / "src").mkdir()
+        (self.root / "src/api.py").write_text("fixed\n", encoding="utf-8")
+        shipped = commit("hotfix")
+        (self.root / "other.py").write_text("x\n", encoding="utf-8")
+        outside = commit("unrelated")
+        self.assertEqual(close(outside)[1]["code"], "HOTFIX-SCOPE-VIOLATION")
+        git(self.root, "checkout", "-q", "-b", "side")
+        (self.root / "src/api.py").write_text("side\n", encoding="utf-8")
+        unmerged = commit("side")
+        self.assertEqual(close(shipped)[1]["code"], "WRONG-INTEGRATION-BRANCH")
+        git(self.root, "checkout", "-q", "main")
+        self.assertEqual(close(unmerged)[1]["code"], "HOTFIX-NOT-SHIPPED")
+        (self.root / "src/api.py").unlink()
+        commit("regression")
+        self.assertEqual(close(shipped)[1]["code"], "CORRECTION-TEST-FAILED")
+        (self.root / "src/api.py").write_text("fixed\n", encoding="utf-8")
+        commit("restore")
+
+        before = snapshot(item)
+        self.assertEqual(close(shipped), (0, {"verdict": "PREVIEW", "code": "HOTFIX-CLOSE-READY", "work_id": work_id, "commit": shipped}))
+        self.assertEqual(snapshot(item), before)
+        self.assertEqual(close(shipped, "--apply")[1]["verdict"], "APPLIED")
+        state = json.loads((item / "state.json").read_text(encoding="utf-8"))
+        self.assertEqual((state["status"], state["audit_verdict"], state["shipped"]["commit"]), ("complete", "GO", shipped))
+        self.assertEqual(close(shipped, "--apply")[1]["verdict"], "REUSED")
+        self.assertEqual(close(outside)[1]["code"], "HOTFIX-CLOSE-DIVERGENCE")
+        audit, audited = invoke("audit", self.root, "--work-id", work_id)
+        self.assertEqual((audit.returncode, audited["verdict"], audited["code"]), (0, "GO", "HOTFIX-SHIPPED"))
+        status, reported = invoke("status", self.root, "--work-id", work_id)
+        self.assertEqual(reported["work_items"][0]["operational_status"], "complete", reported)
+        reconcile, previewed = invoke("reconcile", self.root, "--work-id", work_id)
+        self.assertEqual((reconcile.returncode, previewed["verdict"]), (0, "PREVIEW"), previewed)
+
+        (item / "state.json").write_text(json.dumps({**state, "shipped": {"commit": outside, "integration_branch": "main"}}), encoding="utf-8")
+        tampered, tampered_payload = invoke("audit", self.root, "--work-id", work_id)
+        self.assertEqual((tampered.returncode, tampered_payload["code"]), (2, "BUNDLE-INTEGRITY"))
+
     def test_v23_decomposition_persistence_and_hotfix_exclusion(self) -> None:
         for kind, work_id in (("feature", "decomp-feature"), ("fix", "decomp-fix")):
             item = self._init_item(work_id=work_id, kind=kind, slug=work_id)
