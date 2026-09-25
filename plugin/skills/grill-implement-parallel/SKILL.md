@@ -44,13 +44,23 @@ Use `gauntlet-worker-declare`, nunca `gauntlet-prepare-worker`: a superfície le
 
 ### 4. Despachar os subagentes
 
-Um subagente por worker, no worktree do worker, com o **modelo que o declare devolveu** — nunca um escolhido por você. Cada subagente:
+Use `orca orchestration worker-start --spec ... --worktree path:<worktree do worker> --agent <runtime> --model <model devolvido> --run <run Orca> --json` para cada worker. Guarde o `dispatchId` retornado e registre a sessão imediatamente após o start:
+
+```bash
+python3 <plugin>/scripts/grill_workspace.py gauntlet-worker-session ROOT \
+    --work-id ID --run-id RUN --worker-id p01-a --dispatch ctx-... \
+    --phase register --session-ref LEADER
+```
+
+Um worker por nó, no próprio worktree, com o **modelo que o declare devolveu** — nunca um escolhido por você. Cada worker:
 
 1. invoca `speckit-implement` com o brief como `$ARGUMENTS`;
-2. chama `gauntlet-progress-record` a cada tarefa concluída (renova o lease, evita `stall` aos 15 min);
+2. informa progresso ao líder a cada tarefa concluída; o líder chama `gauntlet-progress-record` (renova o lease, evita `stall` aos 15 min);
 3. grava `specs/NNN/implement/<node-id>.tasks.json`;
 4. commita na própria branch;
-5. chama `gauntlet-worker-terminal --outcome completed`.
+5. envia `worker_done` pelo Dispatch injetado e encerra seu turno.
+
+Após receber e aceitar o `worker_done` do Dispatch exato, o líder confere o resultado/diagnóstico salvo no worktree, chama `gauntlet-worker-terminal --outcome completed` (ou `failed` com classificação honesta), depois `gauntlet-worker-session --phase release --result <path relativo no worktree>` e confere `RELEASED` ou `REUSED`. Esse verbo registra `CLOSE_PENDING` antes do efeito, executa `orca orchestration worker-release --dispatch`, lê o mesmo Dispatch com `worker-show` e persiste `CLOSED` somente com identidade e arquivo de saída arquivado. Em `UNKNOWN`, preserve a sessão e repita **a mesma operação**: a retomada lê o Dispatch sem enviar outro release. Se ainda estiver ativo, reconcilie no Orca antes de repetir. Não use `terminal close`.
 
 O brief vem de comando, não de prosa sua:
 
@@ -70,6 +80,7 @@ python3 <plugin>/scripts/grill_workspace.py gauntlet-converge ROOT \
 ```
 
 Merge `--no-ff` serial, em ordem de `node_id`. Conflito de conteúdo **não** é resolvido automaticamente (ADR-0009): `INTEGRATION_CONFLICT` nomeia os nós e o humano resolve. `gauntlet-remediate` só aceita `stall` e `transient-failure`.
+Para uma sessão Orca, cada worker convergível precisa de recurso de sessão `CLOSED` com release confirmado; substituição exige a mesma prova do worker anterior. O cleanup Git do worktree continua após o merge. Workers antigos exigem registro por identidade e settlement comprovados antes de elegibilidade; nenhum resultado aceito é repetido para drenar cleanup.
 
 Repita 2–5 enquanto houver nó não terminal.
 

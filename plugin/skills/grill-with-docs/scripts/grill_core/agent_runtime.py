@@ -789,7 +789,7 @@ class LeaderBoundary:
     read: Callable[[list[str]], bytes]
     presentation_probe: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] = _orca_presentation_axes
 
-    def observe(self) -> dict[str, Any]:
+    def observe(self, *, allow_settled: bool = False) -> dict[str, Any]:
         if not isinstance(self.session_ref, str) or not re.fullmatch(r"orca:ctx[-_][A-Za-z0-9_-]+", self.session_ref):
             _fail("LEADER-ADAPTER-UNSUPPORTED")
         dispatch_id = self.session_ref.removeprefix("orca:")
@@ -810,6 +810,13 @@ class LeaderBoundary:
         if process != _string(terminal.get("ptyId"), "pty") + ":" + incarnation:
             _fail("LEADER-AUTHORITY-UNPROVEN")
         activity = {"ready": "active", "running": "active", "idle": "idle"}.get(_string(worker.get("state"), "worker state"))
+        settled = (allow_settled and worker.get("stage") == "settled"
+                   and worker.get("state") in {"succeeded", "failed"}
+                   and _dispatch_matches_outcome(dispatch, worker.get("state"))
+                   and isinstance(dispatch.get("completedAt"), str)
+                   and isinstance(dispatch.get("capabilityRevokedAt"), str))
+        if settled:
+            activity = "idle"
         if (terminal.get("worktreePath") != str(self.root) or terminal.get("orphaned") is not False
                 or _mapping(show.get("observation"), "observation").get("exactWorker") is not True
                 or _mapping(projection.get("liveness"), "liveness").get("verdict") != "live"
@@ -818,8 +825,8 @@ class LeaderBoundary:
                 # this active Dispatch. All ownership/incarnation checks above
                 # still apply; retention is neither release nor startup trust.
                 or resource.get("releaseState") not in ("not_requested", "retained")
-                or dispatch.get("status") not in ("dispatched", "running")
-                or "capabilityRevokedAt" not in dispatch or dispatch["capabilityRevokedAt"] is not None
+                or not (settled or (dispatch.get("status") in ("dispatched", "running")
+                        and "capabilityRevokedAt" in dispatch and dispatch["capabilityRevokedAt"] is None))
                 or activity is None):
             _fail("LEADER-AUTHORITY-UNPROVEN")
         provider = _same("provider", self.runtime, terminal.get("agentIdentity"), effective.get("agent"),

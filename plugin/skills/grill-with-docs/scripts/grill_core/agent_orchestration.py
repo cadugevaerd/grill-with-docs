@@ -993,7 +993,9 @@ def close_session_resource(resource: Mapping[str, Any], observation: Mapping[str
     if closed.get("state") != "CLOSE_PENDING":
         _fail("INVALID-RESOURCE-TRANSITION")
     _text(acceptance_ref, "resource acceptance ref")
-    closed.update({"result_acceptance_ref": acceptance_ref, "state": "CLOSED"})
+    release_ref = observed["source_ref"] + ":release"
+    closed["evidence_manifest"]["receipts"].append({"ref": release_ref, "sha256": observed["source_sha256"]})
+    closed.update({"result_acceptance_ref": acceptance_ref, "last_observation": release_ref, "state": "CLOSED"})
     return closed
 
 

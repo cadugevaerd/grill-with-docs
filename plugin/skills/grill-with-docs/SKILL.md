@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v9.1.0
+# Grill with Docs v9.2.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -43,6 +43,7 @@ Leia o [protocolo de sessão](references/session-protocol.md) para admissão, ca
 cleanup, continuidade e recuperação. O líder invoca as onze skills canônicas na sessão
 ativa e persiste seus retornos. Sol no Codex e Opus no Claude são recomendações,
 não trocas automáticas. Autoria especializada continua xhigh; revisão independente high.
+O coordenador Orca inicia o líder com `worker-start`, mantém seu próprio terminal aberto e, após o relatório final e `worker_done` aceito, executa `worker-release` com read-back do Dispatch. Pausa conserva a sessão. Workers e especialistas também encerram por settlement, release e read-back antes de declarar cleanup concluído; `terminal close` não substitui esse fluxo.
 No v5, somente plan/review exigem revisão fixa; risco material exige revisão extra.
 `gauntlet-step-enter` entrega a classificação e seu hash, atividades e suplementos exigidos.
 Ausência de evidência bloqueia; entrega de contexto não atesta execução.

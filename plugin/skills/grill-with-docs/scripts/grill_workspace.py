@@ -5676,6 +5676,157 @@ def gauntlet_worker_terminal_command(args: argparse.Namespace) -> tuple[dict[str
 
 
 @_gauntlet_authorized
+def gauntlet_worker_session_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Bind a scheduler worker to its Orca Dispatch and drain its exact release."""
+    root, runs, admission, record = gauntlet_run_admission(args)
+    runtime = grill_core_module("agent_runtime")
+    store = runs.store
+    snapshot = store.read_snapshot(root, required=True)
+    item = snapshot.document["agent_orchestration"]["work_items"][args.work_id]
+    context_id = item["current_context_id"]
+    try:
+        run = runs._run_for_worker(root, args.work_id, args.run_id, admission, purpose="cleanup")
+        wave_id = runs._worker_wave_id(root, args.work_id, args.run_id, args.worker_id)
+        target, _ = runs._workspace_identity(root, args.work_id, args.run_id, args.worker_id, run["admission"])
+    except runs.GauntletRunError as exc:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.message) from exc
+    worker = run.get("workers", {}).get(args.worker_id)
+    if not isinstance(worker, dict) or not isinstance(worker.get("workspace"), dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORKER-NOT-FOUND", args.worker_id)
+    dispatch_id = args.dispatch.removeprefix("orca:")
+    if not re.fullmatch(r"ctx[-_][A-Za-z0-9_-]+", dispatch_id):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", args.dispatch)
+    source_ref = "orca:" + dispatch_id
+    resource_id = "session-" + hashlib.sha256(f"{args.run_id}:{args.worker_id}".encode()).hexdigest()[:24]
+    resource = item["resources"].get(resource_id)
+    worker_runtime = (resource.get("identity", {}).get("provider") if isinstance(resource, dict)
+                      else record["runtime"]["id"])
+    boundary = _leader_boundary(target, worker_runtime, source_ref, args.work_id)
+    if (resource is not None and resource.get("state") == "CLOSED" and args.phase == "release"
+            and resource.get("identity", {}).get("owner_dispatch") == dispatch_id
+            and resource.get("scheduler_run_id") == args.run_id
+            and resource.get("worker_id") == args.worker_id and resource.get("wave_id") == wave_id
+            and resource.get("result_acceptance_ref") == args.result):
+        return {"verdict": "REUSED", "resource_id": resource_id, "dispatch": dispatch_id}, EXIT_OK
+    if args.phase == "register":
+        if resource is not None:
+            if (resource.get("identity", {}).get("owner_dispatch") != dispatch_id
+                    or resource.get("scheduler_run_id") != args.run_id
+                    or resource.get("worker_id") != args.worker_id or resource.get("wave_id") != wave_id):
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", args.worker_id)
+            return {"verdict": "REUSED", "resource_id": resource_id, "dispatch": dispatch_id}, EXIT_OK
+        if not runs._workspace_is_registered(root, target, worker["workspace"]):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", args.worker_id)
+        if worker["state"] not in {"PREPARED", "TERMINAL", "FAILED"}:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORKER-NOT-ELIGIBLE", args.worker_id)
+        try:
+            show = runtime._object(boundary.read(["orchestration", "worker-show", "--dispatch", dispatch_id, "--json"]), "Orca worker-show")
+            handle = show["terminal"]["handle"]
+            observed = runtime.LeaderBoundary(source_ref, target, record["runtime"]["id"], handle, boundary.read).observe(
+                allow_settled=show["worker"].get("stage") == "settled")
+            if worker["state"] != "PREPARED" and (show["worker"].get("stage") != "settled"
+                    or show["worker"].get("state") != (
+                        "succeeded" if worker["state"] == "TERMINAL" else "failed")):
+                raise ValueError("settlement differs from worker outcome")
+        except (runtime.RuntimeError, KeyError, TypeError, ValueError) as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", str(exc)) from exc
+        identity = {key: observed[key] for key in ("provider", "adapter", "host", "runtime_instance", "handle",
+            "incarnation", "owner_dispatch", "task_id", "dispatch_incarnation", "worktree_id")}
+        created = {"kind": "session", "agent_id": observed["provider"], "activity_id": None,
+            "scheduler_run_id": args.run_id, "worker_id": args.worker_id, "wave_id": wave_id,
+            "origin_context_id": context_id, "identity": identity,
+            "creation_observation": {"kind": "session", "identity": copy.deepcopy(identity),
+                "source_ref": source_ref, "source_sha256": observed["source_sha256"],
+                "collected_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+            "result_acceptance_ref": None,
+            "evidence_manifest": {"files": [], "receipts": [{"ref": source_ref, "sha256": observed["source_sha256"]}],
+                                  "terminal_head": None, "integrated_head": None},
+            "state": "REGISTERED", "last_observation": source_ref,
+            "preservation_reasons": [], "operation_id": None}
+        binding = {"admission_sha256": store.jcs_sha256(run["admission"]),
+                   "dag_sha256": run.get("dag_content_sha256"), "origin_context_id": context_id}
+        if not isinstance(binding["dag_sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", binding["dag_sha256"]):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "DAG-PIN-MISSING", args.run_id)
+        def register(document: dict[str, Any]) -> dict[str, Any]:
+            target_item = document["agent_orchestration"]["work_items"][args.work_id]
+            resources = target_item["resources"]
+            if resource_id in resources or document["revision"] != snapshot.revision:
+                raise store.StoreError(store.STATE_DIVERGENCE, "worker session changed")
+            bindings = target_item["contexts"][context_id]["scheduler_runs"]
+            existing_binding = bindings.get(args.run_id)
+            if existing_binding is not None and any(existing_binding.get(key) != binding[key]
+                    for key in ("admission_sha256", "dag_sha256")):
+                raise store.StoreError(store.STATE_DIVERGENCE, "scheduler run binding changed")
+            if existing_binding is None:
+                bindings[args.run_id] = binding
+            resources[resource_id] = created
+            return document
+        store.transact(root, register)
+        return {"verdict": "REGISTERED", "resource_id": resource_id, "dispatch": dispatch_id}, EXIT_OK
+
+    if resource is None or resource.get("identity", {}).get("owner_dispatch") != dispatch_id or resource.get("wave_id") != wave_id:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", args.worker_id)
+    if not runs._workspace_is_registered(root, target, worker["workspace"]):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", args.worker_id)
+    result = _checkpoint_ref(target, args.result)
+    if result is None:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESULT-NOT-DURABLE", args.worker_id)
+    if worker["state"] not in {"TERMINAL", "FAILED", "PREPARED"}:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "WORKER-NOT-TERMINAL", args.worker_id)
+    if resource["state"] == "REGISTERED":
+        try:
+            show = runtime._object(boundary.read(["orchestration", "worker-show", "--dispatch", dispatch_id, "--json"]), "Orca worker-show")
+            actual = show["worker"]
+            expected = "succeeded" if worker["state"] == "TERMINAL" else "failed"
+            if (show["dispatch"].get("id") != dispatch_id or actual.get("dispatchId") != dispatch_id
+                    or actual.get("stage") != "settled" or actual.get("state") != expected
+                    or show["dispatch"].get("status") != {"succeeded": "completed", "failed": "failed"}[expected]):
+                raise ValueError("worker_done settlement not accepted")
+        except (runtime.RuntimeError, KeyError, TypeError, ValueError) as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SETTLEMENT-UNPROVEN", str(exc)) from exc
+        def pending(document: dict[str, Any]) -> dict[str, Any]:
+            held = document["agent_orchestration"]["work_items"][args.work_id]["resources"].get(resource_id)
+            if held != resource:
+                raise store.StoreError(store.STATE_DIVERGENCE, "worker session changed")
+            held["evidence_manifest"]["receipts"].append(result)
+            held["state"] = "CLOSE_PENDING"
+            return document
+        store.transact(root, pending)
+    elif resource["state"] != "CLOSE_PENDING":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.worker_id)
+    elif result not in resource["evidence_manifest"]["receipts"]:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESULT-NOT-DURABLE", args.worker_id)
+    try:
+        released = boundary.observe_released()
+    except runtime.RuntimeError:
+        # Only the first call issues release. Recovery reads the same Dispatch;
+        # an uncertain request never creates a second process action.
+        if resource["state"] != "REGISTERED":
+            return {"verdict": "UNKNOWN", "code": "SESSION-CLOSE-UNPROVEN", "resource_id": resource_id}, EXIT_BLOCKED
+        try:
+            response = subprocess.run([os.environ.get("ORCA_CLI_COMMAND") or "orca", "orchestration", "worker-release",
+                "--dispatch", dispatch_id, "--json"], cwd=root, capture_output=True, timeout=20)
+            if response.returncode:
+                return {"verdict": "UNKNOWN", "code": "SESSION-CLOSE-UNPROVEN", "resource_id": resource_id}, EXIT_BLOCKED
+            released = boundary.observe_released()
+        except (OSError, subprocess.TimeoutExpired, runtime.RuntimeError):
+            return {"verdict": "UNKNOWN", "code": "SESSION-CLOSE-UNPROVEN", "resource_id": resource_id}, EXIT_BLOCKED
+    observed_identity = {key: released.get(key) for key in resource["identity"]}
+    if observed_identity != resource["identity"] or released.get("release_proof") != "archive":
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "RESOURCE-IDENTITY-DIVERGENT", args.worker_id)
+    receipt = {"ref": source_ref + ":release", "sha256": released["source_sha256"]}
+    def close(document: dict[str, Any]) -> dict[str, Any]:
+        held = document["agent_orchestration"]["work_items"][args.work_id]["resources"].get(resource_id)
+        if not isinstance(held, dict) or held["state"] != "CLOSE_PENDING" or held["identity"] != resource["identity"]:
+            raise store.StoreError(store.STATE_DIVERGENCE, "worker session changed")
+        held["evidence_manifest"]["receipts"].append(receipt)
+        held.update({"last_observation": receipt["ref"], "result_acceptance_ref": result["ref"], "state": "CLOSED"})
+        return document
+    store.transact(root, close)
+    return {"verdict": "RELEASED", "resource_id": resource_id, "dispatch": dispatch_id}, EXIT_OK
+
+
+@_gauntlet_authorized
 def gauntlet_remediate_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """FASE-003 (FR-007/FR-009/FR-010, ADR-0015): remediate one node's
     current worker.
@@ -6545,6 +6696,30 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
 
     if args.phase != "accept":
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ACTIVITY-PHASE", args.phase)
+    if (existing.get("state") == "FAILED" and args.diagnostic and args.observation
+            and existing.get("diagnostic_ref") == args.diagnostic):
+        resource_id = existing.get("session_resource_id")
+        resource = item["resources"].get(resource_id)
+        if (isinstance(resource, dict) and resource.get("state") == "CLOSED"
+                and resource.get("result_acceptance_ref") == args.diagnostic):
+            return {"verdict": "FAILED-RELEASED-REUSED", "activity_id": args.activity_id}, EXIT_BLOCKED
+        if not isinstance(resource, dict) or resource.get("state") != "CLOSE_PENDING":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
+        observation, _ = _activity_json(root, args.observation, "SPECIALIST-CAPABILITY-UNPROVEN")
+        try:
+            contract.verify_specialist(existing, observation, require_open=False)
+            closed = contract.close_session_resource(resource, observation, acceptance_ref=args.diagnostic)
+        except contract.OrchestrationError as exc:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", str(exc)) from exc
+        def close_failure(document: dict[str, Any]) -> dict[str, Any]:
+            target = document["agent_orchestration"]["work_items"][args.work_id]
+            if target["activities"].get(args.activity_id) != existing or target["resources"].get(resource_id) != resource:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
+            target["resources"][resource_id] = closed
+            return document
+        committed = store.transact(root, close_failure)
+        return {"verdict": "FAILED-RELEASED", "activity_id": args.activity_id,
+                "store_revision": committed.revision}, EXIT_BLOCKED
     if existing.get("state") not in {"DISPATCHED", "RESULT_RECORDED"}:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ACTIVITY-STATE-DIVERGENCE", args.activity_id)
     if not args.result and not args.diagnostic:
@@ -6555,8 +6730,15 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         diagnostic = _checkpoint_ref(root, args.diagnostic)
         assert diagnostic is not None
         failed = copy.deepcopy(existing); failed.update({"diagnostic_ref": diagnostic["ref"], "state": "FAILED"})
-        committed = store.transact(root, lambda document: _replace_activity(
-            document, args.work_id, args.activity_id, existing, failed))
+        def record_failure(document: dict[str, Any]) -> dict[str, Any]:
+            updated = _replace_activity(document, args.work_id, args.activity_id, existing, failed)
+            if failed["activity_type"] != "deterministic_check":
+                resource = updated["agent_orchestration"]["work_items"][args.work_id]["resources"].get(failed["session_resource_id"])
+                if not isinstance(resource, dict) or resource.get("state") != "REGISTERED":
+                    raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SESSION-CLOSE-UNPROVEN", args.activity_id)
+                resource["state"] = "CLOSE_PENDING"
+            return updated
+        committed = store.transact(root, record_failure)
         return {"verdict": "FAILED", "activity_id": args.activity_id, "diagnostic": diagnostic,
                 "store_revision": committed.revision}, EXIT_BLOCKED
     result = _checkpoint_ref(root, args.result)
@@ -7840,6 +8022,15 @@ def build_parser() -> JsonParser:
     worker_terminal_parser.add_argument("--outcome", choices=("completed", "failed"), required=True)
     worker_terminal_parser.add_argument("--failure-class", choices=("process-timeout", "transport-failure"))
     worker_terminal_parser.add_argument("--session-ref")
+    worker_session_parser = subparsers.add_parser("gauntlet-worker-session")
+    worker_session_parser.add_argument("root")
+    worker_session_parser.add_argument("--work-id", required=True)
+    worker_session_parser.add_argument("--run-id", required=True)
+    worker_session_parser.add_argument("--worker-id", required=True)
+    worker_session_parser.add_argument("--dispatch", required=True)
+    worker_session_parser.add_argument("--phase", choices=("register", "release"), required=True)
+    worker_session_parser.add_argument("--result")
+    worker_session_parser.add_argument("--session-ref")
     remediate_parser = subparsers.add_parser("gauntlet-remediate")
     remediate_parser.add_argument("root")
     remediate_parser.add_argument("--work-id", required=True)
@@ -7980,6 +8171,7 @@ def main(argv: list[str] | None = None) -> int:
             "gauntlet-worker-declare": gauntlet_worker_declare_command,
             "gauntlet-progress-record": gauntlet_progress_record_command,
             "gauntlet-worker-terminal": gauntlet_worker_terminal_command,
+            "gauntlet-worker-session": gauntlet_worker_session_command,
             "gauntlet-remediate": gauntlet_remediate_command,
             "hotfix": hotfix_command,
             "hotfix-go": hotfix_go_command,
