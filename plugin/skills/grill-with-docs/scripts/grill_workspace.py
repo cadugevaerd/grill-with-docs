@@ -6409,8 +6409,15 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
     if scope == "cycle":
         policy = json.loads(_policy_path(root, args.work_id, _item).read_bytes())
         assessment = _step_assessment(root, args.work_id, step_id, policy)
-        if assessment is not None and manifest.get("assessment_sha256") != contract.validate_step_assessment(assessment, policy, step_id):
-            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-DIVERGENT", args.activity_id)
+        if assessment is not None:
+            # An omitted digest is filled from the same assessment it would
+            # have to match, before the input hash, and in every phase alike,
+            # so prepare and accept hash the same manifest. A stated digest
+            # still has to match.
+            expected_assessment = contract.validate_step_assessment(assessment, policy, step_id)
+            manifest.setdefault("assessment_sha256", expected_assessment)
+            if manifest["assessment_sha256"] != expected_assessment:
+                raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-DIVERGENT", args.activity_id)
     try:
         current_input_sha256 = contract.activity_input_sha256(manifest)
     except contract.OrchestrationError as exc:

@@ -3232,6 +3232,43 @@ class AgentOrchestrationContract(unittest.TestCase):
         return agent_orchestration.accept_activity(
             activity, context=context, observation=None, acceptance_ref=result["ref"]), payload
 
+    def test_activity_manifest_without_assessment_digest_is_filled_in_every_phase(self):
+        temporary, root = self.fixture()
+        (root / "WORKFLOW.md").write_bytes(grill_workspace.grill_core_module("workflow_v5").render_v5())
+        with temporary, orchestration_fixture.offline_leader(grill_workspace), \
+                mock.patch.dict("os.environ", {"GRILL_SKIP_DEPENDENCIES": "1"}):
+            code, created = self.run_cli("init", str(root), "--work-id", "work-x", "--type", "feature",
+                "--slug", "x", "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION,
+                "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+            inputs = root / ".grill/work-items/work-x/step-inputs"; inputs.mkdir()
+            doc = {"schema": "grill-step-assessment/v1", "step": "verify", "new_how": False, "risks": [],
+                   "justification": "Mechanical.", "files": [{"path": "README.md",
+                   "sha256": hashlib.sha256((root / "README.md").read_bytes()).hexdigest()}]}
+            (inputs / "verify.json").write_text(json.dumps(doc), encoding="utf-8")
+            policy = json.loads(grill_workspace._policy_path(root, "work-x").read_bytes())
+            digest = agent_orchestration.validate_step_assessment(doc, policy, "verify")
+            manifest = {"files": [], "required_activity_ids": [], "author_activity_ids": [],
+                        "task_binding": None, "human_authorization": None}
+            (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (root / "wrong.json").write_text(json.dumps({**manifest, "assessment_sha256": "0" * 64}), encoding="utf-8")
+            (root / "result.md").write_text("done\n", encoding="utf-8")
+            def activity(phase, manifest_ref="manifest.json", *tail):
+                return self.run_cli("gauntlet-activity", str(root), "--work-id", "work-x",
+                    "--context-id", item["current_context_id"], "--epoch", "1",
+                    "--session-ref", orchestration_fixture.SESSION, "--activity-id", "check-verify",
+                    "--step", "verify", "--scope", "cycle", "--kind", "deterministic_check",
+                    "--phase", phase, "--input-manifest", manifest_ref, *tail)
+            code, refused = activity("prepare", "wrong.json")
+            self.assertEqual((code, refused["code"]), (2, "STEP-ASSESSMENT-DIVERGENT"), refused)
+            for phase, tail, verdict in (("prepare", (), "PREPARED"), ("dispatch", (), "DISPATCHED"),
+                                         ("accept", ("--result", "result.md"), "ACCEPTED")):
+                code, payload = activity(phase, "manifest.json", *tail)
+                self.assertEqual((code, payload["verdict"]), (0, verdict), payload)
+            saved = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+            self.assertEqual(saved["activities"]["check-verify"]["input_manifest"]["assessment_sha256"], digest)
+
     def test_accept_resumes_a_recorded_result_after_the_worker_is_released(self):
         temporary, root = self.fixture()
         with temporary, orchestration_fixture.offline_leader(grill_workspace):
