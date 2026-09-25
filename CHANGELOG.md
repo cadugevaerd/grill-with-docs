@@ -1,5 +1,9 @@
 # Changelog
 
+## 8.2.1
+
+- Docs: `partition-groups` só sugere o teto `--groups N` de `partition-emit`, que já era entrada do operador. Com a mesma `tasks.md` e o mesmo `--groups`, o DAG é idêntico, então a regra dos WORKFLOW v4/v5 ("o agrupamento é determinístico e vive em código") continua valendo. Não houve workflow v6 nem mudança em `WORKFLOW.md`, template, `ESSENTIAL`, registry ou catálogo. O `SKILL.md` do grill-partition ficou intocado porque os bytes dele estão selados nos catálogos v4/v5.
+
 ## 8.2.0
 
 - Feature: oito kinds novos no `decide`:
