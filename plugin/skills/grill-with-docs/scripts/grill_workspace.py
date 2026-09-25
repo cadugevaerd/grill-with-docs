@@ -6410,13 +6410,9 @@ def gauntlet_activity_command(args: argparse.Namespace) -> tuple[dict[str, Any],
         policy = json.loads(_policy_path(root, args.work_id, _item).read_bytes())
         assessment = _step_assessment(root, args.work_id, step_id, policy)
         if assessment is not None:
-            # An omitted digest is filled from the same assessment it would
-            # have to match, before the input hash, and in every phase alike,
-            # so prepare and accept hash the same manifest. A stated digest
-            # still has to match.
-            expected_assessment = contract.validate_step_assessment(assessment, policy, step_id)
-            manifest.setdefault("assessment_sha256", expected_assessment)
-            if manifest["assessment_sha256"] != expected_assessment:
+            # Omitted: filled before the input hash, in every phase alike. Stated: must match.
+            digest = manifest.setdefault("assessment_sha256", contract.validate_step_assessment(assessment, policy, step_id))
+            if digest != contract.validate_step_assessment(assessment, policy, step_id):
                 raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-DIVERGENT", args.activity_id)
     try:
         current_input_sha256 = contract.activity_input_sha256(manifest)
@@ -7234,6 +7230,108 @@ def checkpoint_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
 
 
 
+def _advance_operation_id(root: Path, work_id: str, step: str, state: str,
+                          development: dict[str, Any], attestation: str | None) -> str:
+    """Derive a checkpoint id from the state it moves, never from the call.
+
+    The audit length is what separates two legitimate visits to the same
+    step: a phase turn or a resume from ``blocked`` appends to the audit, so
+    the next visit gets a fresh id instead of a silent ``REUSED``.
+    """
+    reference = _checkpoint_ref(root, attestation) if state == "complete" else None
+    return "adv-" + grill_core_module("store").jcs_sha256({
+        "work_id": work_id, "step": step, "state": state,
+        "audit_len": len(development.get("audit") or []),
+        "attestation_sha256": reference["sha256"] if reference else None,
+    })[:32]
+
+
+@_gauntlet_authorized
+def advance_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
+    """Close the current step and open the next one, as one resumable call.
+
+    It composes the verbs a leader runs between steps -- ``checkpoint
+    complete``, the next step's assessment, ``gauntlet-step-enter`` and
+    ``checkpoint in-progress`` -- through their own handlers, so every gate
+    each of them owns still fires. Human gates stay outside: a preview
+    approval, a ship authorization, a reviewer verdict, a phase turn or a
+    resume from ``blocked`` are refused here exactly as the verbs refuse them.
+    A refusal lists the operations already done; re-running resumes.
+    """
+    root = project_root(args.root)
+    store = grill_core_module("store")
+    operations: list[dict[str, Any]] = []
+    invocation: dict[str, Any] | None = None
+
+    def development_now() -> dict[str, Any]:
+        _path, state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)
+        return state.get("development") or {}
+
+    def checkpoint(development: dict[str, Any], step: str, state: str) -> None:
+        operation_id = _advance_operation_id(root, args.work_id, step, state, development, args.attestation)
+        argv = ["checkpoint", args.root, "--work-id", args.work_id, "--step", step, "--state", state,
+                "--operation-id", operation_id, "--session-ref", args.session_ref, "--reason", "advance"]
+        if state == "complete":
+            argv += [value for evidence in args.evidence for value in ("--evidence", evidence)]
+            argv += ["--attestation", args.attestation] if args.attestation else []
+        payload, _code = checkpoint_command(build_parser().parse_args(argv))
+        operations.append({"verb": "checkpoint", "step": step, "state": state,
+                           "operation_id": operation_id, "verdict": payload["verdict"]})
+
+    snapshot = store.read_snapshot(root, required=False)
+    block = snapshot.document.get("agent_orchestration") if snapshot is not None else None
+    if not isinstance(block, dict) or not isinstance(block.get("work_items", {}).get(args.work_id), dict):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "ORCHESTRATION-MIGRATION-REQUIRED", args.work_id)
+    completed = None
+    try:
+        development = development_now()
+        current = development.get("current_step")
+        state = (development.get("steps") or {}).get(current)
+        if state == "blocked":
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-BLOCKED", current)
+        if state == "in-progress":
+            checkpoint(development, current, "complete")
+            completed, development = current, development_now()
+        step = development.get("current_step")
+        if step not in (development_sequence(development) or []):
+            return {"verdict": "DONE", "work_id": args.work_id, "completed": completed,
+                    "entered": None, "invocation_context": None, "operations": operations}, EXIT_OK
+        policy = json.loads(_policy_path(root, args.work_id).read_bytes())
+        try:
+            _step_assessment(root, args.work_id, step, policy)
+        except CliFailure as failure:
+            # Missing or unreadable is Jev's to write; stale is a decision
+            # someone already made on files that changed, never overwritten.
+            if failure.code != "STEP-ASSESSMENT-INVALID":
+                raise
+            decision, _code = decide_command(argparse.Namespace(
+                root=args.root, kind="step-assessment", file=None, context=None,
+                work_id=args.work_id, step=step, apply=True))
+            operations.append({"verb": "decide", "step": step, "written": decision.get("written")})
+            if not decision.get("written"):
+                return {"verdict": "ASSESSMENT-REQUIRED", "work_id": args.work_id, "completed": completed,
+                        "entered": None, "step": step, "decision": decision,
+                        "operations": operations}, EXIT_BLOCKED
+        record = store.read_snapshot(root).document["agent_orchestration"]["work_items"][args.work_id]
+        context = record.get("contexts", {}).get(record.get("current_context_id"))
+        if not isinstance(context, dict):
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTEXT-FENCED", args.work_id)
+        entered, _code = gauntlet_step_enter_command(build_parser().parse_args(
+            ["gauntlet-step-enter", args.root, "--work-id", args.work_id, "--context-id", record["current_context_id"],
+             "--epoch", str(context["epoch"]), "--session-ref", args.session_ref, "--step", step]
+            + (["--frontend"] if args.frontend else [])))
+        invocation = entered["invocation_context"]
+        operations.append({"verb": "gauntlet-step-enter", "step": step})
+        if (development.get("steps") or {}).get(step) == "pending":
+            checkpoint(development, step, "in-progress")
+    except CliFailure as failure:
+        failure.extra = {**(failure.extra or {}), "completed": completed, "operations": operations,
+                         "invocation_context": invocation}
+        raise
+    return {"verdict": "ADVANCED", "work_id": args.work_id, "completed": completed, "entered": step,
+            "invocation_context": invocation, "operations": operations}, EXIT_OK
+
+
 @_gauntlet_authorized
 def phase_turn_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Close a finished phase and hand the step matrix back to the next one.
@@ -7766,6 +7864,14 @@ def build_parser() -> JsonParser:
     attest_parser.add_argument("--authorization", default=None,
                                help="project-relative path to the human-authorization/v1 document (required by ship)")
 
+    advance_parser = subparsers.add_parser("advance")
+    advance_parser.add_argument("root")
+    advance_parser.add_argument("--work-id", required=True)
+    advance_parser.add_argument("--session-ref", required=True)
+    advance_parser.add_argument("--attestation")
+    advance_parser.add_argument("--evidence", action="append", default=[])
+    advance_parser.add_argument("--frontend", action="store_true")
+
     checkpoint_parser = subparsers.add_parser("checkpoint")
     checkpoint_parser.add_argument("root")
     checkpoint_parser.add_argument("--work-id", required=True)
@@ -7847,6 +7953,7 @@ def main(argv: list[str] | None = None) -> int:
             "hotfix-go": hotfix_go_command,
             "attest": attest_command,
             "checkpoint": checkpoint_command,
+            "advance": advance_command,
             "phase-turn": phase_turn_command,
             "status": status_command,
             "preflight": preflight_command,
