@@ -17,6 +17,13 @@
     "test-timeout": 180
   },
   "hotfix_sha256": "894e04a49baf1258e39cdf570e0a46cad6f5bdfb2c0dda1ebc413f89967cb16d",
+  "hotfix_ship": {
+    "base_commit": "29c96681b714ac7ca827e79a5c4ba405795f71f2",
+    "commit": "6ed8c901d51524c2774926d031f736df295b38dd",
+    "integration_branch": "main",
+    "test_output_sha256": "f92b9d7d71a08554b04e38401830b622639ec0a2daacff8356b2b3f84f1bcf68"
+  },
+  "hotfix_ship_sha256": "f236dd586b5c830a240e800d087859e45cebc43e789eb963416c265edff7cdfa",
   "immutable": {
     "base_commit": "29c96681b714ac7ca827e79a5c4ba405795f71f2",
     "base_ref": "origin/cadugevaerd/hotfix-6-0-1",
@@ -40,7 +47,7 @@
   "initial_artifacts": {
     "CONSTITUTION-CHECK.md": "8dcf6f6ca3b604890407e89e6d59ff2725f09a54345a1b692c9b46ac889e3af2",
     "HOTFIX.md": "68e40ab0b36eb391a2170c13773406773d17f1965dcc39a62664e25f0928ec90",
-    "state.json": "a54dc73e2dbf8a44d0bcbdf4a0821fa9352f58d0c223154c9e20930f31bc4c03"
+    "state.json": "e5e22da6bd97e4c95f875c0bbf4e65f4233cc5ebe1d3cdc3fe3ea5378141a3c9"
   },
   "schema": "grill-work-item/v2",
   "scope": {

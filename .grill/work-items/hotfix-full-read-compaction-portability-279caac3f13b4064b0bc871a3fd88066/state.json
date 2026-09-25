@@ -1,11 +1,17 @@
 {
-  "audit_verdict": "PREPARED",
+  "active_phase": null,
+  "audit_verdict": "GO",
+  "milestone_status": "completed",
   "mode": "hotfix",
   "post_ship": [
     "reconcile",
     "full-document-audit"
   ],
-  "status": "prepared",
+  "shipped": {
+    "commit": "6ed8c901d51524c2774926d031f736df295b38dd",
+    "integration_branch": "main"
+  },
+  "status": "complete",
   "version": "1.1.0",
   "work_id": "hotfix-full-read-compaction-portability-279caac3f13b4064b0bc871a3fd88066"
 }
