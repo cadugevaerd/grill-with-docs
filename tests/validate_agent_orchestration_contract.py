@@ -3317,6 +3317,61 @@ class AgentOrchestrationContract(unittest.TestCase):
             saved = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
             self.assertEqual(saved["activities"]["author-resume"]["state"], "ACCEPTED")
             self.assertEqual(saved["resources"][resource_id]["state"], "CLOSED")
+            self.assertEqual(saved["resources"][resource_id]["last_observation"], observed["source_ref"] + ":release")
+
+    def test_failed_specialist_diagnostic_closes_after_release(self):
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            code, created = self.run_cli("init", str(root), "--work-id", "work-x", "--type", "feature",
+                "--slug", "x", "--runtime", "codex", "--session-ref", orchestration_fixture.SESSION,
+                "--skip-backlog")
+            self.assertEqual(code, 0, created)
+            item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+            context_id = item["current_context_id"]
+            manifest = {"files": [], "required_activity_ids": [], "author_activity_ids": [],
+                        "task_binding": None, "human_authorization": None}
+            (root / "manifest.json").write_text(json.dumps(manifest))
+            (root / "diagnostic.md").write_text("worker failed\n")
+            model, effort = agent_orchestration.specialist_pair("codex", "author")
+            launch, show = native_sources(model=model, effort=effort)
+            boundary, _ = self.boundary(probe=(launch, show), after=native_sources(
+                released=True, model=model, effort=effort))
+            observed = boundary.verified(model, effort)
+            activity = agent_orchestration.new_activity(activity_id="author-failure", context_id=context_id,
+                step_id="checklist", activity_scope="cycle", activity_type="author", attempt=1,
+                input_manifest=manifest, policy_sha256=item["policy_sha256"], write_files=[])
+            activity = agent_orchestration.prepare_activity(activity, item["contexts"][context_id])
+            activity = agent_orchestration.record_verified_activity(activity, observed)
+            resource_id, resource = agent_orchestration.session_resource(
+                activity, observed, collected_at="2026-01-01T00:00:00Z")
+            activity, _ = agent_orchestration.dispatch_activity(activity, item["contexts"][context_id])
+            def seed(document):
+                target = document["agent_orchestration"]["work_items"]["work-x"]
+                target["activities"][activity["activity_id"]] = copy.deepcopy(activity)
+                target["resources"][resource_id] = copy.deepcopy(resource)
+                return document
+            store.transact(root, seed)
+            argv = ("gauntlet-activity", str(root), "--work-id", "work-x", "--context-id", context_id,
+                    "--epoch", "1", "--session-ref", orchestration_fixture.SESSION,
+                    "--activity-id", "author-failure", "--step", "checklist", "--scope", "cycle",
+                    "--kind", "author", "--phase", "accept", "--input-manifest", "manifest.json",
+                    "--diagnostic", "diagnostic.md")
+            code, failed = self.run_cli(*argv)
+            self.assertEqual((code, failed["verdict"]), (2, "FAILED"), failed)
+            saved = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+            self.assertEqual(saved["resources"][resource_id]["state"], "CLOSE_PENDING")
+            (root / "open.json").write_text(json.dumps(observed))
+            code, refused = self.run_cli(*argv, "--observation", "open.json")
+            self.assertEqual((code, refused.get("code")), (2, "SESSION-CLOSE-UNPROVEN"), refused)
+            closed = boundary.close(observed)
+            (root / "closed.json").write_text(json.dumps(closed))
+            code, released = self.run_cli(*argv, "--observation", "closed.json")
+            self.assertEqual((code, released["verdict"]), (2, "FAILED-RELEASED"), released)
+            saved = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+            self.assertEqual(saved["activities"]["author-failure"]["state"], "FAILED")
+            self.assertEqual(saved["resources"][resource_id]["state"], "CLOSED")
+            code, reused = self.run_cli(*argv, "--observation", "closed.json")
+            self.assertEqual((code, reused["verdict"]), (2, "FAILED-RELEASED-REUSED"), reused)
 
     def test_specialist_admission(self):
         activity, bootstrap, payload, observed, closed, context = self.accepted_specialist("author-plan")

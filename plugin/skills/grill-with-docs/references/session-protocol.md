@@ -1,4 +1,4 @@
-# Protocolo de sessão v9.1.0
+# Protocolo de sessão v9.2.0
 
 Frases com **deve**, **nunca** e **somente** são normativas. A inicialização cria o workflow/Constituição quando ausentes; depois do init, os artefatos são read-only.
 
@@ -60,10 +60,17 @@ reaproveitado durante a revalidação, sem inventar execução de skill ou nova 
 
 Resolver Git root e worktree dedicada. Apresentar recomendação Sol no Codex ou Opus no
 Claude sem trocar modelo. Confirmar bootstrap e autoridade observados antes de init/retomada.
+A sessão GWD começa com `orca orchestration worker-start --worktree current --agent <runtime> --model <modelo> --effort <esforço> --run <run Orca> --spec <brief>` emitido pelo coordenador Orca. O `dispatchId` retornado é o `--session-ref orca:<dispatchId>` do líder. O terminal do coordenador fica aberto. Sem Dispatch supervisionado e apresentação comprovada, não iniciar trabalho GWD novo.
 A Constituição é no-clobber no init e read-only depois; evidência ausente ou stale bloqueia.
 O líder invoca cada canonical skill na sessão ativa: não usar subprocessos de agentes
 para executar macroetapas. Antes da invocação, `gauntlet-step-enter` admite o contexto.
 Especialistas não escrevem `.grill/` ou `.specify/reports/` nem fecham macroetapas.
+
+Para cada especialista, persista resultado ou diagnóstico e confirme o `worker_done` aceito do Dispatch exato. Depois execute `worker-release --dispatch`, confira o `worker-show` do mesmo Dispatch (archive capturado, saída e identidade preservadas) e só então passe a observação de fechamento para `gauntlet-activity accept`. Timeout, settlement recusado, host indisponível ou identidade divergente deixam `CLOSE_PENDING`; recupere a mesma operação por read-back antes de qualquer novo release. Não use `terminal close`.
+
+Para cada worker de implementação, registre o Dispatch no recurso de sessão com `gauntlet-worker-session --phase register` após `worker-start`; após `gauntlet-worker-terminal`, resultado salvo e `worker_done` aceito, chame `--phase release --result PATH` (relativo ao worktree do worker). A operação persiste `CLOSE_PENDING`, chama `worker-release`, confirma o read-back e grava `CLOSED`. `UNKNOWN` preserva a sessão e bloqueia convergência e substituição; repetir o comando reconcilia o mesmo Dispatch sem novo release. O worktree segue o cleanup Git após integração. Para inventariar Dispatches antigos, leia `orca orchestration worker-list --run <run Orca> --terminal-state reclaimable --json`, correlacione cada Task/Dispatch com o worker GWD e registre somente os que Orca comprova como settlement aceito e identidade exata; o registro tardio com `--phase register` não reexecuta trabalho.
+
+Ao concluir `PLAN_ONLY_STOP`, hotfix ou ship, o líder entrega o relatório final e envia `worker_done` no próprio Dispatch. O coordenador aceita o settlement, libera com `worker-release --dispatch <líder>`, confere `worker-show` do mesmo Dispatch e encerra o turno do coordenador apenas após registrar o fechamento. Se houver retomada, `gauntlet-prepare-switch --released-source` reutiliza a prova de líder liberado na continuidade existente. Pausa mantém o Dispatch vivo. Release incerto permanece pendente para a mesma operação; o terminal do coordenador permanece aberto.
 
 Para os verbos, argumentos, recusas e recovery completos, leia antes da operação a seção
 correspondente de [operações de sessão](session-operations.md):

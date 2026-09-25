@@ -1341,6 +1341,7 @@ class Hygiene(Base):
             # stall remediation are the same closed coordinator-only surface.
             "gauntlet-progress-record": "gauntlet_progress_record_command",
             "gauntlet-worker-terminal": "gauntlet_worker_terminal_command",
+            "gauntlet-worker-session": "gauntlet_worker_session_command",
             "gauntlet-remediate": "gauntlet_remediate_command",
             # FASE-004 (T015): wave convergence is the same closed
             # coordinator-only surface, proven by the same admission boundary.

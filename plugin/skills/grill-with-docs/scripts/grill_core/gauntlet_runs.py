@@ -506,6 +506,31 @@ def cleanup_projection(root: str | Path, work_id: str, *, snapshot: Any = None) 
     return result
 
 
+def require_worker_session_released(root: str | Path, work_id: str, run_id: str,
+                                    worker_id: str) -> None:
+    """Fence integration/replacement on the exact Orca worker's saved release."""
+    snapshot = store.read_snapshot(root, required=False)
+    item = (snapshot.document.get("agent_orchestration", {}).get("work_items", {}).get(work_id)
+            if snapshot else None)
+    if not isinstance(item, dict):
+        return
+    context = item.get("contexts", {}).get(item.get("current_context_id"), {})
+    if not str(context.get("leader", {}).get("session_ref", "")).startswith("orca:"):
+        return  # Historical/non-Orca runs have no supervised Dispatch.
+    resources = [resource for resource in item.get("resources", {}).values()
+                 if resource.get("kind") == "session"
+                 and resource.get("scheduler_run_id") == run_id
+                 and resource.get("worker_id") == worker_id]
+    if len(resources) != 1 or resources[0].get("state") != "CLOSED" or not resources[0].get("result_acceptance_ref"):
+        _fail("SESSION-CLOSE-UNPROVEN", f"worker {run_id}/{worker_id} has no confirmed Orca release")
+    resource = resources[0]
+    if (resource.get("wave_id") != _worker_wave_id(root, work_id, run_id, worker_id)
+            or not resource.get("identity", {}).get("owner_dispatch")
+            or not any(receipt.get("ref") == resource.get("last_observation")
+                       for receipt in resource.get("evidence_manifest", {}).get("receipts", []))):
+        _fail("SESSION-CLOSE-UNPROVEN", f"worker {run_id}/{worker_id} release evidence is incomplete")
+
+
 def continuity_worker_quiescence(runs: Mapping[str, Any]) -> tuple[list[str], list[str]]:
     """Report durable worker activity without treating a lease timeout as exit."""
     active: list[str] = []
@@ -2603,6 +2628,7 @@ def remediate_node(root: str | Path, work_id: str, run_id: str, worker_id: str, 
         if failure_class not in FAILURE_CLASSES:
             _fail("FAILURE-CLASS-NOT-TRANSIENT", "worker failure is not classified as transient")
 
+    require_worker_session_released(root, work_id, run_id, worker_id)
     node_id = worker.get("node_id")
     grant = worker.get("grant")
     if not isinstance(grant, Mapping):
@@ -2645,6 +2671,8 @@ def cleanup_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
     lease = worker.get("lease")
     if not _same_workspace_identity(workspace, expected):
         return {"verdict": "PRESERVED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
+    if worker.get("state") in {"TERMINAL", "CLEANING", "CLEANED"}:
+        require_worker_session_released(root, work_id, run_id, worker_id)
     if worker.get("state") == "CLEANED":
         return {"verdict": "REUSED", "work_id": work_id, "run_id": run_id, "worker_id": worker_id}
     predicates = worker.get("state") == "TERMINAL" and all(
@@ -3008,6 +3036,8 @@ def converge_wave(root: str | Path, work_id: str, run_id: str, dag_path: Any, wa
         if entry is None or entry[1].get("state") != "TERMINAL" or not isinstance(entry[1].get("workspace"), Mapping):
             continue
         mergeable.append((node_id, entry[0], entry[1]))
+    for _, worker_id, _ in mergeable:
+        require_worker_session_released(root, work_id, run_id, worker_id)
     branch_heads = {
         node_id: _branch_head(root, worker["workspace"]["branch"]) for node_id, _, worker in mergeable
     }

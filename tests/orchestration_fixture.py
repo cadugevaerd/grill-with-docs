@@ -133,10 +133,14 @@ def offline_leader(module):
                 "sha256:" + hashlib.sha256(REFERENCE.read_bytes()).hexdigest()}]
             policy_path.write_bytes(pack(policy))
         native_which = shutil.which
+        # Legacy scheduler fixtures exercise Git/receipt behavior with an
+        # offline leader. Orca release is covered by validate_worker_session_contract.
+        runs = module.grill_core_module("gauntlet_runs")
         with mock.patch.object(shutil, "which", side_effect=lambda name, *args, **kwargs:
                 (native_which(name, *args, **kwargs) or "/offline/bin/cat") if name == "cat" else native_which(name, *args, **kwargs)), \
                 mock.patch.object(module, "ASSETS", assets), mock.patch.object(module, "_leader_boundary",
-                side_effect=lambda *args: boundary(module, *args)[0]):
+                side_effect=lambda *args: boundary(module, *args)[0]), \
+                mock.patch.object(runs, "require_worker_session_released"):
             yield
 
 

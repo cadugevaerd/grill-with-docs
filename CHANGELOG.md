@@ -1,5 +1,10 @@
 # Changelog
 
+## 9.2.0
+
+- Sessões de workers GWD agora são vinculadas ao Dispatch Orca e exigem resultado salvo, settlement aceito e release confirmado antes de convergência ou substituição. Release incerto fica pendente para read-back da mesma operação; cleanup Git permanece posterior à integração.
+- O protocolo explicita o fechamento de especialistas e do líder supervisionado pelo coordenador, preservando a sessão em pausas. Diagnósticos de especialistas agora deixam a sessão em `CLOSE_PENDING` até o read-back do release; o resultado permanece `FAILED`.
+
 ## 9.1.0
 
 - Feature: verbo `advance ROOT --work-id ID --session-ref REF [--attestation BUNDLE --evidence PATH]`. Numa chamada fecha a etapa corrente (`checkpoint complete`), garante a classificação da seguinte (`decide --kind step-assessment --apply` quando ela falta), admite a entrada (`gauntlet-step-enter`) e a abre (`checkpoint in-progress`). Antes eram quatro a seis chamadas por etapa.
