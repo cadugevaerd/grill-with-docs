@@ -840,22 +840,8 @@ class CheckpointAttestationWiringContract(WiringHarness):
             "--supersedes-attestation", receipt.relative_to(self.root), "--reason", "cedo demais")
         self.assertEqual((process.returncode, payload["code"]), (2, "SUPERSEDE-STEP-NOT-COMPLETE"))
 
-    def test_an_accepted_supersession_records_what_it_replaced_and_why(self) -> None:
-        """The history is the whole point: without it this is just a rewrite.
-
-        The replaced receipt has to remain readable afterwards, carrying the
-        stated reason and the execution that took its place -- otherwise an
-        audit sees a receipt that changed and cannot tell a correction from
-        tampering, which is the distinction the chain exists to sustain.
-        """
-        accepted = self._close_specify()
-        replaced = json.loads(accepted.read_text())["step_output"]
-        corrected = self.root / "corrigido.md"
-        corrected.write_text("artefato corrigido depois do selo\n", encoding="utf-8")
-
-        # Minting a new V4 receipt now requires an immutable activation. Bring
-        # this legacy fixture through the public metadata/workflow migrations;
-        # its already accepted V3 receipt remains untouched.
+    def _activate_gauntlet(self) -> None:
+        """Bring the V3 fixture to an activated V4 Gauntlet through the public migrations."""
         process, payload = invoke("migrate-v3", self.root, "--work-id", "wa", "--apply")
         self.assertEqual((process.returncode, payload["verdict"]), (0, "APPLIED"), payload)
         migrator = GRILL_CORE / "workflow_v4.py"
@@ -878,6 +864,24 @@ class CheckpointAttestationWiringContract(WiringHarness):
             "gauntlet-init", self.root, "--work-id", "wa", "--max-workers", "1",
             "--runtime", "claude")
         self.assertEqual((process.returncode, payload["verdict"]), (0, "ACTIVATED"), payload)
+
+    def test_an_accepted_supersession_records_what_it_replaced_and_why(self) -> None:
+        """The history is the whole point: without it this is just a rewrite.
+
+        The replaced receipt has to remain readable afterwards, carrying the
+        stated reason and the execution that took its place -- otherwise an
+        audit sees a receipt that changed and cannot tell a correction from
+        tampering, which is the distinction the chain exists to sustain.
+        """
+        accepted = self._close_specify()
+        replaced = json.loads(accepted.read_text())["step_output"]
+        corrected = self.root / "corrigido.md"
+        corrected.write_text("artefato corrigido depois do selo\n", encoding="utf-8")
+
+        # Minting a new V4 receipt now requires an immutable activation. Bring
+        # this legacy fixture through the public metadata/workflow migrations;
+        # its already accepted V3 receipt remains untouched.
+        self._activate_gauntlet()
 
         process, payload = invoke(
             "attest", self.root, "--work-id", "wa", "--step", "specify",
@@ -929,6 +933,97 @@ class CheckpointAttestationWiringContract(WiringHarness):
         self.assertEqual(development["steps"]["specify"], "complete",
                          "a supersession is not a transition: the step never reopened")
         self.assertTrue(accepted.exists(), "the replaced bundle must survive on disk")
+
+    def _state(self) -> dict:
+        return json.loads((self.root / ".grill/work-items/wa/state.json").read_text(encoding="utf-8"))["development"]
+
+    def _attest_and_close(self, step: str, artifact: str, out: str) -> None:
+        process, payload = invoke("checkpoint", self.root, "--work-id", "wa", "--step", step,
+                                  "--state", "in-progress", "--reason", "start")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "UPDATED"), payload)
+        (self.root / artifact).write_text(f"{step} artefact\n", encoding="utf-8")
+        process, payload = invoke("attest", self.root, "--work-id", "wa", "--step", step,
+                                  "--artifact", artifact, "--out", out)
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "ATTESTED"), payload)
+        process, payload = invoke("checkpoint", self.root, "--work-id", "wa", "--step", step, "--state", "complete",
+                                  "--evidence", artifact, "--attestation", out, "--reason", "done")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "UPDATED"), payload)
+
+    def _stale_chain(self) -> None:
+        """specify, plan and checklist closed; specify then superseded, so plan and checklist go stale."""
+        accepted = self._close_specify()
+        self._activate_gauntlet()
+        self._attest_and_close("plan", "plan.md", "receipts/plan.json")
+        self._attest_and_close("checklist", "checklist.md", "receipts/checklist.json")
+        (self.root / "corrigido.md").write_text("artefato corrigido\n", encoding="utf-8")
+        process, payload = invoke("attest", self.root, "--work-id", "wa", "--step", "specify",
+                                  "--artifact", "corrigido.md", "--out", "receipts/specify-r2.json",
+                                  "--supersedes", accepted.relative_to(self.root))
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "ATTESTED"), payload)
+        process, payload = invoke(
+            "checkpoint", self.root, "--work-id", "wa", "--step", "specify", "--state", "complete",
+            "--evidence", "corrigido.md", "--attestation", "receipts/specify-r2.json",
+            "--supersedes-attestation", accepted.relative_to(self.root), "--reason", "corrigido")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "UPDATED"), payload)
+        self.assertEqual(self._state()["chain_stale"], ["plan", "checklist"])
+
+    def test_rechain_mints_every_stale_step_and_clears_the_ledger(self) -> None:
+        self._stale_chain()
+        (self.root / "plan.md").write_text("mudou depois do selo\n", encoding="utf-8")
+        process, payload = invoke("attest", self.root, "--work-id", "wa", "--rechain", "--out", "receipts/rechain")
+        self.assertEqual((process.returncode, payload["code"]), (2, "RECHAIN-OUTPUT-CHANGED"), payload)
+        self.assertFalse((self.root / "receipts/rechain").exists(), "a refused re-chain mints nothing")
+        (self.root / "plan.md").write_text("plan artefact\n", encoding="utf-8")
+
+        process, payload = invoke("attest", self.root, "--work-id", "wa", "--rechain", "--out", "receipts/rechain")
+        self.assertEqual((process.returncode, payload["verdict"]), (0, "RECHAINED"), payload)
+        minted = payload["minted"]
+        self.assertEqual([(m["step"], m["supersedes"], m["execution_round"]) for m in minted],
+                         [("plan", "receipts/plan.json", 2), ("checklist", "receipts/checklist.json", 2)])
+        checklist = json.loads((self.root / minted[1]["attestation"]).read_text())["step_output"]
+        self.assertEqual(checklist["dependency_outputs"], [minted[0]["predicted_output"]])
+        for entry in minted:
+            process, payload = invoke(
+                "checkpoint", self.root, "--work-id", "wa", "--step", entry["step"], "--state", "complete",
+                "--evidence", entry["artifact"], "--attestation", entry["attestation"],
+                "--supersedes-attestation", entry["supersedes"], "--reason", "re-chain")
+            self.assertEqual((process.returncode, payload["verdict"]), (0, "UPDATED"), payload)
+            self.assertEqual(self._state()["attested_outputs"][entry["step"]], entry["predicted_output"],
+                             "the prediction is exactly what the judge records")
+        self.assertEqual(self._state()["chain_stale"], [])
+
+    def test_rechain_refuses_ship_without_authorization_and_an_unknown_prior(self) -> None:
+        self._close_specify()
+        path = self.root / ".grill/work-items/wa/state.json"
+        state = json.loads(path.read_text(encoding="utf-8"))
+        state["development"]["chain_stale"] = ["ship"]
+        path.write_text(json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        process, payload = invoke("attest", self.root, "--work-id", "wa", "--rechain", "--out", "receipts/rechain")
+        self.assertEqual((process.returncode, payload["code"]), (2, "HUMAN-AUTHORIZATION-MISSING"), payload)
+        state["development"]["chain_stale"] = ["plan"]
+        path.write_text(json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        process, payload = invoke("attest", self.root, "--work-id", "wa", "--rechain", "--out", "receipts/rechain")
+        self.assertEqual((process.returncode, payload["code"]), (2, "RECHAIN-PRIOR-UNKNOWN"), payload)
+
+    def test_rechain_stops_at_a_stale_assessment_and_reports_what_it_minted(self) -> None:
+        self._stale_chain()
+        module = WORKSPACE_MODULE
+        real = module._mint_one
+        def mint(args, step, *rest):
+            if step == "checklist":
+                raise module.CliFailure(2, "BLOCKED", "STEP-ASSESSMENT-STALE", "checklist.md")
+            return real(args, step, *rest)
+        output = io.StringIO()
+        with orchestration_fixture.offline_leader(module), mock.patch.object(module, "_mint_one", side_effect=mint), \
+                mock.patch.object(sys, "path", [str(SCRIPTS), *sys.path]), \
+                contextlib.redirect_stdout(output):
+            code = module.main(["attest", str(self.root), "--work-id", "wa", "--rechain", "--out", "receipts/rechain",
+                                "--session-ref", orchestration_fixture.SESSION])
+        payload = json.loads(output.getvalue())
+        self.assertEqual((code, payload["code"]), (2, "STEP-ASSESSMENT-STALE"), payload)
+        self.assertEqual([m["step"] for m in payload["minted"]], ["plan"])
+        self.assertEqual(sorted(p.name for p in (self.root / "receipts/rechain").iterdir()), ["plan-r2.json"])
+        self.assertEqual(self._state()["chain_stale"], ["plan", "checklist"], "minting never advances the state")
 
     def test_an_accepted_supersession_needs_a_stated_reason(self) -> None:
         """An unexplained replacement is the thing this mechanism is against."""

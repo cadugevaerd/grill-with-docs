@@ -1,5 +1,33 @@
 # Changelog
 
+## 9.1.0
+
+- Feature: verbo `advance ROOT --work-id ID --session-ref REF [--attestation BUNDLE --evidence PATH]`. Numa chamada fecha a etapa corrente (`checkpoint complete`), garante a classificação da seguinte (`decide --kind step-assessment --apply` quando ela falta), admite a entrada (`gauntlet-step-enter`) e a abre (`checkpoint in-progress`). Antes eram quatro a seis chamadas por etapa.
+  - Cada efeito continua sendo uma operação própria, com id determinístico que inclui o tamanho do audit. Assim, depois de um `phase-turn` o mesmo passo recebe id novo, em vez de um `REUSED` silencioso.
+  - Uma falha no meio devolve as operações já concluídas, e rodar de novo retoma de onde parou.
+  - Continuam fora e humanos: aprovação da prévia, autorização de ship, retomada de `blocked` (`STEP-BLOCKED`), `phase-turn` e revisão com `CHANGES_REQUIRED`. Assessment stale propaga e nunca é sobrescrito; Jev abaixo do limiar devolve `ASSESSMENT-REQUIRED`.
+- Feature: `attest --rechain` recunha numa chamada todos os passos em `chain_stale` cujo artefato não mudou, encadeando cada bundle no output previsto do anterior, e lista os bundles para `checkpoint --supersedes-attestation`. O checkpoint continua separado.
+  - Recusas: `RECHAIN-OUTPUT-CHANGED`, `RECHAIN-PRIOR-UNKNOWN` e `HUMAN-AUTHORIZATION-MISSING` (ship). Tudo é validado antes do primeiro byte gravado.
+  - Para no primeiro `STEP-ASSESSMENT-STALE`.
+  - `accepted_output` virou função compartilhada entre o juiz e o rechain.
+  - `--out` passa a ser um diretório quando se usa `--rechain`.
+- Feature: `decide --kind step-assessment` sem `--file` usa a evidência da etapa anterior completa. Recusa `STEP-ASSESSMENT-EVIDENCE-STALE` se algum arquivo mudou de hash e `STEP-ASSESSMENT-EVIDENCE-MISSING` se a etapa anterior não tem evidência.
+- Feature: `gauntlet-activity` preenche `assessment_sha256` quando o manifesto não traz, da mesma forma em prepare, dispatch e accept. Um valor presente e divergente continua recusando. Juntar prepare e dispatch ficou de fora de propósito: para especialistas, um crash deixaria uma sessão órfã sem cerca.
+- Fix: o log do Jev saiu de `.grill/jev/decisions.jsonl`, um arquivo não rastreado que fazia o `reconcile` recusar `DIRTY-WORKTREE`, para `<git-common-dir>/grill-telemetry/jev-decisions.jsonl`.
+- Feature: `status` avisa (`warnings[]` no JSON, nota no markdown) sobre stash que guarda arquivos não rastreados, porque o commit sem pai muda o project id e o `gauntlet-run` recusa `PROJECT-IDENTITY-DIVERGENCE`.
+- Test: `tests/run_validators.py --jobs N` roda a suíte em paralelo (0 = uma por CPU), com os validadores mais lentos primeiro e a classe do `workspace` dividida em seis lotes. Completa: cerca de 24,7 min em série → cerca de 2,5 min com 12 jobs. O serial continua padrão no CI. Os validadores converge e scheduler usam um repositório pronto, construído uma vez por processo e restaurado no mesmo caminho: 175 → 94 s e 120 → 39 s.
+- Mudança: `status` não aborta mais o repositório inteiro por causa de um bundle ilegível (sem `WORK-ITEM.json`, JSON malformado, UTF-8 inválido, Constituição bloqueada). O bundle vira uma linha `blocked` própria, com o código e o caminho (`fingerprint: unreadable:<código>`), e o veredito global continua `BLOCKED`. Recusas de segurança (`SYMLINK-REJECTED`, `UNSAFE-FILE`, `PATH-ESCAPE`, `EVIDENCE-NOT-REGULAR`) ainda abortam.
+- Repositório: removida a skill `speckit-verify-review-ship-s` (em `.claude/skills` e `.agents/skills`) e suas entradas no registry do Spec Kit. Ela era um alias idêntico a `-ship`. O manifesto da extensão (`extension.yml`) continua intocado, porque o hash dele está selado no registry e nos catálogos. Um `specify extension enable/update` pode rematerializar o alias.
+- Telemetria de recusas foi testada e descartada: recusa não pode escrever nada, nem em `.git`, e 132 testes de contrato fixam isso.
+
+### Incluído desde a 9.0.1 (não publicada separadamente)
+
+- Perf: o JCS (RFC 8785) serializa strings sem `"`, `\` ou caractere de controle por concatenação direta. Antes percorria caractere por caractere em Python puro. O hash do journal real deste repositório (6.693 registros) caiu de 0,42 s para 0,09 s, com bytes idênticos ao algoritmo anterior.
+- Perf: validação memoizada por processo, com chave no sha256 dos bytes lidos de `orchestrator.json` e `events.jsonl`. Os mesmos bytes deixam de ser revalidados várias vezes no mesmo comando (um `checkpoint` tardio validava o snapshot 9 vezes). O witness `events-head` continua sendo conferido a cada leitura, e nada é persistido.
+- Perf: `git_common_dir` guarda por processo as respostas de `rev-parse`. O `status` disparava duas execuções de git por work item para as mesmas worktrees.
+- Fix: o `_settled` da 9.0.0 relia também "store não inicializado" e erros estruturais, somando 0,2 s de espera ao caminho sem store e cerca de 4 s até um store corrompido falhar. Agora só relê as janelas transitórias de um writer: head atrás do journal, head ausente, linha ainda sendo escrita e `STATE_DIVERGENCE`. A leitura sem store caiu de 0,205 s para 0,003 s.
+- Medido neste repositório (melhor de 3): `gauntlet-status` 1,35 → 0,61 s; `status --current-worktree` 1,11 → 0,64 s; `status .` 3,22 → 2,45 s.
+
 ## 9.0.0
 
 - Breaking: o `goal.md` passa a ser gerenciado pelo plugin e todo `init` o reescreve com o template instalado. Antes, um `goal.md` existente nunca era tocado (`REUSED`/`PRESERVED`), e projetos criados na 5.x ficavam presos no texto daquela época. Agora:

@@ -2,6 +2,7 @@
 """Contract smoke matrix for the persistent eleven-step checkpoint ledger."""
 import orchestration_fixture
 import base64, concurrent.futures, hashlib, json, os, subprocess, sys, tempfile, unittest
+from unittest import mock
 from pathlib import Path
 REPO=Path(__file__).resolve().parents[1]
 PLUGIN=REPO/'plugin'
@@ -140,6 +141,96 @@ class CheckpointContract(unittest.TestCase):
   self.assertNotIn('workflow_sha256',checkpoint); self.assertNotIn('constitution_sha256',checkpoint)
   self.assertEqual(checkpoint['context_inputs_sha256'],item['contexts'][item['current_context_id']]['inputs_sha256'])
   self.assertEqual(checkpoint['origin_metadata_sha256'],item['origin']['metadata_sha256'])
+
+class AdvanceContract(unittest.TestCase):
+ """`advance` composes checkpoint, assessment and step-enter; every gate still fires."""
+ setUp=CheckpointContract.setUp; tearDown=CheckpointContract.tearDown
+ def call(self,step,state,**kw):
+  # A fresh id per call: revisiting a step (blocked -> in-progress) is a new transition.
+  a=['checkpoint',self.r,'--work-id','wx','--step',step,'--state',state,'--operation-id',os.urandom(8).hex(),'--session-ref',orchestration_fixture.SESSION]
+  for x in kw.get('evidence',[]): a += ['--evidence',x]
+  if 'reason' in kw: a += ['--reason',kw['reason']]
+  return run(*a)
+ def advance(self,*extra,patches=()):
+  import contextlib, io, grill_workspace
+  out=io.StringIO()
+  with contextlib.ExitStack() as stack:
+   stack.enter_context(orchestration_fixture.offline_leader(grill_workspace)); stack.enter_context(contextlib.redirect_stdout(out))
+   for target,name,value in patches: stack.enter_context(mock.patch.object(target,name,value))
+   code=grill_workspace.main(['advance',str(self.r),'--work-id','wx','--session-ref',orchestration_fixture.SESSION,*extra])
+  return code,json.loads(out.getvalue())
+ def steps(self): return json.loads((self.r/'.grill/work-items/wx/state.json').read_text())['development']['steps']
+ def once(self,real,fail):
+  calls=[]
+  def wrapped(args):
+   if fail(args) and not calls:
+    calls.append(args); raise grill_workspace_module().CliFailure(2,'BLOCKED','INJECTED',args.step)
+   return real(args)
+  return wrapped
+ def test_advance_enters_completes_and_resumes_after_each_partial_failure(self):
+  gw=grill_workspace_module()
+  code,p=self.advance(); self.assertEqual((code,p['verdict'],p['completed'],p['entered']),(0,'ADVANCED',None,'specify'),p)
+  self.assertEqual([o['verb'] for o in p['operations']],['gauntlet-step-enter','checkpoint'])
+  code,p=self.advance('--evidence','e'); self.assertEqual((code,p['completed'],p['entered']),(0,'specify','plan'),p)
+  # step-enter refused after the completion: the completion is reported, and a re-run resumes at the entry.
+  code,p=self.advance('--evidence','e',patches=[(gw,'gauntlet_step_enter_command',self.once(gw.gauntlet_step_enter_command,lambda a:True))])
+  self.assertEqual((code,p['code'],p['completed']),(2,'INJECTED','plan'),p)
+  self.assertEqual([(o['step'],o['state'],o['verdict']) for o in p['operations']],[('plan','complete','UPDATED')])
+  self.assertEqual((self.steps()['plan'],self.steps()['checklist']),('complete','pending'))
+  code,p=self.advance('--evidence','e'); self.assertEqual((code,p['completed'],p['entered']),(0,None,'checklist'),p)
+  # the opening checkpoint refused: re-running enters again and opens it.
+  code,p=self.advance('--evidence','e',patches=[(gw,'checkpoint_command',self.once(gw.checkpoint_command,lambda a:a.state=='in-progress'))])
+  self.assertEqual((code,p['code'],p['completed']),(2,'INJECTED','checklist'),p)
+  self.assertIsNotNone(p['invocation_context'])
+  code,p=self.advance('--evidence','e'); self.assertEqual((code,p['entered']),(0,'tasks'),p); self.assertEqual(self.steps()['tasks'],'in-progress')
+ def test_crash_after_the_state_write_needs_recovery_not_a_silent_retry(self):
+  gw_store=grill_workspace_module().grill_core_module('store'); real=gw_store.transact_checkpoint_with_content
+  def crash(*a,**k): return real(*a,**k,fault=lambda point: (_ for _ in ()).throw(RuntimeError('crash')) if point=='after-state' else None)
+  code,p=self.advance(patches=[(gw_store,'transact_checkpoint_with_content',crash)]); self.assertEqual(code,2,p)
+  # The interrupted transition is pending: a retry refuses instead of writing over it.
+  code,p=self.advance('--evidence','e'); self.assertEqual((code,p.get('code')),(2,'STATE_DIVERGENCE'),p)
+  gw_store.recover_pending_transition(self.r)
+  code,p=self.advance('--evidence','e'); self.assertEqual((code,p['completed'],p['entered']),(0,'specify','plan'),p)
+ def test_a_phase_turn_gives_the_same_step_a_new_operation_id(self):
+  code,first=self.advance(); self.assertEqual(code,0,first)
+  self.assertEqual(self.call('specify','complete',evidence=['e']).returncode,0)
+  for s in STEPS[1:]: self.call(s,'in-progress'); self.assertEqual(self.call(s,'complete',evidence=['e']).returncode,0,s)
+  code,p=self.advance(); self.assertEqual((code,p['verdict']),(0,'DONE'),p)
+  turned=run('phase-turn',self.r,'--work-id','wx','--reason','next phase'); self.assertEqual(turned.returncode,0,turned.stdout)
+  code,second=self.advance(); self.assertEqual((code,second['entered']),(0,'specify'),second)
+  self.assertEqual(second['operations'][-1]['verdict'],'UPDATED')
+  self.assertNotEqual(first['operations'][-1]['operation_id'],second['operations'][-1]['operation_id'])
+ def test_assessment_stale_is_never_overwritten_and_missing_goes_to_jev(self):
+  gw=grill_workspace_module(); decide=mock.Mock(return_value=({'verdict':'OK','written':None},0))
+  stale=mock.Mock(side_effect=gw.CliFailure(2,'BLOCKED','STEP-ASSESSMENT-STALE','spec.md'))
+  code,p=self.advance(patches=[(gw,'_step_assessment',stale),(gw,'decide_command',decide)])
+  self.assertEqual((code,p['code']),(2,'STEP-ASSESSMENT-STALE'),p); decide.assert_not_called(); self.assertEqual(self.steps()['specify'],'pending')
+  missing=mock.Mock(side_effect=gw.CliFailure(2,'BLOCKED','STEP-ASSESSMENT-INVALID','x'))
+  code,p=self.advance(patches=[(gw,'_step_assessment',missing),(gw,'decide_command',decide)])
+  self.assertEqual((code,p['verdict']),(2,'ASSESSMENT-REQUIRED'),p); self.assertEqual(self.steps()['specify'],'pending')
+  asked=decide.call_args.args[0]; self.assertEqual((asked.kind,asked.step,asked.file,asked.apply),('step-assessment','specify',None,True))
+  written=mock.Mock(side_effect=[gw.CliFailure(2,'BLOCKED','STEP-ASSESSMENT-INVALID','x'),None,None])
+  decide.return_value=({'verdict':'OK','written':'step-inputs/specify.json'},0)
+  code,p=self.advance(patches=[(gw,'_step_assessment',written),(gw,'decide_command',decide)])
+  self.assertEqual((code,p['entered']),(0,'specify'),p); self.assertEqual(p['operations'][0]['verb'],'decide')
+ def test_human_gates_stay_outside(self):
+  gw=grill_workspace_module()
+  self.call('specify','in-progress'); self.call('specify','blocked',reason='wait')
+  code,p=self.advance('--evidence','e'); self.assertEqual((code,p['code']),(2,'STEP-BLOCKED'),p)
+  self.call('specify','in-progress'); self.call('specify','complete',evidence=['e'])
+  for s in ('plan','checklist'): self.call(s,'in-progress'); s!='checklist' and self.call(s,'complete',evidence=['e'])
+  refuse=mock.Mock(side_effect=gw.CliFailure(2,'BLOCKED','PREVIEW-APPROVAL-REQUIRED','visual state is PENDING_APPROVAL'))
+  code,p=self.advance('--evidence','e',patches=[(gw,'_require_visual_gate',refuse)])
+  self.assertEqual((code,p['code'],p['completed']),(2,'PREVIEW-APPROVAL-REQUIRED','checklist'),p); self.assertEqual(self.steps()['tasks'],'pending')
+  for s in STEPS[3:-1]: self.call(s,'in-progress'); self.call(s,'complete',evidence=['e'])
+  self.call('ship','in-progress'); path=self.r/'.grill/work-items/wx/state.json'; state=json.loads(path.read_text())
+  state['development']['chain_stale']=['analyze']; path.write_text(json.dumps(state,sort_keys=True,indent=2)+'\n')
+  code,p=self.advance('--evidence','e'); self.assertEqual((code,p['code'],p['operations']),(2,'CHAIN-STALE',[]),p)
+  self.assertEqual(self.steps()['ship'],'in-progress')
+
+def grill_workspace_module():
+ import grill_workspace
+ return grill_workspace
 
 class VisualGateContract(unittest.TestCase):
  def test_visual_gate_requires_current_approval(self):

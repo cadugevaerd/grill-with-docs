@@ -251,6 +251,15 @@ def build_rebound_v3_repository(
     store.transact(root, seed)
 
 
+def build_active_run(root: Path, **options: Any) -> str:
+    """Rebound, activated work item plus one admitted run; returns the run id."""
+    build_rebound_v3_repository(root, **options)
+    process, payload = invoke(WORKSPACE, "gauntlet-run", root, "--work-id", WORK_ID)
+    if process.returncode != 0 or payload.get("verdict") not in {"RUN-CREATED", "RUN-REUSED"} or process.stderr:
+        raise AssertionError((process.returncode, payload, process.stderr))
+    return payload["run_id"]
+
+
 class GauntletSchedulerContractHarness(unittest.TestCase):
     """Public FASE-003 scheduler contract.
 
@@ -262,8 +271,7 @@ class GauntletSchedulerContractHarness(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.root = Path(self.temporary.name) / "repo"
-        build_rebound_v3_repository(self.root)
+        self.root, _ = orchestration_fixture.golden_repo(f"{__file__}:scheduler", build_rebound_v3_repository)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -590,12 +598,8 @@ class GauntletDagAndWaveContractHarness(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.root = Path(self.temporary.name) / "repo"
-        build_rebound_v3_repository(self.root, max_workers=5)
-        process, payload = invoke(WORKSPACE, "gauntlet-run", self.root, "--work-id", WORK_ID)
-        if process.returncode != 0 or payload.get("verdict") not in {"RUN-CREATED", "RUN-REUSED"} or process.stderr:
-            raise AssertionError((process.returncode, payload, process.stderr))
-        self.run_id = payload["run_id"]
+        self.root, self.run_id = orchestration_fixture.golden_repo(
+            f"{__file__}:run-cap5", lambda root: build_active_run(root, max_workers=5))
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -929,12 +933,8 @@ class GauntletProgressTerminationRemediationHarness(unittest.TestCase):
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.root = Path(self.temporary.name) / "repo"
-        build_rebound_v3_repository(self.root, max_workers=5)
-        process, payload = invoke(WORKSPACE, "gauntlet-run", self.root, "--work-id", WORK_ID)
-        if process.returncode != 0 or payload.get("verdict") not in {"RUN-CREATED", "RUN-REUSED"} or process.stderr:
-            raise AssertionError((process.returncode, payload, process.stderr))
-        self.run_id = payload["run_id"]
+        self.root, self.run_id = orchestration_fixture.golden_repo(
+            f"{__file__}:run-cap5", lambda root: build_active_run(root, max_workers=5))
 
     def tearDown(self) -> None:
         self.temporary.cleanup()

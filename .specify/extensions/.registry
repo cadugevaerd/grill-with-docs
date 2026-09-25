@@ -75,16 +75,14 @@
           "speckit.verify-review-ship.v",
           "speckit.verify-review-ship.review",
           "speckit.verify-review-ship.r",
-          "speckit.verify-review-ship.ship",
-          "speckit.verify-review-ship.s"
+          "speckit.verify-review-ship.ship"
         ],
         "codex": [
           "speckit.verify-review-ship.verify",
           "speckit.verify-review-ship.v",
           "speckit.verify-review-ship.review",
           "speckit.verify-review-ship.r",
-          "speckit.verify-review-ship.ship",
-          "speckit.verify-review-ship.s"
+          "speckit.verify-review-ship.ship"
         ]
       },
       "registered_skills": [],

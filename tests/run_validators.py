@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 from time import perf_counter
@@ -47,9 +49,54 @@ ESSENTIAL = (
 ENV = {**os.environ, "OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY") or "test-placeholder-not-a-key"}
 
 
+# Parallel mode only: the slowest validators start first so they set the
+# critical path, and the single 78-test workspace class is cut into batches.
+SLOW_FIRST = (
+    "validate_workspace_contract.py",
+    "validate_gauntlet_converge_contract.py",
+    "validate_checkpoint_contract.py",
+    "validate_gauntlet_scheduler_contract.py",
+    "validate_gauntlet_activation_contract.py",
+)
+SPLIT = {"validate_workspace_contract.py": ("WorkspaceV2Contract", 6)}
+
+
+def split_checks(checks: list[tuple[Path, tuple[str, ...]]]) -> list[tuple[Path, tuple[str, ...]]]:
+    out: list[tuple[Path, tuple[str, ...]]] = []
+    for path, tests in checks:
+        if path.name not in SPLIT or tests:
+            out.append((path, tests))
+            continue
+        cls, batches = SPLIT[path.name]
+        names = re.findall(r"^    def (test_\w+)", path.read_text(encoding="utf-8"), re.M)
+        out.extend((path, tuple(f"{cls}.{n}" for n in names[i::batches])) for i in range(batches))
+    rank = {name: i for i, name in enumerate(SLOW_FIRST)}
+    return sorted(out, key=lambda check: rank.get(check[0].name, len(rank)))
+
+
+def run_parallel(checks: list[tuple[Path, tuple[str, ...]]], jobs: int, started: float) -> int:
+    failed = 0
+
+    def run(check: tuple[Path, tuple[str, ...]]) -> tuple[Path, int, str, float]:
+        begin = perf_counter()
+        result = subprocess.run([sys.executable, str(check[0]), *check[1]], cwd=ROOT.parent, env=ENV,
+                                capture_output=True, text=True)
+        return check[0], result.returncode, (result.stdout or "") + (result.stderr or ""), perf_counter() - begin
+
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        for future in as_completed([pool.submit(run, check) for check in split_checks(checks)]):
+            path, code, output, took = future.result()
+            print(f"==> {path.name}\n{output}<== {path.name}: {took:.1f}s", flush=True)
+            failed = failed or code
+    print(f"Suite duration: {perf_counter() - started:.1f}s", flush=True)
+    return failed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--suite", choices=("full", "essential", "portability"), default="full")
+    # 1 keeps CI serial and stop-on-first-failure; 0 means one job per CPU.
+    parser.add_argument("--jobs", type=int, default=1)
     args = parser.parse_args(argv)
     if args.suite == "full":
         checks = [(validator, ()) for validator in VALIDATORS]
@@ -63,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
         print("No validators found", file=sys.stderr)
         return 2
     started = perf_counter()
+    if args.jobs != 1:
+        return run_parallel(checks, args.jobs or os.cpu_count() or 1, started)
     for validator, tests in checks:
         print(f"==> {validator.name}", flush=True)
         check_started = perf_counter()

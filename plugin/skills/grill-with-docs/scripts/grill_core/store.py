@@ -307,9 +307,15 @@ def _invalid(message: Any) -> NoReturn:
 # --------------------------------------------------------------------------
 
 _ESCAPES = {0x08: "\\b", 0x09: "\\t", 0x0A: "\\n", 0x0C: "\\f", 0x0D: "\\r"}
+_NEEDS_ESCAPE = re.compile(r'["\\\x00-\x1f]')
 
 
 def _jcs_string(value: str) -> str:
+    # Nearly every string in the store needs no escaping; the per-character
+    # walk below dominated every read and write (millions of ord() calls on a
+    # large journal). Same output, byte for byte.
+    if not _NEEDS_ESCAPE.search(value):
+        return '"' + value + '"'
     out = ['"']
     for char in value:
         point = ord(char)
@@ -523,6 +529,9 @@ def _git(root: Path, *args: str, required: bool = True) -> str:
     return process.stdout.strip()
 
 
+_GIT_ANSWERS: dict[str, tuple[str | None, str | None]] = {}
+
+
 def git_common_dir(root: str | Path) -> Path:
     """Resolve ``<git-common-dir>`` for ``root``; creates nothing.
 
@@ -533,10 +542,15 @@ def git_common_dir(root: str | Path) -> Path:
     path = Path(root)
     if path.is_symlink() or not path.is_dir():
         _invalid(f"root must be a real directory: {path}")
-    top = _git(path, "rev-parse", "--show-toplevel")
+    # status used to spawn two git processes per work item for the same few
+    # worktrees; the answers cannot change within one process.
+    cached = _GIT_ANSWERS.get(os.path.realpath(path))
+    if cached is None:
+        cached = (_git(path, "rev-parse", "--show-toplevel"), _git(path, "rev-parse", "--git-common-dir"))
+        _GIT_ANSWERS[os.path.realpath(path)] = cached
+    top, raw = cached
     if not top or Path(os.path.realpath(top)) != Path(os.path.realpath(path)):
         _invalid(f"root must be the Git top-level: {path}")
-    raw = _git(path, "rev-parse", "--git-common-dir")
     if not raw:
         _invalid(f"git-common-dir unavailable: {path}")
     candidate = Path(raw)
@@ -1310,8 +1324,21 @@ def _validate_gauntlet_state_transitions(previous: dict[str, Any], candidate: di
                 elif worker["state"] not in worker_edges.get(old_worker["state"], set()): _fail(STATE_DIVERGENCE, f"invalid gauntlet worker transition: {worker_id}")
 
 
+# Per-process memo of byte strings already fully validated. A single command
+# re-reads the same orchestrator.json and events.jsonl many times (a late
+# checkpoint validated the snapshot nine times); identical bytes give an
+# identical verdict, so the expensive checks run once per distinct content.
+# In memory only, keyed by the bytes actually read -- never persisted.
+_VERIFIED_SNAPSHOTS: set[bytes] = set()
+_VERIFIED_JOURNALS: set[bytes] = set()
+
+
 def _snapshot_from(data: bytes, path: Path) -> Snapshot:
-    document = _validate_document(loads(_decode(data, path)), path)
+    key = hashlib.sha256(data).digest()
+    document = loads(_decode(data, path))
+    if key not in _VERIFIED_SNAPSHOTS:
+        document = _validate_document(document, path)
+        _VERIFIED_SNAPSHOTS.add(key)
     return Snapshot(
         document=document,
         revision=document["revision"],
@@ -1350,7 +1377,11 @@ def _settled(read: Callable[[], Any]) -> Any:
         try:
             return read()
         except StoreError as error:
-            if error.code not in {ORCHESTRATOR_INVALID, STATE_DIVERGENCE} or attempt == SETTLE_ATTEMPTS - 1:
+            # Only a writer's in-flight window heals by waiting; an absent
+            # store or a structural error fails at once.
+            transient = error.code == STATE_DIVERGENCE or any(
+                mark in error.message for mark in ("persisted head", "head missing", "truncated event journal"))
+            if not transient or attempt == SETTLE_ATTEMPTS - 1:
                 raise
             time.sleep(SETTLE_DELAY)
 
@@ -2255,7 +2286,10 @@ def _validated_journal_records(paths: StorePaths) -> list[dict[str, Any]]:
     file exists and is a validated regular file (callers check that)."""
     data = _read_regular(paths.events)
     records: list[dict[str, Any]] = []
-    if data:
+    key = hashlib.sha256(data).digest()
+    if data and key in _VERIFIED_JOURNALS:
+        records = [loads(line) for line in _decode(data, paths.events).splitlines()]
+    elif data:
         text = _decode(data, paths.events)
         if not text.endswith("\n"):
             _invalid(f"truncated event journal: {paths.events}")
@@ -2282,6 +2316,7 @@ def _validated_journal_records(paths: StorePaths) -> list[dict[str, Any]]:
             records.append(record)
             expected_seq += 1
             expected_prev = digest
+        _VERIFIED_JOURNALS.add(key)
     _check_events_head(paths, records[-1] if records else None)
     return records
 

@@ -286,6 +286,12 @@ class MintedChainIsAccepted(unittest.TestCase):
         self.assertEqual(verdict["campaign"]["project_id"], self.project_id)
         self.assertEqual(verdict["campaign"]["run_id"], "run-1")
 
+    def test_the_predicted_output_is_the_one_the_judge_records(self) -> None:
+        bundle = self.chain()
+        verdict = A.judge_checkpoint_attestation(
+            bundle, project_id=self.project_id, work_item_id="wi-1", step_id="specify")
+        self.assertEqual(verdict["output"], A.accepted_output(bundle["step_output"]))
+
     def test_exact_campaign_bridge_admits_only_the_first_successor_receipt(self) -> None:
         old = self.chain()
         old_campaign = A.judge_checkpoint_attestation(
