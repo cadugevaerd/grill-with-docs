@@ -981,6 +981,24 @@ class StoreContract(unittest.TestCase):
   path.write_bytes(b''.join(lines[:-1]))  # cut the whole trailing commit record (revision 3's anchor)
   with self.assertRaises(store.StoreError) as ctx: store.read_snapshot(self.r)
   self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID'); self.assertIn('head',ctx.exception.message)
+ def test_lock_free_reader_settles_an_in_flight_append_but_not_tampering(self):
+  # An append writes the journal line before events-head.json; a lock-free
+  # reader landing between the two must wait for the writer, not fail --
+  # concurrent inits used to die here with ORCHESTRATOR_INVALID.
+  import threading
+  self.register()
+  store.append_event(self.r,{'event':'work.created','work_id':'a'},now=CLOCK)
+  head_after=self.paths().events_head.read_bytes()
+  self.paths().events_head.write_bytes(b'{"content_sha256":"'+b'0'*64+b'","sequence":1}\n')  # writer mid-flight
+  finish=threading.Timer(store.SETTLE_DELAY*1.5,lambda: self.paths().events_head.write_bytes(head_after))
+  finish.start()
+  try:
+   self.assertEqual(store.read_events(self.r)[-1]['event'],'work.created')
+  finally:
+   finish.join()
+  self.paths().events_head.write_bytes(b'{"content_sha256":"'+b'0'*64+b'","sequence":1}\n')  # never finishes: tampering
+  with self.assertRaises(store.StoreError) as ctx: store.read_events(self.r)
+  self.assertEqual(ctx.exception.code,'ORCHESTRATOR_INVALID'); self.assertIn('head',ctx.exception.message)
  def test_snapshot_rollback_with_recomputed_hash_fails_closed(self):
   # The exact attack the critic demonstrated: roll orchestrator.json back to
   # an earlier revision with a *self-consistent* recomputed hash. Invariant

@@ -66,7 +66,7 @@ class ManagedVersionFirstLineOnly(unittest.TestCase):
 
     def test_marker_on_the_first_line_is_managed(self) -> None:
         text = f"<!-- {MARKER} -->\nbody\n"
-        self.assertEqual(managed_version(text), "v1")
+        self.assertEqual(managed_version(text), "v2")
 
 
 class EssentialCoverage(unittest.TestCase):
@@ -193,18 +193,44 @@ class PreservedBranch(GoalRootBase):
         self.assertEqual(result.status, "PRESERVED")
         self.assertEqual((self.root / "goal.md").stat().st_size, 0)
 
-    def test_other_version_marker_is_a_managed_version_mismatch(self) -> None:
-        body = "<!-- grill-with-docs-goal:v2 -->\nconteudo de outra versao\n".encode("utf-8")
+    def test_newer_marker_is_preserved_so_a_downgrade_never_clobbers_it(self) -> None:
+        body = "<!-- grill-with-docs-goal:v9 -->\nconteudo de plugin mais novo\n".encode("utf-8")
         result, _, _ = self.preserved(body)
         self.assertEqual(result.status, "PRESERVED")
-        self.assertEqual(result.reason, "managed version mismatch")
+        self.assertEqual(result.reason, "newer managed version")
 
-    def test_v1_marker_failing_the_contract_is_an_incompatible_goal(self) -> None:
-        # Correct marker on the first line, but the required parts are gone.
+
+class RefreshBranch(GoalRootBase):
+    """A plugin-owned goal.md always ends equal to the bundled template."""
+
+    def refresh(self, body: bytes) -> "ensure_goal.GoalResult":
+        (self.root / "goal.md").write_bytes(body)
+        result = ensure_goal.resolve_goal(self.root)
+        self.assertEqual((self.root / "goal.md").read_bytes(), TEMPLATE.read_bytes())
+        self.assertEqual(sorted(p.name for p in self.root.iterdir() if p.name != ".git"), ["goal.md"])
+        return result
+
+    def test_v1_document_is_rewritten_to_the_current_template(self) -> None:
+        body = "<!-- grill-with-docs-goal:v1 -->\n## Trilha ciclo v4\nantigo\n".encode("utf-8")
+        result = self.refresh(body)
+        self.assertEqual((result.status, result.reason), ("UPDATED", "from v1"))
+
+    def test_edited_or_mutilated_current_version_is_rewritten(self) -> None:
         body = f"<!-- {MARKER} -->\nfaltando tudo\n".encode("utf-8")
-        result, _, _ = self.preserved(body)
-        self.assertEqual(result.status, "PRESERVED")
-        self.assertEqual(result.reason, "incompatible goal")
+        result = self.refresh(body)
+        self.assertEqual((result.status, result.reason), ("UPDATED", "from v2"))
+
+    def test_identical_document_is_reused_and_a_second_run_is_idempotent(self) -> None:
+        result = self.refresh(TEMPLATE.read_bytes())
+        self.assertEqual(result.status, "REUSED")
+        again = ensure_goal.resolve_goal(self.root)
+        self.assertEqual(again.status, "REUSED")
+
+    def test_v1_contract_stays_frozen_alongside_v2(self) -> None:
+        from grill_core import goal_document
+        self.assertIn("## Trilha ciclo v4", goal_document.ESSENTIAL_V1)
+        self.assertIn("## Trilha ciclo externo", goal_document.ESSENTIAL)
+        self.assertEqual(goal_document.KNOWN_VERSIONS, ("v1", "v2"))
 
 
 class BlockedBranch(GoalRootBase):

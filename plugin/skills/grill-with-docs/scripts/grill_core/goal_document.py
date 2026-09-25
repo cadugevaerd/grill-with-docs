@@ -26,16 +26,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-VERSION = "v1"
-MARKER = "grill-with-docs-goal:v1"
+VERSION = "v2"
+MARKER = "grill-with-docs-goal:v2"
 HERE = Path(__file__).resolve()
 TEMPLATE = HERE.parents[2] / "assets/GOAL.template.md"
 
-#: Substrings whose presence defines conformance (contracts/goal-document.md).
-#: Presence, and only presence: order between items is not enforced and
-#: additional content is not forbidden (FR-014). Copied verbatim from the
-#: contract -- never invented, never paraphrased.
-ESSENTIAL = (
+#: Substrings whose presence defines conformance of a v1 document. Frozen as
+#: shipped; kept so a v1 goal.md is still recognised as managed and refreshed.
+ESSENTIAL_V1 = (
     "## Contrato de parada",
     "GOAL-HOLD:",
     "## Templates de objetivo",
@@ -49,9 +47,37 @@ ESSENTIAL = (
     "## Orientação",
 )
 
+#: v2 contract (contracts/goal-document.md). Presence, and only presence: order
+#: between items is not enforced and additional content is not forbidden
+#: (FR-014). A frozen literal of its own, never derived from ESSENTIAL_V1.
+ESSENTIAL = (
+    "## Contrato de parada",
+    "GOAL-HOLD:",
+    "## Templates de objetivo",
+    "### Template A — trilha pré-ciclo",
+    "### Template B — trilha ciclo externo",
+    "## Trilha pré-ciclo",
+    "## Trilha ciclo externo",
+    "PLAN_ONLY_STOP",
+    "## Decisões tipadas",
+    "## Cláusula residual",
+    "## Delegação",
+    "## Orientação",
+)
+
+#: Every marker version this build manages, oldest first. A goal.md carrying
+#: one of these is plugin-owned and ``init`` rewrites it to the current
+#: template; a newer marker belongs to a newer plugin and is left alone.
+KNOWN_VERSIONS = ("v1", "v2")
+
 
 def compatible(text: str) -> bool:
     return text.strip() != "" and all(item in text for item in ESSENTIAL)
+
+
+def is_newer(version: str) -> bool:
+    """True for a marker this build does not know and that sorts after VERSION."""
+    return version not in KNOWN_VERSIONS and int(version[1:]) > int(VERSION[1:])
 
 
 def managed_version(text: str) -> str | None:

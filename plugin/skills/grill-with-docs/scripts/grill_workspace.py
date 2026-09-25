@@ -1221,11 +1221,11 @@ def _goal_document_version(content: bytes) -> str | None:
 def ensure_project_goal(root: Path) -> dict[str, Any]:
     """Materialise or validate the project-wide goal.md, symmetric to ensure_project_workflow.
 
-    goal.md is a project-wide artefact, fixed once per project like
-    WORKFLOW.md (contracts/materialization-cli.md, Superfície 2). Unlike
-    ``workflow``, this block never enters ``WORK-ITEM.json`` /
-    ``immutable_metadata`` (T017): a document that can be legitimately edited
-    later does not belong in sealed work-item identity.
+    goal.md is a project-wide, plugin-owned artefact: every init rewrites a
+    managed goal.md to the bundled template (``UPDATED``), unlike WORKFLOW.md,
+    which is fixed once per project. This block never enters
+    ``WORK-ITEM.json`` / ``immutable_metadata`` (T017): bytes that change on
+    every plugin upgrade do not belong in sealed work-item identity.
     """
     goal = sibling("ensure_goal")
     result = goal.resolve_goal(root)
@@ -1239,7 +1239,7 @@ def ensure_project_goal(root: Path) -> dict[str, Any]:
     version = _goal_document_version(result.content)
     if version is not None:
         block["version"] = version
-    if result.status == "PRESERVED":
+    if result.status in {"PRESERVED", "UPDATED"}:
         block["reason"] = result.reason
     return block
 
