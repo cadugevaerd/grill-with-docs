@@ -23,7 +23,7 @@ worktree C ──> .grill/work-items/<work-id-C>/ ─┘
 6. Hooks são read-only e nunca criam work items automaticamente.
 7. Hotfix-fast é uma exceção operacional fechada: exige escopo, reprodução/evidência, teste de correção, rollback e evidência constitucional; não depende de ROADMAP, BL, DQ ou reconciliação para ser seguro.
 8. Feature e fix permanecem plan-only; hotfix só entrega HOTFIX-GO para ship externo e reconciliação/auditoria documental completa são pós-ship.
-9. A sessão termina em `PLAN_ONLY_STOP`; não implementa código, não executa `specify|plan` e não faz commit/merge.
+9. A sessão de entrevista termina em `PLAN_ONLY_STOP`; nela não se implementa código, não se executa `specify|plan` e não se faz commit/merge. O ciclo externo é outra trilha, aberta por ato humano.
 
 ## Bootstrap de apresentação obrigatório
 

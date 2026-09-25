@@ -120,7 +120,7 @@ Uma requisição a `typesafe/jev-1.13` (`POST https://openrouter.ai/api/alpha/de
 | `diff-hygiene` | arquivos em `--file` | `decide_only: true`: só sinaliza |
 | `constitution-check` | cláusulas de `constitution.md`, enviadas em `clauses` | `decide_only: VIOLATION`: nunca concede PASS |
 
-Os kinds que protegem gates só endurecem: um texto injetado no repositório pode mover a confiança do Jev, mas não afrouxa uma decisão. Toda chamada com `--work-id` e todo `decide-label` acrescentam uma linha a `.grill/jev/decisions.jsonl` (resposta do Jev e resposta final do agente), o gabarito para recalibrar os limiares. Falhas são fail-closed: `OPENROUTER-KEY-INVALID`, `OPENROUTER-CREDIT-EXHAUSTED`, `JEV-UNAVAILABLE`, `JEV-RESPONSE-INVALID`, `JEV-STATE-TOO-LARGE`, `JEV-KIND-UNKNOWN`. É a única chamada de rede do core; nada é baixado.
+Os kinds que protegem gates só endurecem: um texto injetado no repositório pode mover a confiança do Jev, mas não afrouxa uma decisão. Toda chamada com `--work-id` e todo `decide-label` acrescentam uma linha a `<git-common-dir>/grill-telemetry/jev-decisions.jsonl` (fora da árvore de trabalho, para não sujar o `reconcile`) (resposta do Jev e resposta final do agente), o gabarito para recalibrar os limiares. Falhas são fail-closed: `OPENROUTER-KEY-INVALID`, `OPENROUTER-CREDIT-EXHAUSTED`, `JEV-UNAVAILABLE`, `JEV-RESPONSE-INVALID`, `JEV-STATE-TOO-LARGE`, `JEV-KIND-UNKNOWN`. É a única chamada de rede do core; nada é baixado.
 
 ## Entradas da entrevista
 

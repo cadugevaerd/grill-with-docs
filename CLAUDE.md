@@ -16,7 +16,7 @@ Este repositório **é** o plugin `grill-with-docs` e também o consome (dogfood
 python3 tests/run_validators.py
 ```
 
-A suíte completa roda por `tests/run_validators.py`; conte os validadores pelo marcador `==>`, pois `validate_distribution.py` usa asserções diretas e não imprime `Ran N tests`. No CI, `--suite essential` executa contratos selecionados e oito smoke tests de workspace no Ubuntu/Python 3.10; `--suite portability` executa distribuição e os mesmos smoke tests no Windows e macOS/Python 3.13. Cada job tem limite de cinco minutos. Os perfis imprimem a duração de cada validador e do total. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
+A suíte completa roda por `tests/run_validators.py` (serial, padrão do CI) ou por `tests/run_validators.py --jobs 0` (paralela, um job por CPU, cerca de 2,5 min contra 24 min); conte os validadores pelo marcador `==>`, pois `validate_distribution.py` usa asserções diretas e não imprime `Ran N tests`. No CI, `--suite essential` executa contratos selecionados e oito smoke tests de workspace no Ubuntu/Python 3.10; `--suite portability` executa distribuição e os mesmos smoke tests no Windows e macOS/Python 3.13. Cada job tem limite de cinco minutos. Os perfis imprimem a duração de cada validador e do total. Nenhum teste pode tocar a rede nem exigir `specify`, `node` ou `backlogctl` reais. Use os seams injetáveis: `Toolchain` em `ensure_dependencies.py` e o `resolve_cli` substituível em `backlog_bridge.py`.
 
 ## Restrições do core
 
