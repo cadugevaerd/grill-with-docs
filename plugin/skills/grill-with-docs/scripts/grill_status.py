@@ -260,6 +260,17 @@ def worktree_roots(root: Path, current: bool) -> list[Path]:
             if candidate.is_dir() and not candidate.is_symlink() and common_dir(candidate) == common: roots.append(candidate.resolve())
     return sorted(set(roots))
 
+UNSKIPPABLE = {"SYMLINK-REJECTED", "UNSAFE-FILE", "PATH-ESCAPE", "EVIDENCE-NOT-REGULAR"}
+
+
+def unreadable_item(worktree: Path, item: Path, code: str, *, current: bool) -> dict[str, Any]:
+    """Status row for a bundle that could not be read or projected."""
+    return {"work_id": item.name, "fingerprint": f"unreadable:{code}",
+            "locations": [{"worktree": str(worktree), "path": str(item), "current": current}],
+            "findings": [code], "blockers": [], "closed": False, "operational_status": "blocked",
+            "pending_reasons": [f"{code}: bundle ilegível em {item}; corrigir ou remover"], "next_gate": "BLOCKED"}
+
+
 def build_status(root_arg: str | Path, work_id: str | None = None, current_worktree: bool = False) -> tuple[dict[str, Any], int]:
     root = workspace.project_root(root_arg)
     grouped: dict[str, list[dict[str, Any]]] = {}
@@ -280,14 +291,23 @@ def build_status(root_arg: str | Path, work_id: str | None = None, current_workt
             if item.is_symlink():
                 raise workspace.CliFailure(workspace.EXIT_BLOCKED, "BLOCKED", "SYMLINK-REJECTED", str(item))
             if not item.is_dir() or (work_id and item.name != work_id): continue
-            bundle = workspace.read_local_bundle(worktree, item)
-            value = item_payload(
-                worktree,
-                bundle,
-                live_state=live_state,
-                local_branches=local_branches,
-                store_snapshot=store_snapshot,
-            )
+            try:
+                bundle = workspace.read_local_bundle(worktree, item)
+                value = item_payload(
+                    worktree,
+                    bundle,
+                    live_state=live_state,
+                    local_branches=local_branches,
+                    store_snapshot=store_snapshot,
+                )
+            except workspace.CliFailure as exc:
+                # One unreadable bundle used to abort status for the whole
+                # repository. It is now that item's own blocked row; security
+                # refusals still abort, and the global verdict stays BLOCKED.
+                if exc.code in UNSKIPPABLE:
+                    raise
+                grouped.setdefault(item.name, []).append(unreadable_item(worktree, item, exc.code, current=worktree == root))
+                continue
             value["locations"][0]["current"] = worktree == root
             grouped.setdefault(bundle.work_id, []).append(value)
     if work_id and work_id not in grouped: return {"schema":"grill-status/v1","verdict":"NO-GO","code":"WORK-ITEM-MISSING","project_root":str(root),"summary":{"total":0,"in_progress":0,"blocked":0,"completed":0},"work_items":[],"next_action":"iniciar"}, 1

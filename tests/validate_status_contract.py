@@ -416,10 +416,12 @@ class StatusPublicContract(unittest.TestCase):
     def test_development_invalid_is_blocked(self):
         item=self.item(); s=json.loads((item/"state.json").read_text()); s["development"]={"schema":"bad","steps":{}}; (item/"state.json").write_text(json.dumps(s)); p,x=status(self.r); self.assertEqual(p.returncode,2); self.assertIn("INVALID-DEVELOPMENT-SCHEMA",x["work_items"][0]["findings"])
     def test_malformed_state_json_is_exact_exit1(self):
-        item=self.item(); (item/"state.json").write_bytes(b"{"); p,x=status(self.r); self.assertEqual(p.returncode,1); self.assertEqual(x["code"],"MALFORMED-JSON"); self.assertEqual(p.stderr,"")
+        # A broken bundle is its own blocked row now (9.1.0), not an abort of the whole status.
+        item=self.item(); (item/"state.json").write_bytes(b"{"); p,x=status(self.r); self.assertEqual(p.returncode,2); self.assertEqual(x["code"],"MALFORMED-JSON"); self.assertEqual(p.stderr,"")
+        self.assertEqual([i["findings"] for i in x["work_items"] if i["fingerprint"].startswith("unreadable:")],[["MALFORMED-JSON"]])
 
     def test_invalid_utf8_state_is_exact(self):
-        item=self.item(); (item/"state.json").write_bytes(b"\xff"); p,x=status(self.r); self.assertEqual(p.returncode,1); self.assertEqual(x["code"],"INVALID-UTF8")
+        item=self.item(); (item/"state.json").write_bytes(b"\xff"); p,x=status(self.r); self.assertEqual(p.returncode,2); self.assertEqual(x["code"],"INVALID-UTF8")
 
     def test_direct_external_symlink_state_hides_secret(self):
         item=self.item(); secret=Path(self.t.name)/"secret"; secret.write_text("TOP-SECRET"); (item/"state.json").unlink(); (item/"state.json").symlink_to(secret); p,x=status(self.r); self.assertEqual(p.returncode,2); self.assertIn(x["code"],{"SYMLINK-REJECTED","UNSAFE-FILE"}); self.assertNotIn("TOP-SECRET",p.stdout)
@@ -474,4 +476,27 @@ class StashWarning(unittest.TestCase):
             (root/"new.txt").write_text("n"); git("stash","push","-q","-u","-m","with-untracked")
             warnings=module._stash_warnings(root)
             self.assertEqual(len(warnings),1); self.assertTrue(warnings[0].startswith("STASH-SHIFTS-PROJECT-ID: stash@{0}"))
+class UnreadableBundle(unittest.TestCase):
+    """One broken bundle is its own blocked row; a symlink still aborts status."""
+    def run_status(self,root,*extra):
+        script=Path(__file__).resolve().parents[1]/"plugin/skills/grill-with-docs/scripts/grill_workspace.py"
+        p=subprocess.run([sys.executable,str(script),"status",str(root),*extra],capture_output=True,text=True)
+        return p.returncode,p.stdout
+    def test_broken_bundle_becomes_a_row_and_symlink_still_aborts(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root=Path(raw); subprocess.run(["git","init","-q",raw],check=True)
+            (root/".grill/work-items/broken-item").mkdir(parents=True)
+            (root/".grill/work-items/broken-item/notes.md").write_text("sem WORK-ITEM.json\n")
+            code,out=self.run_status(root)
+            payload=json.loads(out)
+            self.assertEqual(code,2); self.assertEqual(payload["verdict"],"BLOCKED")
+            rows=[i for i in payload["work_items"] if i["work_id"]=="broken-item"]
+            self.assertEqual(len(rows),1); self.assertEqual(rows[0]["operational_status"],"blocked")
+            self.assertTrue(rows[0]["fingerprint"].startswith("unreadable:"))
+            code,md=self.run_status(root,"--format","markdown")
+            self.assertIn("broken-item",md); self.assertIn("bundle ilegível",md)
+            outside=root/"outside"; outside.mkdir()
+            (root/".grill/work-items/linked").symlink_to(outside,target_is_directory=True)
+            code,out=self.run_status(root)
+            self.assertEqual((code,json.loads(out)["code"]),(2,"SYMLINK-REJECTED"))
 if __name__=="__main__": unittest.main()
