@@ -122,6 +122,17 @@ Uma requisição a `typesafe/jev-1.13` (`POST https://openrouter.ai/api/alpha/de
 
 Os kinds que protegem gates só endurecem: um texto injetado no repositório pode mover a confiança do Jev, mas não afrouxa uma decisão. Toda chamada com `--work-id` e todo `decide-label` acrescentam uma linha a `<git-common-dir>/grill-telemetry/jev-decisions.jsonl` (fora da árvore de trabalho, para não sujar o `reconcile`) (resposta do Jev e resposta final do agente), o gabarito para recalibrar os limiares. Falhas são fail-closed: `OPENROUTER-KEY-INVALID`, `OPENROUTER-CREDIT-EXHAUSTED`, `JEV-UNAVAILABLE`, `JEV-RESPONSE-INVALID`, `JEV-STATE-TOO-LARGE`, `JEV-KIND-UNKNOWN`. É a única chamada de rede do core; nada é baixado.
 
+## Avançar etapas e recunhar a cadeia
+
+```bash
+python3 .../grill_workspace.py advance ROOT --work-id ID --session-ref REF [--attestation BUNDLE --evidence PATH] [--frontend]
+python3 .../grill_workspace.py attest ROOT --work-id ID --rechain [--authorization PATH] [--out DIR]
+```
+
+`advance` fecha a etapa corrente (exige `--attestation` e `--evidence` quando ela está `in-progress`), garante a classificação da seguinte (lê `step-inputs/<step>.json`; se ausente, roda `decide --kind step-assessment --apply` com a evidência da etapa anterior), chama `gauntlet-step-enter` e abre a etapa com `checkpoint in-progress`. Devolve `ADVANCED` com `invocation_context`, `DONE` no fim da fase, ou `ASSESSMENT-REQUIRED` quando o Jev não decidiu a classificação. Cada efeito é uma operação própria, de id determinístico (inclui o tamanho do audit); numa falha parcial a saída lista as operações concluídas, e repetir o comando retoma. Não satisfaz gates humanos: prévia visual, autorização de ship, retomada de `blocked` (`STEP-BLOCKED`), `phase-turn` e revisão `CHANGES_REQUIRED` continuam separados.
+
+`attest --rechain` só cunha: para cada etapa em `chain_stale`, na ordem canônica, confere que o artefato aceito não mudou (`RECHAIN-OUTPUT-CHANGED`), acha o bundle aceito (`RECHAIN-PRIOR-UNKNOWN`) e cunha o sucessor encadeado no output previsto da etapa anterior; `ship` exige `--authorization`. Tudo é validado antes de gravar e o comando para no primeiro `STEP-ASSESSMENT-STALE`. Cada bundle listado ainda precisa de `checkpoint --supersedes-attestation`.
+
 ## Entradas da entrevista
 
 Defina `WORK_ITEM=.grill/work-items/<work-id>`. As oito entradas decisórias são:

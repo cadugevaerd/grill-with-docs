@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v9.0.1
+# Grill with Docs v9.1.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -83,6 +83,8 @@ resposta de DQ; `dq-batch` e `human-or-author` ao montar o lote; `triage`, `bug-
 após analyze/converge/review (`context.findings` com `proposed`; só confirma ou sobe);
 `spec-coverage` e `diff-hygiene` no verify (só NO-GO/sinalização); `learning-route` no ship.
 Depois de decidir as pendentes, registre a resposta final com `decide-label`.
+Entre etapas use `advance` (fecha a corrente, classifica e abre a seguinte); depois de
+supersessão ou integração da main, `attest --rechain` recunha a cadeia stale de uma vez.
 Falha de API é fail-closed (`JEV-UNAVAILABLE`, `OPENROUTER-*`): pare e reporte.
 O Jev nunca substitui skill canônica nem review obrigatório.
 

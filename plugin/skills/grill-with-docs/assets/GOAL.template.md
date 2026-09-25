@@ -259,6 +259,9 @@ está, com seus argumentos obrigatórios:
   in-progress|complete|blocked --session-ref REF --operation-id OP_ID
   [--evidence PATH] [--reason TEXTO]` — sela a etapa e move `current_step`. O
   retorno nomeia a etapa seguinte.
+- `grill_workspace.py advance ROOT --work-id WORK_ID --session-ref REF
+  [--attestation BUNDLE --evidence PATH]` — fecha a etapa corrente e abre a
+  seguinte numa chamada; `attest --rechain` recunha a cadeia stale.
 - `grill_workspace.py gauntlet-status ROOT --work-id WORK_ID [--run-id RUN]` —
   estado da ativação e da run corrente, na trilha ciclo externo.
 - `grill_workspace.py gauntlet-tasks-import` / `gauntlet-tasks-rebase` —
