@@ -97,11 +97,27 @@ Bundle criado antes da projeção tem registro **autoral**, detectado pela ausê
 `OPENROUTER_API_KEY` é obrigatória para o fluxo: `init` recusa com `OPENROUTER-KEY-REQUIRED` (exit 2) e `preflight` reporta `BLOCKED` com o mesmo código, independentemente de `--require-dependencies` e de `GRILL_SKIP_DEPENDENCIES`. Só a presença é verificada; o valor nunca é gravado, logado nem ecoado.
 
 ```bash
-python3 .../grill_workspace.py decide ROOT --kind step-assessment|triage|dq-batch|partition-groups|spec-coverage \
-  [--file PATH]... [--context JSON] [--work-id ID --step STEP --apply]
+python3 .../grill_workspace.py decide ROOT --kind K[,K2,...] [--file PATH]... [--context JSON] \
+  [--work-id ID] [--step STEP --apply]
+python3 .../grill_workspace.py decide-label ROOT --work-id ID --kind K [--step STEP] --answers '{"chave": "valor"}'
 ```
 
-Uma requisição por decisão a `typesafe/jev-1.13` (`POST https://openrouter.ai/api/alpha/decisions`), com as perguntas de `assets/jev-questions.json`. Cada pergunta é decidida isoladamente: as que passam do limiar do kind vão para `decided`, as demais para `pending` (com o valor sugerido em `hint`) e o agente responde só as pendentes. `decided_by` é `jev` (todas decididas, com `result` completo), `partial` ou `agent` (nenhuma). Em `spec-coverage`, um único requisito decidido como não coberto já produz `result` NO-GO mesmo parcial. `step-assessment --apply` grava `step-inputs/<step>.json` validado por `validate_step_assessment`; os demais kinds só imprimem. `dq-batch` lê `context.candidates` (`{id: texto}`); `spec-coverage` extrai `FR-`/`SC-` de `spec.md` entre os `--file` e só antecipa NO-GO. Falhas são fail-closed: `OPENROUTER-KEY-INVALID`, `OPENROUTER-CREDIT-EXHAUSTED`, `JEV-UNAVAILABLE`, `JEV-RESPONSE-INVALID`, `JEV-STATE-TOO-LARGE`. É a única chamada de rede do core; nada é baixado.
+Uma requisição a `typesafe/jev-1.13` (`POST https://openrouter.ai/api/alpha/decisions`) responde todos os kinds pedidos: as perguntas rodam em paralelo, então juntar kinds do mesmo momento não custa latência. As perguntas vivem em `assets/jev-questions.json`; cada kind tem `threshold` e, opcionalmente, `thresholds` por tipo de pergunta (`noul`, `choice`, `score`). Cada pergunta é decidida isoladamente: acima do limiar vai para `decided`; abaixo, para `pending`, com o valor sugerido em `hint`. `decided_by` é `jev`, `partial` ou `agent`. Com um kind, o payload traz a decisão no topo; com vários, em `decisions`. `--work-id` vira `session_id` (agrupamento de custo no OpenRouter, sem cache).
+
+| kind | itens | regra de segurança |
+|---|---|---|
+| `step-assessment` | riscos da policy | `--apply` grava `step-inputs/<step>.json` só com tudo decidido |
+| `triage`, `bug-type`, `learning-route`, `partition-groups` | — | direto |
+| `round-record` | artefatos (CONTEXT, ADR, ROADMAP…) | voto independente sobre `transition`, `scope_delta`, `progress`, `repeat`, `adr_needed`; `context.dq`, `context.answer`, `context.frontier` |
+| `dq-batch` | `context.candidates` | até três DQs materiais |
+| `human-or-author` | `context.decisions` | `decide_only: human`: nunca tira uma decisão do humano |
+| `delivery-classification` | — | compara com `context.proposed`; divergência → `ASK-HUMAN` |
+| `finding-severity` | `context.findings` (`text`, `proposed`) | só confirma ou sobe a severidade |
+| `spec-coverage` | FR/SC de `spec.md`, enviados em `requirements` | NO-GO se um requisito for decidido como não coberto |
+| `diff-hygiene` | arquivos em `--file` | `decide_only: true`: só sinaliza |
+| `constitution-check` | cláusulas de `constitution.md`, enviadas em `clauses` | `decide_only: VIOLATION`: nunca concede PASS |
+
+Os kinds que protegem gates só endurecem: um texto injetado no repositório pode mover a confiança do Jev, mas não afrouxa uma decisão. Toda chamada com `--work-id` e todo `decide-label` acrescentam uma linha a `.grill/jev/decisions.jsonl` (resposta do Jev e resposta final do agente), o gabarito para recalibrar os limiares. Falhas são fail-closed: `OPENROUTER-KEY-INVALID`, `OPENROUTER-CREDIT-EXHAUSTED`, `JEV-UNAVAILABLE`, `JEV-RESPONSE-INVALID`, `JEV-STATE-TOO-LARGE`, `JEV-KIND-UNKNOWN`. É a única chamada de rede do core; nada é baixado.
 
 ## Entradas da entrevista
 

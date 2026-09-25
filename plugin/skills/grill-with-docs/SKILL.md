@@ -3,7 +3,7 @@ name: grill-with-docs
 description: Entrevista decisões arquiteturais por work item isolado, mantém feature plan-only e oferece hotfix-fast executável com HOTFIX-GO fail-closed.
 argument-hint: "iniciar|retomar|pausar|auditar|conciliar|migrar|status|checkpoint <git-root>"
 ---
-# Grill with Docs v8.1.0
+# Grill with Docs v8.2.0
 
 Protocolo **plan-only** para uma feature, fix ou hotfix em worktree/branch dedicada. Cada trabalho possui identidade e artefatos próprios; o estado global é somente uma projeção de trabalhos concluídos.
 
@@ -72,13 +72,18 @@ Após auditoria GO e handoff, emitir PLAN_ONLY_STOP e parar; sem implementação
 
 `OPENROUTER_API_KEY` é obrigatória: sem ela `init` e `preflight` recusam com
 `OPENROUTER-KEY-REQUIRED`. Antes de decidir em prosa, rode
-`grill_workspace.py decide ROOT --kind K --file ...` para `step-assessment`
-(`--work-id --step --apply` grava `step-inputs/<step>.json`), `triage`, `dq-batch`
-(`--context` com `candidates`), `partition-groups` ou `spec-coverage`.
-Cada pergunta é decidida sozinha: use `decided` sem deliberar e responda só as `pending`
-(`decided_by` = `jev`, `partial` ou `agent`). `result` sai completo só com tudo decidido.
+`grill_workspace.py decide ROOT --kind K[,K2] --file ... [--context JSON] --work-id ID`.
+Kinds do mesmo momento vão numa chamada só (`--kind triage,bug-type`).
+Use `decided` sem deliberar e responda só as `pending` (`decided_by` = `jev|partial|agent`).
+Quando: `step-assessment` antes de cada etapa (`--step --apply`); `round-record` após cada
+resposta de DQ; `dq-batch` e `human-or-author` ao montar o lote; `triage`, `bug-type`;
+`delivery-classification` (`context.proposed`, divergência = pergunte ao humano);
+`constitution-check` (só antecipa VIOLATION); `partition-groups`; `finding-severity`
+após analyze/converge/review (`context.findings` com `proposed`; só confirma ou sobe);
+`spec-coverage` e `diff-hygiene` no verify (só NO-GO/sinalização); `learning-route` no ship.
+Depois de decidir as pendentes, registre a resposta final com `decide-label`.
 Falha de API é fail-closed (`JEV-UNAVAILABLE`, `OPENROUTER-*`): pare e reporte.
-`spec-coverage` só antecipa NO-GO; nunca dispensa review obrigatório.
+O Jev nunca substitui skill canônica nem review obrigatório.
 
 ## Status humano canônico
 

@@ -84,10 +84,214 @@
       "per_item": {
         "prefix": "req_",
         "type": "noul",
-        "instructions": "Is requirement {item} of the spec in `files` fully implemented by the changed files also present in `files`?",
+        "instructions": "Is requirement {item} (its text is in `requirements`) fully implemented by the changed files in `files`?",
         "criteria": {
           "true": "The changed files implement every clause of {item}.",
           "false": "{item} is missing, partial or contradicted by the changed files."
+        }
+      }
+    },
+    "round-record": {
+      "threshold": 0.85,
+      "items": [
+        "CONTEXT.md",
+        "ADR",
+        "ROADMAP.md",
+        "DECISION-BACKLOG.md",
+        "PLAN-CONTEXT.md",
+        "handoff"
+      ],
+      "questions": {
+        "transition": {
+          "type": "choice",
+          "instructions": "Given the decision question `context.dq` and the human answer `context.answer`, what happened to the question?",
+          "criteria": {
+            "resolved": "The answer settles the decision.",
+            "deferred": "The answer postpones it to a later phase.",
+            "split": "The answer shows it is really several separate decisions.",
+            "blocked": "It cannot be decided until some evidence or dependency exists.",
+            "out-of-scope": "The answer puts it outside this work item."
+          }
+        },
+        "scope_delta": {
+          "type": "choice",
+          "instructions": "Did the answer `context.answer` change the scope of the work item described in `files`?",
+          "criteria": {
+            "none": "Scope unchanged.",
+            "expanded": "New work, behavior or deliverables were added.",
+            "reduced": "Work, behavior or deliverables were removed."
+          }
+        },
+        "progress": {
+          "type": "noul",
+          "instructions": "Did the answer `context.answer` resolve a decision or reduce an uncertainty of the work item?",
+          "criteria": {
+            "true": "At least one decision is settled or one open uncertainty is smaller.",
+            "false": "Nothing was settled; the round only restated, deferred or went in circles."
+          }
+        },
+        "repeat": {
+          "type": "noul",
+          "instructions": "Is `context.dq` the same decision as one already open in `context.frontier`, just worded differently?",
+          "criteria": {
+            "true": "Same underlying decision as an open question.",
+            "false": "A distinct decision."
+          }
+        },
+        "adr_needed": {
+          "type": "noul",
+          "instructions": "Is the decision in `context.answer` hard to reverse and a real trade-off between alternatives?",
+          "criteria": {
+            "true": "Costly to undo and alternatives were weighed.",
+            "false": "Cheap to change or no real alternative."
+          }
+        }
+      },
+      "per_item": {
+        "prefix": "artifact_",
+        "type": "noul",
+        "instructions": "Must the artifact '{item}' of the work item change because of `context.answer`?",
+        "criteria": {
+          "true": "'{item}' now states something false or misses the new decision.",
+          "false": "'{item}' stays accurate."
+        }
+      }
+    },
+    "learning-route": {
+      "threshold": 0.85,
+      "questions": {
+        "destination": {
+          "type": "choice",
+          "instructions": "Where does the learning `context.candidate` belong?",
+          "criteria": {
+            "constitution": "A non-negotiable project rule every work item must obey.",
+            "agent-context": "Operational guidance for agents working in this repository (CLAUDE.md/AGENTS.md).",
+            "adr-docs": "A design decision or documentation of how something works.",
+            "backlog": "Work still to be done.",
+            "memory": "A fact useful across sessions but not a rule or doc.",
+            "discard": "Not reusable, already known, or not supported by evidence."
+          }
+        },
+        "duplicate": {
+          "type": "noul",
+          "instructions": "Is `context.candidate` already stated by a rule in `files`?",
+          "criteria": {
+            "true": "An existing rule in `files` already says the same thing.",
+            "false": "Nothing in `files` says it."
+          }
+        }
+      }
+    },
+    "bug-type": {
+      "threshold": 0.85,
+      "questions": {
+        "bug_type": {
+          "type": "choice",
+          "instructions": "Given the bug report and spec in `files`, what kind of defect is it?",
+          "criteria": {
+            "spec-gap": "The spec never covered this behavior.",
+            "spec-conflict": "The spec contradicts itself or another spec.",
+            "implementation-drift": "The spec is right; the code does not follow it.",
+            "untested-flow": "The behavior is specified and implemented but no test exercises this flow.",
+            "dependency-issue": "A library, tool or external service misbehaves."
+          }
+        }
+      }
+    },
+    "finding-severity": {
+      "threshold": 0.85,
+      "questions": {},
+      "per_item": {
+        "prefix": "finding_",
+        "type": "choice",
+        "instructions": "How severe is finding '{item}' described in `context.findings`?",
+        "criteria": {
+          "critical": "Breaks a constitution rule, loses data, opens a security hole or blocks the main flow.",
+          "high": "Wrong behavior or missing requirement a user will hit.",
+          "medium": "Inconsistency, ambiguity or gap with a workaround.",
+          "low": "Wording, style or minor redundancy."
+        }
+      }
+    },
+    "delivery-classification": {
+      "threshold": 0.9,
+      "questions": {
+        "development_type": {
+          "type": "choice",
+          "instructions": "Which development type best fits the delivery unit in `files`?",
+          "criteria": {
+            "frontend": "The unit is mainly frontend work.",
+            "backend": "The unit is mainly backend work.",
+            "mobile": "The unit is mainly mobile work.",
+            "integration": "The unit is mainly integration work.",
+            "data": "The unit is mainly data work.",
+            "ml-ai": "The unit is mainly ml-ai work.",
+            "infra-iac": "The unit is mainly infra-iac work.",
+            "platform-devops": "The unit is mainly platform-devops work.",
+            "security": "The unit is mainly security work.",
+            "observability-sre": "The unit is mainly observability-sre work.",
+            "qa": "The unit is mainly qa work.",
+            "documentation": "The unit is mainly documentation work."
+          }
+        },
+        "module_kind": {
+          "type": "choice",
+          "instructions": "What kind of module is the delivery unit in `files`?",
+          "criteria": {
+            "domain": "Business capability owned by one domain.",
+            "platform": "Shared infrastructure other modules build on.",
+            "cross-cutting": "Concern spread across many modules (auth, logging, i18n)."
+          }
+        }
+      }
+    },
+    "human-or-author": {
+      "threshold": 0.85,
+      "questions": {},
+      "per_item": {
+        "prefix": "decision_",
+        "type": "choice",
+        "decide_only": [
+          "human"
+        ],
+        "instructions": "Who must decide the decision '{item}' described in `context.decisions`?",
+        "criteria": {
+          "human": "It changes scope, public behavior or material risk.",
+          "author": "A reversible implementation choice inside approved scope.",
+          "settled": "Already decided by the artifacts in `files`."
+        }
+      }
+    },
+    "diff-hygiene": {
+      "threshold": 0.9,
+      "questions": {},
+      "per_item": {
+        "prefix": "file_",
+        "type": "noul",
+        "decide_only": [
+          true
+        ],
+        "instructions": "Is the change to `{item}` in `files` unrelated to the feature described in `context.feature`, or generated noise?",
+        "criteria": {
+          "true": "The change does not serve the feature, or is generated/incidental.",
+          "false": "The change serves the feature."
+        }
+      }
+    },
+    "constitution-check": {
+      "threshold": 0.95,
+      "questions": {},
+      "per_item": {
+        "prefix": "clause_",
+        "type": "choice",
+        "decide_only": [
+          "VIOLATION"
+        ],
+        "instructions": "Does the work item in `files` comply with the constitution clause '{item}' (its text is in `clauses`)?",
+        "criteria": {
+          "PASS": "The work item follows the clause.",
+          "NOT-APPLICABLE": "The clause does not concern this work item.",
+          "VIOLATION": "The work item breaks the clause."
         }
       }
     }
