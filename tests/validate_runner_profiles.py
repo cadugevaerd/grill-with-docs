@@ -42,6 +42,26 @@ class RunnerProfiles(TestCase):
         self.assertEqual(code, 7)
         self.assertEqual(names, [path.name for path in run_validators.VALIDATORS if path.name <= "validate_backlog_contract.py"])
 
+    def test_parallel_runs_everything_splits_workspace_and_reports_failure(self):
+        called = []
+
+        def run(command, **kwargs):
+            called.append(command)
+            return SimpleNamespace(returncode=7 if Path(command[1]).name == "validate_backlog_contract.py" else 0,
+                                   stdout="", stderr="")
+
+        with mock.patch.object(run_validators.subprocess, "run", side_effect=run), \
+                contextlib.redirect_stdout(io.StringIO()):
+            code = run_validators.main(["--suite", "full", "--jobs", "4"])
+        names = [Path(command[1]).name for command in called]
+        self.assertEqual(code, 7)
+        self.assertEqual(set(names), {path.name for path in run_validators.VALIDATORS})
+        batches = [command[2:] for command in called if Path(command[1]).name == "validate_workspace_contract.py"]
+        self.assertEqual(len(batches), run_validators.SPLIT["validate_workspace_contract.py"][1])
+        tests = [test for batch in batches for test in batch]
+        self.assertEqual(len(tests), len(set(tests)))
+        self.assertTrue(all(test.startswith("WorkspaceV2Contract.test_") for test in tests))
+
     def test_unknown_suite_is_rejected(self):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as failure:
             run_validators.main(["--suite", "unknown"])
