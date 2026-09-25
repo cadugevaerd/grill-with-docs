@@ -457,4 +457,21 @@ class StatusPublicContract(unittest.TestCase):
         with mock.patch.object(Path,"read_bytes",side_effect=AssertionError("unsafe Path.read_bytes")):
             bundle=module.read_local_bundle(self.r,item)
         self.assertEqual(bundle.work_id,"work-a"); self.assertIn("WORK-ITEM.json",bundle.files)
+class StashWarning(unittest.TestCase):
+    """A stash with untracked files shifts the project id; status says so first."""
+    def test_only_a_stash_holding_untracked_files_is_warned(self):
+        script=Path(__file__).resolve().parents[1]/"plugin/skills/grill-with-docs/scripts/grill_workspace.py"
+        sys.path.insert(0,str(script.parent))
+        spec=importlib.util.spec_from_file_location("grill_workspace_stash",script)
+        module=importlib.util.module_from_spec(spec); sys.modules[spec.name]=module; spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as raw:
+            root=Path(raw); git=lambda *a: subprocess.run(["git","-C",raw,*a],check=True,capture_output=True)
+            git("init","-q"); git("config","user.email","t@example.invalid"); git("config","user.name","t")
+            (root/"a.txt").write_text("a"); git("add","a.txt"); git("commit","-qm","a")
+            self.assertEqual(module._stash_warnings(root),[])
+            (root/"a.txt").write_text("b"); git("stash","push","-q","-m","tracked-only")
+            self.assertEqual(module._stash_warnings(root),[])
+            (root/"new.txt").write_text("n"); git("stash","push","-q","-u","-m","with-untracked")
+            warnings=module._stash_warnings(root)
+            self.assertEqual(len(warnings),1); self.assertTrue(warnings[0].startswith("STASH-SHIFTS-PROJECT-ID: stash@{0}"))
 if __name__=="__main__": unittest.main()

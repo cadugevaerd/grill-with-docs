@@ -1349,18 +1349,29 @@ def require_openrouter_key() -> None:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", exc.code, exc.detail) from exc
 
 
-JEV_LOG = ".grill/jev/decisions.jsonl"
+# Local telemetry lives next to the orchestrator store, under the git common
+# dir: shared by every worktree, never versioned, and never an untracked file
+# that would make reconcile refuse DIRTY-WORKTREE.
+TELEMETRY_DIR = "grill-telemetry"
+JEV_LOG = f"<git-common-dir>/{TELEMETRY_DIR}/jev-decisions.jsonl"
+
+
+def _telemetry_append(root: Path, name: str, record: dict[str, Any]) -> Path:
+    directory = grill_core_module("store").git_common_dir(root) / TELEMETRY_DIR
+    if directory.is_symlink():
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "SYMLINK-REJECTED", str(directory))
+    directory.mkdir(mode=0o700, exist_ok=True)
+    line = json.dumps({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **record},
+                      ensure_ascii=False, sort_keys=True)
+    path = directory / name
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(line + "\n")
+    return path
 
 
 def _jev_log(root: Path, record: dict[str, Any]) -> None:
     """Append one line to the calibration log: Jev's answer, later the agent's final one."""
-    path = root / JEV_LOG
-    reject_symlink_chain(root, path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    line = json.dumps({"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **record},
-                      ensure_ascii=False, sort_keys=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(line + "\n")
+    _telemetry_append(root, "jev-decisions.jsonl", record)
 
 
 def _decide_items(jev: Any, kind: str, state: dict[str, Any], root: Path, work_id: str | None,
@@ -7200,7 +7211,21 @@ def status_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         return {"schema": "grill-status/v1", "verdict": "BLOCKED", "code": "STATUS-INVALID-OUTPUT"}, EXIT_BLOCKED
     if not isinstance(payload, dict):
         return {"schema": "grill-status/v1", "verdict": "BLOCKED", "code": "STATUS-SCHEMA"}, EXIT_BLOCKED
+    warnings = _stash_warnings(Path(args.root))
+    if warnings:
+        payload["warnings"] = warnings
     return payload, process.returncode if process.returncode in {0, 1, 2, 3} else EXIT_BLOCKED
+
+
+def _stash_warnings(root: Path) -> list[str]:
+    """A stash holding untracked files adds a parentless commit that shifts the
+    project id (store.project_identity), and gauntlet-run then refuses
+    PROJECT-IDENTITY-DIVERGENCE. Said before it bites, never acted on."""
+    process = subprocess.run(["git", "-C", str(root), "log", "-g", "--format=%gd %P", "refs/stash"],
+                             capture_output=True, text=True, check=False)
+    return [f"STASH-SHIFTS-PROJECT-ID: {line.split()[0]} guarda arquivos não rastreados; "
+            "drop com backup por SHA antes de gauntlet-run"
+            for line in process.stdout.splitlines() if len(line.split()) == 4]
 
 
 def status_markdown_command(args: argparse.Namespace) -> int:
@@ -7226,6 +7251,8 @@ def status_markdown_command(args: argparse.Namespace) -> int:
         sys.stdout.write("| Item | Status | Pendência |\n|---|---|---|\n| workspace | blocked | STATUS-INVALID-OUTPUT: resolver bloqueios |\n")
         return EXIT_BLOCKED
     sys.stdout.write(process.stdout)
+    for warning in _stash_warnings(Path(args.root)):
+        sys.stdout.write(f"\n> aviso: {warning}\n")
     return process.returncode if process.returncode in {0, 1, 2, 3} else EXIT_BLOCKED
 
 

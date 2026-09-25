@@ -376,11 +376,13 @@ class CliLog(unittest.TestCase):
                 code = workspace.main(["decide-label", str(root), "--work-id", "fix-x-1", "--kind", "triage",
                                        "--answers", '{"route": "bugfix"}'])
             self.assertEqual(code, 0)
-            lines = [json.loads(l) for l in (root / ".grill/jev/decisions.jsonl").read_text().splitlines()]
+            log = root / ".git/grill-telemetry/jev-decisions.jsonl"
+            lines = [json.loads(l) for l in log.read_text().splitlines()]
+            self.assertFalse((root / ".grill/jev").exists())  # never an untracked file in the worktree
             self.assertEqual([l["event"] for l in lines], ["decision", "label"])
             self.assertEqual(lines[1]["answers"], {"route": "bugfix"})
             self.assertIn("triage", lines[0]["decisions"])
-            self.assertNotIn(KEY, (root / ".grill/jev/decisions.jsonl").read_text() + out.getvalue())
+            self.assertNotIn(KEY, log.read_text() + out.getvalue())
 
 
 if __name__ == "__main__":
