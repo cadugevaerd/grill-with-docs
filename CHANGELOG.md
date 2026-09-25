@@ -1,5 +1,13 @@
 # Changelog
 
+## 9.0.1
+
+- Perf: o JCS (RFC 8785) serializa strings sem `"`, `\` ou caractere de controle por concatenação direta. Antes percorria caractere por caractere em Python puro. O hash do journal real deste repositório (6.693 registros) caiu de 0,42 s para 0,09 s, com bytes idênticos ao algoritmo anterior.
+- Perf: validação memoizada por processo, com chave no sha256 dos bytes lidos de `orchestrator.json` e `events.jsonl`. Os mesmos bytes deixam de ser revalidados várias vezes no mesmo comando (um `checkpoint` tardio validava o snapshot 9 vezes). O witness `events-head` continua sendo conferido a cada leitura, e nada é persistido.
+- Perf: `git_common_dir` guarda por processo as respostas de `rev-parse`. O `status` disparava duas execuções de git por work item para as mesmas worktrees.
+- Fix: o `_settled` da 9.0.0 relia também "store não inicializado" e erros estruturais, somando 0,2 s de espera ao caminho sem store e cerca de 4 s até um store corrompido falhar. Agora só relê as janelas transitórias de um writer: head atrás do journal, head ausente, linha ainda sendo escrita e `STATE_DIVERGENCE`. A leitura sem store caiu de 0,205 s para 0,003 s.
+- Medido neste repositório (melhor de 3): `gauntlet-status` 1,35 → 0,61 s; `status --current-worktree` 1,11 → 0,64 s; `status .` 3,22 → 2,45 s.
+
 ## 9.0.0
 
 - Breaking: o `goal.md` passa a ser gerenciado pelo plugin e todo `init` o reescreve com o template instalado. Antes, um `goal.md` existente nunca era tocado (`REUSED`/`PRESERVED`), e projetos criados na 5.x ficavam presos no texto daquela época. Agora:
