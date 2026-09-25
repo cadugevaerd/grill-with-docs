@@ -1386,20 +1386,53 @@ def _decide_items(jev: Any, kind: str, state: dict[str, Any], root: Path, work_i
     return [], None
 
 
+def _previous_step_evidence(root: Path, work_id: str | None, step: str | None) -> dict[str, str]:
+    """Evidence the previous step was completed with, as ``{path: sha256}``.
+
+    ``attested_outputs`` carries digests, not paths; the audit entry that
+    completed the predecessor is the only record naming the files it rested on.
+    """
+    if not step or not work_id or not WORK_ID_RE.fullmatch(work_id):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS",
+                         "step-assessment needs --work-id, --step and --file")
+    _path, state = read_development_state(root, resolve_development_item(root, work_id), work_id)
+    development = state.get("development") or {}
+    sequence = development_sequence(development) or []
+    if step not in sequence or sequence.index(step) == 0:
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "INVALID-ARGUMENTS",
+                         f"{step} has no previous step; pass --file")
+    previous = sequence[sequence.index(step) - 1]
+    entries = [entry for entry in development.get("audit") or []
+               if isinstance(entry, dict) and entry.get("step") == previous and entry.get("state") == "complete"]
+    evidence = entries[-1].get("evidence") if entries else None
+    if (development.get("steps", {}).get(previous) != "complete" or not isinstance(evidence, list) or not evidence
+            or not all(isinstance(e, dict) and isinstance(e.get("path"), str) for e in evidence)):
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-EVIDENCE-MISSING", previous)
+    return {entry["path"]: entry.get("sha256") for entry in evidence}
+
+
 def decide_command(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     """Answer typed workflow decisions through Jev, several kinds in one request.
 
     Read-only except for the calibration log and ``step-assessment --apply``,
     which writes the same ``step-inputs/<step>.json`` the agent would otherwise
     write by hand, and only when Jev cleared the threshold on every question.
+
+    Without ``--file``, a step assessment reads the evidence the previous step
+    was completed with, and refuses when any of it changed since.
     """
     jev = grill_core_module("jev")
     root = project_root(args.root)
     kinds = [k for k in args.kind.split(",") if k]
     refs: list[dict[str, str]] = []
     texts: dict[str, str] = {}
-    for relative in args.file or []:
+    expected: dict[str, str] = {}
+    if not args.file and "step-assessment" in kinds:
+        expected = _previous_step_evidence(root, args.work_id, args.step)
+    for relative in args.file or list(expected):
         data = safe_read_regular_fd(root, root / relative)
+        if relative in expected and hash_bytes(data) != expected[relative]:
+            raise CliFailure(EXIT_BLOCKED, "BLOCKED", "STEP-ASSESSMENT-EVIDENCE-STALE", relative)
         refs.append({"path": Path(relative).as_posix(), "sha256": hash_bytes(data)})
         texts[Path(relative).as_posix()] = data.decode("utf-8", errors="replace")
     # Structured state: the spec and the constitution become named fields the
