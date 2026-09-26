@@ -22,7 +22,7 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parents[1] / "plugin/skills/grill-with-docs/scripts"
 sys.path.insert(0, str(SCRIPTS))
 from grill_core.agent_runtime import (RuntimeBoundary, RuntimeError, approved_presentation_reference,
-                                      presentation_state, validate_observation)
+                                      presentation_state, validate_observation, _orca_observation)
 from grill_core import agent_orchestration, attestation, gauntlet_runs, store
 import grill_workspace
 
@@ -1126,7 +1126,7 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertEqual(response, {"active_model": None, "coordinator_recommendation": expected,
                                             "active_model_changed": False})
         self.assertEqual(agent_orchestration.specialist_pair("codex", "author"), ("gpt-6-astra", "xhigh"))
-        self.assertEqual(agent_orchestration.specialist_pair("claude", "reviewer"), ("opus", "high"))
+        self.assertEqual(agent_orchestration.specialist_pair("claude", "reviewer"), ("claude-opus-5-5", "high"))
         old = {"project_id": "sha256:" + "1" * 64, "run_id": "leader-work-x", "runtime": "codex",
                "adapter": "codex", "registry_sha256": "sha256:" + "2" * 64,
                "recovery_generation_id": "rg-" + "3" * 64, "plan_revision": 7}
@@ -3851,6 +3851,94 @@ class AgentOrchestrationContract(unittest.TestCase):
             (directory / "execution-dag.r4.json").write_text("{}\n")
             with self.assertRaisesRegex(grill_workspace.CliFailure, "PARTITION-REVISION-INCOMPLETE"):
                 grill_workspace._next_partition_revision(directory, "demo")
+
+
+    def test_exact_claude_specialist_from_real_orca_bytes(self):
+        # Orca contract v1, 2026-09-26, Dispatch ctx_79c05d12fd20:
+        # worker-start --agent claude --model claude-opus-5-5 --effort xhigh.
+        # Redacted: home path, preview prompt and its clipped fragment, resume id.
+        fixtures = Path(__file__).parent / "fixtures/orchestration"
+        launch = (fixtures / "orca-claude-opus-5-5-launch.json").read_bytes()
+        live = (fixtures / "orca-claude-opus-5-5-worker-show.json").read_bytes()
+        released = (fixtures / "orca-claude-opus-5-5-worker-show-released.json").read_bytes()
+        ref = "orca:worker-show:ctx_79c05d12fd20"
+        observed = _orca_observation(ref, launch, live)
+        closed = _orca_observation(ref, launch, released)
+        self.assertEqual(tuple(observed[k] for k in ("requested_model", "effective_model", "resolved_model_id", "effective_effort", "activity", "close")),
+                         ("claude-opus-5-5",) * 3 + ("xhigh", "active", "not_requested"))
+        # Real released worker-show omits agentWait; the adapter accepts absence.
+        self.assertEqual((closed["activity"], closed["close"]), ("exited", "closed"))
+
+        def activity(role):
+            manifest = {"files": [], "required_activity_ids": [], "author_activity_ids": [],
+                        "task_binding": None, "human_authorization": None}
+            declared = agent_orchestration.new_activity(
+                activity_id=f"fix-{role}", context_id="ctx-1", step_id="specify", activity_scope="cycle",
+                activity_type=role, attempt=1, input_manifest=manifest, policy_sha256="a" * 64,
+                write_files=[])
+            return agent_orchestration.prepare_activity(declared, {"context_id": "ctx-1", "runtime": "claude"})
+
+        def orca_observation(requested="claude-opus-5-5", effective="claude-opus-5-5",
+                             requested_effort="xhigh", effective_effort="xhigh"):
+            first, second = json.loads(launch), json.loads(live)
+            for pair in (first["result"]["launch"], second["result"]["worker"]["startOptions"]["launch"]):
+                pair["requested"].update(model=requested, effort=requested_effort)
+                pair["effective"].update(model=effective, effort=effective_effort)
+            return _orca_observation(ref, pack(first), pack(second))
+
+        for role, effort in (("author", "xhigh"), ("reviewer", "high")):
+            with self.subTest(role=role, case="admitted"):
+                current = activity(role)
+                good = orca_observation(requested_effort=effort, effective_effort=effort)
+                admitted = agent_orchestration.record_verified_activity(current, good)
+                self.assertEqual((admitted["state"], admitted["effective_model"], admitted["effective_effort"]),
+                                 ("VERIFIED", "claude-opus-5-5", effort))
+            for alias in ("opus", "fable", "claude-fable-5-1", "Claude-Opus-5-5",
+                          "claude-opus-5-5 ", "claude-opus-5-5[1m]"):
+                cases = (
+                    (orca_observation(requested=alias, requested_effort=effort, effective_effort=effort),
+                     "SPECIALIST-CAPABILITY-UNPROVEN"),
+                    (orca_observation(effective=alias, requested_effort=effort, effective_effort=effort),
+                     "SPECIALIST-MODEL-DIVERGENT"),
+                    (orca_observation(requested=alias, effective=alias, requested_effort=effort, effective_effort=effort),
+                     "SPECIALIST-MODEL-DIVERGENT"),
+                )
+                for index, (bad, code) in enumerate(cases):
+                    with self.subTest(role=role, alias=alias, case=index):
+                        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, f"^{code}$"):
+                            agent_orchestration.record_verified_activity(current, bad)
+                old_request = {**current, "requested_model": alias}
+                with self.subTest(role=role, alias=alias, case="recorded request"):
+                    with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "^SPECIALIST-CAPABILITY-UNPROVEN$"):
+                        agent_orchestration.record_verified_activity(old_request, good)
+            for field, value, code in (("effective_model", None, "SPECIALIST-MODEL-DIVERGENT"),
+                                       ("effective_effort", None, "SPECIALIST-EFFORT-DIVERGENT"),
+                                       ("effective_effort", "high" if role == "author" else "xhigh", "SPECIALIST-EFFORT-DIVERGENT")):
+                with self.subTest(role=role, field=field, value=value):
+                    with self.assertRaisesRegex(agent_orchestration.OrchestrationError, f"^{code}$"):
+                        agent_orchestration.record_verified_activity(current, {**good, field: value})
+            with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "^SPECIALIST-CAPABILITY-UNPROVEN$"):
+                agent_orchestration.record_verified_activity({**current, "requested_effort": "high" if role == "author" else "xhigh"}, good)
+
+    def test_retired_opus_only_after_admission_and_sealed_policies(self):
+        old = {"author": ("opus", "xhigh"), "reviewer": ("opus", "high")}
+        with mock.patch.dict(agent_orchestration.SPECIALIST_PAIRS, {"claude": old}):
+            accepted, _, _, observed, closed, _ = self.accepted_specialist("old-opus", runtime="claude")
+        self.assertEqual(agent_orchestration.verify_specialist(accepted, closed, require_open=False)["effective_model"], "opus")
+        agent_orchestration._visual_activity(accepted, role="author", context_id="ctx-1", files={})
+        self.assertEqual(agent_orchestration._admitted_pair(accepted), ("opus", "xhigh"))
+        for state in ("DECLARED", "BOOTSTRAPPING", "BLOCKED"):
+            self.assertEqual(agent_orchestration._admitted_pair({**accepted, "state": state}),
+                             ("claude-opus-5-5", "xhigh"))
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "^SPECIALIST-CAPABILITY-UNPROVEN$"):
+            agent_orchestration.verify_specialist({**accepted, "state": "BOOTSTRAPPING"}, observed)
+        with mock.patch.dict(agent_orchestration.SPECIALIST_PAIRS, {"claude": {"author": ("fable", "xhigh"), "reviewer": ("fable", "high")}}):
+            old_fable, _, _, _, fable_closed, _ = self.accepted_specialist("old-fable", runtime="claude")
+        with self.assertRaisesRegex(agent_orchestration.OrchestrationError, "^SPECIALIST-CAPABILITY-UNPROVEN$"):
+            agent_orchestration.verify_specialist(old_fable, fable_closed, require_open=False)
+        for name, expected in (("agent-orchestration.v1.json", "c30b3cecf9c5cc4949c8c3d14eca050608d773f4ffa690fc2c9e72e7a95a3553"),
+                               ("agent-orchestration.v2.json", "6c19c578086153d9304e98fabe5eeb0c73fbe2ab90a5e0a89319998d57b87bfd")):
+            self.assertEqual(hashlib.sha256((SCRIPTS.parent / "assets" / name).read_bytes()).hexdigest(), expected)
 
 
 if __name__ == "__main__":

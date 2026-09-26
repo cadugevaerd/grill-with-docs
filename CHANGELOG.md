@@ -1,5 +1,9 @@
 # Changelog
 
+## 9.3.2
+
+- Fix (SGD-46): especialistas Claude novos exigem o id exato `claude-opus-5-5`, com `xhigh` para autor e `high` para revisor. `opus`, `fable` e variantes continuam recusados pelos diagnósticos existentes; evidência `opus` já admitida permanece válida. As policies de orquestração v1 e v2 e o `WORKFLOW.md` ficam byte-idênticos; a pendência documental está em SGD-46.
+
 ## 9.3.1
 
 - Hotfix (SGD-45): o worktree de cada worker do `implement-parallel` passa a nascer em `<worktree principal>/.claude/worktrees/wt-<run>-<worker>`, e não mais em `<git-common-dir>/grill/`. O Orca só monta a aba de terminal de worktrees sob uma fonte de visibilidade, e `.claude/worktrees/*` é a fonte embutida; fora dela o terminal do worker saía `orphaned=true`, `gauntlet-worker-session register/release` recusava e `gauntlet-converge` nunca fechava sob Orca.

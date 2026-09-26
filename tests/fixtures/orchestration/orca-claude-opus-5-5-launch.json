@@ -1,0 +1,86 @@
+{
+  "id": "de9ab35b-28f1-4d81-903b-1738ade28c9d",
+  "ok": true,
+  "result": {
+    "runId": "run_29bd2f0fd430",
+    "taskId": "task_5b938f8d5cd0",
+    "dispatchId": "ctx_79c05d12fd20",
+    "state": "ready",
+    "stage": "input_accepted",
+    "turnStart": "observed",
+    "setup": {
+      "requested": "not_applicable",
+      "effective": "not_applicable",
+      "source": "existing_worktree",
+      "hookFound": false,
+      "startupPolicy": "start-immediately",
+      "state": "not_applicable"
+    },
+    "launch": {
+      "requested": {
+        "agent": "claude",
+        "model": "claude-opus-5-5",
+        "effort": "xhigh"
+      },
+      "effective": {
+        "agent": "claude",
+        "model": "claude-opus-5-5",
+        "effort": "xhigh"
+      }
+    },
+    "mode": {
+      "mode": "terminal",
+      "preferred": "terminal",
+      "reason": "user_default",
+      "detail": "Started a terminal agent worker, the default for new agent tabs in your settings."
+    },
+    "timeoutMs": 60000,
+    "effects": [
+      {
+        "kind": "worktree",
+        "action": "reused",
+        "id": "73370200-23ff-4ab0-ac89-5bbd64fc6c00::/home/user/orca/workspaces/grill-with-docs/fix-fable"
+      },
+      {
+        "kind": "setup",
+        "action": "not_applicable",
+        "state": "not_applicable"
+      },
+      {
+        "kind": "terminal",
+        "role": "agent",
+        "action": "created",
+        "id": "term_1b87d045-c3b3-4566-ba25-bfe25a5500f9",
+        "surface": "visible"
+      },
+      {
+        "kind": "dispatch_input",
+        "role": "agent",
+        "id": "term_1b87d045-c3b3-4566-ba25-bfe25a5500f9",
+        "state": "accepted"
+      }
+    ],
+    "prompt": {
+      "requestId": "6525c79c-b0ad-4581-b26e-2b3e1ab42605",
+      "stages": [
+        "input_accepted",
+        "turn_started"
+      ],
+      "provider": "claude",
+      "observation": "supported",
+      "processIncarnation": "422e3777-0f28-484b-944f-e4147595ba13",
+      "generation": 111,
+      "baselineWorkingSequence": 0,
+      "baselineExplicitWorkingStartedAt": null,
+      "baselinePermissionSequence": 0
+    },
+    "residualResources": [],
+    "mutation": {
+      "requestId": "6525c79c-b0ad-4581-b26e-2b3e1ab42605",
+      "replayed": false
+    }
+  },
+  "_meta": {
+    "runtimeId": "060585ba-9729-4026-a508-a1232cb40357"
+  }
+}

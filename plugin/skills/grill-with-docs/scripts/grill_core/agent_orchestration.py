@@ -55,10 +55,11 @@ _RECOVERY_GENERATION = re.compile(r"^rg-[0-9a-f]{64}$")
 # unavailable pair blocks instead of falling back to the leader or a frontier
 # worker.
 # Codex names a family, resolved to the newest listed slug at call time
-# (tier_models.resolve_codex_family); Claude's alias already tracks the latest.
+# (tier_models.resolve_codex_family); Claude pins an exact id because aliases
+# do not prove a model version.
 SPECIALIST_PAIRS = {
     "codex": {"author": ("family:astra", "xhigh"), "reviewer": ("family:astra", "high")},
-    "claude": {"author": ("opus", "xhigh"), "reviewer": ("opus", "high")},
+    "claude": {"author": ("claude-opus-5-5", "xhigh"), "reviewer": ("claude-opus-5-5", "high")},
 }
 _SESSION_IDENTITY_FIELDS = (
     "provider", "adapter", "host", "runtime_instance", "handle", "incarnation",
@@ -297,6 +298,15 @@ def specialist_pair(runtime: str, activity_type: str) -> tuple[str, str]:
     return model, effort
 
 
+def _admitted_pair(activity: Mapping[str, Any]) -> tuple[str, str]:
+    model, effort = specialist_pair(activity.get("runtime"), activity.get("activity_type"))
+    if (activity.get("runtime") == "claude"
+            and activity.get("state") in {"VERIFIED", "DISPATCHED", "RESULT_RECORDED", "ACCEPTED", "FAILED"}
+            and activity.get("requested_model") == "opus"):
+        return "opus", effort
+    return model, effort
+
+
 def activity_input_sha256(manifest: dict[str, Any]) -> str:
     """Validate and hash the immutable activity input before a bootstrap."""
     _input_manifest(manifest)
@@ -357,7 +367,7 @@ def verify_specialist(activity: Mapping[str, Any], observation: Mapping[str, Any
     observed = validate_observation(dict(observation))
     if activity.get("activity_type") not in {"author", "reviewer"}:
         _fail("SPECIALIST-CAPABILITY-UNPROVEN")
-    expected_model, expected_effort = specialist_pair(activity.get("runtime"), activity["activity_type"])
+    expected_model, expected_effort = _admitted_pair(activity)
     if activity.get("requested_model") != expected_model or activity.get("requested_effort") != expected_effort:
         _fail("SPECIALIST-CAPABILITY-UNPROVEN")
     if observed["provider"] != activity["runtime"]:
@@ -1265,7 +1275,7 @@ def _visual_activity(activity: Any, *, role: str, context_id: str,
     if (activity.get("activity_type") != role or activity.get("context_id") != context_id
             or activity.get("step_id") != "plan"):
         _fail("PREVIEW-APPROVAL-REQUIRED")
-    expected_model, expected_effort = specialist_pair(activity.get("runtime"), role)
+    expected_model, expected_effort = _admitted_pair(activity)
     if (activity.get("requested_model"), activity.get("requested_effort"),
             activity.get("effective_model"), activity.get("effective_effort"),
             activity.get("resolved_model_id")) != (expected_model, expected_effort,
@@ -1696,7 +1706,7 @@ def require_task_files_review(item: Mapping[str, Any], *, context_id: str, autho
                 or activity.get("policy_sha256") != item.get("policy_sha256")
                 or activity.get("review_verdict") != "APPROVED" or not activity.get("acceptance_ref")):
             _fail("ACTIVITY-REQUIRED")
-        model, effort = specialist_pair(activity.get("runtime"), role)
+        model, effort = _admitted_pair(activity)
         if (activity.get("requested_model"), activity.get("effective_model"), activity.get("resolved_model_id"),
                 activity.get("requested_effort"), activity.get("effective_effort")) != (model, model, model, effort, effort):
             _fail("SPECIALIST-CAPABILITY-UNPROVEN")
