@@ -415,7 +415,7 @@ class GauntletConvergeContractHarness(unittest.TestCase):
         return f"grill/{WORK_ID}/{self.run_id}/{worker_id}"
 
     def worker_worktree(self, worker_id: str) -> Path:
-        return store.git_common_dir(self.root) / "grill" / f"wt-{self.run_id}-{worker_id}"
+        return self.root / ".claude" / "worktrees" / f"wt-{self.run_id}-{worker_id}"
 
     def commit_in_worker(self, worker_id: str, relative: str, body: str) -> str:
         worktree = self.worker_worktree(worker_id)

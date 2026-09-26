@@ -1,5 +1,11 @@
 # Changelog
 
+## 9.3.1
+
+- Hotfix (SGD-45): o worktree de cada worker do `implement-parallel` passa a nascer em `<worktree principal>/.claude/worktrees/wt-<run>-<worker>`, e não mais em `<git-common-dir>/grill/`. O Orca só monta a aba de terminal de worktrees sob uma fonte de visibilidade, e `.claude/worktrees/*` é a fonte embutida; fora dela o terminal do worker saía `orphaned=true`, `gauntlet-worker-session register/release` recusava e `gauntlet-converge` nunca fechava sob Orca.
+  - Antes do `git worktree add`, o core garante a linha `/.claude/worktrees/` em `<git-common-dir>/info/exclude`, para que o worktree aninhado não suje o status de nenhum checkout.
+  - Run já declarada mantém o path antigo quando ele existe (retomada e cleanup), mas o terminal dela continua órfão no Orca: para adotar, abandone a run presa e abra uma run nova no HEAD corrente.
+
 ## 9.3.0
 
 - Feature: verbo `hotfix-close ROOT --work-id ID --shipped-commit SHA --integration-branch BRANCH [--apply]`. Fecha o hotfix depois do ship, que antes não tinha caminho: o bundle ficava `prepared` para sempre, e editar `state.json` à mão quebrava o selo ou fabricava prova.
