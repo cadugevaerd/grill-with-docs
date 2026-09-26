@@ -1,0 +1,11 @@
+{
+  "audit_verdict": "PREPARED",
+  "mode": "hotfix",
+  "post_ship": [
+    "reconcile",
+    "full-document-audit"
+  ],
+  "status": "prepared",
+  "version": "1.1.0",
+  "work_id": "hotfix-worker-worktree-orca-a7d34c1fb39f4c5dbb6c088a4e75195f"
+}

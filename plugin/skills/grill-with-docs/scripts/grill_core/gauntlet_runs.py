@@ -1678,7 +1678,12 @@ def _workspace_identity(root: str | Path, work_id: str, run_id: str, worker_id: 
     key = f"wt-{run_id}-{worker_id}"
     # ``git_common_dir`` is descriptor-safe and insists that root is the
     # coordinator top-level.  ``key`` is a single validated logical segment.
-    target = store.git_common_dir(root) / "grill" / key
+    legacy = store.git_common_dir(root) / "grill" / key
+    # SGD-45: Orca only mounts a terminal for a worktree under a visible
+    # source, and ``.claude/worktrees/*`` of the main worktree is the built-in
+    # one; anything else (``.git/grill`` included) leaves the worker terminal
+    # orphaned.  A worktree already at the legacy path keeps it for resume.
+    target = legacy if os.path.lexists(legacy) else _main_worktree(root) / WORKER_WORKTREE_DIR / key
     workspace = {
         "worktree_key": key,
         "branch": f"grill/{work_id}/{run_id}/{worker_id}",
@@ -1703,6 +1708,25 @@ def _worktree_blocks(root: str | Path) -> list[list[str]]:
     if process.returncode != 0:
         _fail("GIT-UNAVAILABLE", "could not inspect Git worktrees")
     return [block.splitlines() for block in process.stdout.strip().split("\n\n") if block.strip()]
+
+
+WORKER_WORKTREE_DIR = Path(".claude") / "worktrees"
+
+
+def _main_worktree(root: str | Path) -> Path:
+    """Git lists the main worktree first, whichever worktree asks."""
+    return Path(_worktree_blocks(root)[0][0].removeprefix("worktree "))
+
+
+def _exclude_worker_worktrees(root: str | Path) -> None:
+    """Keep nested worker worktrees out of every checkout's status."""
+    line = f"/{WORKER_WORKTREE_DIR.as_posix()}/"
+    exclude = store.git_common_dir(root) / "info" / "exclude"
+    text = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
+    if line not in text.splitlines():
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        with exclude.open("a", encoding="utf-8") as handle:
+            handle.write(("\n" if text and not text.endswith("\n") else "") + line + "\n")
 
 
 def _workspace_git_state(root: str | Path, target: Path, workspace: Mapping[str, Any]) -> str:
@@ -2094,6 +2118,7 @@ def prepare_worker(root: str | Path, work_id: str, run_id: str, worker_id: str,
         # an implicit lease renewal if time passed while recording evidence.
         _require_active_lease(current_lease)
         _require_orchestration_authority(root, work_id, "prepare")
+        _exclude_worker_worktrees(root)
         target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         added = _git(root, "worktree", "add", "-b", expected_workspace["branch"], str(target), expected_workspace["base_commit"])
         if added.returncode != 0:

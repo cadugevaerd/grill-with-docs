@@ -52,7 +52,7 @@ SCRIPTS = SKILL / "scripts"
 # exercised for admission, status, and resume.
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
-from grill_core import store
+from grill_core import gauntlet_runs, store
 
 
 def strict_json_bytes(value: bytes, *, source: str) -> dict[str, Any]:
@@ -129,7 +129,7 @@ def root_snapshot(root: Path) -> dict[str, tuple[bytes, int, int]]:
     return {
         relative: value
         for relative, value in _file_snapshot(root).items()
-        if relative != ".git" and not relative.startswith(".git/")
+        if relative != ".git" and not relative.startswith((".git/", ".claude/worktrees/"))
     }
 
 
@@ -927,6 +927,7 @@ class GauntletRunContractHarness(unittest.TestCase):
         run_id = created["run_id"]
         base_commit = created["base_commit"]
         root_before = root_snapshot(self.root)
+        status_before = git(self.root, "status", "--porcelain", "--untracked-files=all")
 
         process, payload = self.prepare_worker(run_id, "worker-a", "plugin")
 
@@ -955,6 +956,23 @@ class GauntletRunContractHarness(unittest.TestCase):
         )
         self.assertIn(f"HEAD {base_commit}", prepared_block)
         self.assertEqual(root_snapshot(self.root), root_before)
+        # SGD-45: Orca only mounts terminals of worktrees under a visible
+        # source; the worker worktree must never land in the git-common-dir.
+        expected = self.root.resolve() / ".claude" / "worktrees" / f"wt-{run_id}-worker-a"
+        self.assertIn(f"worktree {expected}", prepared_block)
+        self.assertNotIn(str(common_git_dir(self.root)), prepared_block)
+        self.assertEqual(git(self.root, "status", "--porcelain", "--untracked-files=all"), status_before)
+
+    def test_worker_worktree_identity_keeps_a_legacy_path_for_resume(self) -> None:
+        _, created = self.admit_run()
+        run_id = created["run_id"]
+        admission = {"base_commit": created["base_commit"]}
+        target, _ = gauntlet_runs._workspace_identity(self.root, WORK_ID, run_id, "worker-a", admission)
+        self.assertEqual(target, self.root.resolve() / ".claude" / "worktrees" / f"wt-{run_id}-worker-a")
+        legacy = common_git_dir(self.root) / "grill" / f"wt-{run_id}-worker-a"
+        legacy.mkdir(parents=True)
+        target, _ = gauntlet_runs._workspace_identity(self.root, WORK_ID, run_id, "worker-a", admission)
+        self.assertEqual(target, legacy)
 
     def test_prepare_rejects_unsafe_or_duplicate_grant_scope_without_mutation(self) -> None:
         _, created = self.admit_run()
