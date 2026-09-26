@@ -1,11 +1,17 @@
 {
-  "audit_verdict": "PREPARED",
+  "active_phase": null,
+  "audit_verdict": "GO",
+  "milestone_status": "completed",
   "mode": "hotfix",
   "post_ship": [
     "reconcile",
     "full-document-audit"
   ],
-  "status": "prepared",
+  "shipped": {
+    "commit": "83e1280825ddeaa25d7ac873f717a0b1e56b3cfd",
+    "integration_branch": "main"
+  },
+  "status": "complete",
   "version": "1.1.0",
   "work_id": "hotfix-worker-worktree-orca-a7d34c1fb39f4c5dbb6c088a4e75195f"
 }
