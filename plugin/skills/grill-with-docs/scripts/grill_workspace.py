@@ -3990,6 +3990,10 @@ def _takeover_prepared_workers(document: dict[str, Any], work_id: str) -> list[s
                   if worker.get("state") == "PREPARED")
 
 
+_SESSION_IDENTITY_KEYS = ("provider", "adapter", "host", "runtime_instance", "handle", "incarnation",
+                          "owner_dispatch", "task_id", "dispatch_incarnation", "worktree_id")
+
+
 def _released_activity_sessions(root: Path, item: dict[str, Any], work_id: str) -> dict[str, tuple[str, dict[str, Any]]]:
     """Return pending result sessions whose exact Orca release archive is current."""
     runtime = grill_core_module("agent_runtime")
@@ -3999,7 +4003,8 @@ def _released_activity_sessions(root: Path, item: dict[str, Any], work_id: str) 
         resource = item.get("resources", {}).get(resource_id)
         identity = resource.get("identity", {}) if isinstance(resource, dict) else {}
         dispatch = identity.get("owner_dispatch")
-        if (activity.get("state") != "RESULT_RECORDED" or activity.get("activity_type") != "author"
+        if (activity.get("state") != "RESULT_RECORDED"
+                or activity.get("activity_type") not in {"author", "reviewer"}
                 or not isinstance(resource_id, str)
                 or resource.get("state") not in {"CLOSE_PENDING", "CLOSED"}
                 or resource.get("kind") != "session" or resource.get("activity_id") != activity_id
@@ -4009,12 +4014,85 @@ def _released_activity_sessions(root: Path, item: dict[str, Any], work_id: str) 
             observed = _leader_boundary(root, identity.get("provider"), "orca:" + dispatch, work_id).observe_released()
         except (runtime.RuntimeError, TypeError):
             continue
-        observed_identity = {key: observed.get(key) for key in (
-            "provider", "adapter", "host", "runtime_instance", "handle", "incarnation",
-            "owner_dispatch", "task_id", "dispatch_incarnation", "worktree_id")}
-        if identity == observed_identity:
+        if identity == {key: observed.get(key) for key in _SESSION_IDENTITY_KEYS}:
             released[activity_id] = (resource_id, observed)
     return released
+
+
+def _superseded_activity_sessions(root: Path, item: dict[str, Any], work_id: str
+                                  ) -> tuple[dict[str, tuple[str, dict[str, Any]]], dict[str, str]]:
+    """Pending result sessions Orca retains after a user takeover, redone and accepted later.
+
+    Orca never archives a `user_takeover` terminal, so such a session can never
+    produce the release `_released_activity_sessions` wants. It stops blocking
+    only when a later session of the same step and activity type is ACCEPTED
+    and the exact dispatch is settled, revoked and not live. Returns the proven
+    sessions and, per candidate that failed the proof, the named refusal.
+    """
+    runtime = grill_core_module("agent_runtime")
+    activities, resources = item.get("activities", {}), item.get("resources", {})
+    superseded: dict[str, tuple[str, dict[str, Any]]] = {}
+    refused: dict[str, str] = {}
+    for activity_id, activity in activities.items():
+        resource_id = activity.get("session_resource_id")
+        resource = resources.get(resource_id)
+        if (activity.get("state") != "RESULT_RECORDED" or activity.get("activity_type") not in {"author", "reviewer"}
+                or not isinstance(resource_id, str) or not isinstance(resource, dict)
+                or resource.get("kind") != "session" or resource.get("state") != "CLOSE_PENDING"
+                or resource.get("activity_id") != activity_id):
+            continue
+        created = resource.get("creation_observation", {}).get("collected_at")
+        if not isinstance(created, str) or not created:
+            continue
+        successors = []
+        for sibling_id, sibling in activities.items():
+            sibling_resource = resources.get(sibling.get("session_resource_id"))
+            if (sibling_id != activity_id and sibling.get("state") == "ACCEPTED"
+                    and sibling.get("step_id") == activity.get("step_id")
+                    and sibling.get("activity_type") == activity.get("activity_type")
+                    and isinstance(sibling_resource, dict)
+                    and sibling_resource.get("creation_observation", {}).get("collected_at", "") > created):
+                successors.append(sibling_id)
+        if not successors:
+            continue
+        identity = resource.get("identity", {})
+        dispatch = identity.get("owner_dispatch")
+        try:
+            if not isinstance(dispatch, str):
+                raise runtime.RuntimeError("SESSION-SUPERSEDED-UNPROVEN:dispatch")
+            observed = _leader_boundary(root, identity.get("provider"), "orca:" + dispatch,
+                                        work_id).observe_user_takeover_settled()
+        except (runtime.RuntimeError, TypeError) as exc:
+            refused[activity_id] = str(exc) or "SESSION-SUPERSEDED-UNPROVEN"
+            continue
+        if identity != {key: observed.get(key) for key in _SESSION_IDENTITY_KEYS}:
+            refused[activity_id] = "SESSION-SUPERSEDED-UNPROVEN:identity"
+            continue
+        superseded[activity_id] = (resource_id, observed)
+    return superseded, refused
+
+
+def _close_result_session(target: dict[str, Any], item: dict[str, Any], activity_id: str,
+                          resource_id: str, observation: dict[str, Any], receipt_suffix: str) -> bool:
+    """Close a pending result session on its exact proof; the recorded result is kept as is.
+
+    Returns whether this call moved the resource from CLOSE_PENDING to CLOSED.
+    """
+    store = grill_core_module("store")
+    activity = target["activities"].get(activity_id)
+    resource = target["resources"].get(resource_id)
+    if (not isinstance(activity, dict) or activity.get("state") != "RESULT_RECORDED"
+            or not isinstance(resource, dict) or resource.get("identity") != item["resources"][resource_id]["identity"]
+            or resource.get("state") not in {"CLOSE_PENDING", "CLOSED"}):
+        raise store.StoreError(store.STATE_DIVERGENCE, "released activity session changed")
+    if resource["state"] != "CLOSE_PENDING":
+        return False
+    ref = observation["source_ref"] + receipt_suffix
+    receipt = {"ref": ref, "sha256": observation["source_sha256"]}
+    if receipt not in resource["evidence_manifest"]["receipts"]:
+        resource["evidence_manifest"]["receipts"].append(receipt)
+    resource.update({"state": "CLOSED", "last_observation": ref, "result_acceptance_ref": activity["result_ref"]})
+    return True
 
 
 def _transferred_activity_sessions(item: dict[str, Any]) -> dict[str, tuple[str, str, dict[str, str]]]:
@@ -4152,6 +4230,7 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
         _require_current_leader(root, args.work_id, context, args.session_ref)
     released_sessions = _released_activity_sessions(root, item, args.work_id) if released is not None else {}
     transferred_sessions = _transferred_activity_sessions(item) if released is not None else {}
+    superseded_sessions, _ = _superseded_activity_sessions(root, item, args.work_id)
     state_path, state = read_development_state(root, resolve_development_item(root, args.work_id), args.work_id)
     identity = _continuity_identity(root, args.work_id, state)
     sealed = context.get("worktree_identity")
@@ -4213,7 +4292,7 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
         checkpoint_id = operation.get("expected_before", {}).get("checkpoint_id")
         if not isinstance(checkpoint_id, str):
             raise CliFailure(EXIT_BLOCKED, "BLOCKED", "CONTINUITY-STATE-DIVERGENCE", operation_id)
-    quiet_sessions = set(released_sessions) | set(transferred_sessions)
+    quiet_sessions = set(released_sessions) | set(transferred_sessions) | set(superseded_sessions)
     active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id, quiet_sessions)
     began_active = context["state"] == "ACTIVE"
     def mutate(document: dict[str, Any]) -> dict[str, Any]:
@@ -4230,22 +4309,17 @@ def gauntlet_prepare_switch_command(args: argparse.Namespace) -> tuple[dict[str,
         target["operations"].setdefault(operation_id, copy.deepcopy(operation))
         for activity_id, (resource_id, observation) in released_sessions.items():
             activity = target["activities"].get(activity_id)
-            resource = target["resources"].get(resource_id)
-            if (not isinstance(activity, dict) or activity.get("state") != "RESULT_RECORDED"
-                    or not isinstance(resource, dict) or resource.get("identity") != item["resources"][resource_id]["identity"]
-                    or resource.get("state") not in {"CLOSE_PENDING", "CLOSED"}):
-                raise store.StoreError(store.STATE_DIVERGENCE, "released activity session changed")
-            if resource["state"] == "CLOSE_PENDING":
-                release_ref = observation["source_ref"] + ":release"
-                receipt = {"ref": release_ref, "sha256": observation["source_sha256"]}
-                if receipt not in resource["evidence_manifest"]["receipts"]:
-                    resource["evidence_manifest"]["receipts"].append(receipt)
-                resource.update({"state": "CLOSED", "last_observation": release_ref,
-                                 "result_acceptance_ref": activity["result_ref"]})
+            closed = _close_result_session(target, item, activity_id, resource_id, observation, ":release")
+            # Only an author result is accepted here: a reviewer's verdict is
+            # not in the release proof, so its session closes and the recorded
+            # result stays pending instead of being stamped APPROVED.
+            if closed and activity["activity_type"] == "author":
                 activity.update({"released_at": observation["source_ref"],
                                  "accepted_by_context": source["context_id"],
                                  "acceptance_ref": activity["result_ref"],
                                  "review_verdict": "APPROVED", "state": "ACCEPTED"})
+        for activity_id, (resource_id, observation) in superseded_sessions.items():
+            _close_result_session(target, item, activity_id, resource_id, observation, ":user-takeover-superseded")
         for activity_id, (resource_id, successor_id, receipt) in transferred_sessions.items():
             activity = target["activities"].get(activity_id)
             resource = target["resources"].get(resource_id)
@@ -4476,11 +4550,20 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     # A proven-terminal predecessor cannot advance workers it fully prepared.
     # The successor inherits only that exact state; activities, unknown workers
     # and every earlier worker state still block the takeover.
-    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id)
+    # A result session Orca retains after a user takeover is closed (never
+    # accepted) when a later sibling of the same step and type was ACCEPTED.
+    superseded, superseded_refused = _superseded_activity_sessions(root, item, args.work_id)
+    closed_superseded_sessions = {activity_id: observation["source_sha256"]
+                                  for activity_id, (_, observation) in sorted(superseded.items())}
+    active, unknown = _continuity_quiescence(snapshot.document, item, args.work_id, set(superseded))
     inherited_prepared_workers = _takeover_prepared_workers(snapshot.document, args.work_id)
     blocking_active = sorted(set(active) - set(inherited_prepared_workers))
     if blocking_active or unknown:
-        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-WORK-ACTIVE", ",".join(blocking_active + unknown))
+        detail = ",".join(blocking_active + unknown)
+        if superseded_refused:
+            detail += " (" + ",".join(f"activity:{activity_id}={code}"
+                                      for activity_id, code in sorted(superseded_refused.items())) + ")"
+        raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-WORK-ACTIVE", detail)
     # T016: the environment proves the predecessor ended, but nobody had
     # observed the *incoming* session, so its leader was installed with null
     # incarnation/observation and every @_gauntlet_authorized command refused
@@ -4569,10 +4652,12 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     expected = store.jcs_sha256({"work_id": args.work_id, "from_context_id": context_id,
         "from_session_ref": old_session_ref, "to_session_ref": args.session_ref,
         "observation": {"verdict": observation["verdict"], "reference": observation["reference"]},
-        "checkpoint_ref": checkpoint_ref, "inherited_prepared_workers": inherited_prepared_workers})
+        "checkpoint_ref": checkpoint_ref, "inherited_prepared_workers": inherited_prepared_workers,
+        "closed_superseded_sessions": closed_superseded_sessions})
     if not args.apply:
         return {"verdict": "TAKEOVER-PREVIEW", "work_id": args.work_id, "from_context_id": context_id,
                 "inherited_prepared_workers": inherited_prepared_workers,
+                "closed_superseded_sessions": sorted(closed_superseded_sessions),
                 "expected_sha256": expected}, EXIT_OK
     if args.expected_sha256 != expected:
         raise CliFailure(EXIT_BLOCKED, "BLOCKED", "TAKEOVER-INPUTS-STALE",
@@ -4588,7 +4673,8 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
     # (gauntlet_cleanup_command and the acceptance path) filter by the
     # current context. Same projection shape as the resume.
     retained = {resource_id: copy.deepcopy(resource) for resource_id, resource in item.get("resources", {}).items()
-                if resource.get("state") not in {"CLOSED", "REMOVED"}}
+                if resource.get("state") not in {"CLOSED", "REMOVED"}
+                and resource_id not in {closing for closing, _ in superseded.values()}}
     reconcile = {record_id: copy.deepcopy(record) for record_id, record in item.get("operations", {}).items()
                  if record.get("state") in {"INTENT", "APPLIED", "UNKNOWN"}}
     taken_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -4625,6 +4711,8 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
             raise store.StoreError(store.STATE_DIVERGENCE, "takeover source changed")
         if new_context_id in target["contexts"] or operation_id in target["operations"]:
             raise store.StoreError(store.STATE_DIVERGENCE, "takeover already recorded under a different outcome")
+        for activity_id, (resource_id, observation) in superseded.items():
+            _close_result_session(target, item, activity_id, resource_id, observation, ":user-takeover-superseded")
         source["state"] = "SUPERSEDED"
         source["leader"]["state"] = leader_advance[source["leader"]["state"]]
         new_context = {
@@ -4656,6 +4744,7 @@ def gauntlet_context_takeover_command(args: argparse.Namespace) -> tuple[dict[st
                            "reason": "takeover", "evidence": evidence, "taken_at": taken_at},
             "preserved_resources": retained, "operations_to_reconcile": reconcile,
             "inherited_prepared_workers": inherited_prepared_workers,
+            "closed_superseded_sessions": sorted(closed_superseded_sessions),
             "presentation": readiness["presentation"],
             "store_revision": committed.revision}, EXIT_OK
 

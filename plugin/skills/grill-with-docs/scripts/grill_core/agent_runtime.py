@@ -1052,6 +1052,64 @@ class LeaderBoundary:
         released["source_sha256"] = _sha256(json.dumps(released, sort_keys=True).encode())
         return released
 
+    def observe_user_takeover_settled(self) -> dict[str, Any]:
+        """Prove a settled specialist whose terminal Orca retains after a user takeover.
+
+        Orca never archives a `user_takeover` resource, so `observe_released`
+        can never pass for it. This proof only says the exact dispatch is
+        settled, revoked, still owns the retained terminal and is not live; the
+        caller must add the supersession fact (a later ACCEPTED sibling).
+        """
+        if not isinstance(self.session_ref, str) or not re.fullmatch(r"orca:ctx[-_][A-Za-z0-9_-]+", self.session_ref):
+            _fail("LEADER-ADAPTER-UNSUPPORTED")
+        dispatch_id = self.session_ref.removeprefix("orca:")
+        show = _object(self.read(["orchestration", "worker-show", "--dispatch", dispatch_id, "--json"]), "Orca worker-show")
+        dispatch = _mapping(show.get("dispatch"), "dispatch")
+        worker = _mapping(show.get("worker"), "worker")
+        terminal = _mapping(show.get("terminal"), "retained terminal")
+        resource = _mapping(show.get("terminalResource"), "terminal resource")
+        projection = _mapping(show.get("projection"), "projection")
+        projected_resource = _mapping(projection.get("resource"), "projected resource")
+        liveness = _mapping(projection.get("liveness"), "liveness")
+        effective = _mapping(_mapping(_mapping(worker.get("startOptions"), "startOptions").get("launch"),
+                                      "launch").get("effective"), "effective")
+        _same("dispatch", dispatch_id, dispatch.get("id"), worker.get("dispatchId"),
+              resource.get("originDispatchId"), resource.get("ownerDispatchId"), projected_resource.get("ownerDispatchId"))
+        handle = _same("retained terminal", terminal.get("handle"), worker.get("agentTerminalHandle"),
+                       resource.get("terminalHandle"))
+        worktree = _same("worktree", terminal.get("worktreeId"), worker.get("worktreeId"),
+                         resource.get("worktreeId"), _mapping(projection.get("workspace"), "workspace").get("id"))
+        incarnation = _string(terminal.get("incarnationId"), "incarnation")
+        process = _same("dispatch incarnation", dispatch.get("processIncarnation"), resource.get("endpointIncarnation"),
+                        _string(terminal.get("ptyId"), "pty") + ":" + incarnation)
+        checks = (
+            ("dispatch-settled", worker.get("stage") == "settled" and worker.get("state") == "succeeded"
+                and _dispatch_matches_outcome(dispatch, "succeeded") and projection.get("outcome") == "succeeded"
+                and isinstance(dispatch.get("completedAt"), str)),
+            ("capability-revoked", isinstance(dispatch.get("capabilityRevokedAt"), str)),
+            ("user-takeover", resource.get("retainedReason") == "user_takeover"
+                and resource.get("releaseState") == "retained" and resource.get("ownershipState") == "user_owned"
+                and projected_resource.get("releaseState") == "retained" and resource.get("releaseError") is None),
+            ("process-not-live", isinstance(liveness.get("verdict"), str) and liveness["verdict"] != "live"
+                and terminal.get("connected") is False and terminal.get("writable") is False
+                and show.get("observation") == {"status": "exited", "exactWorker": True}),
+            ("worktree", terminal.get("worktreePath") == str(self.root)),
+            ("runtime", effective.get("agent") == terminal.get("agentIdentity") == self.runtime),
+        )
+        for name, ok in checks:
+            if not ok:
+                _fail("SESSION-SUPERSEDED-UNPROVEN:" + name)
+        settled = {"source_ref": self.session_ref, "provider": self.runtime, "adapter": "orca",
+                   "host": _same("host", terminal.get("executionHostId"), _mapping(dispatch.get("hostScope"), "host").get("hostId")),
+                   "incarnation": incarnation, "dispatch_incarnation": process,
+                   "owner_dispatch": dispatch_id, "handle": handle, "worktree_id": worktree,
+                   "runtime_instance": _same("runtime instance", worker.get("runtimeEpoch"), resource.get("endpointId")),
+                   "task_id": _same("task", dispatch.get("taskId"), projection.get("taskId")),
+                   "outcome": "succeeded", "release_proof": "user-takeover-superseded",
+                   "release_completed_at": dispatch["completedAt"]}
+        settled["source_sha256"] = _sha256(json.dumps(settled, sort_keys=True).encode())
+        return settled
+
     def transcript(self, observed: dict[str, Any]) -> dict[str, Any]:
         raw = self.read(["orchestration", "worker-read", "--dispatch", observed["owner_dispatch"],
                          "--source", "transcript", "--limit", "1000", "--json"])

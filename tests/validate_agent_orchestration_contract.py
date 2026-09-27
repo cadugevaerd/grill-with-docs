@@ -3852,6 +3852,180 @@ class AgentOrchestrationContract(unittest.TestCase):
             with self.assertRaisesRegex(grill_workspace.CliFailure, "PARTITION-REVISION-INCOMPLETE"):
                 grill_workspace._next_partition_revision(directory, "demo")
 
+    def user_takeover_show(self, root, dispatch, runtime="codex"):
+        """worker-show of a settled specialist whose terminal a user took over (real Orca shape)."""
+        show = orchestration_fixture.native_show(root, runtime, dispatch)
+        result = show["result"]
+        result["dispatch"].update(status="completed", capabilityRevokedAt="2026-01-01T00:00:00Z",
+                                  completedAt="2026-01-01T00:00:00Z")
+        result["worker"].update(state="succeeded", stage="settled")
+        result["terminal"].update(connected=False, writable=False, orphaned=True)
+        result["terminalResource"].update(originDispatchId=dispatch, ownershipState="user_owned",
+            releaseState="retained", retainedReason="user_takeover", releaseError=None,
+            archive={"source": None, "status": None})
+        result["projection"].update(outcome="succeeded", provider=None, workspace={"id": "worktree-fixture"},
+            liveness={"verdict": "unverifiable", "reason": "missing_status"},
+            resource={"state": "user_owned", "ownerDispatchId": dispatch,
+                      "releaseState": "retained", "terminalState": "retained"})
+        result["observation"] = {"status": "exited", "exactWorker": True}
+        return show
+
+    def test_user_takeover_settled_proof_is_fail_closed(self):
+        core = grill_workspace.grill_core_module("agent_runtime")
+        temporary, root = self.fixture()
+        with temporary:
+            show = self.user_takeover_show(root, "ctx-stuck")
+            adapter = core.LeaderBoundary("orca:ctx-stuck", root, "codex", None,
+                                          lambda argv: orchestration_fixture.pack(show))
+            proven = adapter.observe_user_takeover_settled()
+            self.assertEqual((proven["release_proof"], proven["owner_dispatch"], proven["outcome"]),
+                             ("user-takeover-superseded", "ctx-stuck", "succeeded"))
+            result = show["result"]
+            refusals = {
+                "process-not-live": lambda: result["projection"].update(
+                    liveness={"verdict": "live", "source": "agent_status"}),
+                "user-takeover": lambda: result["terminalResource"].update(retainedReason="reused"),
+                "dispatch-settled": lambda: (result["dispatch"].update(status="running"),
+                                             result["worker"].update(state="running", stage="running")),
+                "capability-revoked": lambda: result["dispatch"].update(capabilityRevokedAt=None),
+            }
+            for name, damage in refusals.items():
+                with self.subTest(refusal=name):
+                    saved = copy.deepcopy(show)
+                    damage()
+                    with self.assertRaisesRegex(core.RuntimeError, "SESSION-SUPERSEDED-UNPROVEN:" + name):
+                        adapter.observe_user_takeover_settled()
+                    show.clear(); show.update(saved); result = show["result"]
+            del show["result"]["projection"]["liveness"]
+            with self.assertRaisesRegex(core.RuntimeError, "missing liveness"):
+                adapter.observe_user_takeover_settled()
+
+    def test_superseded_session_needs_a_later_accepted_sibling(self):
+        core = grill_workspace.grill_core_module("agent_runtime")
+        temporary, root = self.fixture()
+        with temporary:
+            show = self.user_takeover_show(root, "ctx-stuck")
+            adapter = core.LeaderBoundary("orca:ctx-stuck", root, "codex", None,
+                                          lambda argv: orchestration_fixture.pack(show))
+            identity = {key: adapter.observe_user_takeover_settled()[key]
+                        for key in grill_workspace._SESSION_IDENTITY_KEYS}
+            def session(activity_id, state, collected_at, owner="ctx-stuck"):
+                return {"kind": "session", "state": state, "activity_id": activity_id,
+                        "identity": {**identity, "owner_dispatch": owner},
+                        "creation_observation": {"collected_at": collected_at}}
+            item = {"activities": {
+                "review-2": {"state": "RESULT_RECORDED", "session_resource_id": "s2", "step_id": "specify",
+                             "activity_type": "reviewer", "result_ref": "results/review-2.md"},
+                "review-3": {"state": "ACCEPTED", "session_resource_id": "s3", "step_id": "specify",
+                             "activity_type": "reviewer"},
+            }, "resources": {"s2": session("review-2", "CLOSE_PENDING", "2026-01-01T00:01:00Z"),
+                             "s3": session("review-3", "CLOSED", "2026-01-01T00:02:00Z", "ctx-redo")}}
+            with mock.patch.object(grill_workspace, "_leader_boundary", return_value=adapter):
+                superseded, refused = grill_workspace._superseded_activity_sessions(root, item, "work-x")
+                self.assertEqual((list(superseded), refused), (["review-2"], {}))
+                self.assertEqual(superseded["review-2"][0], "s2")
+                for label, change in (
+                        ("earlier", lambda i: i["resources"]["s3"]["creation_observation"].update(
+                            collected_at="2026-01-01T00:00:00Z")),
+                        ("other-step", lambda i: i["activities"]["review-3"].update(step_id="plan")),
+                        ("other-type", lambda i: i["activities"]["review-3"].update(activity_type="author")),
+                        ("not-accepted", lambda i: i["activities"]["review-3"].update(state="RESULT_RECORDED"))):
+                    with self.subTest(successor=label):
+                        changed = copy.deepcopy(item); change(changed)
+                        self.assertEqual(grill_workspace._superseded_activity_sessions(root, changed, "work-x"),
+                                         ({}, {}))
+                show["result"]["projection"]["liveness"] = {"verdict": "live", "source": "agent_status"}
+                superseded, refused = grill_workspace._superseded_activity_sessions(root, item, "work-x")
+                self.assertEqual((superseded, refused),
+                                 ({}, {"review-2": "SESSION-SUPERSEDED-UNPROVEN:process-not-live"}))
+
+    def test_context_takeover_closes_a_superseded_user_takeover_session(self):
+        temporary, root = self.fixture()
+        with temporary, orchestration_fixture.offline_leader(grill_workspace):
+            code, payload = self.run_cli("init", str(root), "--type", "feature", "--slug", "x",
+                "--work-id", "work-x", "--runtime", "codex", "--session-ref",
+                orchestration_fixture.SESSION, "--skip-backlog")
+            self.assertEqual(code, 0, payload)
+            item = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+            context_id = item["current_context_id"]
+            manifest = {"files": [], "required_activity_ids": [], "author_activity_ids": [],
+                        "task_binding": None, "human_authorization": None}
+            recorded = {}
+            for activity_id, dispatch, collected_at in (("stuck", "ctx-stuck", "2026-01-01T00:01:00Z"),
+                                                        ("redo", "ctx-redo", "2026-01-01T00:02:00Z")):
+                adapter, show, _ = orchestration_fixture.boundary(
+                    grill_workspace, root, "codex", "orca:" + dispatch, "work-x", loaded=False)
+                for launch in show["result"]["worker"]["startOptions"]["launch"].values():
+                    launch.update(model="gpt-6-astra", effort="xhigh")
+                observed = adapter.observe(); observed["resolved_model_id"] = "gpt-6-astra"
+                activity = agent_orchestration.new_activity(activity_id=activity_id, context_id=context_id,
+                    step_id="specify", activity_scope="cycle", activity_type="author", attempt=1,
+                    input_manifest=manifest, policy_sha256=item["policy_sha256"], write_files=[])
+                activity = agent_orchestration.prepare_activity(activity, item["contexts"][context_id])
+                activity = agent_orchestration.record_verified_activity(activity, observed)
+                resource_id, resource = agent_orchestration.session_resource(activity, observed,
+                                                                             collected_at=collected_at)
+                activity, _ = agent_orchestration.dispatch_activity(activity, item["contexts"][context_id])
+                activity = agent_orchestration.record_activity_result(activity,
+                    result_ref=f"results/{activity_id}.md", result_sha256="b" * 64, output_manifest={"files": [],
+                        "return_ref": {"ref": f"results/{activity_id}.md", "sha256": "b" * 64}, "effect_ref": None})
+                resource["state"] = "CLOSE_PENDING"
+                if activity_id == "redo":
+                    closed = {**observed, "activity": "exited", "close": "closed"}
+                    activity = agent_orchestration.accept_activity(activity, context=item["contexts"][context_id],
+                        observation=closed, acceptance_ref=activity["result_ref"])
+                    resource = agent_orchestration.close_session_resource(resource, closed,
+                        acceptance_ref=activity["result_ref"])
+                recorded[activity_id] = (activity, resource_id, resource)
+            def add_activities(document):
+                target = document["agent_orchestration"]["work_items"]["work-x"]
+                for activity, resource_id, resource in recorded.values():
+                    target["activities"][activity["activity_id"]] = copy.deepcopy(activity)
+                    target["resources"][resource_id] = copy.deepcopy(resource)
+                return document
+            store.transact(root, add_activities)
+            stuck_resource = recorded["stuck"][1]
+            stuck_show = self.user_takeover_show(root, "ctx-stuck")
+            native_boundary = grill_workspace._leader_boundary
+            core = grill_workspace.grill_core_module("agent_runtime")
+            def boundary(root_, runtime, session_ref, work_id):
+                if session_ref == "orca:ctx-stuck":
+                    return core.LeaderBoundary(session_ref, root_, runtime, None,
+                                               lambda argv: orchestration_fixture.pack(stuck_show))
+                return native_boundary(root_, runtime, session_ref, work_id)
+            leader_show = takeover_show("ctx-fixture", status="completed",
+                                        liveness={"verdict": "exited", "source": "agent_status"})
+            real_run = subprocess.run
+            def run(cmd, **kwargs):
+                if isinstance(cmd, list) and "worker-show" in cmd:
+                    return subprocess.CompletedProcess(cmd, 0, stdout=leader_show)
+                return real_run(cmd, **kwargs)
+            def takeover(*tail):
+                return self.run_cli("gauntlet-context-takeover", str(root), "--work-id", "work-x",
+                                    "--session-ref", "orca:ctx-new", *tail)
+            with mock.patch.dict(os.environ, {"ORCA_TERMINAL_HANDLE": "term-fixture"}), \
+                    mock.patch.object(subprocess, "run", side_effect=run), \
+                    mock.patch.object(grill_workspace, "_leader_boundary", side_effect=boundary):
+                stuck_show["result"]["terminalResource"]["retainedReason"] = "reused"
+                code, blocked = takeover()
+                self.assertEqual((code, blocked["code"]), (2, "TAKEOVER-WORK-ACTIVE"), blocked)
+                self.assertIn("activity:stuck=SESSION-SUPERSEDED-UNPROVEN:user-takeover", blocked["error"])
+                stuck_show["result"]["terminalResource"]["retainedReason"] = "user_takeover"
+                code, preview = takeover()
+                self.assertEqual((code, preview["verdict"], preview["closed_superseded_sessions"]),
+                                 (0, "TAKEOVER-PREVIEW", ["stuck"]), preview)
+                code, applied = takeover("--apply", "--expected-sha256", preview["expected_sha256"])
+            self.assertEqual((code, applied["verdict"]), (0, "TAKEOVER-APPLIED"), applied)
+            self.assertNotIn(stuck_resource, applied["preserved_resources"])
+            saved = store.read_snapshot(root).document["agent_orchestration"]["work_items"]["work-x"]
+            resource = saved["resources"][stuck_resource]
+            self.assertEqual((resource["state"], resource["last_observation"], resource["result_acceptance_ref"]),
+                             ("CLOSED", "orca:ctx-stuck:user-takeover-superseded", "results/stuck.md"))
+            self.assertIn("orca:ctx-stuck:user-takeover-superseded",
+                          [receipt["ref"] for receipt in resource["evidence_manifest"]["receipts"]])
+            self.assertEqual(saved["activities"]["stuck"]["state"], "RESULT_RECORDED")
+            self.assertIsNone(saved["activities"]["stuck"]["acceptance_ref"])
+
 
     def test_exact_claude_specialist_from_real_orca_bytes(self):
         # Orca contract v1, 2026-09-26, Dispatch ctx_79c05d12fd20:
