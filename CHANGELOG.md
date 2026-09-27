@@ -1,5 +1,9 @@
 # Changelog
 
+## 9.3.5
+
+- Fix (SGD-47): o Claude Code grava um registro `type=pr-link` no transcript da sessão quando `gh pr create` ou `git push` toca uma branch com PR. `_native_messages` recusava qualquer tipo de registro desconhecido, então toda leitura posterior do transcript do líder falhava com `LEADER-TRANSCRIPT-UNPROVEN` e todo verbo com readiness (attest, step-enter, ship) ficava bloqueado. `pr-link` não carrega mensagem e passa a integrar os tipos de registro Claude ignoráveis, com teste de regressão que reprova sem o fix.
+
 ## 9.3.4
 
 - Fix: `LeaderBoundary.observe_released` exigia `terminal.orphaned=false`, mas o Orca atual devolve `orphaned=true` para todo terminal liberado, inclusive sob `.claude/worktrees/`. Com isso `gauntlet-worker-session --phase release` recusava com `LEADER-RELEASE-UNPROVEN`/`SESSION-CLOSE-UNPROVEN` e nenhum `gauntlet-converge` fechava com líder `orca:`. `orphaned=true` passa a ser aceito somente com release consumado: worker `settled` com archive `transcript/captured`, recurso `released/released` com `releaseCompletedAt` e sem `releaseError`, liveness `exited/resource_release`. O caminho `resource-fence` (sem archive) continua exigindo `orphaned=false`. O caminho `ownership-transfer` com terminal fonte liberado recebe a mesma tolerância, pois já exige o release completo no mesmo guard. Observação viva e `observe_user_takeover_settled` ficam como estão.
