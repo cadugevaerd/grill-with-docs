@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugin"
-VERSION = "9.3.4"
+VERSION = "9.3.5"
 
 def load(path):
     with path.open(encoding="utf-8") as handle:

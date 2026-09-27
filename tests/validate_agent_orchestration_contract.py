@@ -156,6 +156,19 @@ class AgentOrchestrationContract(unittest.TestCase):
                 self.assertFalse(native["work_ready"])
                 self.assertEqual(show, original_show)
 
+    def test_claude_pr_link_record_is_ignored(self):
+        # `gh pr create` / `git push` of a branch with a PR makes Claude Code append
+        # a `pr-link` metadata record; it carries no message and must not refuse
+        # the whole leader transcript (SGD-47).
+        core = grill_workspace.grill_core_module("agent_runtime")
+        records = [
+            {"type": "user", "uuid": "u1", "sessionId": "sid", "message": {"role": "user", "content": "oi"}},
+            {"type": "pr-link", "sessionId": "sid", "prNumber": 335, "prRepository": "o/r",
+             "prUrl": "https://github.com/o/r/pull/335", "timestamp": "2026-09-26T21:00:00Z"},
+        ]
+        messages = core._native_messages("\n".join(json.dumps(r) for r in records).encode(), "claude", "sid")
+        self.assertEqual([m["id"] for m in messages], ["u1"])
+
     def test_public_init_adopt_refuse_assertions_and_preserve_load_request(self):
         temp, root = self.fixture()
         core = grill_workspace.grill_core_module("agent_runtime")
