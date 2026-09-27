@@ -967,7 +967,9 @@ class LeaderBoundary:
                     or not _dispatch_matches_outcome(dispatch, source_outcome)
                     or not isinstance(dispatch.get("completedAt"), str)
                     or not isinstance(dispatch.get("capabilityRevokedAt"), str)
-                    or terminal.get("worktreePath") != str(self.root) or terminal.get("orphaned") is not False
+                    # Orca marks every released terminal orphaned; the release
+                    # itself is proven by the resource checks below.
+                    or terminal.get("worktreePath") != str(self.root) or not isinstance(terminal.get("orphaned"), bool)
                     or terminal.get("connected") is not False or terminal.get("writable") is not False
                     or _mapping(show.get("observation"), "observation") != {"status": "exited", "exactWorker": True}
                     or transferred.get("dispatchId") != resource.get("ownerDispatchId")
@@ -1030,7 +1032,10 @@ class LeaderBoundary:
                        and projection.get("outcome") == "failed"
                        and archive.get("source") is None and archive.get("status") == "unavailable")
         outcome = worker.get("state") if archived else "failed"
-        if (terminal.get("worktreePath") != str(self.root) or terminal.get("orphaned") is not False
+        # Orca marks every released terminal orphaned: accept it only with an
+        # archived release; the fence path keeps requiring orphaned=False.
+        if (terminal.get("worktreePath") != str(self.root) or not isinstance(terminal.get("orphaned"), bool)
+                or (terminal["orphaned"] and not archived)
                 or terminal.get("connected") is not False or terminal.get("writable") is not False
                 or observation.get("status") != "exited" or observation.get("exactWorker") is not True
                 or not (archived or fenced_stop) or not isinstance(dispatch.get("completedAt"), str)

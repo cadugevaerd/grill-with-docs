@@ -1300,6 +1300,19 @@ class AgentOrchestrationContract(unittest.TestCase):
             result["worker"]["state"] = result["projection"]["outcome"] = "failed"
             result["worker"]["stage"] = "settled"
             self.assertEqual(adapter.observe_released()["outcome"], "failed")
+            # Real Orca marks every released terminal orphaned: accepted only
+            # with an archived, completed release.
+            result["terminal"]["orphaned"] = True
+            self.assertEqual(adapter.observe_released()["release_proof"], "archive")
+            for key, value in (("releaseState", "retained"), ("releaseCompletedAt", None),
+                               ("archive", {"source": "transcript", "status": "missing"})):
+                saved = copy.deepcopy(result["terminalResource"][key])
+                result["terminalResource"][key] = value
+                with self.subTest(orphaned_without=key), \
+                        self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                    adapter.observe_released(allow_unarchived_stopped=True)
+                result["terminalResource"][key] = saved
+            result["terminal"]["orphaned"] = False
             result["dispatch"]["status"] = "completed"
             result["worker"]["state"] = result["projection"]["outcome"] = "succeeded"
             argv = ("gauntlet-prepare-switch", str(root), "--work-id", "work-x", "--context-id", context_id,
@@ -1360,6 +1373,13 @@ class AgentOrchestrationContract(unittest.TestCase):
             recovered = adapter.observe_released(allow_unarchived_stopped=True)
             self.assertEqual((recovered["outcome"], recovered["release_proof"]),
                              ("succeeded", "ownership-transfer"))
+            result["terminal"]["orphaned"] = True
+            self.assertEqual(adapter.observe_released(allow_unarchived_stopped=True)["release_proof"],
+                             "ownership-transfer")
+            released_resource["releaseState"] = "retained"
+            with self.assertRaisesRegex(core.RuntimeError, "LEADER-RELEASE-UNPROVEN"):
+                adapter.observe_released(allow_unarchived_stopped=True)
+            released_resource["releaseState"] = "released"
             result["terminal"] = None
             result["observation"] = {"status": "missing", "exactWorker": False}
             recovered = adapter.observe_released(allow_unarchived_stopped=True)
